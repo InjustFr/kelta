@@ -939,7 +939,9 @@ async fn tickets_carry_work_item_and_key_matched_prs_and_caps() {
     assert_eq!(bare.len(), 1);
     assert_eq!((bare[0].number, bare[0].repo.as_str(), bare[0].ci), (90, "acme/shop-api", CiState::None));
     assert_eq!(bare[0].account, Some(AccountId::new("github-work")));
-    assert!(page.items.iter().all(|i| i.caps == e.tracker.caps), "caps of the ticket's tracker");
+    // plus `block`, core-filled: Jira's default marker, the flag, is writable
+    let caps = kelta_proto::tracker::TrackerCaps { block: true, ..e.tracker.caps.clone() };
+    assert!(page.items.iter().all(|i| i.caps == caps), "caps of the ticket's tracker");
 
     for kind in [ReviewKind::Authored, ReviewKind::ReviewRequested] {
         e.h.core.review_page(Scope::All, kind, true).await.unwrap();
@@ -959,7 +961,7 @@ async fn tickets_carry_work_item_and_key_matched_prs_and_caps() {
     assert_eq!(child.ticket.r#ref.key, "SHOP-143");
     assert_eq!(child.project_ids, vec![ProjectId::new("shop")]);
     assert_eq!(child.prs.iter().map(|l| l.number).collect::<Vec<_>>(), vec![95]);
-    assert_eq!(child.caps, e.tracker.caps);
+    assert_eq!(child.caps, caps);
 }
 
 #[test]

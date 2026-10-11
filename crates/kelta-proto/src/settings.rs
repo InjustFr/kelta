@@ -16,7 +16,7 @@ use crate::ext::{CommandDef, EmbedMode, ToolDef, TriggerDef};
 use crate::ids::{AccountId, PluginId, ProjectId};
 use crate::model::SplitDir;
 use crate::secret::SecretRef;
-use crate::tracker::{StatusCategory, Who};
+use crate::tracker::{StatusCategory, Ticket, TrackerKind, Who, is_blocked_status};
 
 /// Configuration layer (low → high precedence).
 #[derive(
@@ -1771,6 +1771,60 @@ pub struct Source {
     /// `repo_rules` must stay empty: `routes` replace them.
     pub tracker: TrackerBinding,
     pub routes: Vec<SourceRoute>,
+    /// How this tracker marks a ticket blocked; unset follows the provider: flag on Jira, relation on
+    /// Linear, status elsewhere.
+    #[ts(optional)]
+    pub blocked: Option<BlockedMarker>,
+}
+
+/// How the tracker marks a ticket blocked.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BlockedMarker {
+    /// The status name reads blocked, on hold, waiting or impediment.
+    Status,
+    /// The Jira flag (Impediment).
+    Flag,
+    /// A Linear blocked-by relation to an open issue.
+    Relation,
+    /// This label (case-insensitive).
+    Label(String),
+}
+
+impl BlockedMarker {
+    /// Flag on Jira, relation on Linear, status elsewhere.
+    pub fn default_for(kind: TrackerKind) -> Self {
+        match kind {
+            TrackerKind::Jira => Self::Flag,
+            TrackerKind::Linear => Self::Relation,
+            _ => Self::Status,
+        }
+    }
+
+    /// Whether `t` carries this marker; flag and relation are the provider's `Ticket.blocked`.
+    pub fn on(&self, t: &Ticket) -> bool {
+        match self {
+            Self::Status => is_blocked_status(&t.status.name),
+            Self::Flag | Self::Relation => t.blocked,
+            Self::Label(l) => t.labels.iter().any(|x| x.eq_ignore_ascii_case(l)),
+        }
+    }
+
+    /// Kelta can set and clear it on `kind`: statuses by transition, the rest by `Tracker::set_blocked`.
+    pub fn writable(&self, kind: TrackerKind) -> bool {
+        match self {
+            Self::Status => true,
+            Self::Flag => kind == TrackerKind::Jira,
+            Self::Relation => false,
+            Self::Label(_) => matches!(
+                kind,
+                TrackerKind::Jira
+                    | TrackerKind::GithubIssues
+                    | TrackerKind::GitlabIssues
+                    | TrackerKind::GiteaIssues
+            ),
+        }
+    }
 }
 
 impl Source {
@@ -2011,6 +2065,29 @@ pub struct SettingsDiff {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blocked_marker_parses_and_matches() {
+        let s: Settings = toml::from_str(
+            "[[sources]]\nid = \"a\"\nblocked = \"flag\"\n[[sources]]\nid = \"b\"\nblocked = { label = \"Blocked\" }\n[[sources]]\nid = \"c\"\n",
+        )
+        .unwrap();
+        let m: Vec<_> = s.sources.iter().map(|s| s.blocked.clone()).collect();
+        assert_eq!(m, [Some(BlockedMarker::Flag), Some(BlockedMarker::Label("Blocked".into())), None]);
+        let mut t = Ticket { labels: vec!["blocked".into()], ..Ticket::default() };
+        assert!(BlockedMarker::Label("Blocked".into()).on(&t));
+        assert!(!BlockedMarker::Flag.on(&t));
+        t.blocked = true;
+        assert!(BlockedMarker::Flag.on(&t));
+        t.status.name = "On hold".into();
+        assert!(BlockedMarker::Status.on(&t));
+        t.status.name = "In Progress".into();
+        assert!(!BlockedMarker::Status.on(&t));
+        assert_eq!(BlockedMarker::default_for(TrackerKind::Jira), BlockedMarker::Flag);
+        assert_eq!(BlockedMarker::default_for(TrackerKind::GithubIssues), BlockedMarker::Status);
+        assert!(!BlockedMarker::Relation.writable(TrackerKind::Linear));
+        assert!(!BlockedMarker::Label("x".into()).writable(TrackerKind::Redmine));
+    }
 
     #[test]
     fn defaults_serialize_and_parse_back() {

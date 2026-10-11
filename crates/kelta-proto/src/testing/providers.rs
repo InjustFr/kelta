@@ -14,7 +14,7 @@ use crate::codehost::{
 use crate::error::KeltaError;
 use crate::ids::AccountId;
 use crate::samples;
-use crate::settings::{TrackerBinding, TrackerView};
+use crate::settings::{BlockedMarker, TrackerBinding, TrackerView};
 use crate::tracker::{
     Assignee, Column, Comment, Cursor, Page, SourceHit, Status, StatusCategory, Ticket, TicketDetail,
     TicketItem, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
@@ -88,6 +88,7 @@ impl FakeTracker {
                 comment: true,
                 transitions_need_fetch: true,
                 projects_v2: false,
+                block: false,
             },
             me: samples::user(),
             tickets: Mutex::new(tickets),
@@ -340,6 +341,25 @@ impl Tracker for FakeTracker {
     async fn set_body(&self, t: &TicketRef, body_md: &str) -> Result<(), KeltaError> {
         self.enter(&format!("set_body:{}", t.key))?;
         self.update(t, |d| d.body_md = body_md.to_owned()).map(|_| ())
+    }
+
+    /// A flag sets `Ticket.blocked`; a label is added or removed.
+    async fn set_blocked(
+        &self,
+        t: &TicketRef,
+        marker: &BlockedMarker,
+        blocked: bool,
+    ) -> Result<Ticket, KeltaError> {
+        self.enter(&format!("set_blocked:{}:{blocked}", t.key))?;
+        self.update(t, |d| match marker {
+            BlockedMarker::Label(l) => {
+                d.ticket.labels.retain(|x| x != l);
+                if blocked {
+                    d.ticket.labels.push(l.clone());
+                }
+            }
+            _ => d.ticket.blocked = blocked,
+        })
     }
 
     async fn close(&self, t: &TicketRef) -> Result<Ticket, KeltaError> {

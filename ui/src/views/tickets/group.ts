@@ -86,7 +86,12 @@ export function flowOf(item: TicketItem, s: FlowSignals, now: number): Flow | nu
   if (t.status.category === 'done') return now - since(t) <= 7 * DAY ? 'done' : null;
   const pr = mainPr(item.prs);
   const open = pr?.state === 'open';
-  if (s.needsYou || BLOCKED.test(t.status.name) || (open && (pr.ci === 'failure' || pr.ci === 'error')))
+  if (
+    s.needsYou ||
+    t.blocked ||
+    BLOCKED.test(t.status.name) ||
+    (open && (pr.ci === 'failure' || pr.ci === 'error'))
+  )
     return 'waiting';
   if (
     s.work?.state.kind === 'active' ||
@@ -126,7 +131,7 @@ const byUpdated = (a: TicketItem, b: TicketItem): number =>
 /** No priority sorts after every rank. */
 const rank = (i: TicketItem): number => i.ticket.priority_rank ?? 256;
 
-/** Sorted copy: priority (then updated), updated (newest), age (longest in status), key (natural). */
+/** Sorted copy, blocked tickets last: priority (then updated), updated (newest), age (longest in status), key (natural). */
 export function sortTickets(items: readonly TicketItem[], sort: TicketSort): TicketItem[] {
   const cmp =
     sort === 'priority'
@@ -136,7 +141,7 @@ export function sortTickets(items: readonly TicketItem[], sort: TicketSort): Tic
         : sort === 'age'
           ? (a: TicketItem, b: TicketItem) => since(a.ticket) - since(b.ticket) || byKey(a, b)
           : byKey;
-  return [...items].sort(cmp);
+  return [...items].sort((a, b) => Number(a.ticket.blocked) - Number(b.ticket.blocked) || cmp(a, b));
 }
 
 // ---- grouping --------------------------------------------------------------------------------

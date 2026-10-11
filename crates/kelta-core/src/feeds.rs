@@ -20,12 +20,12 @@ use kelta_proto::ext::Urgency;
 use kelta_proto::ids::{AccountId, ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{NextUp, NextUpItem, PaneContent, Scope, WorkItem, WorkState};
 use kelta_proto::settings::{
-    AccountKind, ColumnSpec, ProjectConfig, Settings, Source, TrackerBinding, TrackerView,
+    AccountKind, BlockedMarker, ColumnSpec, ProjectConfig, Settings, Source, TrackerBinding, TrackerView,
 };
 use kelta_proto::store::{ProviderCacheRow, SeenReviewRow};
 use kelta_proto::tracker::{
     AccountError, Assignee, Column, Cursor, Page, Person, SourceHit, StatusCategory, Ticket, TicketDetail,
-    TicketItem, TicketPage, TicketRef, Transition, User, Who,
+    TicketItem, TicketPage, TicketRef, TrackerCaps, Transition, User, Who, is_blocked_status,
 };
 use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
@@ -693,6 +693,7 @@ impl Core {
         let repos = self.code_repos(&i.project_ids);
         i.prs = ticket_prs(&i.ticket.r#ref.key, w, w.and_then(|w| self.work_binding(w)), reviews, &repos);
         i.caps = self.tracker_of(&i.ticket.r#ref.account).map(|t| t.caps()).unwrap_or_default();
+        self.fill_blocked(&mut i.ticket, &mut i.caps, &i.source_ids);
         i.waiting = team::ticket_waiting(i, reviews, people);
     }
 
@@ -942,6 +943,7 @@ impl Core {
         let reviews = self.cached_reviews().await;
         d.prs = ticket_prs(&t.key, w, w.and_then(|w| self.work_binding(w)), &reviews, &repos);
         d.caps = self.tracker_of(&t.account)?.caps();
+        self.fill_blocked(&mut d.ticket, &mut d.caps, &[]);
         // Sub-tasks: the provider gives each ticket, the rest is ours (like a list row).
         let people = self.people_of(d.children.iter().map(|c| &c.ticket), &reviews).await;
         for c in &mut d.children {
@@ -1150,6 +1152,66 @@ impl Core {
         self.rt.capture();
         let ticket = self.tracker_of(&t.account)?.set_priority(t, priority).await?;
         self.after_ticket_write(&ticket).await;
+        Ok(ticket)
+    }
+
+    /// The blocked marker of a ticket (#348): the first of `source_ids` (with none, of the account's
+    /// sources) that sets one, else the provider's default.
+    fn blocked_marker(
+        &self,
+        account: &AccountId,
+        tracker: &dyn Tracker,
+        source_ids: &[String],
+    ) -> BlockedMarker {
+        let mine = |s: &&Source| {
+            if source_ids.is_empty() { uses_account(s, account) } else { source_ids.contains(&s.id) }
+        };
+        let sources = self.sources();
+        sources
+            .iter()
+            .filter(mine)
+            .find_map(|s| s.blocked.clone())
+            .unwrap_or_else(|| BlockedMarker::default_for(tracker.kind()))
+    }
+
+    /// Core-filled blocked fields: `ticket.blocked` by the source's marker, and `caps.block`.
+    fn fill_blocked(&self, ticket: &mut Ticket, caps: &mut TrackerCaps, source_ids: &[String]) {
+        let Ok(tracker) = self.tracker_of(&ticket.r#ref.account) else { return };
+        let m = self.blocked_marker(&ticket.r#ref.account, tracker.as_ref(), source_ids);
+        ticket.blocked = m.on(ticket);
+        caps.block = m.writable(tracker.kind());
+    }
+
+    /// `tracker_set_blocked` (#348): a status marker moves the ticket (to a blocked status, or back
+    /// to in progress, else to do); a flag or label goes through the provider.
+    pub async fn tracker_set_blocked(&self, t: &TicketRef, blocked: bool) -> Result<Ticket, KeltaError> {
+        self.rt.capture();
+        let tracker = self.tracker_of(&t.account)?;
+        let sources = self.cached_ticket(t, true).await.map(|(_, s)| s).unwrap_or_default();
+        let marker = self.blocked_marker(&t.account, tracker.as_ref(), &sources);
+        let mut ticket = if marker == BlockedMarker::Status {
+            let ts = tracker.transitions(t).await?;
+            let to = if blocked {
+                ts.iter().find(|x| is_blocked_status(&x.to.name))
+            } else {
+                [StatusCategory::InProgress, StatusCategory::Todo]
+                    .iter()
+                    .find_map(|c| ts.iter().find(|x| x.to.category == *c && !is_blocked_status(&x.to.name)))
+            };
+            let to = to.ok_or_else(|| {
+                KeltaError::not_found(if blocked {
+                    "No transition to a blocked status"
+                } else {
+                    "No transition out of the blocked status"
+                })
+            })?;
+            self.tracker_transition(t, &to.id, None, None).await?
+        } else {
+            let ticket = tracker.set_blocked(t, &marker, blocked).await?;
+            self.after_ticket_write(&ticket).await;
+            ticket
+        };
+        ticket.blocked = marker.on(&ticket);
         Ok(ticket)
     }
 

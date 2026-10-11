@@ -10,6 +10,7 @@
     trackerAssignableUsers,
     trackerComment,
     trackerPriorities,
+    trackerSetBlocked,
     trackerSetPriority,
   } from '$lib/ipc/commands';
   import { projects, tickets, toasts, work } from '$lib/stores';
@@ -122,6 +123,19 @@
       toasts.info(t('{key} priority set to {priority}', { key: r.key, priority }));
     } catch (err) {
       toasts.error(err, t('Changing the priority of {key}', { key: r.key }));
+    }
+  }
+
+  async function setBlocked(blocked: boolean): Promise<void> {
+    const r = ref;
+    try {
+      tickets.patch(await trackerSetBlocked({ ticket: r, blocked }));
+      toasts.info(blocked ? t('{key} blocked', { key: r.key }) : t('{key} unblocked', { key: r.key }));
+    } catch (err) {
+      toasts.error(
+        err,
+        blocked ? t('Blocking {key}', { key: r.key }) : t('Unblocking {key}', { key: r.key }),
+      );
     }
   }
 
@@ -258,6 +272,9 @@
         break;
       case 'comment':
         commentBox?.querySelector('textarea')?.focus();
+        break;
+      case 'block':
+        void setBlocked(!ticket.blocked);
         break;
       case 'refine':
         void refine(ref, project);

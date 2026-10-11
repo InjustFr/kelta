@@ -543,6 +543,7 @@ Wire format (frozen by the scaffold, checked by the fixture round-trips): enums 
 | `tracker_assignable_users` | `{ticket, query}` | `Vec<User>` (assignee picker; `Unsupported` if the provider cannot list) | |
 | `tracker_priorities` | `{ticket}` | `Vec<String>` (priority names, highest first; `Unsupported` where priorities cannot be set) | |
 | `tracker_set_priority` | `{ticket, priority}` | `Ticket` | |
+| `tracker_set_blocked` | `{ticket, blocked}` | `Ticket` (sets or clears the source's blocked marker: a transition for `status`, else the provider's `set_blocked`; `Unsupported` when it cannot) | |
 | `tracker_refine` | `{ticket, project_id?}` | `String` (Markdown proposal of a one-shot `claude -p` in the project's primary repo: acceptance criteria, open questions, sub-tasks; MCP `get_ticket` resolves to the ticket for that run) | |
 | `tracker_sources` | `{account_id, query}` | `Vec<SourceHit>` (source picker; `Unsupported` if the provider cannot list) | |
 | `workflows_list` | `{ticket}` | `Vec<WorkflowInfo>` (`name`, `description`, `path`, `source`: `repo` or `home`; MCP "Launch from Kelta") | |
@@ -749,6 +750,7 @@ UI: the context bar shows `⚙ <workflow> · <phase with a running agent>` (or t
   async fn assignable_users(&self, t: &TicketRef, query: &str) -> Result<Vec<User>, KeltaError>;  // assignee picker; default Unsupported (plugins)
   async fn priorities(&self, t: &TicketRef) -> Result<Vec<String>, KeltaError>;  // highest first: jira editmeta, redmine enumeration, linear fixed, github Projects v2 `Priority` field, gitlab `priority::` labels; default Unsupported (gitea, plugins)
   async fn set_priority(&self, t: &TicketRef, priority: &str) -> Result<Ticket, KeltaError>;  // one of `priorities` by name; gitlab swaps the `priority::` label
+  async fn set_blocked(&self, t: &TicketRef, marker: &BlockedMarker, blocked: bool) -> Result<Ticket, KeltaError>;  // jira flag or label, github/gitlab/gitea label; default Unsupported (core moves `status` markers itself)
   async fn create(&self, project: &TrackerView, title: &str, body_md: &str) -> Result<Ticket, KeltaError>;  // new ticket where the view points (jira jql project, redmine project_id, github repo, gitlab/gitea project, linear team); default Unsupported
 }
 pub struct TicketRef { account: AccountId, key: String, id: String }
@@ -756,7 +758,8 @@ pub struct Ticket { r#ref: TicketRef, title, url, status: Status, kind: Option<S
   labels: Vec<String>, priority: Option<String>, updated_at: String, project_hint: Option<String>,
   priority_rank: Option<u8> /*0 = highest*/, status_since: Option<String> /*RFC 3339; falls back to updated_at*/,
   sprint: Option<Sprint{id, name, active, ends_at: Option<String>}> /*Jira sprint, Linear cycle, GitHub Projects iteration, GitLab iteration|milestone, Redmine version*/,
-  estimate: Option<String>, due: Option<String> }
+  estimate: Option<String>, due: Option<String>,
+  blocked: bool /*the source's `blocked` marker (#348): providers set the jira flag / linear blocked-by, kelta-core resolves the rest*/ }
 pub struct TicketDetail { ticket: Ticket, body_md: String, body_html: String, body_format: BodyFormat /*Adf|JiraWiki|Textile|Markdown*/,
   comments: Vec<Comment{author, created_at, body_html}>, parent: Option<TicketRef>,
   prs: Vec<PrLink>, caps: TrackerCaps /*both filled by kelta-core, providers leave them empty*/ }

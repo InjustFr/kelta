@@ -2267,5 +2267,18 @@
   "#{n} is a draft again": "#{n} est de nouveau un brouillon",
   "Mark ready / draft (my PRs)": "Marquer prête / brouillon (mes PR)",
   "Mark ready / Convert to draft": "Marquer prête / Repasser en brouillon",
-  "Mark ready…": "Marquer prête…"
+  "Mark ready…": "Marquer prête…",
+  "Blocked": "Bloqué",
+  "Block ticket": "Bloquer le ticket",
+  "Unblock ticket": "Débloquer le ticket",
+  "Kelta cannot set the blocked marker of this tracker. Set it in the tracker.": "Kelta ne peut pas poser le marqueur de blocage de ce tracker. Posez-le dans le tracker.",
+  "{key} blocked": "{key} bloqué",
+  "{key} unblocked": "{key} débloqué",
+  "Blocking {key}": "Blocage de {key}",
+  "Unblocking {key}": "Déblocage de {key}",
+  "How the tracker marks a ticket blocked.": "Comment le tracker marque un ticket bloqué.",
+  "The status name reads blocked, on hold, waiting or impediment.": "Le nom du statut indique blocked, on hold, waiting ou impediment.",
+  "The Jira flag (Impediment).": "Le drapeau Jira (Impediment).",
+  "A Linear blocked-by relation to an open issue.": "Une relation Linear « bloqué par » vers un ticket ouvert.",
+  "This label (case-insensitive).": "Ce label (sans tenir compte de la casse)."
 }

@@ -479,6 +479,7 @@ export const ticketPage: TicketPage = {
     {
       "caps": {
         "assign": true,
+        "block": true,
         "board_columns": true,
         "comment": true,
         "projects_v2": false,
@@ -513,6 +514,7 @@ export const ticketPage: TicketPage = {
           "login": "ada",
           "name": "Ada Lovelace"
         },
+        "blocked": false,
         "due": "2026-10-15",
         "estimate": "3",
         "kind": "Story",
@@ -572,6 +574,7 @@ export const ticket: Ticket = {
     "login": "ada",
     "name": "Ada Lovelace"
   },
+  "blocked": false,
   "due": "2026-10-15",
   "estimate": "3",
   "kind": "Story",
@@ -638,6 +641,7 @@ export const ticketDetail: TicketDetail = {
   "body_md": "Limit login attempts to **5/min**.",
   "caps": {
     "assign": false,
+    "block": false,
     "board_columns": false,
     "comment": false,
     "projects_v2": false,
@@ -647,6 +651,7 @@ export const ticketDetail: TicketDetail = {
     {
       "caps": {
         "assign": false,
+        "block": false,
         "board_columns": false,
         "comment": false,
         "projects_v2": false,
@@ -665,6 +670,7 @@ export const ticketDetail: TicketDetail = {
           "login": "ada",
           "name": "Ada Lovelace"
         },
+        "blocked": false,
         "due": "2026-10-15",
         "estimate": "3",
         "kind": "Story",
@@ -724,6 +730,7 @@ export const ticketDetail: TicketDetail = {
       "login": "ada",
       "name": "Ada Lovelace"
     },
+    "blocked": false,
     "due": "2026-10-15",
     "estimate": "3",
     "kind": "Story",

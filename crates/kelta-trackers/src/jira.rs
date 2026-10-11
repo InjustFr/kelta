@@ -12,7 +12,7 @@ use kelta_http::{AuthScheme, Authed, HttpCtx, HttpRequest, markdown};
 use kelta_proto::api::{SecretResolver, Tracker};
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
-use kelta_proto::settings::{AccountConfig, JiraFlavor, TrackerBinding, TrackerView};
+use kelta_proto::settings::{AccountConfig, BlockedMarker, JiraFlavor, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
     Assignee, BodyFormat, Column, Comment, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
     TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
@@ -45,12 +45,13 @@ const LIST_FIELDS: &[&str] = &[
     "timeoriginalestimate",
 ];
 
-/// Instance-specific ids, discovered once: the sprint and story-point custom fields (`GET /field`) and
-/// the priority ids in rank order, highest first (`GET /priority`).
+/// Instance-specific ids, discovered once: the sprint, story-point and Flagged custom fields
+/// (`GET /field`) and the priority ids in rank order, highest first (`GET /priority`).
 #[derive(Default)]
 struct Lookups {
     sprint: Option<String>,
     points: Vec<String>,
+    flagged: Option<String>,
     priorities: Vec<String>,
 }
 
@@ -59,6 +60,7 @@ impl Lookups {
     fn fields(&self) -> Vec<&str> {
         let mut f = LIST_FIELDS.to_vec();
         f.extend(self.sprint.as_deref().into_iter().chain(self.points.iter().map(String::as_str)));
+        f.extend(self.flagged.as_deref());
         f
     }
 }
@@ -239,6 +241,7 @@ impl JiraTracker {
                         matches!(s(f, "name"), Some("Story Points" | "Story point estimate"))
                             && f.pointer("/schema/type").and_then(Value::as_str) == Some("number")
                     }),
+                    flagged: by(&|f| s(f, "name") == Some("Flagged")).into_iter().next(),
                     priorities: prios
                         .as_array()
                         .map(|a| a.iter().filter_map(|p| p.get("id").and_then(idstr)).collect())
@@ -284,6 +287,12 @@ impl JiraTracker {
                 .map(|p| format!("{p} pts"))
                 .or_else(|| f.get("timeoriginalestimate")?.as_u64().map(duration)),
             due: s(f, "duedate").map(str::to_owned),
+            // The Flagged field holds `[{"value": "Impediment"}]` when set.
+            blocked: lk
+                .flagged
+                .as_deref()
+                .and_then(|id| f.get(id)?.as_array())
+                .is_some_and(|a| !a.is_empty()),
             project_hint: f.get("project").and_then(|p| s(p, "key")).map(str::to_owned),
         })
     }
@@ -467,6 +476,8 @@ impl Tracker for JiraTracker {
             comment: true,
             transitions_need_fetch: true,
             projects_v2: false,
+            // core-filled per source
+            block: false,
         }
     }
 
@@ -741,6 +752,34 @@ impl Tracker for JiraTracker {
     async fn set_priority(&self, t: &TicketRef, priority: &str) -> Result<Ticket, KeltaError> {
         let api = self.api().await?;
         let body = json!({ "fields": { "priority": { "name": priority } } });
+        api.auth
+            .send_text(HttpRequest::put(api.url(&format!("/issue/{}", percent_encode(&t.key)))).json(body))
+            .await?;
+        self.fetch_ticket(&api, &t.key).await
+    }
+
+    async fn set_blocked(
+        &self,
+        t: &TicketRef,
+        marker: &BlockedMarker,
+        blocked: bool,
+    ) -> Result<Ticket, KeltaError> {
+        let api = self.api().await?;
+        let body = match marker {
+            BlockedMarker::Flag => {
+                let lk = self.lookups(&api).await?;
+                let id = lk
+                    .flagged
+                    .as_deref()
+                    .ok_or_else(|| KeltaError::unsupported("this Jira has no Flagged field"))?;
+                let v = if blocked { json!([{ "value": "Impediment" }]) } else { Value::Null };
+                json!({ "fields": { id: v } })
+            }
+            BlockedMarker::Label(l) => {
+                json!({ "update": { "labels": [{ if blocked { "add" } else { "remove" }: l }] } })
+            }
+            _ => return Err(KeltaError::unsupported("Jira sets a flag or a label, not this marker")),
+        };
         api.auth
             .send_text(HttpRequest::put(api.url(&format!("/issue/{}", percent_encode(&t.key)))).json(body))
             .await?;

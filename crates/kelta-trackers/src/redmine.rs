@@ -230,6 +230,7 @@ impl RedmineTracker {
             }),
             estimate: issue.get("estimated_hours").and_then(Value::as_f64).map(|h| format!("{h}h")),
             due: s(issue, "due_date").map(str::to_owned),
+            blocked: false,
             project_hint: issue.pointer("/project/id").and_then(idstr),
         })
     }
@@ -427,6 +428,8 @@ impl Tracker for RedmineTracker {
             comment: true,
             transitions_need_fetch: true,
             projects_v2: false,
+            // core-filled per source
+            block: false,
         }
     }
 

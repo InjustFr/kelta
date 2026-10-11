@@ -246,6 +246,8 @@ export interface Commands {
   tracker_assignable_users: { args: { ticket: TicketRef; query: string }; result: User[] };
   tracker_priorities: { args: { ticket: TicketRef }; result: string[] };
   tracker_set_priority: { args: { ticket: TicketRef; priority: string }; result: Ticket };
+  /** Sets or clears the ticket's blocked marker through its tracker (#348). */
+  tracker_set_blocked: { args: { ticket: TicketRef; blocked: boolean }; result: Ticket };
   tracker_refine: { args: { ticket: TicketRef; project_id?: ProjectId | null }; result: string };
   /** Saved Claude workflows a run on the ticket can use (#233): its project's primary repo, then home. */
   workflows_list: { args: { ticket: TicketRef }; result: WorkflowInfo[] };
@@ -453,6 +455,7 @@ export const COMMAND_NAMES = [
   'tracker_assignable_users',
   'tracker_priorities',
   'tracker_set_priority',
+  'tracker_set_blocked',
   'tracker_refine',
   'workflows_list',
   'workflow_run',
@@ -686,6 +689,7 @@ export const trackerAssign = wrap('tracker_assign');
 export const trackerAssignableUsers = wrap('tracker_assignable_users');
 export const trackerPriorities = wrap('tracker_priorities');
 export const trackerSetPriority = wrap('tracker_set_priority');
+export const trackerSetBlocked = wrap('tracker_set_blocked');
 export const trackerRefine = wrap('tracker_refine');
 export const workflowsList = wrap('workflows_list');
 export const workflowRun = wrap('workflow_run');

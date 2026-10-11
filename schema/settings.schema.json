@@ -2918,6 +2918,48 @@
         "additionalProperties": false,
         "description": "`[[sources]]`: a ticket board, global, feeding zero or more projects (SETTINGS §2).",
         "properties": {
+          "blocked": {
+            "anyOf": [
+              {
+                "description": "How the tracker marks a ticket blocked.",
+                "oneOf": [
+                  {
+                    "const": "status",
+                    "description": "The status name reads blocked, on hold, waiting or impediment.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "flag",
+                    "description": "The Jira flag (Impediment).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "relation",
+                    "description": "A Linear blocked-by relation to an open issue.",
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "description": "This label (case-insensitive).",
+                    "properties": {
+                      "label": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "label"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "How this tracker marks a ticket blocked; unset follows the provider: flag on Jira, relation on\nLinear, status elsewhere."
+          },
           "id": {
             "default": "",
             "type": "string"

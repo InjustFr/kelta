@@ -141,6 +141,8 @@ describe('flowOf', () => {
     const active = { work: workIn('active'), needsYou: true };
     expect(at(item('A', ['In Progress', 'in_progress']), active)).toBe('waiting');
     expect(at(item('A', ['Blocked', 'in_progress']))).toBe('waiting');
+    // The source's marker (a Jira flag, a label), whatever the status.
+    expect(at(item('A', ['To Do', 'todo'], null, [], { blocked: true }))).toBe('waiting');
     expect(at(item('A', ['In Progress', 'in_progress'], null, [], {}, [pr({ ci: 'failure' })]))).toBe(
       'waiting',
     );
@@ -219,6 +221,9 @@ describe('priority, sprint, sort and age', () => {
     expect(keys('updated')).toEqual(['X-9', 'X-2', 'X-10']);
     expect(keys('age')).toEqual(['X-9', 'X-10', 'X-2']);
     expect(keys('key')).toEqual(['X-2', 'X-9', 'X-10']);
+    // Blocked last, whatever the sort.
+    const blocked = [p('X-1', 1, 'High', { blocked: true }), ...list];
+    expect(sortTickets(blocked, 'key').map((i) => i.ticket.ref.key)).toEqual(['X-2', 'X-9', 'X-10', 'X-1']);
   });
 
   it('marks age at 7, 14 and 21 days in a non-done status, falling back to updated_at', () => {

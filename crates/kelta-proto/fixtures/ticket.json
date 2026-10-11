@@ -6,6 +6,7 @@
     "login": "ada",
     "name": "Ada Lovelace"
   },
+  "blocked": false,
   "due": "2026-10-15",
   "estimate": "3",
   "kind": "Story",

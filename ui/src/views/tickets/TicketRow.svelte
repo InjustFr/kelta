@@ -107,7 +107,9 @@
   >
   <span class="k-row-key c-key">{tk.ref.key}</span>
   <span class="c-title"
-    ><span class="text">{tk.title}</span><span class="acts" data-acts>
+    ><span class="text"
+      >{#if tk.blocked}<span class="blocked" data-blocked>{t('Blocked')}</span>{/if}{tk.title}</span
+    ><span class="acts" data-acts>
       <RowButton icon="arrow-right" label={t('Move (m)')} onclick={onmove} />
       <RowButton
         icon="git-pull-request"
@@ -234,6 +236,16 @@
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* The source's blocked marker (#348), ahead of the title. */
+  .blocked {
+    margin-right: var(--k-space-2);
+    padding: 0 var(--k-space-1);
+    border: 1px solid var(--k-danger);
+    border-radius: var(--k-radius-sm);
+    color: var(--k-danger);
+    font-size: var(--k-font-size-xs);
   }
 
   .c-signals {

@@ -99,6 +99,7 @@ pub fn ticket() -> Ticket {
         }),
         estimate: Some("3".into()),
         due: Some("2026-10-15".into()),
+        blocked: false,
     }
 }
 
@@ -878,6 +879,7 @@ pub fn all() -> Vec<Fixture> {
                         comment: true,
                         transitions_need_fetch: true,
                         projects_v2: false,
+                        block: true,
                     },
                     waiting: vec![],
                 }],

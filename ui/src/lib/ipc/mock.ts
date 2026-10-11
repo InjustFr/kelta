@@ -1108,6 +1108,12 @@ export function createMockTransport(options: MockOptions = {}): {
       item.ticket.priority_rank = rank;
       return clone(item.ticket);
     },
+    tracker_set_blocked: ({ ticket, blocked }) => {
+      const item = ticketItem(ticket);
+      if (!item.caps.block) throw err('unsupported', `${ticket.account} cannot set this blocked marker`);
+      item.ticket.blocked = blocked;
+      return clone(item.ticket);
+    },
     tracker_refine: ({ ticket }) => {
       const t = ticketItem(ticket).ticket;
       return [

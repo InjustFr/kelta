@@ -31,7 +31,8 @@ pub const MAX_PAGES: u32 = 20;
 const USER: &str = "id name displayName avatarUrl";
 const ISSUE: &str = "id identifier title url updatedAt priorityLabel priority estimate dueDate \
     startedAt completedAt canceledAt cycle { id name number isActive endsAt } state { id name type } \
-    assignee { id name displayName avatarUrl } creator { id name displayName avatarUrl } labels { nodes { name } } team { key }";
+    assignee { id name displayName avatarUrl } creator { id name displayName avatarUrl } labels { nodes { name } } team { key } \
+    inverseRelations { nodes { type issue { state { type } } } }";
 
 /// Linear's fixed priorities as (label, API value), highest first.
 const PRIORITIES: [(&str, u8); 5] =
@@ -170,6 +171,16 @@ impl LinearTracker {
             }),
             estimate: v["estimate"].as_f64().map(|e| e.to_string()),
             due: s(v, "dueDate").map(str::to_owned),
+            // Blocked by an open issue: an inverse `blocks` relation whose issue is not completed or canceled.
+            blocked: v.pointer("/inverseRelations/nodes").and_then(Value::as_array).is_some_and(|a| {
+                a.iter().any(|r| {
+                    s(r, "type") == Some("blocks")
+                        && !matches!(
+                            r.pointer("/issue/state/type").and_then(Value::as_str),
+                            Some("completed" | "canceled")
+                        )
+                })
+            }),
         })
     }
 
@@ -254,6 +265,8 @@ impl Tracker for LinearTracker {
             comment: true,
             transitions_need_fetch: true,
             projects_v2: false,
+            // core-filled per source
+            block: false,
         }
     }
 

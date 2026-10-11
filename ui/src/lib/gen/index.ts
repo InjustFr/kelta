@@ -16,6 +16,7 @@ export type * from './Attention';
 export type * from './AttentionSummary';
 export type * from './AuthKind';
 export type * from './BellMode';
+export type * from './BlockedMarker';
 export type * from './BlockingOutcome';
 export type * from './BodyFormat';
 export type * from './BranchChoice';

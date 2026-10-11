@@ -98,6 +98,15 @@ pub async fn tracker_set_priority(
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub async fn tracker_set_blocked(
+    core: State<'_, Arc<Core>>,
+    ticket: TicketRef,
+    blocked: bool,
+) -> Res<Ticket> {
+    core.tracker_set_blocked(&ticket, blocked).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
 pub async fn tracker_refine(
     core: State<'_, Arc<Core>>,
     ticket: TicketRef,

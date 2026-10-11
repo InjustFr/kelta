@@ -28,4 +28,9 @@ estimate: string | null,
 /**
  * Due date, `YYYY-MM-DD` or RFC 3339.
  */
-due: string | null, };
+due: string | null, 
+/**
+ * Blocked by the source's marker (`Source.blocked`, #348). Providers set their native marker
+ * (Jira flag, Linear blocked-by relation); kelta-core resolves the source's.
+ */
+blocked: boolean, };
