@@ -24,7 +24,7 @@ use serde_json::Value;
 
 use super::{Call, Out, PROTOCOL_VERSION, Req, SpawnSpec, decode, encode, peer_uid, pidfile, read_msg};
 
-const CALL_TIMEOUT: Duration = Duration::from_secs(10);
+const CALL_TIMEOUT: Duration = Duration::from_secs(if cfg!(test) { 2 } else { 10 });
 /// How long a replaced keltad gets to close its socket after SIGTERM.
 const STOP_TIMEOUT: Duration = Duration::from_secs(2);
 const THREAD_STACK: usize = 256 * 1024;
@@ -352,6 +352,12 @@ impl TerminalHost for DaemonTerminalHost {
         };
         let seq = c.next_seq();
         let r = c.call_seq(seq, &req, &[]);
+        if let Err(e) = &r
+            && e.code == ErrorCode::Timeout
+        {
+            // keltad may still finish the spawn: queued behind it, the kill leaves no session without a handler.
+            let _ = c.send(0, &Req::Kill { id: id.clone(), signal: KillSignal::Kill }, &[]);
+        }
         if r.is_err() {
             let mut ev = c.events.lock();
             match prev {

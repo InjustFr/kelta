@@ -13,6 +13,7 @@ use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::{DirBuilderExt, FileExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
+use std::time::Duration;
 
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::SessionId;
@@ -31,12 +32,13 @@ const MAX_PENDING: usize = 1024 * 1024;
 const QUEUE: usize = 64;
 /// Bytes read per requested line by `tail`.
 const TAIL_BYTES_PER_LINE: usize = 512;
+/// How long a caller waits for the writer to catch up before reading what is on disk.
+const SYNC_WAIT: Duration = Duration::from_secs(2);
 
 enum Msg {
     Append(SessionId, String),
     Caps(u64, u64),
     Delete(SessionId),
-    Tail(SessionId, usize, mpsc::Sender<String>),
     Sync(mpsc::Sender<()>),
 }
 
@@ -89,15 +91,22 @@ impl HistoryLog {
 
     pub fn set_caps(&self, limits: &TerminalLimits) {
         let (per, total) = caps(limits);
-        let _ = self.tx.send(Msg::Caps(per, total));
+        self.send_later(Msg::Caps(per, total));
     }
 
     pub fn delete(&self, id: &SessionId) {
-        let _ = self.tx.send(Msg::Delete(id.clone()));
+        self.send_later(Msg::Delete(id.clone()));
     }
 
+    /// Reads on the calling thread once queued batches landed (or [`SYNC_WAIT`] passed).
     pub fn tail(&self, id: &SessionId, max_lines: usize) -> String {
-        self.request(|tx| Msg::Tail(id.clone(), max_lines, tx)).unwrap_or_default()
+        self.request(Msg::Sync);
+        self.tail_now(id, max_lines)
+    }
+
+    /// What is on disk, without waiting for the writer (a respawn must not hang on a slow disk's queue).
+    pub fn tail_now(&self, id: &SessionId, max_lines: usize) -> String {
+        tail(&self.dir, id, max_lines)
     }
 
     /// Scans on the calling thread (a long scan must not stall the writer) once queued batches landed.
@@ -111,7 +120,25 @@ impl HistoryLog {
     fn request<T>(&self, msg: impl FnOnce(mpsc::Sender<T>) -> Msg) -> Option<T> {
         let (tx, rx) = mpsc::channel();
         self.tx.send(msg(tx)).ok()?;
-        rx.recv().ok()
+        rx.recv_timeout(SYNC_WAIT).ok()
+    }
+
+    /// Never waits: callers serve keystrokes (keltad's connection loop). A full queue hands the
+    /// message to a short-lived thread.
+    fn send_later(&self, msg: Msg) {
+        if let Err(TrySendError::Full(msg)) = self.tx.try_send(msg) {
+            let tx = self.tx.clone();
+            #[allow(clippy::disallowed_methods)] // allowlisted (ARCHITECTURE §9.6)
+            let r = std::thread::Builder::new()
+                .name("kelta-history-send".into())
+                .stack_size(64 * 1024)
+                .spawn(move || {
+                    let _ = tx.send(msg);
+                });
+            if let Err(e) = r {
+                tracing::warn!("history log: request dropped: {e}");
+            }
+        }
     }
 }
 
@@ -181,9 +208,6 @@ impl Writer {
                     self.checked.remove(&id);
                     self.total = log_files(&self.dir).iter().map(|f| f.2).sum();
                 }
-                Msg::Tail(id, n, tx) => {
-                    let _ = tx.send(self.tail(&id, n));
-                }
                 Msg::Sync(tx) => {
                     let _ = tx.send(());
                 }
@@ -237,17 +261,18 @@ impl Writer {
             }
         }
     }
+}
 
-    fn tail(&self, id: &SessionId, n: usize) -> String {
-        let Some([cur, old]) = self.paths(id) else { return String::new() };
-        let budget = n.saturating_mul(TAIL_BYTES_PER_LINE).saturating_add(4096);
-        let mut text = read_tail(&cur, budget);
-        if text.lines().count() < n {
-            text = read_tail(&old, budget) + &text;
-        }
-        let lines: Vec<&str> = text.lines().collect();
-        lines[lines.len().saturating_sub(n)..].join("\n")
+/// The last `n` lines of a session's logs.
+fn tail(dir: &Path, id: &SessionId, n: usize) -> String {
+    let Some([cur, old]) = paths(dir, id) else { return String::new() };
+    let budget = n.saturating_mul(TAIL_BYTES_PER_LINE).saturating_add(4096);
+    let mut text = read_tail(&cur, budget);
+    if text.lines().count() < n {
+        text = read_tail(&old, budget) + &text;
     }
+    let lines: Vec<&str> = text.lines().collect();
+    lines[lines.len().saturating_sub(n)..].join("\n")
 }
 
 /// `[current, previous]` log paths of a session in `dir`.
@@ -330,10 +355,10 @@ mod tests {
         let [cur, old] = w.paths(&id).unwrap();
         let size = |p: &Path| fs::metadata(p).map_or(0, |m| m.len());
         assert!(size(&old) > 0 && size(&cur) + size(&old) <= 1000 + 10, "{} + {}", size(&cur), size(&old));
-        assert_eq!(w.tail(&id, 3), "line 0197\nline 0198\nline 0199");
+        assert_eq!(tail(d.path(), &id, 3), "line 0197\nline 0198\nline 0199");
         // The tail spans the rotation boundary.
         let n = fs::read_to_string(&cur).unwrap().lines().count();
-        assert_eq!(w.tail(&id, n + 2).lines().count(), n + 2);
+        assert_eq!(tail(d.path(), &id, n + 2).lines().count(), n + 2);
     }
 
     #[test]
@@ -361,11 +386,11 @@ mod tests {
         fs::write(d.path().join("s.log"), b"one\ntwo\nthr\xC3").unwrap();
         let mut w = writer(d.path(), 1 << 20, 1 << 30);
         let id = SessionId::new("s");
-        assert_eq!(w.tail(&id, 10), "one\ntwo\nthr\u{FFFD}");
+        assert_eq!(tail(d.path(), &id, 10), "one\ntwo\nthr\u{FFFD}");
         w.append(&id, "four\n").unwrap();
-        assert_eq!(w.tail(&id, 10), "one\ntwo\nthr\u{FFFD}\nfour");
+        assert_eq!(tail(d.path(), &id, 10), "one\ntwo\nthr\u{FFFD}\nfour");
         w.append(&id, "five\n").unwrap();
-        assert_eq!(w.tail(&id, 2), "four\nfive");
+        assert_eq!(tail(d.path(), &id, 2), "four\nfive");
     }
 
     #[test]

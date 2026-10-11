@@ -197,7 +197,7 @@ impl TerminalHost for PtyTerminalHost {
         if let Some(h) = self.shared.history_on() {
             // Same id again (restore, restart): earlier output goes back into the scrollback,
             // above a cleared screen, before logging starts so it is not logged twice.
-            let tail = h.tail(&spec.id, self.view_scrollback());
+            let tail = h.tail_now(&spec.id, self.view_scrollback());
             if !tail.is_empty() {
                 model.feed(format!("{}\r\n\x1b[2J\x1b[H", tail.replace('\n', "\r\n")).as_bytes());
             }
