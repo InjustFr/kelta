@@ -178,6 +178,7 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 
 ### [work]
 | `plan_preview` | bool | `true` | show StartWorkPlan sheet |
+| `finish_first` | bool | `true` | starting a new ticket while other work is unfinished lists that work first (Start anyway or go to it); the sheet's "Don't ask again" turns it off |
 | `default_template` | str | `"claude+editor"` | |
 | `review_template` | str | `"review"` | |
 | `scratch_branch_template` | Template | `"wip/{slug}"` | branch of a New work item (`⇧⌘N`, `kelta-ctl start --task`); `{slug}` = slug of the task's first line (`worktree.slug_max`). Validated like `git check-ref-format`; an existing branch or item is refused, never adopted |
