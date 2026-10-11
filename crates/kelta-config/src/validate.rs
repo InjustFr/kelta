@@ -188,13 +188,16 @@ pub fn lenient_issues(layer: Layer, value: &mut Value, stem: Option<&str>) -> (V
         let raw = layer_issues(layer, value, stem);
         let mut again = false;
         for (k, (_, pattern, message)) in SOFT_KEYS.iter().enumerate().filter(|(_, (l, ..))| *l == layer) {
-            // last first: dropping an array item leaves the earlier indices valid
+            // last first: dropping an array item leaves the earlier indices valid; one entry can raise
+            // several issues, and a second drop would remove the item that shifted into its place
+            let mut dropped: HashSet<&[String]> = HashSet::new();
             for r in raw.iter().rev() {
                 let hit = r.path.len() >= pattern.len()
                     && pattern.iter().zip(&r.path).all(|(p, s)| *p == "*" || p == s);
                 let path = &r.path[..pattern.len().min(r.path.len())];
                 // schema problems hide the follow-up checks, so validate again after a drop
-                if hit && crate::path::remove(value, path) {
+                if hit && !dropped.contains(path) && crate::path::remove(value, path) {
+                    dropped.insert(path);
                     warnings.push((k, RawIssue::new(path, *message)));
                     again = true;
                 }
@@ -844,6 +847,17 @@ mod tests {
             [RawIssue::new(&path("2"), SOURCE_FIELD), RawIssue::new(&path("0"), SOURCE_FIELD)]
         );
         assert_eq!(v["sources"][0]["fields"], json!([field("cf_1")]));
+    }
+
+    #[test]
+    fn a_source_field_with_two_issues_or_no_id_drops_only_itself() {
+        // empty id plus a misspelt key: two issues on one entry; a missing id: one
+        let fields = json!([{"id": "", "lable": "x"}, {"id": "cf_1"}, {"label": "Verified"}]);
+        let mut v = json!({"sources": [{"id": "a", "tracker": {"account": "j"}, "fields": fields}]});
+        let (errors, warnings) = lenient_issues(Layer::Global, &mut v, None);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(warnings.len(), 2, "{warnings:?}");
+        assert_eq!(v["sources"][0]["fields"], json!([{"id": "cf_1"}]));
     }
 
     #[test]

@@ -1798,12 +1798,13 @@ pub struct Source {
 
 /// A tracker field to show on the tickets.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
-#[serde(default, deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 pub struct SourceField {
     /// The tracker's field: a Jira field id (`customfield_10042`), a GitHub project field name.
     #[schemars(length(min = 1))]
     pub id: String,
     /// Shown before the value; empty shows the value alone.
+    #[serde(default)]
     pub label: String,
 }
 

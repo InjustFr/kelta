@@ -3508,7 +3508,6 @@
               "description": "A tracker field to show on the tickets.",
               "properties": {
                 "id": {
-                  "default": "",
                   "description": "The tracker's field: a Jira field id (`customfield_10042`), a GitHub project field name.",
                   "minLength": 1,
                   "type": "string"
@@ -3519,6 +3518,9 @@
                   "type": "string"
                 }
               },
+              "required": [
+                "id"
+              ],
               "type": "object"
             },
             "type": "array"
