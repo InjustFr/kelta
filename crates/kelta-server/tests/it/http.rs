@@ -64,6 +64,9 @@ async fn server_is_lazy_and_stops_after_last_release() {
     e.server.release_http();
     // Still one consumer: reachable.
     assert_eq!(raw_status(port, &format!("127.0.0.1:{port}"), "/hook/x", None, "{}").await, 401);
+    // A half-sent request must not keep the listener alive (#293).
+    let mut half = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    half.write_all(b"POST /hook/x HTTP/1.1\r\nHost: 127.0.0.1").await.unwrap();
     e.server.release_http();
     assert_eq!(e.server.http_port(), None);
     let mut closed = false;

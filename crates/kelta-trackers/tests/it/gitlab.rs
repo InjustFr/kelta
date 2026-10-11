@@ -90,6 +90,7 @@ async fn a_304_reuses_the_cached_list() {
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("etag", "W/\"abc\"")
+                .insert_header("x-next-page", "2")
                 .set_body_string(fixture_text("gitlab/issues_p1.json")),
         )
         .expect(1)
@@ -99,6 +100,8 @@ async fn a_304_reuses_the_cached_list() {
     let a = t.list(&view("mine"), None).await.unwrap();
     let b = t.list(&view("mine"), None).await.unwrap();
     assert_eq!(a, b);
+    // The bare 304 carries no x-next-page: `next` comes from the cached 200's headers.
+    assert_eq!(b.next, Some(Cursor::Page(2)));
 }
 
 #[tokio::test]
@@ -235,6 +238,21 @@ async fn done_labels_close_and_other_labels_reopen_a_closed_issue() {
     let put = &bodies(&server2, "PUT", ISSUE).await[0];
     assert_eq!(put["state_event"], "reopen");
     assert_eq!(put["remove_labels"], "workflow::done");
+}
+
+#[tokio::test]
+async fn negated_done_labels_do_not_close() {
+    let server = MockServer::start().await;
+    issue_with(&server, "gitlab/issue.json").await;
+    Mock::given(method("PUT"))
+        .and(path(ISSUE))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitlab/issue_moved.json")))
+        .mount(&server)
+        .await;
+    gl(&server).transition(&r(), "label:workflow::not-done", None).await.unwrap();
+    let put = &bodies(&server, "PUT", ISSUE).await[0];
+    assert_eq!(put["add_labels"], "workflow::not-done");
+    assert!(put.get("state_event").is_none(), "{put}");
 }
 
 #[tokio::test]
