@@ -36,13 +36,23 @@ describe('TagsStore', () => {
 
   it('a rename keeps the tag on its items; a delete takes it off and the filter lets go', async () => {
     await tags.toggle('tickets', 'jira:A-1', 'ping');
-    await tags.put(1, { name: 'ping PO', color: 'theme:blue' });
+    await tags.put('ping', { name: 'ping PO', color: 'theme:blue' });
     expect(tags.has('tickets', 'jira:A-1', 'ping PO')).toBe(true);
     expect(tags.live('ping')).toBeNull();
 
     await tags.remove('ping PO');
     expect(tags.value.tags.map((t) => t.name)).toEqual(['retest']);
     expect(tags.of('tickets', 'jira:A-1')).toEqual([]);
+  });
+
+  it('an edit from a stale list hits the tag by name, not by position', async () => {
+    const other = new TagsStore();
+    await other.load();
+    await other.remove('retest'); // another window deletes retest; `tags` still shows [retest, ping]
+    await tags.put('ping', { name: 'ping PO', color: null });
+    expect(tags.value.tags.map((t) => t.name)).toEqual(['ping PO']);
+    await tags.put('retest', { name: 'x', color: null }); // deleted elsewhere: no-op
+    expect(tags.value.tags.map((t) => t.name)).toEqual(['ping PO']);
   });
 
   it('rolls back a refused save', async () => {

@@ -55,11 +55,14 @@ export class TagsStore {
     });
   }
 
-  /** Adds a tag (`at` null) or replaces the one at `at`; a rename keeps it on its items. */
-  put(at: number | null, tag: LocalTag): Promise<void> {
+  /** Adds a tag (`oldName` null) or replaces the one named `oldName`; a rename keeps it on its items. */
+  put(oldName: string | null, tag: LocalTag): Promise<void> {
     return this.#save((v) => {
-      const old = at === null ? null : (v.tags[at] ?? null);
-      const tags = at === null ? [...v.tags, tag] : v.tags.map((t, i) => (i === at ? tag : t));
+      // Looked up by name in the fresh set: another window may have moved or deleted it (then no-op).
+      const at = oldName === null ? -1 : v.tags.findIndex((t) => t.name === oldName);
+      if (oldName !== null && at < 0) return v;
+      const old = v.tags[at];
+      const tags = at < 0 ? [...v.tags, tag] : v.tags.map((t, i) => (i === at ? tag : t));
       const rename = (m: Record<string, string[]>): Record<string, string[]> =>
         old && old.name !== tag.name
           ? Object.fromEntries(

@@ -33,7 +33,10 @@
 
   async function save(): Promise<void> {
     if (editing === null || !name.trim()) return;
-    await tags.put(editing < 0 ? null : editing, { name: name.trim(), color });
+    await tags.put(editing < 0 ? null : (tags.value.tags[editing]?.name ?? null), {
+      name: name.trim(),
+      color,
+    });
     editing = null;
   }
 
