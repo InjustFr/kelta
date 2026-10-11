@@ -298,7 +298,8 @@ function ticketDetailFor({ ticket: t, prs, caps }: TicketItem, comments: string[
         body_html: `<p>${escapeHtml(c)}</p>`,
       })),
     ],
-    parent: null,
+    // Jira-like: the list's parent opens as a ticket.
+    parent: t.parent ? { account: t.ref.account, key: t.parent.key, id: t.parent.key } : null,
     children: [],
     prs,
     caps,

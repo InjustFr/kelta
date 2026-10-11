@@ -404,6 +404,10 @@ describe('TicketsPane workbench', () => {
       expect(groupNames(container)).toEqual(['Ada Lovelace 3', 'Bob Martin 1', 'Unassigned 1']),
     );
     await press('G'); // source
+    await press('G');
+    await waitFor(() =>
+      expect(groupNames(container)).toEqual(['SHOP-142 · Rate-limit login 1', 'No parent 4']),
+    );
     await press('G'); // none
     await waitFor(() => expect(groupNames(container)).toEqual([]));
     expect(card(container, 'SHOP-151')).not.toBeNull();
