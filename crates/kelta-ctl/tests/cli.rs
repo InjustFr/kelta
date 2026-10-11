@@ -124,6 +124,23 @@ fn hook_relays_the_payload() {
 }
 
 #[test]
+fn outside_hook_relays_with_the_parent_pid_and_skips_kelta_panes() {
+    let d = tmp();
+    let sock = d.path().join("c.sock");
+    let env = [("KELTA_SOCK", sock.as_path())];
+    let payload = br#"{"hook_event_name":"Stop","session_id":"u1"}"#;
+    // In a Kelta pane: nothing sent (the socket does not even exist).
+    assert!(run(&["hook", "--outside"], &env, &[("KELTA_SESSION_ID", "s")], payload).status.success());
+    let srv = fake_server(&sock, r#"{"ok":true,"result":null}"#);
+    assert!(run(&["hook", "--outside"], &env, &[], payload).status.success());
+    let line: serde_json::Value = serde_json::from_str(&srv.join().unwrap()).unwrap();
+    assert_eq!(line["cmd"], "outside_hook");
+    assert_eq!(line["payload"]["session_id"], "u1");
+    assert_eq!(line["pid"], std::process::id());
+    assert!(line.get("token").is_none());
+}
+
+#[test]
 fn commands_print_result_or_fail() {
     let d = tmp();
     let sock = d.path().join("c.sock");

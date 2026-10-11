@@ -3,4 +3,4 @@
 /**
  * Tickets pane grouping (`PaneContent::Tickets.group`; `None` = flow).
  */
-export type TicketGroupBy = "flow" | "status" | "priority" | "sprint" | "assignee" | "source" | "none";
+export type TicketGroupBy = "flow" | "status" | "priority" | "sprint" | "assignee" | "source" | "parent" | "none";

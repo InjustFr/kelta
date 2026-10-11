@@ -18,6 +18,7 @@ import type {
   Layer,
   LocalTags,
   NextUp,
+  OutsideSession,
   Layout,
   Person,
   ProjectInfo,
@@ -128,6 +129,8 @@ export interface MockState {
   workflows: WorkflowInfo[];
   /** Claude `Workflow` runs (`claude_runs_list`, #272); `workflow_run` adds one. */
   claudeRuns: ClaudeRun[];
+  /** Claude sessions Kelta did not start (`outside_list`, #345). */
+  outside: OutsideSession[];
   /** `app_update_status`; `app_update_check` stamps `checked_at`. */
   update: UpdateStatus;
 }
@@ -262,6 +265,7 @@ function freshState(): MockState {
     nextUp: { items: [], seen: FIXTURES.tickets.slice(0, -1).map((t) => refKey(t.ticket.ref)) },
     workflows: clone(MOCK_WORKFLOWS),
     claudeRuns: [],
+    outside: [],
     update: { ...clone(samples.updateStatus), state: { type: 'up_to_date' } },
   };
 }
@@ -310,7 +314,8 @@ function ticketDetailFor({ ticket: t, prs, caps }: TicketItem, comments: string[
         body_html: `<p>${escapeHtml(c)}</p>`,
       })),
     ],
-    parent: null,
+    // Jira-like: the list's parent opens as a ticket.
+    parent: t.parent ? { account: t.ref.account, key: t.parent.key, id: t.parent.key } : null,
     children: [],
     prs,
     caps,
@@ -483,6 +488,7 @@ export function createMockTransport(options: MockOptions = {}): {
   const screens = new Map<ScreenInstanceId, string>();
   // Claude Code found, Kelta's MCP not registered yet.
   let claudeMcp: boolean | null = false;
+  let claudeHooks: boolean | null = false;
 
   const emit = (event: UiEvent): void => {
     for (const ch of eventChannels) {
@@ -664,6 +670,18 @@ export function createMockTransport(options: MockOptions = {}): {
     },
     claude_mcp_status: () => claudeMcp,
     claude_permission_mode: () => 'auto',
+    claude_hooks_status: () => claudeHooks,
+    claude_hooks_install: () => {
+      claudeHooks = true;
+      return null;
+    },
+    claude_hooks_remove: () => {
+      claudeHooks = false;
+      return null;
+    },
+    outside_list: () => clone(state.outside),
+    // No window control in the browser: Peek with a note.
+    outside_jump: () => 'Terminal',
     claude_mcp_install: () => {
       claudeMcp = true;
       return null;
@@ -1119,6 +1137,12 @@ export function createMockTransport(options: MockOptions = {}): {
       if (rank < 0) throw err('not_found', `no priority named ${priority}`);
       item.ticket.priority = priority;
       item.ticket.priority_rank = rank;
+      return clone(item.ticket);
+    },
+    tracker_set_blocked: ({ ticket, blocked }) => {
+      const item = ticketItem(ticket);
+      if (!item.caps.block) throw err('unsupported', `${ticket.account} cannot set this blocked marker`);
+      item.ticket.blocked = blocked;
       return clone(item.ticket);
     },
     tracker_refine: ({ ticket }) => {

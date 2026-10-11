@@ -108,7 +108,8 @@
     },
     "parent": {
       "id": "10100",
-      "key": "SHOP-100"
+      "key": "SHOP-100",
+      "fields": { "summary": "Login hardening" }
     },
     "subtasks": [
       {

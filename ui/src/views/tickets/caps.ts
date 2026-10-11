@@ -13,6 +13,7 @@ export type TicketAction =
   | 'assign'
   | 'unassign'
   | 'comment'
+  | 'block'
   | 'refine'
   | 'workflow'
   | 'branch'
@@ -27,6 +28,7 @@ export const TICKET_ACTIONS: readonly { id: TicketAction; key: string }[] = [
   { id: 'assign', key: 'a' },
   { id: 'unassign', key: 'A' },
   { id: 'comment', key: 'c' },
+  { id: 'block', key: 'b' },
   { id: 'refine', key: 'r' },
   { id: 'workflow', key: 'w' },
   { id: 'branch', key: 'y' },
@@ -56,6 +58,10 @@ export function blockedReason(
       return action === 'unassign' && !item.ticket.assignee ? t('Nobody is assigned.') : null;
     case 'comment':
       return item.caps.comment ? null : t('This tracker does not let Kelta add comments.');
+    case 'block':
+      return item.caps.block
+        ? null
+        : t('Kelta cannot set the blocked marker of this tracker. Set it in the tracker.');
     case 'branch':
       return branch ? null : t('No branch yet. Start work first.');
     case 'workflow':

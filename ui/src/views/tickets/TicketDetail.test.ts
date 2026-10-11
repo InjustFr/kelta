@@ -5,7 +5,7 @@ import type { StartWorkPlan, TicketItem } from '$lib/gen';
 import * as samples from '$lib/gen/fixtures';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { projects, reviews, tickets, toasts, ui, work } from '$lib/stores';
+import { layout, projects, reviews, tickets, toasts, ui, work } from '$lib/stores';
 import { ticketKey } from '$lib/stores/tickets.svelte';
 
 import { sheetRegistry } from '$app/registry';
@@ -104,7 +104,15 @@ describe('TicketDetail', () => {
       within(more)
         .getAllByRole('menuitem')
         .map((b) => b.querySelector('.label')?.textContent),
-    ).toEqual(['Unassign', 'Refine with Claude', 'Run workflow…', 'Copy branch', 'Open in browser', 'Tags…']);
+    ).toEqual([
+      'Unassign',
+      'Block ticket',
+      'Refine with Claude',
+      'Run workflow…',
+      'Copy branch',
+      'Open in browser',
+      'Tags…',
+    ]);
     await fireEvent.keyDown(more, { key: 'Escape' });
     const meta = screen.getByTestId('ticket-detail').querySelector('dl')!;
     expect(meta.textContent).toContain('SHOP Sprint 12');
@@ -173,6 +181,28 @@ describe('TicketDetail', () => {
     await fireEvent.keyDown(screen.getByTestId('ticket-detail'), { key: 'a' });
     expect(mock.calls.some((c) => c.cmd === 'tracker_assign')).toBe(false);
     expect(toasts.list.at(-1)?.toast.text).toBe('This tracker does not let Kelta change the assignee.');
+  });
+
+  it('b blocks the ticket through its tracker', async () => {
+    await fireEvent.keyDown(mount('SHOP-142'), { key: 'b' });
+    await waitFor(() =>
+      expect(mock.calls.filter((c) => c.cmd === 'tracker_set_blocked').at(-1)?.args).toMatchObject({
+        blocked: true,
+      }),
+    );
+    expect(toasts.list.at(-1)?.toast.text).toBe('SHOP-142 blocked');
+  });
+
+  it('a blocked ticket offers Unblock ticket, which clears the marker', async () => {
+    itemOf('SHOP-142').ticket.blocked = true;
+    mount('SHOP-142');
+    await fireEvent.click(action('More'));
+    await fireEvent.click(screen.getByRole('menuitem', { name: /^Unblock ticket/ }));
+    await waitFor(() =>
+      expect(mock.calls.filter((c) => c.cmd === 'tracker_set_blocked').at(-1)?.args).toMatchObject({
+        blocked: false,
+      }),
+    );
   });
 
   it('u assigns to anyone the tracker offers, ! changes the priority', async () => {
@@ -250,6 +280,16 @@ describe('TicketDetail', () => {
         transition_id: 'to-in_review',
       }),
     );
+  });
+
+  it('shows the parent above the title; Enter on it opens its detail', async () => {
+    mount('SHOP-160');
+    const link = screen.getByRole('button', { name: /parent SHOP-142/ });
+    expect(link.textContent).toContain('Rate-limit login');
+    await waitFor(() => expect(tickets.details[ticketKey(itemOf('SHOP-160').ticket.ref)]?.data).toBeTruthy());
+    link.focus();
+    await fireEvent.click(link); // a focused button's Enter is its click
+    await waitFor(() => expect(JSON.stringify(layout.get('shop'))).toMatch(/"ticket_detail".*"SHOP-142"/));
   });
 
   it('lists sub-tasks with their status; s on one starts work on it, not on the parent', async () => {

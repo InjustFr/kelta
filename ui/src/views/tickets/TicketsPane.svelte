@@ -6,7 +6,7 @@
   import { dispatch } from '$lib/actions';
   import type { Column, PrLink, Ticket, TicketItem, TicketSort, TicketsMode, Who } from '$lib/gen';
   import { openExternal, trackerAssign } from '$lib/ipc/commands';
-  import { GLOBAL, projects, settings, tags, tickets, toasts, ui, work } from '$lib/stores';
+  import { GLOBAL, projects, sessions, settings, tags, tickets, toasts, ui, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import {
     Badge,
@@ -34,6 +34,7 @@
   import { batch, batchKey } from '../work/batch.svelte';
   import { runPrimary } from '../work/actions';
   import { phaseNow } from '../work/live';
+  import { outsidePhase } from '../work/phase';
   import CommentDialog from './CommentDialog.svelte';
   import MoveDialogs from './MoveDialogs.svelte';
   import StatusPicker from './StatusPicker.svelte';
@@ -308,6 +309,12 @@
   const phaseFor = (item: TicketItem) => {
     const w = liveWork(item);
     return w ? phaseNow(w) : null;
+  };
+  /** Shown: the work item's phase, else a Claude session Kelta did not start on the ticket (#345). */
+  const shownPhase = (item: TicketItem) => {
+    const key = ticketKey(item.ticket.ref);
+    const s = sessions.elsewhere.find((o) => o.ticket && ticketKey(o.ticket) === key);
+    return phaseFor(item) ?? (s ? outsidePhase(s) : null);
   };
 
   // ---- selection ----------------------------------------------------------------------------
@@ -946,7 +953,7 @@
                   selected={cur === r.item}
                   picked={picked.includes(r.key)}
                   picking={picked.length > 0}
-                  phase={phaseFor(r.item)}
+                  phase={shownPhase(r.item)}
                   hasWork={hasWork(r.item)}
                   marked={batch.has(r.item.ticket.ref)}
                   {groupBy}
@@ -1021,7 +1028,7 @@
                 >
                   <span class="card-row first">
                     <span class="key">{item.ticket.ref.key}</span>
-                    <Lamp level={phaseFor(item)?.lamp ?? 'none'} title={phaseFor(item)?.label} />
+                    <Lamp level={shownPhase(item)?.lamp ?? 'none'} title={shownPhase(item)?.label} />
                     {#if hasWork(item)}<Badge tone="accent" title={t('Local work in progress')}
                         >{t('work')}</Badge
                       >{/if}

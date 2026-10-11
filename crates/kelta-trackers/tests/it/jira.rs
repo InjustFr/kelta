@@ -2,7 +2,7 @@
 
 use crate::support::*;
 use kelta_proto::error::ErrorCode;
-use kelta_proto::settings::{ColumnSpec, TrackerBinding, TrackerView};
+use kelta_proto::settings::{BlockedMarker, ColumnSpec, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{Assignee, BodyFormat, Cursor, StatusCategory, Who};
 use serde_json::json;
 use wiremock::matchers::{body_partial_json, header, method, path, query_param};
@@ -198,6 +198,9 @@ async fn cloud_detail_converts_adf_and_keeps_the_last_twenty_comments() {
     assert!(d.comments[19].body_html.contains("Comment 25"));
     assert_eq!(d.comments[0].author.name, "Alice");
     assert_eq!(d.parent.as_ref().map(|p| p.key.as_str()), Some("SHOP-100"));
+    let parent = d.ticket.parent.unwrap();
+    assert_eq!((parent.key.as_str(), parent.title.as_str()), ("SHOP-100", "Login hardening"));
+    assert!(parent.url.ends_with("/browse/SHOP-100"));
     let kids: Vec<_> =
         d.children.iter().map(|c| (c.ticket.r#ref.key.as_str(), c.ticket.status.category)).collect();
     assert_eq!(kids, vec![("SHOP-143", StatusCategory::Todo)]);
@@ -847,4 +850,50 @@ async fn search_ands_an_escaped_text_clause_onto_the_view_jql() {
         all.last().unwrap()["jql"],
         r#"((project = SHOP) AND assignee = currentUser()) AND text ~ "say \"hi\"" ORDER BY rank"#
     );
+}
+
+#[tokio::test]
+async fn the_flagged_field_marks_blocked_and_block_sets_the_flag_or_a_label() {
+    let server = MockServer::start().await;
+    mount_get(
+        &server,
+        "/rest/api/3/field",
+        json!([{"id": "customfield_10021", "name": "Flagged", "schema": {"type": "array"}}]),
+    )
+    .await;
+    mount_get(&server, "/rest/api/3/priority", json!([])).await;
+    let flagged = issue(json!({"customfield_10021": [{"id": "10019", "value": "Impediment"}]}));
+    Mock::given(method("POST"))
+        .and(path("/rest/api/3/search/jql"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(
+                json!({"issues": [flagged.clone(), issue(json!({"customfield_10021": null}))]}),
+            ),
+        )
+        .mount(&server)
+        .await;
+    let p = cloud(&server);
+    let page = p.list(&jql_view(), None).await.unwrap();
+    assert_eq!(page.items.iter().map(|t| t.blocked).collect::<Vec<_>>(), [true, false]);
+
+    Mock::given(method("PUT"))
+        .and(path("/rest/api/3/issue/SHOP-1"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&server)
+        .await;
+    mount_get(&server, "/rest/api/3/issue/SHOP-1", flagged).await;
+    let r = tref("jira-acme", "SHOP-1", "1");
+    assert!(p.set_blocked(&r, &BlockedMarker::Flag, true).await.unwrap().blocked);
+    p.set_blocked(&r, &BlockedMarker::Flag, false).await.unwrap();
+    p.set_blocked(&r, &BlockedMarker::Label("blocked".into()), false).await.unwrap();
+    assert_eq!(
+        bodies(&server, "PUT", "/rest/api/3/issue/SHOP-1").await,
+        [
+            json!({"fields": {"customfield_10021": [{"value": "Impediment"}]}}),
+            json!({"fields": {"customfield_10021": null}}),
+            json!({"update": {"labels": [{"remove": "blocked"}]}}),
+        ]
+    );
+    let err = p.set_blocked(&r, &BlockedMarker::Relation, true).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::Unsupported);
 }

@@ -2,7 +2,7 @@
 
 use crate::support::*;
 use kelta_proto::error::ErrorCode;
-use kelta_proto::settings::{ProjectV2Ref, TrackerBinding};
+use kelta_proto::settings::{BlockedMarker, ProjectV2Ref, TrackerBinding};
 use kelta_proto::tracker::{Assignee, Cursor, StatusCategory, Who};
 use serde_json::json;
 use wiremock::matchers::{body_partial_json, body_string_contains, header, method, path, query_param};
@@ -114,7 +114,10 @@ async fn repo_views_filter_by_state_and_assignee() {
     let page = gh(&server).list(&v, None).await.unwrap();
     assert_eq!(page.items.len(), 2);
     assert!(page.next.is_none());
-    assert!(bodies(&server, "POST", "/graphql").await.is_empty(), "closed lists skip the board lookup");
+    let b = bodies(&server, "POST", "/graphql").await;
+    assert_eq!(b.len(), 1, "closed lists still look the parents up");
+    let q = b[0]["query"].as_str().unwrap();
+    assert!(q.contains("parent{") && !q.contains("projectItems"), "parents only, no board lookup");
 }
 
 #[tokio::test]
@@ -270,6 +273,11 @@ async fn project_moves_resolve_field_and_option_ids_by_name_and_cache_them() {
     assert_eq!(moved.status.category, StatusCategory::InReview);
     assert_eq!(moved.sprint.as_ref().map(|s| s.name.as_str()), Some("Sprint 7"));
     assert_eq!(moved.priority_rank, Some(1));
+    assert_eq!(
+        moved.parent.as_ref().map(|p| p.key.as_str()),
+        Some("acme/shop#10"),
+        "a move keeps the parent"
+    );
     let gql_bodies = bodies(&server, "POST", "/graphql").await;
     let field_queries =
         gql_bodies.iter().filter(|b| b["query"].as_str().unwrap_or("").contains("node(id")).count();
@@ -690,6 +698,9 @@ async fn repo_lists_take_the_status_from_the_board_in_one_request() {
         ]
     );
     assert_eq!(page.items[0].priority.as_deref(), Some("P1"));
+    let parent = page.items[0].parent.as_ref().unwrap();
+    assert_eq!((parent.key.as_str(), parent.title.as_str()), ("acme/shop#10", "Checkout epic"));
+    assert!(page.items[1].parent.is_none());
     let gql_bodies = bodies(&server, "POST", "/graphql").await;
     assert_eq!(gql_bodies.len(), 1, "one enrichment request per page, not one per issue");
     assert_eq!(gql_bodies[0]["variables"]["ids"], json!(["I_12", "I_14", "I_15"]));
@@ -703,6 +714,8 @@ async fn repo_lists_take_the_status_from_the_board_in_one_request() {
     let d = t.get(&r()).await.unwrap();
     assert_eq!(d.ticket.status, page.items[0].status);
     assert_eq!(d.ticket.priority, page.items[0].priority);
+    assert_eq!(d.ticket.parent, page.items[0].parent);
+    assert_eq!(d.parent.map(|p| p.key), Some("acme/shop#10".to_owned()));
 }
 
 #[tokio::test]
@@ -781,4 +794,32 @@ async fn repo_columns_still_find_the_board_after_a_no_board_list() {
     let b = TrackerBinding { views: vec![repo_view()], ..TrackerBinding::default() };
     let cols = t.columns(&b).await.unwrap();
     assert_eq!(cols.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), vec!["Todo", "In Progress", "Done"]);
+}
+
+#[tokio::test]
+async fn block_adds_the_label_and_unblock_removes_it() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/repos/acme/shop/issues/12/labels"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([{"name": "blocked"}])))
+        .expect(1)
+        .mount(&server)
+        .await;
+    // 404: the label is not on the issue, which is what Unblock wants
+    Mock::given(method("DELETE"))
+        .and(path("/repos/acme/shop/issues/12/labels/on%20hold"))
+        .respond_with(ResponseTemplate::new(404).set_body_json(json!({"message": "Label does not exist"})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    mount(&server, "GET", "/repos/acme/shop/issues/12", 200, "github/issue.json").await;
+    let t = gh(&server);
+    t.set_blocked(&r(), &BlockedMarker::Label("blocked".into()), true).await.unwrap();
+    assert_eq!(
+        bodies(&server, "POST", "/repos/acme/shop/issues/12/labels").await[0],
+        json!({"labels": ["blocked"]})
+    );
+    t.set_blocked(&r(), &BlockedMarker::Label("on hold".into()), false).await.unwrap();
+    let err = t.set_blocked(&r(), &BlockedMarker::Flag, true).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::Unsupported);
 }

@@ -2,7 +2,7 @@
 // Ready for review row → Enter opens the delta zoomed in the work tab. Also the work menu from a terminal.
 import { expect, test, type Page } from '@playwright/test';
 
-import { activeProject, boot, callsOf } from '../shell/helpers';
+import { activeProject, boot, callsOf, dispatch } from '../shell/helpers';
 
 const now = (page: Page) => page.getByTestId('inbox-pane');
 const selected = (page: Page) => now(page).locator('.row[aria-current="true"]');
@@ -134,4 +134,70 @@ test('Now open refreshes review items: a moved head reads Updated since your rev
   await expect(row).toContainText('Updated since your review');
   const gets = (await callsOf(page, 'review_get')).slice(before);
   expect(gets.some((c) => (c.args as { review: { number: number } }).review.number === 309)).toBe(true);
+});
+
+test('a Claude session Kelta did not start: Elsewhere, Claude needs you, Mod+J, its ticket row (#345)', async ({
+  page,
+}) => {
+  await boot(page);
+  const badge = page.getByTestId('inbox-badge');
+  const waiting = async (): Promise<number> =>
+    (await badge.count()) ? Number(await badge.textContent()) : 0;
+  const before = await waiting();
+  const emit = (status: string) =>
+    page.evaluate((s) => {
+      const session = {
+        id: 'u1',
+        cwd: '/src/shop',
+        title: 'Fix checkout',
+        status: s as 'working',
+        pid: 42,
+        branch: 'feat/SHOP-151',
+        ticket: { account: 'jira-acme', key: 'SHOP-151', id: 'SHOP-151' },
+        preview: null,
+        updated_at: '2020-01-01T00:00:00Z',
+      };
+      // What core lists too (Now's refresh reloads it).
+      window.__keltaMock!.state.outside = [session];
+      window.__keltaMock!.emit({ type: 'outside.updated', session });
+    }, status);
+
+  await emit('working');
+  const rail = page.getByTestId('rail-outside');
+  await expect(rail).toHaveAttribute('data-attention', 'working');
+  await expect(rail).toContainText('Fix checkout');
+  expect(await waiting()).toBe(before);
+
+  await emit('needs_input');
+  await expect(rail).toHaveAttribute('data-attention', 'needs_input');
+  await expect.poll(waiting).toBe(before + 1);
+  await page.keyboard.press('Control+Shift+0');
+  await expect(now(page).locator('[data-section="needs_you"]')).toBeVisible();
+  await expect(now(page).locator('[data-row="o:u1"]')).toContainText('Claude needs you, outside Kelta');
+  await dispatch(page, 'attention.next');
+  await expect(page.getByTestId('jump-hud')).toContainText(/^1\/\d+ · needs input · Fix checkout/);
+  // #346: no window control in the mock, so the jump degrades to Peek with where it runs.
+  const peekBox = page.getByTestId('peek');
+  await expect(page.getByTestId('peek-where')).toContainText('it runs in Terminal');
+  await expect(peekBox).toContainText('/src/shop');
+  await page.keyboard.press('Escape');
+  await expect(peekBox).toBeHidden();
+  await rail.click();
+  await expect(peekBox).toHaveAttribute('data-outside-id', 'u1');
+  await page.keyboard.press('Escape');
+  expect((await callsOf(page, 'outside_jump')).map((c) => c.args)).toEqual([{ id: 'u1' }, { id: 'u1' }]);
+
+  await dispatch(page, 'tickets.open', { project_id: 'shop' });
+  await page.getByRole('tab', { name: 'List' }).click();
+  await expect(page.locator('[data-key="jira-acme:SHOP-151"] [data-phase="elsewhere"]')).toHaveAttribute(
+    'title',
+    'Claude needs you, outside Kelta',
+  );
+
+  await page.evaluate(() => {
+    window.__keltaMock!.state.outside = [];
+    window.__keltaMock!.emit({ type: 'outside.removed', id: 'u1' });
+  });
+  await expect(rail).toHaveCount(0);
+  await expect.poll(waiting).toBe(before);
 });

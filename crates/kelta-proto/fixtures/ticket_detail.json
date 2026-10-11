@@ -4,6 +4,7 @@
   "body_md": "Limit login attempts to **5/min**.",
   "caps": {
     "assign": false,
+    "block": false,
     "board_columns": false,
     "comment": false,
     "projects_v2": false,
@@ -13,6 +14,7 @@
     {
       "caps": {
         "assign": false,
+        "block": false,
         "board_columns": false,
         "comment": false,
         "projects_v2": false,
@@ -31,12 +33,18 @@
           "login": "ada",
           "name": "Ada Lovelace"
         },
+        "blocked": false,
         "due": "2026-10-15",
         "estimate": "3",
         "kind": "Story",
         "labels": [
           "api"
         ],
+        "parent": {
+          "key": "SHOP-100",
+          "title": "Login hardening",
+          "url": "https://acme.atlassian.net/browse/SHOP-100"
+        },
         "priority": "High",
         "priority_rank": 1,
         "project_hint": "SHOP",
@@ -90,12 +98,18 @@
       "login": "ada",
       "name": "Ada Lovelace"
     },
+    "blocked": false,
     "due": "2026-10-15",
     "estimate": "3",
     "kind": "Story",
     "labels": [
       "api"
     ],
+    "parent": {
+      "key": "SHOP-100",
+      "title": "Login hardening",
+      "url": "https://acme.atlassian.net/browse/SHOP-100"
+    },
     "priority": "High",
     "priority_rank": 1,
     "project_hint": "SHOP",

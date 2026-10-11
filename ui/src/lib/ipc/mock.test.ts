@@ -244,6 +244,7 @@ describe('mock transport', () => {
       tracker_assignable_users: { ticket, query: 'gra' },
       tracker_priorities: { ticket },
       tracker_set_priority: { ticket, priority: 'Low' },
+      tracker_set_blocked: { ticket, blocked: true },
       tracker_refine: { ticket, project_id: null },
       workflows_list: { ticket },
       workflow_run: { ticket: s.tickets[1]!.ticket.ref, workflow: 'kelta-ticket-pass' },

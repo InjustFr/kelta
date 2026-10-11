@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ReviewItem, SessionInfo, TicketItem, WorkItem } from '$lib/gen';
+import type { OutsideSession, ReviewItem, SessionInfo, TicketItem, UiEvent, WorkItem } from '$lib/gen';
 import * as samples from '$lib/gen/fixtures';
 
 import type { Phase, PhaseId, NowSection } from '../work/phase';
@@ -343,5 +343,28 @@ describe('jumpQueue', () => {
       tickets: [ticket('T-1', 'todo')],
     });
     expect(jumpQueue(sections, [])).toEqual([]);
+  });
+});
+
+describe('Claude sessions Kelta did not start (#345)', () => {
+  const outside = (id: string, status: OutsideSession['status']): OutsideSession => ({
+    ...(samples.uiEventOutsideUpdated as Extract<UiEvent, { type: 'outside.updated' }>).session,
+    id,
+    title: `t-${id}`,
+    status,
+  });
+
+  it('asks in Claude needs you (badge, Mod+J), the others in Elsewhere', () => {
+    const sections = nowSections({
+      ...empty,
+      outside: [outside('a', 'needs_input'), outside('b', 'working'), outside('c', 'done')],
+    });
+    expect(sections.map((s) => [s.id, s.rows.map((r) => r.id)])).toEqual([
+      ['needs_you', ['o:a']],
+      ['elsewhere', ['o:b', 'o:c']],
+    ]);
+    expect(waitingCount(sections)).toBe(1);
+    const queue = jumpQueue(sections, []);
+    expect(queue.map((j) => [j.label, rowKey(j.row)])).toEqual([['needs input', 't-a']]);
   });
 });

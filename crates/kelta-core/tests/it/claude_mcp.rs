@@ -224,3 +224,38 @@ async fn setup_registers_the_mcp_then_starts_claude_in_home() {
     let tab = layout.tabs.iter().find(|t| t.title == "Set up Kelta").unwrap();
     assert_eq!(layout.active_tab.as_ref(), Some(&tab.id), "the setup tab takes the focus");
 }
+
+#[tokio::test]
+async fn outside_hook_relay_offer_install_and_remove() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let h = start(root, Settings::defaults(), vec![]);
+    let settings = root.join("home/.claude/settings.json");
+    let hooks_offers = |h: &H| {
+        h.ui.take_events()
+            .iter()
+            .filter(|e| matches!(e, UiEvent::Toast { toast } if toast.action.as_ref().is_some_and(|a| a.command == "claude.hooks_install")))
+            .count()
+    };
+    fake_claude(root);
+    h.core.claude_hooks_startup().await;
+    assert_eq!(hooks_offers(&h), 1);
+    h.cfg.update(|s| s.claude.hooks_offer = false);
+    h.core.claude_hooks_startup().await;
+    assert_eq!(hooks_offers(&h), 0, "Never");
+
+    std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+    std::fs::write(&settings, r#"{"model":"opus"}"#).unwrap();
+    h.core.claude_hooks_install().await.unwrap();
+    assert_eq!(h.core.claude_hooks_status().await, Some(true));
+    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(&settings).unwrap()).unwrap();
+    let cmd = v["hooks"]["Stop"][0]["hooks"][0]["command"].as_str().unwrap();
+    assert!(cmd.ends_with("kelta-ctl' hook --outside"), "{cmd}");
+    assert_eq!(v["model"], "opus");
+
+    h.core.claude_hooks_remove().await.unwrap();
+    assert_eq!(h.core.claude_hooks_status().await, Some(false));
+    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(&settings).unwrap()).unwrap();
+    assert_eq!(v, serde_json::json!({"model": "opus"}));
+    assert!(log(root).is_empty(), "`claude` did not run");
+}

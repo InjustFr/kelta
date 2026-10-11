@@ -33,7 +33,8 @@
         "ends_at": "2026-10-16"
       },
       "estimate": "5",
-      "due": "2026-10-14"
+      "due": "2026-10-14",
+      "blocked": false
     },
     "project_ids": ["shop"],
     "work_item_id": "0199a6b2-0000-7000-8000-00000000a001",
@@ -72,7 +73,8 @@
       "assign": true,
       "comment": true,
       "transitions_need_fetch": true,
-      "projects_v2": false
+      "projects_v2": false,
+      "block": true
     },
     "waiting": []
   },
@@ -110,7 +112,8 @@
         "ends_at": "2026-10-16"
       },
       "estimate": "3",
-      "due": null
+      "due": null,
+      "blocked": false
     },
     "project_ids": ["shop"],
     "work_item_id": null,
@@ -122,7 +125,8 @@
       "assign": true,
       "comment": true,
       "transitions_need_fetch": true,
-      "projects_v2": false
+      "projects_v2": false,
+      "block": true
     },
     "waiting": []
   },
@@ -155,7 +159,8 @@
         "ends_at": "2026-10-30"
       },
       "estimate": "1",
-      "due": null
+      "due": null,
+      "blocked": false
     },
     "project_ids": ["shop"],
     "work_item_id": null,
@@ -167,7 +172,8 @@
       "assign": true,
       "comment": true,
       "transitions_need_fetch": true,
-      "projects_v2": false
+      "projects_v2": false,
+      "block": true
     },
     "waiting": []
   },
@@ -205,7 +211,8 @@
         "ends_at": "2026-10-16"
       },
       "estimate": "8",
-      "due": "2026-10-09"
+      "due": "2026-10-09",
+      "blocked": false
     },
     "project_ids": ["shop"],
     "work_item_id": null,
@@ -244,7 +251,8 @@
       "assign": true,
       "comment": true,
       "transitions_need_fetch": true,
-      "projects_v2": false
+      "projects_v2": false,
+      "block": true
     },
     "waiting": []
   },
@@ -282,7 +290,8 @@
         "ends_at": "2026-10-31"
       },
       "estimate": "6h",
-      "due": "2026-10-12"
+      "due": "2026-10-12",
+      "blocked": false
     },
     "project_ids": ["billing"],
     "work_item_id": "0199a6b2-0000-7000-8000-00000000a002",
@@ -308,7 +317,8 @@
       "assign": true,
       "comment": true,
       "transitions_need_fetch": false,
-      "projects_v2": false
+      "projects_v2": false,
+      "block": true
     },
     "waiting": []
   },
@@ -346,7 +356,8 @@
         "ends_at": "2026-10-31"
       },
       "estimate": "4h",
-      "due": null
+      "due": null,
+      "blocked": false
     },
     "project_ids": ["billing"],
     "work_item_id": null,
@@ -372,7 +383,8 @@
       "assign": true,
       "comment": true,
       "transitions_need_fetch": false,
-      "projects_v2": false
+      "projects_v2": false,
+      "block": true
     },
     "waiting": []
   },
@@ -410,7 +422,8 @@
         "ends_at": "2026-10-03"
       },
       "estimate": null,
-      "due": null
+      "due": null,
+      "blocked": false
     },
     "project_ids": ["billing"],
     "work_item_id": null,
@@ -422,7 +435,8 @@
       "assign": true,
       "comment": true,
       "transitions_need_fetch": false,
-      "projects_v2": false
+      "projects_v2": false,
+      "block": true
     },
     "waiting": []
   },
@@ -460,7 +474,8 @@
         "ends_at": "2026-10-17"
       },
       "estimate": null,
-      "due": null
+      "due": null,
+      "blocked": false
     },
     "project_ids": ["kelta-tools"],
     "work_item_id": "0199a6b2-0000-7000-8000-00000000a003",
@@ -486,7 +501,8 @@
       "assign": true,
       "comment": true,
       "transitions_need_fetch": false,
-      "projects_v2": true
+      "projects_v2": true,
+      "block": true
     },
     "waiting": []
   },
@@ -519,7 +535,8 @@
       "status_since": "2026-09-15T12:00:00Z",
       "sprint": null,
       "estimate": null,
-      "due": null
+      "due": null,
+      "blocked": false
     },
     "project_ids": ["kelta-tools"],
     "work_item_id": "0199a6b2-0000-7000-8000-00000000a009",
@@ -531,7 +548,8 @@
       "assign": true,
       "comment": true,
       "transitions_need_fetch": false,
-      "projects_v2": true
+      "projects_v2": true,
+      "block": true
     },
     "waiting": []
   },
@@ -569,7 +587,8 @@
         "ends_at": null
       },
       "estimate": null,
-      "due": null
+      "due": null,
+      "blocked": false
     },
     "project_ids": [],
     "work_item_id": null,
@@ -581,7 +600,8 @@
       "assign": false,
       "comment": false,
       "transitions_need_fetch": false,
-      "projects_v2": false
+      "projects_v2": false,
+      "block": false
     },
     "waiting": []
   },
@@ -614,7 +634,8 @@
       "status_since": "2026-10-07T12:00:00Z",
       "sprint": null,
       "estimate": null,
-      "due": "2026-11-01"
+      "due": "2026-11-01",
+      "blocked": false
     },
     "project_ids": [],
     "work_item_id": null,
@@ -626,7 +647,8 @@
       "assign": false,
       "comment": false,
       "transitions_need_fetch": false,
-      "projects_v2": false
+      "projects_v2": false,
+      "block": false
     },
     "waiting": []
   },
@@ -639,6 +661,11 @@
       },
       "title": "Apple Pay: waiting on merchant certificate",
       "url": "https://acme.atlassian.net/browse/SHOP-160",
+      "parent": {
+        "key": "SHOP-142",
+        "title": "Rate-limit login",
+        "url": "https://acme.atlassian.net/browse/SHOP-142"
+      },
       "status": {
         "id": "10010",
         "name": "Blocked",
@@ -664,7 +691,8 @@
         "ends_at": "2026-10-16"
       },
       "estimate": "2",
-      "due": null
+      "due": null,
+      "blocked": false
     },
     "project_ids": ["shop"],
     "work_item_id": null,
@@ -676,7 +704,8 @@
       "assign": true,
       "comment": true,
       "transitions_need_fetch": true,
-      "projects_v2": false
+      "projects_v2": false,
+      "block": true
     },
     "waiting": []
   },
@@ -709,7 +738,8 @@
       "status_since": "2026-08-20T12:00:00Z",
       "sprint": null,
       "estimate": null,
-      "due": null
+      "due": null,
+      "blocked": false
     },
     "project_ids": ["billing"],
     "work_item_id": null,
@@ -721,7 +751,8 @@
       "assign": true,
       "comment": true,
       "transitions_need_fetch": false,
-      "projects_v2": false
+      "projects_v2": false,
+      "block": true
     },
     "waiting": []
   }

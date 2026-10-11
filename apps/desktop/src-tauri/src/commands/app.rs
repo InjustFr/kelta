@@ -129,6 +129,34 @@ pub async fn claude_setup(core: State<'_, Arc<Core>>) -> Res<SessionInfo> {
     core.claude_setup().await
 }
 
+/// Kelta's hook relay in Claude Code's user settings (Settings → Claude, #345): `None` = Claude Code not found.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn claude_hooks_status(core: State<'_, Arc<Core>>) -> Res<Option<bool>> {
+    Ok(core.claude_hooks_status().await)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn claude_hooks_install(core: State<'_, Arc<Core>>) -> Res<()> {
+    core.claude_hooks_install().await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn claude_hooks_remove(core: State<'_, Arc<Core>>) -> Res<()> {
+    core.claude_hooks_remove().await
+}
+
+/// Claude sessions Kelta did not start (#345); drops those whose process is gone.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn outside_list(core: State<'_, Arc<Core>>) -> Res<Vec<OutsideSession>> {
+    Ok(core.outside_list())
+}
+
+/// Brings an outside session's tmux pane and window forward (#346): `None` when it did, else where it runs.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn outside_jump(core: State<'_, Arc<Core>>, id: String) -> Res<Option<String>> {
+    core.outside_jump(&id).await
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub async fn claude_mcp_remove(core: State<'_, Arc<Core>>) -> Res<()> {
     core.claude_mcp_remove().await

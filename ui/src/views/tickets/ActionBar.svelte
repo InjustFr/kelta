@@ -34,6 +34,7 @@
     assign: t('Assign to me'),
     unassign: t('Unassign'),
     comment: t('Comment'),
+    block: t('Block ticket'),
     refine: t('Refine with Claude'),
     workflow: t('Run workflow…'),
     branch: t('Copy branch'),
@@ -53,7 +54,9 @@
           ? t('Resume work')
           : a.id === 'pr' && item.prs.length > 1
             ? t('Open PRs')
-            : LABELS[a.id],
+            : a.id === 'block' && item.ticket.blocked
+              ? t('Unblock ticket')
+              : LABELS[a.id],
       reason: blockedReason(a.id, item, branch, workflows[ticketKey(item.ticket.ref)]),
       chord: a.key === 'A' ? 'shift+a' : a.key,
     })),

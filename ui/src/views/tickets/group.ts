@@ -1,5 +1,5 @@
 // Tickets list grouping (TICKETS.md T5/T6): Flow (default), native status, priority, sprint, assignee,
-// source or none; sort within groups; status age.
+// source, parent or none; sort within groups; status age.
 
 import { msg, t } from '$lib/i18n/index.svelte';
 import type {
@@ -23,6 +23,7 @@ export const GROUP_BYS: readonly GroupBy[] = [
   'sprint',
   'assignee',
   'source',
+  'parent',
   'none',
 ];
 export const SORTS: readonly TicketSort[] = ['priority', 'updated', 'age', 'key'];
@@ -86,7 +87,12 @@ export function flowOf(item: TicketItem, s: FlowSignals, now: number): Flow | nu
   if (t.status.category === 'done') return now - since(t) <= 7 * DAY ? 'done' : null;
   const pr = mainPr(item.prs);
   const open = pr?.state === 'open';
-  if (s.needsYou || BLOCKED.test(t.status.name) || (open && (pr.ci === 'failure' || pr.ci === 'error')))
+  if (
+    s.needsYou ||
+    t.blocked ||
+    BLOCKED.test(t.status.name) ||
+    (open && (pr.ci === 'failure' || pr.ci === 'error'))
+  )
     return 'waiting';
   if (
     s.work?.state.kind === 'active' ||
@@ -126,7 +132,7 @@ const byUpdated = (a: TicketItem, b: TicketItem): number =>
 /** No priority sorts after every rank. */
 const rank = (i: TicketItem): number => i.ticket.priority_rank ?? 256;
 
-/** Sorted copy: priority (then updated), updated (newest), age (longest in status), key (natural). */
+/** Sorted copy, blocked tickets last: priority (then updated), updated (newest), age (longest in status), key (natural). */
 export function sortTickets(items: readonly TicketItem[], sort: TicketSort): TicketItem[] {
   const cmp =
     sort === 'priority'
@@ -136,7 +142,7 @@ export function sortTickets(items: readonly TicketItem[], sort: TicketSort): Tic
         : sort === 'age'
           ? (a: TicketItem, b: TicketItem) => since(a.ticket) - since(b.ticket) || byKey(a, b)
           : byKey;
-  return [...items].sort(cmp);
+  return [...items].sort((a, b) => Number(a.ticket.blocked) - Number(b.ticket.blocked) || cmp(a, b));
 }
 
 // ---- grouping --------------------------------------------------------------------------------
@@ -188,6 +194,17 @@ export function groupTickets(
       ];
     } else if (by === 'assignee') {
       g = [tk.assignee?.id ?? '', tk.assignee?.name ?? t('Unassigned'), null, tk.assignee ? 0 : 1];
+    } else if (by === 'parent') {
+      // Keyed by URL: keys repeat across trackers. Redmine sends no title: the listed parent's, if any.
+      const p = tk.parent;
+      const title =
+        p &&
+        (p.title ||
+          items.find((i) => i.ticket.ref.account === tk.ref.account && i.ticket.ref.key === p.key)?.ticket
+            .title);
+      g = p
+        ? [p.url || `${tk.ref.account}:${p.key}`, title ? `${p.key} · ${title}` : p.key, null, 0]
+        : ['', t('No parent'), null, 1];
     } else {
       const at = sources.findIndex((s) => s.id === item.source_ids[0]);
       g = [item.source_ids[0] ?? '', sources[at]?.label ?? t('Other'), null, at < 0 ? sources.length : at];

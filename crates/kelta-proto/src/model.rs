@@ -830,6 +830,27 @@ pub enum WorkflowSource {
     Home,
 }
 
+/// A Claude Code session Kelta did not start (another terminal, a multiplexer, a script), seen
+/// through the user-scope hook relay (`kelta-ctl hook --outside`, #345). Keyed by Claude's session id.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct OutsideSession {
+    /// Claude's session uuid.
+    pub id: String,
+    pub cwd: Option<PathBuf>,
+    /// The first prompt's first line, else the cwd's last component.
+    pub title: String,
+    pub status: SessionStatus,
+    /// The Claude process, when the relay found it: the entry goes when it exits.
+    pub pid: Option<u32>,
+    /// Checked-out branch of the cwd's repo when first seen.
+    pub branch: Option<String>,
+    /// A listed ticket whose `branch_key` the branch or cwd carries.
+    pub ticket: Option<TicketRef>,
+    /// Last `Stop` preview.
+    pub preview: Option<String>,
+    pub updated_at: String,
+}
+
 /// A Claude Code `Workflow` run inside a Kelta session (#272), read from Claude's undocumented
 /// on-disk files under `~/.claude/projects/<slug>/<claude session>/`; every field is best effort.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]

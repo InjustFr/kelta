@@ -43,6 +43,7 @@ import type {
   LocalTags,
   NextUp,
   NextUpItem,
+  OutsideSession,
   ProjectDraft,
   ProjectId,
   TabId,
@@ -129,6 +130,14 @@ export interface Commands {
   claude_mcp_remove: { args: NoArgs; result: null };
   /** The last mode a Claude session switched to (#277); `null` = Claude's own default. */
   claude_permission_mode: { args: NoArgs; result: PermissionMode | null };
+  /** Kelta's hook relay in Claude Code's user settings (#345); `null` = Claude Code not found. */
+  claude_hooks_status: { args: NoArgs; result: boolean | null };
+  claude_hooks_install: { args: NoArgs; result: null };
+  claude_hooks_remove: { args: NoArgs; result: null };
+  /** Claude sessions Kelta did not start (#345); those whose process is gone are dropped. */
+  outside_list: { args: NoArgs; result: OutsideSession[] };
+  /** Brings its tmux pane and window forward (#346): `null` when it did, else where it runs (may be ''). */
+  outside_jump: { args: { id: string }; result: string | null };
   app_update_status: { args: NoArgs; result: UpdateStatus };
   /** Checks now and installs what it finds (resolves once done). */
   app_update_check: { args: NoArgs; result: UpdateStatus };
@@ -247,6 +256,8 @@ export interface Commands {
   tracker_assignable_users: { args: { ticket: TicketRef; query: string }; result: User[] };
   tracker_priorities: { args: { ticket: TicketRef }; result: string[] };
   tracker_set_priority: { args: { ticket: TicketRef; priority: string }; result: Ticket };
+  /** Sets or clears the ticket's blocked marker through its tracker (#348). */
+  tracker_set_blocked: { args: { ticket: TicketRef; blocked: boolean }; result: Ticket };
   tracker_refine: { args: { ticket: TicketRef; project_id?: ProjectId | null }; result: string };
   /** Saved Claude workflows a run on the ticket can use (#233): its project's primary repo, then home. */
   workflows_list: { args: { ticket: TicketRef }; result: WorkflowInfo[] };
@@ -395,6 +406,11 @@ export const COMMAND_NAMES = [
   'claude_setup',
   'claude_mcp_remove',
   'claude_permission_mode',
+  'claude_hooks_status',
+  'claude_hooks_install',
+  'claude_hooks_remove',
+  'outside_list',
+  'outside_jump',
   'app_update_status',
   'app_update_check',
   'app_restart',
@@ -458,6 +474,7 @@ export const COMMAND_NAMES = [
   'tracker_assignable_users',
   'tracker_priorities',
   'tracker_set_priority',
+  'tracker_set_blocked',
   'tracker_refine',
   'workflows_list',
   'workflow_run',
@@ -583,6 +600,11 @@ export const claudeMcpInstall = wrap('claude_mcp_install');
 export const claudeSetup = wrap('claude_setup');
 export const claudeMcpRemove = wrap('claude_mcp_remove');
 export const claudePermissionMode = wrap('claude_permission_mode');
+export const claudeHooksStatus = wrap('claude_hooks_status');
+export const claudeHooksInstall = wrap('claude_hooks_install');
+export const claudeHooksRemove = wrap('claude_hooks_remove');
+export const outsideList = wrap('outside_list');
+export const outsideJump = wrap('outside_jump');
 export const appUpdateStatus = wrap('app_update_status');
 export const appUpdateCheck = wrap('app_update_check');
 export const appRestart = wrap('app_restart');
@@ -693,6 +715,7 @@ export const trackerAssign = wrap('tracker_assign');
 export const trackerAssignableUsers = wrap('tracker_assignable_users');
 export const trackerPriorities = wrap('tracker_priorities');
 export const trackerSetPriority = wrap('tracker_set_priority');
+export const trackerSetBlocked = wrap('tracker_set_blocked');
 export const trackerRefine = wrap('tracker_refine');
 export const workflowsList = wrap('workflows_list');
 export const workflowRun = wrap('workflow_run');

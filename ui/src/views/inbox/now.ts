@@ -3,12 +3,14 @@
 
 import { formatDate, t } from '$lib/i18n/index.svelte';
 import type { KeltaError, TicketRef } from '$lib/gen';
+import { outsideJump } from '$lib/ipc/commands';
 import { projects, reviews, sessions, tickets, toasts, ui, work } from '$lib/stores';
 import { ticketKey } from '$lib/stores/tickets.svelte';
 
 import { hud } from '../../shell/hud.svelte';
 import { flushJump } from '../../shell/jumplist';
 import { revealSession } from '../../shell/nav';
+import { peek } from '../../shell/peek.svelte';
 import { runPrimary } from '../work/actions';
 import { batch, claudeSlots, startsNow } from '../work/batch.svelte';
 import { phaseNow, unfinishedWork } from '../work/live';
@@ -38,6 +40,7 @@ export function currentSections(): Section[] {
   return nowSections({
     work: unfinishedWork().map((item) => ({ item, phase: phaseNow(item) })),
     sessions: sessions.all,
+    outside: sessions.elsewhere,
     requested: reviews.items(ALL, 'review_requested'),
     authored: reviews.items(ALL, 'authored'),
     tickets: mine,
@@ -99,6 +102,7 @@ export async function refreshNow(force = false): Promise<void> {
     reviews.load(ALL, 'review_requested', force),
     reviews.load(ALL, 'authored', force),
     work.refreshStatus(),
+    sessions.loadOutside(),
     ...unfinishedWork().flatMap((w) => (w.review ? [reviews.loadDetail(w.review)] : [])),
   ]);
   await nextUp.prune();
@@ -131,6 +135,9 @@ export async function goToRow(row: NowRow): Promise<void> {
     case 'session':
       await revealSession(row.session.id);
       return;
+    case 'outside':
+      await jumpOutside(row.session.id);
+      return;
     case 'review': {
       const pid = rowProject(row.review.project_ids);
       if (pid) await openReview(pid, { kind: 'review_detail', review: row.review.review.ref });
@@ -140,6 +147,16 @@ export async function goToRow(row: NowRow): Promise<void> {
       const pid = rowProject(row.ticket.project_ids);
       if (pid) await openFromNow(pid, { kind: 'ticket_detail', ticket: row.ticket.ticket.ref });
     }
+  }
+}
+
+/** A Claude session Kelta did not start: its pane and window, else Peek with where it runs (#346). */
+export async function jumpOutside(id: string): Promise<void> {
+  try {
+    const place = await outsideJump({ id });
+    if (place !== null) peek.openOutside(id, place);
+  } catch (err) {
+    toasts.error(err, t('Could not reach that Claude session'));
   }
 }
 

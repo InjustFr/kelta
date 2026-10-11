@@ -30,6 +30,8 @@ pub struct TrackerCaps {
     pub comment: bool,
     pub transitions_need_fetch: bool,
     pub projects_v2: bool,
+    /// Kelta can set and clear this ticket's blocked marker (core-filled per source, #348).
+    pub block: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -77,6 +79,8 @@ pub enum TicketGroupBy {
     Sprint,
     Assignee,
     Source,
+    /// Epic or parent issue (`Ticket.parent`).
+    Parent,
     None,
 }
 
@@ -100,6 +104,18 @@ pub struct Sprint {
     /// RFC 3339 or `YYYY-MM-DD`.
     #[serde(default)]
     pub ends_at: Option<String>,
+}
+
+/// What a ticket belongs to: Jira epic or parent, GitHub parent issue, GitLab epic, Linear parent issue
+/// (else project), Redmine parent issue.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct TicketParent {
+    pub key: String,
+    /// Empty when the list call does not return it (Redmine).
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub url: String,
 }
 
 /// One ticket source offered by `Tracker::sources`, ready to append to `TrackerBinding.views`.
@@ -168,6 +184,19 @@ pub struct Ticket {
     /// Due date, `YYYY-MM-DD` or RFC 3339.
     #[serde(default)]
     pub due: Option<String>,
+    /// Blocked by the source's marker (`Source.blocked`, #348). Providers set their native marker
+    /// (Jira flag, Linear blocked-by relation); kelta-core resolves the source's.
+    #[serde(default)]
+    pub blocked: bool,
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub parent: Option<TicketParent>,
+}
+
+/// A status name that reads as blocked (`Blocked`, `On hold`, `Waiting for QA`, `Impediment`).
+pub fn is_blocked_status(name: &str) -> bool {
+    let n = name.to_lowercase();
+    ["block", "on hold", "waiting", "impediment"].iter().any(|w| n.contains(w))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]

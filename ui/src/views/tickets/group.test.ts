@@ -88,6 +88,24 @@ describe('groupTickets', () => {
     ]);
   });
 
+  it('groups by parent with no parent last; a parent without title takes the listed ticket title', () => {
+    const parent = (key: string, title = '') => ({ parent: { key, title, url: `https://t/${key}` } });
+    const list = [
+      item('A', ['Backlog', 'todo'], null, [], parent('E-2', 'Search')),
+      item('B', ['Done', 'done'], null, [], { parent: null }),
+      item('C', ['QA', 'in_review'], null, [], parent('E-1', 'Checkout')),
+      item('D', ['Todo', 'todo'], null, [], parent('E-2', 'Search')),
+      item('E-3', ['Todo', 'todo'], null, [], { parent: undefined, title: 'Login' }),
+      item('F', ['Todo', 'todo'], null, [], parent('E-3')),
+    ];
+    expect(summary(groupTickets(list, 'parent'))).toEqual([
+      ['E-1 · Checkout', ['C']],
+      ['E-2 · Search', ['A', 'D']],
+      ['E-3 · Login', ['F']],
+      ['No parent', ['B', 'E-3']],
+    ]);
+  });
+
   it('groups by source in source order, unknown sources last', () => {
     const sources = [
       { id: 'v1', label: 'Mine' },
@@ -141,6 +159,8 @@ describe('flowOf', () => {
     const active = { work: workIn('active'), needsYou: true };
     expect(at(item('A', ['In Progress', 'in_progress']), active)).toBe('waiting');
     expect(at(item('A', ['Blocked', 'in_progress']))).toBe('waiting');
+    // The source's marker (a Jira flag, a label), whatever the status.
+    expect(at(item('A', ['To Do', 'todo'], null, [], { blocked: true }))).toBe('waiting');
     expect(at(item('A', ['In Progress', 'in_progress'], null, [], {}, [pr({ ci: 'failure' })]))).toBe(
       'waiting',
     );
@@ -219,6 +239,9 @@ describe('priority, sprint, sort and age', () => {
     expect(keys('updated')).toEqual(['X-9', 'X-2', 'X-10']);
     expect(keys('age')).toEqual(['X-9', 'X-10', 'X-2']);
     expect(keys('key')).toEqual(['X-2', 'X-9', 'X-10']);
+    // Blocked last, whatever the sort.
+    const blocked = [p('X-1', 1, 'High', { blocked: true }), ...list];
+    expect(sortTickets(blocked, 'key').map((i) => i.ticket.ref.key)).toEqual(['X-2', 'X-9', 'X-10', 'X-1']);
   });
 
   it('marks age at 7, 14 and 21 days in a non-done status, falling back to updated_at', () => {

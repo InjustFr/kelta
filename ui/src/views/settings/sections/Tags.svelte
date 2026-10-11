@@ -18,26 +18,29 @@
 
   let props: SettingsSectionProps = $props();
 
-  /** The tag being edited: its index, `-1` for a new one, `null` for none. */
-  let editing = $state<number | null>(null);
+  /** The tag being edited, by name (a list that shifts under the form cannot retarget it), and the new-tag form. */
+  let editing = $state<string | null>(null);
+  let adding = $state(false);
   let name = $state('');
   let color = $state<string | null>(null);
   let removing = $state<string | null>(null);
 
-  function edit(at: number): void {
-    const tag = tags.value.tags[at];
-    editing = at;
+  function edit(tag: { name: string; color: string | null } | null): void {
+    editing = tag?.name ?? null;
+    adding = tag === null;
     name = tag?.name ?? '';
     color = tag?.color ?? null;
   }
 
-  async function save(): Promise<void> {
-    if (editing === null || !name.trim()) return;
-    await tags.put(editing < 0 ? null : (tags.value.tags[editing]?.name ?? null), {
-      name: name.trim(),
-      color,
-    });
+  function close(): void {
     editing = null;
+    adding = false;
+  }
+
+  async function save(): Promise<void> {
+    if ((!adding && editing === null) || !name.trim()) return;
+    await tags.put(adding ? null : editing, { name: name.trim(), color });
+    close();
   }
 
   async function confirmRemove(): Promise<void> {
@@ -58,7 +61,7 @@
     <ColorPicker value={color} onchange={(c) => (color = c)} />
     <div class="row">
       <Button type="submit" variant="primary" size="sm" disabled={!name.trim()}>{t('Save')}</Button>
-      <Button size="sm" variant="ghost" onclick={() => (editing = null)}>{t('Cancel')}</Button>
+      <Button size="sm" variant="ghost" onclick={close}>{t('Cancel')}</Button>
     </div>
   </form>
 {/snippet}
@@ -67,19 +70,19 @@
   {#snippet before()}
     <SettingsGroup heading={t('Your tags')}>
       {#snippet actions()}
-        <Button size="sm" variant="primary" icon="plus" onclick={() => edit(-1)}>{t('New tag')}</Button>
+        <Button size="sm" variant="primary" icon="plus" onclick={() => edit(null)}>{t('New tag')}</Button>
       {/snippet}
-      {#if editing === -1}
+      {#if adding}
         <SettingsCard data-testid="tag-new">{@render form()}</SettingsCard>
       {/if}
-      {#if tags.value.tags.length === 0 && editing !== -1}
+      {#if tags.value.tags.length === 0 && !adding}
         <EmptyState
           icon="tag"
           title={t('No tags yet')}
           body={t('Tags are reminders only you see, on tickets and pull requests.')}
         />
       {/if}
-      {#each tags.value.tags as tag, i (tag.name)}
+      {#each tags.value.tags as tag (tag.name)}
         <SettingsCard data-testid="tag-row" data-tag={tag.name}>
           {#snippet head()}
             <span class="dot" style:background={resolveProjectColor(tag.color) ?? 'var(--k-border)'}></span>
@@ -87,12 +90,12 @@
             <span class="muted">{tn('{n} item', '{n} items', tags.uses(tag.name))}</span>
           {/snippet}
           {#snippet actions()}
-            {#if editing !== i}
+            {#if editing !== tag.name}
               <IconButton
                 icon="pencil"
                 label={t('Edit {name}', { name: tag.name })}
                 size="sm"
-                onclick={() => edit(i)}
+                onclick={() => edit(tag)}
               />
               <IconButton
                 icon="trash-2"
@@ -102,7 +105,7 @@
               />
             {/if}
           {/snippet}
-          {#if editing === i}{@render form()}{/if}
+          {#if editing === tag.name}{@render form()}{/if}
         </SettingsCard>
       {/each}
     </SettingsGroup>

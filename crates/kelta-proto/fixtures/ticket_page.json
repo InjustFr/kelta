@@ -14,6 +14,7 @@
     {
       "caps": {
         "assign": true,
+        "block": true,
         "board_columns": true,
         "comment": true,
         "projects_v2": false,
@@ -48,12 +49,18 @@
           "login": "ada",
           "name": "Ada Lovelace"
         },
+        "blocked": false,
         "due": "2026-10-15",
         "estimate": "3",
         "kind": "Story",
         "labels": [
           "api"
         ],
+        "parent": {
+          "key": "SHOP-100",
+          "title": "Login hardening",
+          "url": "https://acme.atlassian.net/browse/SHOP-100"
+        },
         "priority": "High",
         "priority_rank": 1,
         "project_hint": "SHOP",

@@ -13,7 +13,9 @@ use kelta_proto::events::UiEvent;
 use kelta_proto::ids::{AccountId, ProjectId};
 use kelta_proto::model::{Scope, WorkSource};
 use kelta_proto::samples;
-use kelta_proto::settings::{AccountKind, RepoMatch, Settings, Source, SourceRoute, TrackerView};
+use kelta_proto::settings::{
+    AccountKind, BlockedMarker, RepoMatch, Settings, Source, SourceRoute, TrackerView,
+};
 use kelta_proto::store::ProviderCacheRow;
 use kelta_proto::testing::{FakeSecrets, FakeTerminalHost, FakeTracker, FakeUiBridge};
 use kelta_proto::tracker::Who;
@@ -335,4 +337,44 @@ fn unopenable_state_database_toasts_at_app_ready() {
     tokio::runtime::Runtime::new().unwrap().block_on(core.app_ready(0.0)).unwrap();
     let t = toasts(&ui);
     assert!(t.len() == 1 && t[0].contains("changes this session will not be saved"), "{t:?}");
+}
+
+#[tokio::test]
+async fn a_source_label_marks_tickets_blocked_and_block_round_trips() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut s = Settings::defaults();
+    s.accounts.insert("jira-acme".into(), account(AccountKind::Jira));
+    let mut labelled = source("labelled", &["shop"], vec![view("mine", "assignee = currentUser()")]);
+    labelled.blocked = Some(BlockedMarker::Label("blocked".into()));
+    s.sources = vec![labelled, source("flagged", &[], vec![view("team", "project = TEAM")])];
+    let tracker = Arc::new(FakeTracker::new());
+    let factory = Arc::new(Factory::default());
+    factory.trackers.lock().insert(AccountId::new("jira-acme"), tracker.clone() as Arc<dyn Tracker>);
+    let h = start_in(
+        tmp.path(),
+        MemConfig::new(s, vec![project("shop", tmp.path())]),
+        FakeTerminalHost::new(),
+        factory,
+    );
+    let list = |id: &str| {
+        let scope = Scope::Source { id: id.into() };
+        let core = h.core.clone();
+        async move { core.tracker_list(scope, None, None, None, None, true).await.unwrap() }
+    };
+    let blocked = |p: &kelta_proto::tracker::TicketPage| -> Vec<String> {
+        p.items.iter().filter(|i| i.ticket.blocked).map(|i| i.ticket.r#ref.key.clone()).collect()
+    };
+    let page = list("labelled").await;
+    assert!(blocked(&page).is_empty());
+    assert!(page.items.iter().all(|i| i.caps.block), "Jira writes labels");
+
+    let t = page.items.iter().find(|i| i.ticket.r#ref.key == "SHOP-141").unwrap().ticket.r#ref.clone();
+    assert!(h.core.tracker_set_blocked(&t, true).await.unwrap().blocked);
+    assert!(tracker.calls().contains(&"set_blocked:SHOP-141:true".to_owned()));
+    assert_eq!(blocked(&list("labelled").await), ["SHOP-141"]);
+    // Another source on the same tracker keeps Jira's default, the flag: the label means nothing there.
+    assert!(blocked(&list("flagged").await).is_empty());
+
+    assert!(!h.core.tracker_set_blocked(&t, false).await.unwrap().blocked);
+    assert!(blocked(&list("labelled").await).is_empty());
 }

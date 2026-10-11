@@ -90,6 +90,7 @@
     sprint: t('By sprint'),
     assignee: t('By assignee'),
     source: t('By source'),
+    parent: t('By parent'),
     none: t('No grouping'),
   });
   const SORT_LABELS: Record<TicketSort, string> = $derived({

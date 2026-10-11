@@ -9,7 +9,7 @@ use crate::ctl::CtlCommand;
 use crate::ext::Urgency;
 use crate::ids::{AccountId, ProjectId, ScreenInstanceId, SessionId, WorkItemId};
 use crate::model::{
-    Attention, ClaudeRun, Layout, OpenPaneRequest, ProjectInfo, Scope, SessionInfo, WorkItem,
+    Attention, ClaudeRun, Layout, OpenPaneRequest, OutsideSession, ProjectInfo, Scope, SessionInfo, WorkItem,
 };
 use crate::settings::Layer;
 
@@ -129,6 +129,12 @@ pub enum UiEvent {
     /// Quit asked with sessions keltad would keep (#305): the UI asks keep / stop, then `app_quit`.
     #[serde(rename = "app.quit_requested")]
     QuitRequested { live: u32, busy: Vec<String> },
+    /// A Claude session Kelta did not start appeared or changed (#345).
+    #[serde(rename = "outside.updated")]
+    OutsideUpdated { session: OutsideSession },
+    /// It ended (`SessionEnd`) or its process is gone.
+    #[serde(rename = "outside.removed")]
+    OutsideRemoved { id: String },
 }
 
 impl UiEvent {
@@ -152,6 +158,8 @@ impl UiEvent {
             Self::UiOpen { .. } => "ui.open",
             Self::WorkflowUpdated { .. } => "workflow.updated",
             Self::QuitRequested { .. } => "app.quit_requested",
+            Self::OutsideUpdated { .. } => "outside.updated",
+            Self::OutsideRemoved { .. } => "outside.removed",
         }
     }
 }

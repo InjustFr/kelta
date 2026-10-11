@@ -22,12 +22,15 @@ class PeekStore {
   at = $state<{ x: number; y: number } | null>(null);
   /** The popover holds the keyboard (opened by key or entered by the pointer). */
   focused = $state(false);
+  /** A Claude session Kelta did not start whose window it could not bring forward, and where it runs (#346). */
+  outside = $state<{ id: string; place: string } | null>(null);
   /** Focus to give back on close (the pane Louis was in). */
   previous: Element | null = null;
   #timer: ReturnType<typeof setTimeout> | undefined;
 
   open(id: SessionId, anchor: DOMRect | null, focus: boolean): void {
     clearTimeout(this.#timer);
+    this.outside = null;
     this.id = id;
     // Beside the anchor (a lamp), or below it when that runs off the window (a Now row).
     const beside = anchor !== null && anchor.right + 6 + PEEK_WIDTH <= window.innerWidth;
@@ -37,6 +40,14 @@ class PeekStore {
         ? { x: anchor.right + 6, y: anchor.top }
         : { x: Math.max(8, Math.min(anchor.left, window.innerWidth - PEEK_WIDTH - 8)), y: anchor.bottom + 4 };
     if (focus) this.#grab();
+  }
+
+  openOutside(id: string, place: string): void {
+    clearTimeout(this.#timer);
+    this.id = null;
+    this.outside = { id, place };
+    this.at = null;
+    this.#grab();
   }
 
   /** Pointer left the anchor or the popover: close unless it holds the keyboard. */
@@ -68,6 +79,7 @@ class PeekStore {
     clearTimeout(this.#timer);
     const prev = this.previous;
     this.id = null;
+    this.outside = null;
     this.focused = false;
     this.previous = null;
     if (restore && prev instanceof HTMLElement && prev.isConnected) prev.focus();
