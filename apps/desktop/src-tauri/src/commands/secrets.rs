@@ -10,16 +10,18 @@ use kelta_core::Core;
 use kelta_proto::prelude::*;
 use tauri::State;
 
-use super::Res;
+use super::{Res, unpanic};
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn secret_set(core: State<'_, Arc<Core>>, secret_ref: String, value: String) -> Res<()> {
-    core.secret_resolver().set(&SecretRef::new(secret_ref), &value).await
+    let core = core.inner().clone();
+    unpanic(async move { core.secret_resolver().set(&SecretRef::new(secret_ref), &value).await }).await
 }
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn secret_delete(core: State<'_, Arc<Core>>, secret_ref: String) -> Res<()> {
-    core.secret_resolver().delete(&SecretRef::new(secret_ref)).await
+    let core = core.inner().clone();
+    unpanic(async move { core.secret_resolver().delete(&SecretRef::new(secret_ref)).await }).await
 }
 
 #[tauri::command(rename_all = "snake_case")]
