@@ -965,7 +965,7 @@
           "default": {
             "effort": "high",
             "model": "opus",
-            "permission_mode": "acceptEdits"
+            "permission_mode": null
           },
           "plan": {
             "effort": "high",
@@ -1113,16 +1113,21 @@
                 "type": "string"
               },
               "permission_mode": {
-                "default": "acceptEdits",
+                "default": null,
+                "description": "Forced with `--permission-mode`; unset = the last mode a Claude session reported, else Claude's\nown `permissions.defaultMode`.",
                 "enum": [
                   "default",
                   "acceptEdits",
                   "plan",
                   "auto",
                   "dontAsk",
-                  "bypassPermissions"
+                  "bypassPermissions",
+                  null
                 ],
-                "type": "string"
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             },
             "type": "object"
@@ -1131,7 +1136,7 @@
             "default": {
               "effort": "high",
               "model": "opus",
-              "permission_mode": "acceptEdits"
+              "permission_mode": null
             },
             "plan": {
               "effort": "high",

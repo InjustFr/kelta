@@ -2,7 +2,11 @@
 import type { ClaudeEffort } from "./ClaudeEffort";
 import type { PermissionMode } from "./PermissionMode";
 
-export type ClaudePlan = { profile: string, model: string, effort: ClaudeEffort, permission_mode: PermissionMode, 
+export type ClaudePlan = { profile: string, model: string, effort: ClaudeEffort, 
+/**
+ * `None` = the remembered mode, else Claude's own default (no `--permission-mode`).
+ */
+permission_mode: PermissionMode | null, 
 /**
  * Rendered prompt (editable).
  */

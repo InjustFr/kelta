@@ -85,6 +85,8 @@ pub struct SessionEntry {
     pub timers: Arc<SessionTimers>,
     /// Claude `Workflow` runs seen in its hooks (#272).
     pub claude_runs: crate::claude_runs::Runs,
+    /// Its last Claude permission mode: the launch flag, then what its hooks report (#277).
+    pub permission_mode: Option<kelta_proto::settings::PermissionMode>,
 }
 
 impl SessionEntry {
@@ -313,6 +315,7 @@ impl Core {
             };
             let entry = SessionEntry {
                 info,
+                permission_mode: crate::permission_mode::launched_with(&spec.args),
                 spec,
                 restore,
                 hook_token: spawn_env::token(),
@@ -768,6 +771,7 @@ impl Core {
                 last_program_notify: None,
                 timers: Arc::new(SessionTimers::default()),
                 claude_runs: Default::default(),
+                permission_mode: crate::permission_mode::launched_with(&spec.args),
             };
             s.insert(id.clone(), entry)
         };
@@ -934,19 +938,27 @@ impl Core {
     }
 
     pub(crate) fn write_session(&self, id: &SessionId, bytes: &[u8]) -> Result<(), KeltaError> {
-        let (info, timers) = {
+        let (info, timers, state) = {
             let s = self.sessions.lock();
             let e = s.get(id).ok_or_else(|| KeltaError::not_found(format!("session {id}")))?;
-            (e.info.clone(), e.timers.clone())
+            // Visibility doesn't matter to `Heuristic::Input`.
+            (e.info.clone(), e.timers.clone(), e.state(false))
         };
         // Any input restarts the auto-park clock (#142); focus reports are the view, not Louis typing.
-        if bytes != b"\x1b[I" && bytes != b"\x1b[O" {
+        let typed = bytes != b"\x1b[I" && bytes != b"\x1b[O";
+        if typed {
             self.auto_park_status(&info, false, &timers);
         }
         if info.lifecycle != Lifecycle::Live {
             return Err(KeltaError::new(ErrorCode::Conflict, format!("session {id} is not running")));
         }
-        self.terminal.write(id, bytes)
+        self.terminal.write(id, bytes)?;
+        // No hook fires when a permission prompt is answered (#278): the keystroke itself is the signal.
+        if typed && info.status == SessionStatus::NeedsInput && matches!(info.kind, SessionKind::Claude) {
+            let d = status::apply_heuristic(&state, Heuristic::Input);
+            self.apply_decision(id, d, info.status_source, None);
+        }
+        Ok(())
     }
 
     pub fn session_resize(&self, id: &SessionId, cols: u16, rows: u16) -> Result<(), KeltaError> {

@@ -50,7 +50,7 @@ fn table_over_fixtures() {
 }
 
 #[test]
-fn other_notifications_and_tools_and_events_are_ignored() {
+fn other_notifications_and_events_are_ignored() {
     let base: HookPayload = fixtures::load("hook_notification_idle").unwrap();
     for kind in ["elicitation_dialog", "agent_needs_input"] {
         let p = HookPayload { notification_type: Some(kind.into()), ..base.clone() };
@@ -64,8 +64,10 @@ fn other_notifications_and_tools_and_events_are_ignored() {
         let p = HookPayload { tool_name: Some(tool.into()), ..edit.clone() };
         assert!(map(&p).unwrap().file_edited.is_some(), "{tool}");
     }
+    // Any tool maps (NeedsInput → Working in core, #278); only edit tools report a file.
     let p = HookPayload { tool_name: Some("Bash".into()), ..edit.clone() };
-    assert!(map(&p).is_none());
+    let c = map(&p).unwrap();
+    assert_eq!((c.status, c.file_edited), (SessionStatus::Unknown, None));
 
     for ev in ["PreToolUse", "SubagentStop", "PreCompact", "", "Whatever"] {
         let p = HookPayload { hook_event_name: ev.into(), ..Default::default() };

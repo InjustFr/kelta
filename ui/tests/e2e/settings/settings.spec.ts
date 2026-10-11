@@ -63,5 +63,7 @@ test.describe('settings pane', () => {
     await expect(mcp).toContainText('are installed in Claude Code');
     await mcp.getByRole('button', { name: 'Remove' }).click();
     await expect(mcp.getByRole('button', { name: 'Install' })).toBeVisible();
+    // #277: the mode of sessions whose profile forces none
+    await expect(page.getByTestId('claude-permission-mode')).toContainText('last used: auto');
   });
 });

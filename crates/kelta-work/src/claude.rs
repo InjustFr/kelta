@@ -116,7 +116,8 @@ pub struct LaunchSpec {
     pub name: String,
     pub model: String,
     pub effort: ClaudeEffort,
-    pub permission_mode: PermissionMode,
+    /// `None` = no `--permission-mode`: Claude's own `defaultMode`.
+    pub permission_mode: Option<PermissionMode>,
     pub settings_file: PathBuf,
     pub mcp_file: Option<PathBuf>,
     pub allowed_tools: Vec<String>,
@@ -143,7 +144,9 @@ pub fn argv(spec: &LaunchSpec) -> Vec<String> {
         a.extend(["--model".into(), spec.model.clone()]);
     }
     a.extend(["--effort".into(), enum_str(&spec.effort)]);
-    a.extend(["--permission-mode".into(), enum_str(&spec.permission_mode)]);
+    if let Some(m) = &spec.permission_mode {
+        a.extend(["--permission-mode".into(), enum_str(m)]);
+    }
     a.extend(["--settings".into(), spec.settings_file.to_string_lossy().into_owned()]);
     if let Some(m) = &spec.mcp_file {
         a.extend(["--mcp-config".into(), m.to_string_lossy().into_owned()]);
@@ -225,7 +228,7 @@ mod tests {
             name: String::new(),
             model: String::new(),
             effort: ClaudeEffort::Low,
-            permission_mode: PermissionMode::Plan,
+            permission_mode: Some(PermissionMode::Plan),
             settings_file: "/s".into(),
             mcp_file: None,
             allowed_tools: vec![],
@@ -244,7 +247,7 @@ mod tests {
             name: String::new(),
             model: String::new(),
             effort: ClaudeEffort::Low,
-            permission_mode: PermissionMode::Plan,
+            permission_mode: Some(PermissionMode::Plan),
             settings_file: "/s".into(),
             mcp_file: None,
             allowed_tools: vec![],

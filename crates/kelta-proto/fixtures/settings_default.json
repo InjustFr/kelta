@@ -30,7 +30,7 @@
       "default": {
         "effort": "high",
         "model": "opus",
-        "permission_mode": "acceptEdits"
+        "permission_mode": null
       },
       "plan": {
         "effort": "high",

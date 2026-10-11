@@ -637,6 +637,7 @@ export function createMockTransport(options: MockOptions = {}): {
       return null;
     },
     claude_mcp_status: () => claudeMcp,
+    claude_permission_mode: () => 'auto',
     claude_mcp_install: () => {
       claudeMcp = true;
       return null;
