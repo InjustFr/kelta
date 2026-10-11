@@ -1704,6 +1704,11 @@ pub struct TrackerView {
     pub current_iteration: bool,
     /// Account of this view; `None` = the binding's account.
     pub account: Option<AccountId>,
+    /// The source's `fields`, filled by kelta-core for the list call (not configured per view, #351).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    #[ts(skip)]
+    pub fields: Vec<SourceField>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
@@ -1808,6 +1813,23 @@ pub struct Source {
     /// Linear, status elsewhere.
     #[ts(optional)]
     pub blocked: Option<BlockedMarker>,
+    /// Tracker fields shown on this source's tickets, rows and detail, when they have a value. An entry
+    /// without an id is dropped with a warning.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<SourceField>>", optional)]
+    pub fields: Vec<SourceField>,
+}
+
+/// A tracker field to show on the tickets.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SourceField {
+    /// The tracker's field: a Jira field id (`customfield_10042`), a GitHub project field name.
+    #[schemars(length(min = 1))]
+    pub id: String,
+    /// Shown before the value; empty shows the value alone.
+    #[serde(default)]
+    pub label: String,
 }
 
 /// How the tracker marks a ticket blocked.

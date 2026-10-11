@@ -40,6 +40,7 @@ type SourceList = {
   routes: SourceRoute[];
   tracker: TrackerBinding;
   status_colors: Record<string, string>;
+  fields?: { id: string; label: string }[];
 }[];
 /** The last `sources` list written to the global settings. */
 const lastSources = () => lastSettingsValue<SourceList>(mock);
@@ -135,6 +136,37 @@ describe('Board block of a source', () => {
 
     await fireEvent.change(board, { target: { value: '' } });
     await waitFor(() => expect(shop()?.tracker.views.find((v) => v.id === id)?.board_id).toBeNull());
+  });
+
+  it('picks ticket fields from the tracker, labels them, warns on an id it lacks and removes them', async () => {
+    render(TrackerSources, { sourceId: 'shop' });
+    const group = await screen.findByTestId('source-fields');
+    const add = await within(group).findByRole('combobox', { name: 'Add a field' });
+    await fireEvent.change(add, { target: { value: 'customfield_10050' } });
+    await waitFor(() => expect(shop()?.fields).toEqual([{ id: 'customfield_10050', label: 'Verified' }]));
+    const label = await within(group).findByRole('textbox', { name: 'Label of Verified' });
+    await fireEvent.change(label, { target: { value: 'QA' } });
+    await waitFor(() => expect(shop()?.fields).toEqual([{ id: 'customfield_10050', label: 'QA' }]));
+    expect(within(group).queryByText('Unknown field')).toBeNull();
+
+    // A hand-written id the tracker does not have: a warning here, nothing on the rows.
+    const plain = JSON.parse(JSON.stringify(settings.value()!.sources)) as SourceList;
+    const sources = plain.map((s) => (s.id === 'shop' ? { ...s, fields: [{ id: 'nope', label: '' }] } : s));
+    await ipc.settingsSet({ layer: 'global', path: 'sources', value: sources as unknown as JsonValue });
+    await settings.load();
+    await waitFor(() => expect(within(group).getByText('Unknown field')).toBeTruthy());
+    await fireEvent.click(within(group).getByRole('button', { name: 'Remove nope' }));
+    await waitFor(() => expect(shop()?.fields).toEqual([]));
+  });
+
+  it('a tracker that cannot list its fields takes a typed id', async () => {
+    const billing = () => lastSources()?.find((s) => s.id === 'billing');
+    render(TrackerSources, { sourceId: 'billing' });
+    const group = await screen.findByTestId('source-fields');
+    const id = await within(group).findByRole('textbox', { name: 'Add a field by id' });
+    await fireEvent.input(id, { target: { value: 'Severity' } });
+    await fireEvent.keyDown(id, { key: 'Enter' });
+    await waitFor(() => expect(billing()?.fields).toEqual([{ id: 'Severity', label: '' }]));
   });
 
   it('Add view… opens the source picker on that source', async () => {

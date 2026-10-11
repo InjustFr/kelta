@@ -144,6 +144,7 @@ impl LinearTracker {
         };
         Some(Ticket {
             r#ref: TicketRef { account: self.account().clone(), id: s(v, "id")?.to_owned(), key },
+            fields: Vec::new(),
             title: s(v, "title").unwrap_or("").to_owned(),
             url,
             status,
