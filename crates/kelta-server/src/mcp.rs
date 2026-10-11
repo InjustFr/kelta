@@ -537,18 +537,13 @@ async fn by_key(core: &Arc<dyn CoreApi>, args: &Value) -> Result<(Arc<dyn Tracke
 /// `by_key` without the tracker, plus the Kelta projects the listed ticket belongs to.
 async fn ref_by_key(core: &Arc<dyn CoreApi>, args: &Value) -> Result<(TicketRef, Vec<ProjectId>), String> {
     let key = str_arg(args, "key")?;
-    let account = args.get("account").and_then(Value::as_str).filter(|a| !a.is_empty());
-    let listed = core.ticket_list(Scope::All, None, None, false).await.ok().and_then(|p| {
-        p.items.into_iter().find(|i| {
-            i.ticket.r#ref.key == key && account.is_none_or(|a| i.ticket.r#ref.account.as_str() == a)
-        })
-    });
+    let account = args.get("account").and_then(Value::as_str).filter(|a| !a.is_empty()).map(AccountId::new);
+    let listed = core.ticket_by_key(key, account.as_ref()).await.ok().flatten();
     match (listed, account) {
         (Some(i), _) => Ok((i.ticket.r#ref, i.project_ids)),
-        (None, Some(a)) => Ok((
-            TicketRef { account: AccountId::new(a), key: key.to_owned(), id: key.to_owned() },
-            Vec::new(),
-        )),
+        (None, Some(account)) => {
+            Ok((TicketRef { account, key: key.to_owned(), id: key.to_owned() }, Vec::new()))
+        }
         (None, None) => Err(format!("{key} is not in Kelta's ticket lists; pass its `account`")),
     }
 }

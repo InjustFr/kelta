@@ -285,6 +285,27 @@ function ticketDetailFor({ ticket: t, prs, caps }: TicketItem, comments: string[
   };
 }
 
+/** The assignees and reporters of a scope's tickets, as the core's `TicketPage.people`. */
+function teamPeople(items: TicketItem[]): Person[] {
+  const people = new Map<string, Person>();
+  for (const t of items) {
+    for (const u of [t.ticket.assignee, t.ticket.reporter]) {
+      if (!u) continue;
+      const me = u.id === ME.id;
+      const key = me ? 'me' : `${t.ticket.ref.account}:${u.id}`;
+      people.set(key, {
+        key,
+        name: me ? 'You' : u.name,
+        avatar_url: u.avatar_url,
+        ids: [{ account: t.ticket.ref.account, id: u.id, login: u.login, code_host: false }],
+        matched: me,
+        me,
+      });
+    }
+  }
+  return clone([...people.values()]);
+}
+
 function escapeHtml(s: string): string {
   return s.replace(
     /[&<>"']/g,
@@ -886,7 +907,7 @@ export function createMockTransport(options: MockOptions = {}): {
             ? s.id === scope.id
             : s.projects.includes(scope.id),
       );
-      const items = state.tickets
+      const scoped = state.tickets
         .map((t) => {
           // a project-less ticket comes from the sources feeding no project
           const from = inScope.filter((s) =>
@@ -895,7 +916,8 @@ export function createMockTransport(options: MockOptions = {}): {
           const views = from[0]?.tracker.views ?? [];
           return { item: t, from, view: views.find((v) => v.id === view_id) ?? views[0] };
         })
-        .filter(({ from }) => from.length > 0)
+        .filter(({ from }) => from.length > 0);
+      const items = scoped
         .filter(({ item, view }) => {
           const w = who ?? view?.who;
           return w === 'mine'
@@ -922,6 +944,7 @@ export function createMockTransport(options: MockOptions = {}): {
         next: offset + pageSize < filtered.length ? { kind: 'offset', value: offset + pageSize } : null,
         stale: false,
         errors: [],
+        people: teamPeople(scoped.map((s) => s.item)),
       };
     },
     tracker_get: ({ ticket }) => {
@@ -1098,25 +1121,6 @@ export function createMockTransport(options: MockOptions = {}): {
       if (!hits) throw err('unsupported', `${account_id} cannot list sources`);
       const q = query.trim().toLowerCase();
       return clone(hits.filter((h) => h.label.toLowerCase().includes(q)));
-    },
-    team_people: ({ scope }) => {
-      const people = new Map<string, Person>();
-      for (const t of state.tickets.filter((t) => scope.kind === 'all' || t.project_ids.includes(scope.id))) {
-        for (const u of [t.ticket.assignee, t.ticket.reporter]) {
-          if (!u) continue;
-          const me = u.id === ME.id;
-          const key = me ? 'me' : `${t.ticket.ref.account}:${u.id}`;
-          people.set(key, {
-            key,
-            name: me ? 'You' : u.name,
-            avatar_url: u.avatar_url,
-            ids: [{ account: t.ticket.ref.account, id: u.id, login: u.login, code_host: false }],
-            matched: me,
-            me,
-          });
-        }
-      }
-      return clone([...people.values()]);
     },
     next_up_list: () => clone(state.nextUp),
     next_up_put: ({ item }) => {

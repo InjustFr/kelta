@@ -860,6 +860,7 @@ pub fn all() -> Vec<Fixture> {
                     account_id: AccountId::new("redmine-client"),
                     error: KeltaError::network("offline"),
                 }],
+                people: vec![],
             }
         ),
         fx!("ticket", Ticket, ticket()),

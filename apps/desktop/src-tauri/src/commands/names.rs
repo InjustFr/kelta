@@ -87,7 +87,6 @@ pub const COMMANDS: &[&str] = &[
     "workflow_run",
     "tracker_search",
     "tracker_sources",
-    "team_people",
     "next_up_list",
     "next_up_put",
     "next_up_remove",

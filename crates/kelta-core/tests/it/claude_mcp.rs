@@ -1,5 +1,5 @@
 //! Kelta's MCP in Claude Code: startup offer, install / remove, silent re-registration, with a fake
-//! `claude` that keeps its user-scope registration in a file.
+//! `claude` that keeps its user-scope registration in `~/.claude.json` of a fake home.
 
 use std::path::Path;
 
@@ -7,17 +7,21 @@ use crate::common::*;
 use kelta_proto::events::UiEvent;
 use kelta_proto::settings::Settings;
 
-/// `claude mcp get|add|remove kelta`, logging each call to `claude.log`.
+fn config(root: &Path) -> std::path::PathBuf {
+    root.join("home/.claude.json")
+}
+
+/// `claude mcp add|remove kelta`, logging each call to `claude.log`.
 fn fake_claude(root: &Path) {
-    let reg = root.join("kelta.reg");
+    let reg = config(root);
     let log = root.join("claude.log");
     let script = format!(
         r#"#!/bin/sh
 echo "$*" >> '{log}'
 case "$2" in
-  get) [ -f '{reg}' ] && cat '{reg}' && exit 0; echo 'No MCP server named "kelta"' >&2; exit 1 ;;
   remove) [ -f '{reg}' ] && rm '{reg}' && exit 0; exit 1 ;;
-  add) printf 'kelta:\n  Scope: User config\n  Type: http\n  URL: %s\n  Headers:\n    %s\n' "$8" "${{10}}" > '{reg}' ;;
+  add) mkdir -p "$(dirname '{reg}')"; h="${{10}}"
+    printf '{{"mcpServers":{{"kelta":{{"type":"http","url":"%s","headers":{{"Authorization":"%s"}}}}}}}}' "$8" "${{h#Authorization: }}" > '{reg}' ;;
 esac
 "#,
         log = log.display(),
@@ -89,15 +93,15 @@ async fn offer_install_and_silent_reregistration() {
     assert_eq!(ping(token).await.unwrap().status(), 200);
     assert_eq!(ping("other").await.unwrap().status(), 401);
 
-    // Up to date: nothing re-registered.
+    // Up to date: read from the config file, `claude` never runs.
     let calls = log(root).len();
     h.core.claude_mcp_startup().await;
-    assert_eq!(log(root)[calls..], ["mcp get kelta"]);
+    assert!(log(root)[calls..].is_empty(), "{:?}", &log(root)[calls..]);
 
     // Stale (another port and token): updated without asking.
     std::fs::write(
-        root.join("kelta.reg"),
-        "kelta:\n  Type: http\n  URL: http://127.0.0.1:1/mcp\n  Headers:\n    Authorization: Bearer old\n",
+        config(root),
+        r#"{"mcpServers":{"kelta":{"type":"http","url":"http://127.0.0.1:1/mcp","headers":{"Authorization":"Bearer old"}}}}"#,
     )
     .unwrap();
     let calls = log(root).len();
@@ -105,8 +109,7 @@ async fn offer_install_and_silent_reregistration() {
     h.core.claude_mcp_startup().await;
     assert_eq!(offers(&h), 0);
     let tail = &log(root)[calls..];
-    assert_eq!(tail[..2], ["mcp get kelta", "mcp remove --scope user kelta"]);
-    assert_eq!(tail[2], format!("{prefix}{token}"));
+    assert_eq!(tail, ["mcp remove --scope user kelta".to_owned(), format!("{prefix}{token}")]);
 
     // Remove: unregistered, endpoint closed.
     h.core.claude_mcp_remove().await.unwrap();

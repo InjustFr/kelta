@@ -993,30 +993,49 @@ async fn writes_patch_the_cached_list() {
 }
 
 #[tokio::test]
-async fn team_people_reads_caches_only_and_waits_name_merged_people() {
+async fn ticket_pages_carry_the_team_people_and_waits_name_merged_people() {
     let tmp = tempfile::tempdir().unwrap();
     let mut authored = review("acme/shop-api", 87, ReviewKind::Authored);
     authored.waiting_on = vec!["bob".into()];
     authored.author_to_act = true;
     let e = env(tmp.path(), vec![authored]);
     let shop = Scope::Project { id: "shop".into() };
-    // nothing cached yet: nobody is known but the accounts' own users, and nothing is fetched
-    let cold = e.h.core.team_people(shop.clone()).await.unwrap();
-    assert!(cold.iter().all(|p| p.me), "{cold:?}");
-    assert_eq!(*e.host.calls.lock(), 0);
-    assert!(!e.tracker.calls().iter().any(|c| c.starts_with("list:")));
 
-    e.h.core.tracker_list(shop.clone(), None, Some(Who::Anyone), None, true).await.unwrap();
+    let team = e.h.core.tracker_list(shop.clone(), None, Some(Who::Anyone), None, true).await.unwrap();
     let page = e.h.core.review_page(shop.clone(), ReviewKind::Authored, true).await.unwrap();
     let names: Vec<_> = page.items[0].waiting.iter().map(|w| (w.name.as_str(), w.why)).collect();
     assert_eq!(names, [("Bob", WaitWhy::Review), ("Bob", WaitWhy::Author)]);
     let (host_calls, tracker_calls) = (*e.host.calls.lock(), e.tracker.calls().len());
 
-    let people = e.h.core.team_people(shop.clone()).await.unwrap();
+    // Any tab's page names the Team list's people, from caches only.
+    let mine = e.h.core.tracker_list(shop, None, Some(Who::Mine), None, false).await.unwrap();
+    let people = &mine.people;
     assert!(people.iter().any(|p| p.ids.iter().any(|i| i.id == "bob" && i.code_host && !p.matched)));
     assert!(people.iter().any(|p| p.me));
-    e.h.core.team_people(shop).await.unwrap();
-    assert_eq!((*e.host.calls.lock(), e.tracker.calls().len()), (host_calls, tracker_calls));
+    let assignees = team.items.iter().filter_map(|i| i.ticket.assignee.as_ref());
+    for a in assignees {
+        assert!(people.iter().any(|p| p.ids.iter().any(|i| !i.code_host && i.id == a.id)), "{a:?}");
+    }
+    let tracker_lists = e.tracker.calls()[tracker_calls..].iter().filter(|c| c.starts_with("list:")).count();
+    assert_eq!((*e.host.calls.lock(), tracker_lists), (host_calls, 1), "Mine fetched once, the rest cached");
+}
+
+#[tokio::test]
+async fn ticket_by_key_reads_the_cached_lists_without_enrichment() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    let page = e.h.core.ticket_list(Scope::All, None, None, true).await.unwrap();
+    let want = &page.items[0];
+    let key = want.ticket.r#ref.key.clone();
+    let calls = e.tracker.calls().len();
+    let got = e.h.core.ticket_by_key(&key, None).await.unwrap().unwrap();
+    assert_eq!(got.ticket.r#ref, want.ticket.r#ref);
+    assert_eq!((&got.project_ids, &got.source_ids), (&want.project_ids, &want.source_ids));
+    let mine = e.h.core.ticket_by_key(&key, Some(&want.ticket.r#ref.account)).await.unwrap();
+    assert_eq!(mine.map(|i| i.ticket.r#ref), Some(want.ticket.r#ref.clone()));
+    assert!(e.h.core.ticket_by_key(&key, Some(&AccountId::new("other"))).await.unwrap().is_none());
+    assert!(e.h.core.ticket_by_key("NOPE-1", None).await.unwrap().is_none());
+    assert_eq!(e.tracker.calls().len(), calls, "served from the cache: {:?}", e.tracker.calls());
 }
 
 /// shop (a source feeds it, bound to acme/shop-api) + lab (no source, bound to acme/lab).

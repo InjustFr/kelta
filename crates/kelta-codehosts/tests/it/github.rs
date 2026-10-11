@@ -8,7 +8,7 @@ use kelta_proto::codehost::{
 };
 use kelta_proto::error::ErrorCode;
 use serde_json::{Value, json};
-use wiremock::matchers::{body_partial_json, header, method, path, query_param};
+use wiremock::matchers::{body_partial_json, body_string_contains, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn gh(server: &MockServer) -> std::sync::Arc<dyn kelta_proto::api::CodeHost> {
@@ -70,11 +70,96 @@ async fn direct_requests_only_and_drafts_on_demand() {
     assert_eq!(v["s"], "is:pr is:open user-review-requested:@me archived:false");
 }
 
+/// GitHub's GraphQL cost: each `first`/`last` connection is one request per parent node (the
+/// product of its ancestors' sizes), and 100 requests make a point. Fragments are inlined.
+fn query_cost(query: &str) -> f64 {
+    let mut q = query.to_owned();
+    while let Some(at) = q.find("fragment ") {
+        let rest = &q[at..];
+        let name = rest["fragment ".len()..].split_whitespace().next().unwrap().to_owned();
+        let open = at + rest.find('{').unwrap();
+        let (mut depth, mut end) = (0, open);
+        for (i, c) in q[open..].char_indices() {
+            depth += match c {
+                '{' => 1,
+                '}' => -1,
+                _ => 0,
+            };
+            if depth == 0 {
+                end = open + i;
+                break;
+            }
+        }
+        let body = q[open + 1..end].to_owned();
+        q.replace_range(at..=end, "");
+        q = q.replace(&format!("...{name}"), &body);
+    }
+    let (mut stack, mut pending, mut requests) = (vec![1.0_f64], None, 0.0);
+    let mut chars = q.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '(' => {
+                let args: String = chars.by_ref().take_while(|c| *c != ')').collect();
+                pending = args.split(',').find_map(|a| {
+                    let (k, v) = a.split_once(':')?;
+                    matches!(k.trim(), "first" | "last").then(|| v.trim().parse::<f64>().ok()).flatten()
+                });
+            }
+            '{' => {
+                let connection = pending.take();
+                if connection.is_some() {
+                    requests += stack.iter().product::<f64>();
+                }
+                stack.push(connection.unwrap_or(1.0));
+            }
+            '}' => {
+                stack.pop();
+            }
+            _ => {}
+        }
+    }
+    requests / 100.0
+}
+
+#[test]
+fn query_cost_follows_githubs_documented_example() {
+    let q = "query { viewer { login repositories(first:100){ edges{ node{ id issues(first:50){ edges{ node{ id \
+labels(first:60){ edges{ node{ id name } } } } } } } } } } }";
+    assert!((query_cost(q) - 51.01).abs() < 1e-9, "{}", query_cost(q));
+}
+
+#[tokio::test]
+async fn list_queries_cost_at_most_ten_points_for_fifty_prs() {
+    let server = MockServer::start().await;
+    mount(&server, "POST", "/graphql", 200, "github/gql_list.json").await;
+    let h = gh(&server);
+    for kind in [ReviewKind::Authored, ReviewKind::ReviewRequested] {
+        h.list_reviews(&query(kind, true, false)).await.unwrap();
+    }
+    for b in bodies(&server, "POST", "/graphql").await {
+        let q = b["query"].as_str().unwrap();
+        if q.contains("search(") {
+            let cost = query_cost(q);
+            assert!(cost <= 10.0, "{cost} points: {q}");
+        }
+    }
+}
+
 #[tokio::test]
 async fn authored_list() {
     let server = MockServer::start().await;
     mount(&server, "POST", "/graphql", 200, "github/gql_list.json").await;
-    let list = gh(&server).list_reviews(&query(ReviewKind::Authored, true, false)).await.unwrap();
+    Mock::given(method("POST"))
+        .and(path("/graphql"))
+        .and(body_string_contains("nodes(ids:$ids)"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_string(fixture_text("github/gql_last_comments.json")),
+        )
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    let h = gh(&server);
+    let list = h.list_reviews(&query(ReviewKind::Authored, true, false)).await.unwrap();
     assert_eq!(list.len(), 1);
     let r = &list[0];
     assert_eq!(r.kind, ReviewKind::Authored);
@@ -89,8 +174,14 @@ async fn authored_list() {
         Some("2026-10-01T09:00:00Z"),
         "resolved and answered threads left out; compared as instants"
     );
-    let q = bodies(&server, "POST", "/graphql").await[0]["query"].as_str().unwrap().to_owned();
-    assert!(q.contains("...Threads") && q.contains("reviewThreads"));
+    let reqs = bodies(&server, "POST", "/graphql").await;
+    assert!(reqs[0]["query"].as_str().unwrap().contains("...Threads"));
+    assert_eq!(reqs[1]["variables"]["ids"], json!(["PR_55"]), "last comments of the PR with open threads");
+
+    // Threads unchanged (same updatedAt and count): the last comments come from the cache.
+    let again = h.list_reviews(&query(ReviewKind::Authored, true, false)).await.unwrap();
+    assert_eq!(again[0].last_comment_at.as_deref(), Some("2026-10-01T09:00:00Z"));
+    assert_eq!(count(&server, "POST", "/graphql").await, 3, "one list query, no thread query");
 }
 
 #[tokio::test]
@@ -98,7 +189,7 @@ async fn ghe_uses_its_own_graphql_endpoint() {
     let server = MockServer::start().await;
     Mock::given(path("/api/graphql"))
         .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("github/gql_list.json")))
-        .expect(1)
+        .expect(2) // the list, then its threads' last comments
         .mount(&server)
         .await;
     Mock::given(path("/api/v3/user"))
