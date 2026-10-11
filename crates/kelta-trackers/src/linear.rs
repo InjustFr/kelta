@@ -17,7 +17,7 @@ use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, AuthKind, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
     Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
-    TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
+    TicketDetail, TicketParent, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -31,7 +31,8 @@ pub const MAX_PAGES: u32 = 20;
 const USER: &str = "id name displayName avatarUrl";
 const ISSUE: &str = "id identifier title url updatedAt priorityLabel priority estimate dueDate \
     startedAt completedAt canceledAt cycle { id name number isActive endsAt } state { id name type } \
-    assignee { id name displayName avatarUrl } creator { id name displayName avatarUrl } labels { nodes { name } } team { key }";
+    assignee { id name displayName avatarUrl } creator { id name displayName avatarUrl } labels { nodes { name } } team { key } \
+    parent { id identifier title url } project { name url }";
 
 /// Linear's fixed priorities as (label, API value), highest first.
 const PRIORITIES: [(&str, u8); 5] =
@@ -170,6 +171,25 @@ impl LinearTracker {
             }),
             estimate: v["estimate"].as_f64().map(|e| e.to_string()),
             due: s(v, "dueDate").map(str::to_owned),
+            // The parent issue, else the project (named by its name: it has no key).
+            parent: v
+                .get("parent")
+                .filter(|p| !p.is_null())
+                .and_then(|p| {
+                    Some(TicketParent {
+                        key: s(p, "identifier")?.to_owned(),
+                        title: s(p, "title").unwrap_or("").to_owned(),
+                        url: s(p, "url").unwrap_or("").to_owned(),
+                    })
+                })
+                .or_else(|| {
+                    let p = v.get("project")?;
+                    Some(TicketParent {
+                        key: s(p, "name")?.to_owned(),
+                        title: String::new(),
+                        url: s(p, "url").unwrap_or("").to_owned(),
+                    })
+                }),
         })
     }
 
@@ -382,7 +402,13 @@ impl Tracker for LinearTracker {
             body_md: body,
             body_format: BodyFormat::Markdown,
             comments,
-            parent: None,
+            parent: raw.get("parent").and_then(|p| {
+                Some(TicketRef {
+                    account: self.account().clone(),
+                    key: s(p, "identifier")?.to_owned(),
+                    id: s(p, "id")?.to_owned(),
+                })
+            }),
             children,
             prs: Vec::new(),
             caps: Default::default(),

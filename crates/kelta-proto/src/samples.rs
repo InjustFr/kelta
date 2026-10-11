@@ -99,6 +99,11 @@ pub fn ticket() -> Ticket {
         }),
         estimate: Some("3".into()),
         due: Some("2026-10-15".into()),
+        parent: Some(TicketParent {
+            key: "SHOP-100".into(),
+            title: "Login hardening".into(),
+            url: "https://acme.atlassian.net/browse/SHOP-100".into(),
+        }),
     }
 }
 

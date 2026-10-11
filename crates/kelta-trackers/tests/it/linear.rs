@@ -45,6 +45,9 @@ async fn list_sends_the_raw_key_filters_to_me_and_maps_fields() {
     assert_eq!(t.project_hint.as_deref(), Some("ENG"));
     assert_eq!(page.items[1].status.category, StatusCategory::Todo);
     assert!(page.items[1].priority.is_none() && page.items[1].assignee.is_none());
+    // the parent issue, else the project
+    let parents: Vec<_> = page.items.iter().map(|t| t.parent.as_ref().map(|p| p.key.as_str())).collect();
+    assert_eq!(parents, vec![Some("ENG-10"), Some("Q4 auth")]);
     let f = &gql_bodies(&server, "issues(filter").await[0]["variables"]["filter"];
     assert_eq!(f["assignee"], json!({"isMe": {"eq": true}}));
     assert_eq!(f["state"]["type"]["nin"], json!(["completed", "canceled"]));

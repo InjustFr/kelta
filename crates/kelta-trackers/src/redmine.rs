@@ -11,7 +11,7 @@ use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, TextFormat, TrackerBinding, TrackerView};
 use kelta_proto::tracker::{
     Assignee, BodyFormat, Column, Cursor, Page, SourceHit, Sprint, Status, StatusCategory, Ticket,
-    TicketDetail, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
+    TicketDetail, TicketParent, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -231,6 +231,12 @@ impl RedmineTracker {
             estimate: issue.get("estimated_hours").and_then(Value::as_f64).map(|h| format!("{h}h")),
             due: s(issue, "due_date").map(str::to_owned),
             project_hint: issue.pointer("/project/id").and_then(idstr),
+            // The list returns the parent's id only; the UI takes its title from the list when it is there.
+            parent: issue.pointer("/parent/id").and_then(idstr).map(|id| TicketParent {
+                url: format!("{}/issues/{id}", self.web),
+                key: id,
+                title: String::new(),
+            }),
         })
     }
 
