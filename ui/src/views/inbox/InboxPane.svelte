@@ -2,7 +2,7 @@
   // Now (FLOW §3): one screen across projects answering "review Claude's work, or grab a feature?".
   // It keeps the Inbox slot (rail top tile, ⌘0, `inbox.open`, pane kind `inbox`).
   import { t, tn } from '$lib/i18n/index.svelte';
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
@@ -53,6 +53,7 @@
     testsMissing,
     workKey,
     type Lamp as LampKind,
+    type NowSection,
     type WorkActionId,
   } from '../work/phase';
   import Loading from '../work/shared/Loading.svelte';
@@ -395,6 +396,16 @@
       root.focus({ preventScroll: true });
   });
 
+  /** A header chip: selects its section's first row and brings the section heading into view. */
+  async function jumpTo(id: NowSection): Promise<void> {
+    const first = visible.find((s) => s.id === id)?.rows[0];
+    if (!first) return;
+    selId = first.id;
+    root?.focus({ preventScroll: true });
+    await tick();
+    vlist?.scrollToIndex(lines.findIndex((l) => l.type === 'section' && l.section.id === id));
+  }
+
   function step(delta: number): void {
     if (selectable.length === 0) return;
     const at = cur ? selectable.indexOf(cur) : -1;
@@ -554,7 +565,20 @@
       <span class="subtitle">{t('Everything waiting on you, across projects')}</span>
     </span>
     <span class="split" data-testid="now-header" title={summary.header}>
-      {#each summary.parts as part (part)}<span>{part}</span>{/each}
+      {#each summary.chips as c (c.section)}
+        {@const at = c.text.indexOf(String(c.n))}
+        <Button
+          size="sm"
+          variant="ghost"
+          class="count {c.lamp ?? ''}"
+          disabled={!visible.some((s) => s.id === c.section && s.rows.length > 0)}
+          data-testid="now-chip-{c.section}"
+          onclick={() => void jumpTo(c.section)}
+          >{#if at < 0}{c.text}{:else}{c.text.slice(0, at)}<b class="k-num">{c.n}</b>{c.text.slice(
+              at + String(c.n).length,
+            )}{/if}</Button
+        >
+      {/each}
     </span>
     {#if stale}<span class="asof" data-testid="now-asof"
         >{t('Updated {ago}', { ago: relativeTime(stale.ms) })}</span
@@ -763,13 +787,30 @@
 
   .split {
     display: inline-flex;
-    gap: var(--k-space-4);
+    gap: var(--k-space-1);
     min-width: 0;
     overflow: hidden;
     font-size: var(--k-font-size-sm);
     font-variant-numeric: tabular-nums;
     color: var(--k-fg-muted);
     white-space: nowrap;
+  }
+
+  .split :global(.count) {
+    color: var(--k-fg-muted);
+  }
+
+  .split :global(.count b) {
+    font-weight: 600;
+  }
+
+  /* Only the sections that need Louis take their lamp colour. */
+  .split :global(.count.needs_input) {
+    color: var(--k-lamp-needs-input);
+  }
+
+  .split :global(.count.error) {
+    color: var(--k-lamp-error);
   }
 
   .subtitle {

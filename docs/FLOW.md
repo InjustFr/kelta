@@ -200,11 +200,11 @@ Each row is one *thing*: a work item, a session that is not part of a work item,
 | Elsewhere | none | Claude sessions Kelta did not start (#345), dimmed, with their status; they need Kelta's hook relay in Claude Code's user settings (Settings → Claude, or the startup offer, `claude.hooks_offer`) | latest first | jump to their terminal window or tmux pane (#346) |
 | Up next | none | tickets assigned to me, not Done nor in their source's `waiting_statuses`, with no unfinished work item and not in Next up; in-progress first, then tracker order; 10 max, then "Show all" (the Tickets view on Mine) | | Start work |
 
-Sections run in the order of the table above. The header answers "review LLM work or grab a new feature?" in the order of that decision, with section names as words:
+Sections run in the order of the table above. The header is a row of chips in that same order, each a bold count then a word (#386):
 
-`Claude: 1 asks · 3 LLM diffs · 2 PRs waiting · Fix 2 · 1 working · 4 up next`
+`1 needs you · 3 LLM diffs · 2 to fix · 2 PRs waiting · 1 working · 4 up next`
 
-"asks" = Claude needs you, "LLM diffs" = Ready for review, "PRs waiting" = Review requests, "working" = Claude sessions in `Working` (the parallel capacity in use). Zero parts are dropped. The rail's Now tile badge shows the sum of the first four sections; its tooltip is the same split. The dock badge stays "sessions needing input" (interrupt level only).
+"needs you" = Claude needs you, "LLM diffs" = Ready for review, "to fix" = Fix, "PRs waiting" = Review requests, "working" = Claude sessions in `Working` (the parallel capacity in use; the chip goes to In flight). Zero chips are dropped. A chip scrolls to its section and selects its first row. Only the chips of sections that need you (Claude needs you, Fix) take their lamp colour; the others stay muted. The rail's Now tile badge shows the sum of the first four sections; its line shows only the most urgent chip (`1 needs you`, else `2 to fix`, else the first one), never the whole list. "needs you" is the same wording in the rail, the header, the top-bar chip (#372) and the status strip. The dock badge stays "sessions needing input" (interrupt level only).
 
 ### 3.2 Row grammar
 

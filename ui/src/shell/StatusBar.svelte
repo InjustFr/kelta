@@ -37,7 +37,7 @@
 
   // Lamp meter: one button per non-zero state; clicking walks the sessions in that state.
   const METER: { lamp: LampLevel; label: string }[] = [
-    { lamp: 'needs_input', label: msg('need input') },
+    { lamp: 'needs_input', label: msg('need you') },
     { lamp: 'error', label: msg('in error') },
     { lamp: 'working', label: msg('working') },
     { lamp: 'done', label: msg('done') },
@@ -50,7 +50,7 @@
   );
 
   function words(lamp: LampLevel, n: number): string {
-    if (lamp === 'needs_input') return tn('{n} needs input', '{n} need input', n);
+    if (lamp === 'needs_input') return tn('{n} needs you', '{n} need you', n);
     if (lamp === 'done') return tn('{n} ready to review', '{n} ready to review', n);
     if (lamp === 'error') return tn('{n} in error', '{n} in error', n);
     return tn('{n} working', '{n} working', n);
