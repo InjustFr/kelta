@@ -674,6 +674,7 @@
   "Repository": "Dépôt",
   "All repos": "Tous les dépôts",
   "Drafts": "Brouillons",
+  "Compact": "Compact",
   "Loading reviews": "Chargement des revues",
   "Could not load reviews": "Impossible de charger les revues",
   "No ticket source feeds a project with a repository yet": "Aucune source de tickets n’alimente encore un projet avec un dépôt",

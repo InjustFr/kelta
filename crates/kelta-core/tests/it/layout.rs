@@ -131,7 +131,7 @@ async fn global_views_layout_survives_a_restart() {
 
 /// A tab with one pane that has no session (startup prunes dead sessions' panes).
 fn tab(id: &str) -> Tab {
-    let root = LayoutNode::Pane { id: id.into(), content: PaneContent::Inbox };
+    let root = LayoutNode::Pane { id: id.into(), content: PaneContent::Inbox { density: None } };
     Tab {
         id: id.into(),
         title: id.into(),

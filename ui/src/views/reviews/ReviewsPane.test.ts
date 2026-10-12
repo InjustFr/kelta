@@ -42,6 +42,15 @@ function mountReviews() {
 }
 
 describe('ReviewsPane linked tickets', () => {
+  it('rows are two-line until the Compact switch is on (#383)', async () => {
+    mountReviews();
+    await screen.findAllByRole('button', { name: /^Open SHOP-/ });
+    expect(document.querySelector('.k-row.two')).not.toBeNull();
+    await fireEvent.click(screen.getByRole('switch', { name: 'Compact' }));
+    await waitFor(() => expect(document.querySelector('.k-row.two')).toBeNull());
+    expect(document.querySelector('.k-row')).not.toBeNull();
+  });
+
   it('a linked ticket badge opens that ticket without opening the review', async () => {
     mountReviews();
     await fireEvent.keyDown(await screen.findByTestId('reviews-pane'), { key: '3' }); // Mine

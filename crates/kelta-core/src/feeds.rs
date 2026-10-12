@@ -2038,14 +2038,14 @@ impl Core {
                     let (scope, view) = self.list_scope(scope, source_id.as_deref(), view_id.as_deref());
                     tickets(&scope, view.as_deref(), *who, &mut want)
                 }
-                PaneContent::Reviews { scope, tab } => {
+                PaneContent::Reviews { scope, tab, .. } => {
                     reviews(self.review_accounts(scope), &both, &mut want);
                     // Team only while shown: For me and Mine feed Now, badges and notifications.
                     if *tab == Some(ReviewKind::Team) {
                         reviews(self.team_accounts(scope), &[ReviewKind::Team], &mut want);
                     }
                 }
-                PaneContent::Inbox => {
+                PaneContent::Inbox { .. } => {
                     // Now reads `tracker_list(All, None, Mine)`: poll that cache key
                     tickets(&Scope::All, None, Some(Who::Mine), &mut want);
                     reviews(self.review_accounts(&Scope::All), &both, &mut want);

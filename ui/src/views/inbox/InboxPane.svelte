@@ -6,7 +6,7 @@
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import type { AccountError, SessionInfo } from '$lib/gen';
+  import type { AccountError, RowDensity, SessionInfo } from '$lib/gen';
   import { openExternal } from '$lib/ipc/commands';
   import {
     GLOBAL,
@@ -32,6 +32,7 @@
     Lamp,
     Menu,
     ROW_HEIGHT,
+    Toggle,
     VirtualList,
     relativeTime,
   } from '$lib/ui';
@@ -69,7 +70,16 @@
   import FilterBar from '../filters/FilterBar.svelte';
   import { clearAll, commonFilters, noMatch } from '../filters/filters';
 
-  let { focused }: PaneProps<'inbox'> = $props();
+  let { projectId, paneId, content, focused }: PaneProps<'inbox'> = $props();
+
+  let densityOverride = $state<RowDensity | null>(null);
+  /** Compact keeps the single 32px line (#383); comfortable is the two-line row. */
+  const compact = $derived((densityOverride ?? content.density) === 'compact');
+
+  function setCompact(on: boolean): void {
+    densityOverride = on ? 'compact' : 'comfortable';
+    persistPaneContent(projectId, paneId, { density: densityOverride });
+  }
 
   const ALL = { kind: 'all' } as const;
 
@@ -569,6 +579,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
   class="pane"
+  class:compact
   data-testid="inbox-pane"
   bind:this={root}
   tabindex="0"
@@ -601,6 +612,7 @@
         >{t('Updated {ago}', { ago: relativeTime(stale.ms) })}</span
       >{/if}
     <span class="spacer"></span>
+    <Toggle label={t('Compact')} checked={compact} onchange={setCompact} />
     <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}
       >{t('Refresh')}</Button
     >
@@ -661,7 +673,7 @@
           bind:this={vlist}
           items={lines}
           itemHeight={ROW_HEIGHT}
-          measure
+          measure={!compact}
           key={(l) => l.id}
           label={t('Now')}
         >
@@ -686,7 +698,8 @@
                 <button
                   type="button"
                   tabindex="-1"
-                  class="row two"
+                  class="row"
+                  class:two={!compact}
                   class:dim={v.dim}
                   class:selected={cur === l.row}
                   aria-current={cur === l.row ? 'true' : undefined}
@@ -716,7 +729,7 @@
                         title={v.cost.over ? t('Over budget') : t('Claude spend on this item')}
                         >{v.cost.text}</span
                       >{/if}
-                    <span class="meta">{v.age}</span>
+                    <span class="meta" class:age={compact}>{v.age}</span>
                   </span>
                 </button>
               {:else}
@@ -993,6 +1006,16 @@
     padding-block: var(--k-space-2);
   }
 
+  /* Compact: the meta joins the row's own line. */
+  .row:not(.two) .sub {
+    display: contents;
+  }
+
+  .age {
+    width: 64px;
+    text-align: right;
+  }
+
   .sub {
     grid-column: 3;
     display: flex;
@@ -1008,6 +1031,15 @@
     gap: var(--k-space-1) var(--k-space-3);
     padding-block: 0 var(--k-space-2);
     padding-left: calc(var(--k-space-4) + 12px + 76px + 3 * var(--k-space-2));
+  }
+
+  .compact .detail {
+    flex-wrap: nowrap;
+    padding-block: 0;
+  }
+
+  .compact .msg {
+    flex: 1;
   }
 
   .msg {

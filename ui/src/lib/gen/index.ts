@@ -186,6 +186,7 @@ export type * from './ReviewQuery';
 export type * from './ReviewRef';
 export type * from './Reviewer';
 export type * from './ReviewsSettings';
+export type * from './RowDensity';
 export type * from './RunClaim';
 export type * from './RunShow';
 export type * from './RunState';

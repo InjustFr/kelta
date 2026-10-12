@@ -2,6 +2,7 @@
 import type { PluginId } from "./PluginId";
 import type { ReviewKind } from "./ReviewKind";
 import type { ReviewRef } from "./ReviewRef";
+import type { RowDensity } from "./RowDensity";
 import type { Scope } from "./Scope";
 import type { ScreenInstanceId } from "./ScreenInstanceId";
 import type { SessionId } from "./SessionId";
@@ -38,4 +39,4 @@ person?: string | null, } | { "kind": "ticket_detail", ticket: TicketRef, } | { 
 /**
  * The shown tab (For me / Team / Mine); `None` = For me.
  */
-tab?: ReviewKind | null, } | { "kind": "review_detail", review: ReviewRef, } | { "kind": "inbox" } | { "kind": "work_item", id: WorkItemId, } | { "kind": "settings", section: string | null, } | { "kind": "diagnostics" } | { "kind": "welcome" } | { "kind": "empty" };
+tab?: ReviewKind | null, density?: RowDensity | null, } | { "kind": "review_detail", review: ReviewRef, } | { "kind": "inbox", density?: RowDensity | null, } | { "kind": "work_item", id: WorkItemId, } | { "kind": "settings", section: string | null, } | { "kind": "diagnostics" } | { "kind": "welcome" } | { "kind": "empty" };

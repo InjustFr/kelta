@@ -72,7 +72,7 @@ async fn fake_core_sessions_and_bus() {
         .layout_open(
             &ProjectId::new("shop"),
             OpenPaneRequest {
-                content: PaneContent::Inbox,
+                content: PaneContent::Inbox { density: None },
                 placement: Placement::NewTab,
                 focus: true,
                 tab_title: None,

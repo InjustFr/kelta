@@ -674,6 +674,7 @@
   "Repository": "Repository",
   "All repos": "Alle Repos",
   "Drafts": "Entwürfe",
+  "Compact": "Kompakt",
   "Loading reviews": "Reviews werden geladen",
   "Could not load reviews": "Reviews konnten nicht geladen werden",
   "No ticket source feeds a project with a repository yet": "Noch keine Ticketquelle speist ein Projekt mit einem Repository",

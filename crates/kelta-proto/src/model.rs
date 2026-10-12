@@ -483,6 +483,17 @@ pub enum TicketsMode {
     Board,
 }
 
+/// Row layout of the Reviews and Now lists (#383); `None` = comfortable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum RowDensity {
+    /// Two lines: title, then chips and meta.
+    #[default]
+    Comfortable,
+    /// One 32px line.
+    Compact,
+}
+
 /// Pane content; serde tag `kind`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -532,11 +543,18 @@ pub enum PaneContent {
         #[serde(default)]
         #[ts(optional = nullable)]
         tab: Option<ReviewKind>,
+        #[serde(default)]
+        #[ts(optional = nullable)]
+        density: Option<RowDensity>,
     },
     ReviewDetail {
         review: ReviewRef,
     },
-    Inbox,
+    Inbox {
+        #[serde(default)]
+        #[ts(optional = nullable)]
+        density: Option<RowDensity>,
+    },
     WorkItem {
         id: WorkItemId,
     },
