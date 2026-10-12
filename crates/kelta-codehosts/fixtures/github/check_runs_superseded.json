@@ -1,0 +1,16 @@
+{
+  "total_count": 6,
+  "check_runs": [
+    { "name": "lint", "status": "completed", "conclusion": "success", "check_suite": { "id": 2002 } },
+    { "name": "unit-tests", "status": "completed", "conclusion": "success", "check_suite": { "id": 2002 } },
+    { "name": "e2e (shard 1/2)", "status": "completed", "conclusion": "success", "check_suite": { "id": 2002 } },
+    { "name": "lint", "status": "completed", "conclusion": "cancelled", "check_suite": { "id": 2001 } },
+    { "name": "unit-tests", "status": "completed", "conclusion": "cancelled", "check_suite": { "id": 2001 } },
+    {
+      "name": "e2e (shard ${{ matrix.shard }}/${{ matrix.shardTotal }})",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "check_suite": { "id": 2001 }
+    }
+  ]
+}
