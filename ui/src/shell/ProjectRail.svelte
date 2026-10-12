@@ -24,7 +24,7 @@
   import { jumpOutside, nowSummary, refreshNow } from '../views/inbox/now';
   import { outsidePhase } from '../views/work/phase';
   import { confirms } from './confirm.svelte';
-  import { chordFor } from './labels';
+  import { chordFor, currentRun, runState, toolIcon } from './labels';
   import {
     activateProject,
     attachTab,
@@ -75,6 +75,20 @@
   const index = $derived(new Map(railRows(lines).map((r, i) => [r.tab.id, i + 1])));
   $effect(() => {
     if (tools.byProject[toolsOf] === undefined) void tools.load(toolsOf);
+  });
+
+  // Each session's current Claude workflow run (#377); a closed session drops its runs.
+  const runs = $derived(
+    Object.entries(sessions.runs).flatMap(([id, list]) => {
+      const s = sessions.get(id);
+      const run = currentRun(list);
+      return s && run ? [{ s, run, ...runState(run, s) }] : [];
+    }),
+  );
+  // Runs a Claude session started before this window listened (once per session; events keep them current).
+  $effect(() => {
+    for (const s of sessions.all)
+      if (s.kind.type === 'claude' && s.lifecycle === 'live') void sessions.loadRuns(s.id);
   });
 
   // The pane in front (no global view): marks the tool row or sub-line it belongs to.
@@ -580,6 +594,32 @@
         </div>
       {/if}
 
+      {#if runs.length > 0}
+        <section class="band tools" aria-label={t('Workflows')} data-testid="rail-workflows">
+          <h2 class="tools-heading">{t('Workflows')}</h2>
+          <ul class="rows">
+            {#each runs as r (r.run.run_id)}
+              <li class="row">
+                <button
+                  type="button"
+                  class="item tab-row"
+                  title={`${r.s.name} › ${t('Workflow runs of this session')}`}
+                  data-testid="rail-workflow"
+                  data-run-id={r.run.run_id}
+                  data-attention={r.lamp}
+                  onclick={() => ui.openSheet('claude_runs', { sessionId: r.s.id })}
+                >
+                  <span class="socket" aria-hidden="true"><Lamp level={r.lamp} /></span>
+                  <span class="kind" aria-hidden="true"><Icon name="bot" size={14} /></span>
+                  <span class="text"><span class="name">{r.run.name ?? t('workflow')} · {r.label}</span></span
+                  >
+                </button>
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
+
       {#if sessions.elsewhere.length > 0}
         <!-- Claude sessions Kelta did not start (#345): dimmed, Now lists them. -->
         <section class="band tools" aria-label={t('Elsewhere')} data-testid="rail-elsewhere">
@@ -614,6 +654,7 @@
             {#each toolList as tool, i (tool.id)}
               {@const launchOnly = tool.kind !== 'pty'}
               {@const lvl = launchOnly ? 'none' : toolLamp(tool.id)}
+              {@const mark = toolIcon(tool)}
               <!-- A `user` tool has one instance: its row is the way to it. -->
               {@const instances =
                 tool.scope === 'user' ? [] : [...lines.values()].filter((x) => x.tool === tool.id)}
@@ -631,8 +672,7 @@
                 >
                   <span class="socket" aria-hidden="true"><Lamp level={lvl} /></span>
                   <span class="kind" aria-hidden="true">
-                    {#if tool.icon && isIconName(tool.icon)}<Icon name={tool.icon} size={14} />{:else}<span
-                        class="abbr">{tool.label.slice(0, 2)}</span
+                    {#if isIconName(mark)}<Icon name={mark} size={14} />{:else}<span class="abbr">{mark}</span
                       >{/if}
                   </span>
                   <span class="text"><span class="name">{tool.label}</span></span>

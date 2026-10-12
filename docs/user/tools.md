@@ -38,7 +38,7 @@ scope = "user"                  # one for you, as its own tab in Home, wherever 
 [[tools]]
 id = "lazygit"
 label = "lazygit"
-icon = "branch"
+icon = "git-branch"              # a sprite icon name or 1-2 characters
 command = "lazygit"
 keybinding = "mod+g"            # Cmd+G on macOS, Ctrl+Shift+G on Linux
 check = ["lazygit", "--version"]
@@ -57,6 +57,10 @@ kind = "external"               # launched beside Kelta, never tracked or stoppe
 command = "open"
 args = ["-a", "Fork", "."]
 ```
+
+`icon` is a [Lucide](https://lucide.dev) name from Kelta's icon set (`git-branch`, `box`, `terminal`,
+`file-code`, ...) or one or two characters. Without one, a well-known tool gets its icon (lazydocker, lazygit, a
+shell, an editor) and any other shows the first two letters of its label.
 
 A tool runs in the work item's worktree when there is one, else in the project root. Set `cwd` to change it;
 placeholders work in `cwd`, `command` and `args`, and `|` picks the first one that has a value:
