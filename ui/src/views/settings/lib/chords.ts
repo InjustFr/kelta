@@ -1,8 +1,9 @@
-// Chord strings (`ctrl+shift+k`, `cmd+alt+left`): capture from a KeyboardEvent (physical key, like
-// the key manager) and helpers for the keybinding editor.
+// Chord strings (`ctrl+shift+k`, `cmd+alt+left`): capture from a KeyboardEvent (layout character,
+// like the key manager) and helpers for the keybinding editor.
 
 import { msg } from '$lib/i18n/index.svelte';
 import { ACTIONS, type ActionMeta } from '$lib/gen/actions';
+import { eventCode } from '$lib/keys/chords';
 
 export type Platform = 'macos' | 'linux';
 
@@ -61,15 +62,17 @@ export function keyName(code: string): string | null {
 
 export interface ChordEvent {
   code: string;
+  key: string;
   ctrlKey: boolean;
   altKey: boolean;
   shiftKey: boolean;
   metaKey: boolean;
+  getModifierState?: (key: string) => boolean;
 }
 
 /** `cmd+ctrl+alt+shift+<key>`; null while only modifiers are held. */
 export function chordFromEvent(e: ChordEvent): string | null {
-  const key = keyName(e.code);
+  const key = keyName(eventCode(e));
   if (!key) return null;
   const parts: string[] = [];
   if (e.metaKey) parts.push('cmd');
