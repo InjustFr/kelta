@@ -2,6 +2,7 @@
 // it only relies on the frozen contracts (main.ts debug handles, stores, registries), not on the
 // shell's markup.
 import { expect, test } from '@playwright/test';
+import type * as Icons from '$lib/ui/icons';
 
 test.describe('scaffold', () => {
   test('boots on the mock IPC, loads stores and every lazy view', async ({ page }) => {
@@ -73,5 +74,16 @@ test.describe('scaffold', () => {
     await expect(page.locator('#kelta-sprite symbol#i-x')).toHaveCount(1);
     const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     expect(bg).not.toBe('');
+  });
+
+  test('a Lucide icon outside the sprite loads on first use', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#kelta-sprite symbol#i-x')).toHaveCount(1);
+    await expect(page.locator('#kelta-sprite symbol#i-anchor')).toHaveCount(0);
+    await page.evaluate(async (url) => {
+      const icons = (await import(url)) as typeof Icons;
+      await icons.ensureIcon('anchor');
+    }, '/src/lib/ui/icons.ts');
+    await expect(page.locator('#kelta-sprite symbol#i-anchor path')).not.toHaveCount(0);
   });
 });

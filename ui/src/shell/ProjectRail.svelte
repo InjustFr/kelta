@@ -117,7 +117,7 @@
         { id: 'down', label: t('Move down'), icon: 'arrow-down', disabled: index >= reorderable.length - 1 },
         { id: 'close', label: t('Close project'), icon: 'x', separator: true },
         { id: 'close_kill', label: t('Close and stop sessions'), icon: 'square', danger: true },
-        { id: 'remove', label: t('Remove project…'), icon: 'trash-2', danger: true },
+        { id: 'remove', label: t('Remove project…'), icon: 'trash', danger: true },
       );
     }
     return items;

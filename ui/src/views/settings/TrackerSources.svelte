@@ -197,7 +197,7 @@
               />
             {/if}
             <IconButton
-              icon="trash-2"
+              icon="trash"
               label={t('Remove {name}', { name: v.label })}
               size="sm"
               onclick={() => void remove(v)}
@@ -274,7 +274,7 @@
                 >{t('Unknown field')}</Badge
               >{/if}
             <IconButton
-              icon="trash-2"
+              icon="trash"
               label={t('Remove {name}', { name: f.label || f.id })}
               size="sm"
               onclick={() => void setFields((fs) => fs.filter((x) => x.id !== f.id))}

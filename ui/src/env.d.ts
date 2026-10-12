@@ -1,6 +1,12 @@
 /// <reference types="svelte" />
 /// <reference types="vite/client" />
 
+declare module 'virtual:lucide-names' {
+  /** Every icon name in `lucide-static` (vite.config.ts). */
+  const names: string[];
+  export default names;
+}
+
 interface ImportMetaEnv {
   /** `mock` selects the in-memory IPC mock; anything else uses Tauri IPC. */
   readonly VITE_IPC?: string;

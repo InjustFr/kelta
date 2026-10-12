@@ -198,7 +198,7 @@
                       >{t('Unbind')}</Button
                     >
                     {#if custom}<IconButton
-                        icon="history"
+                        icon="rotate-ccw-clock"
                         size="sm"
                         label={t('Reset {action} to default', { action: t(a.label) })}
                         onclick={() => resetBinding(a.id)}

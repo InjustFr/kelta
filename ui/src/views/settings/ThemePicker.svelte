@@ -163,7 +163,7 @@
               {#if c.custom}
                 <span class="tag">{t('Custom')}</span>
                 <IconButton
-                  icon="trash-2"
+                  icon="trash"
                   label={t('Delete theme')}
                   size="sm"
                   tabindex={-1}

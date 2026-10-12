@@ -140,7 +140,7 @@
           {/snippet}
           {#snippet actions()}
             <IconButton
-              icon="trash-2"
+              icon="trash"
               label={t('Remove {name}', { name: s.label })}
               size="sm"
               onclick={() => void remove(s)}
@@ -240,7 +240,7 @@
                           onclick={() => moveRoute(s, i, 1)}
                         />
                         <IconButton
-                          icon="trash-2"
+                          icon="trash"
                           label={t('Remove route {n}', { n: i + 1 })}
                           size="sm"
                           onclick={() =>

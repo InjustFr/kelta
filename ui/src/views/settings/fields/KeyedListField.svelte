@@ -119,7 +119,7 @@
               >{e.enabled === false ? t('Enable') : t('Disable')}</Button
             >
             <IconButton
-              icon="trash-2"
+              icon="trash"
               size="sm"
               label={t('Remove {name} from this layer', { name: id })}
               onclick={() => removeOwn(id)}
@@ -130,7 +130,7 @@
               >{e.enabled === false ? t('Enable') : t('Disable here')}</Button
             >
             {#if mine}<IconButton
-                icon="trash-2"
+                icon="trash"
                 size="sm"
                 label={t('Remove {name} override', { name: id })}
                 onclick={() => removeOwn(id)}
