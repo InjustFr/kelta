@@ -27,7 +27,8 @@
     relativeTime,
   } from '$lib/ui';
 
-  import { phaseNow } from '../work/live';
+  import AskBar from '../work/AskBar.svelte';
+  import { askerOf, phaseNow } from '../work/live';
   import { openContent } from '../work/nav';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { startWorkOnTicket } from '../work/startWork';
@@ -63,6 +64,7 @@
   const project = $derived(projectId ?? item.project_ids[0] ?? projects.activeId);
   const workItem = $derived(work.forTicket(ref) ?? (item.work_item_id ? work.get(item.work_item_id) : null));
   const runPhase = $derived(workItem?.run && workItem.state.kind !== 'finished' ? phaseNow(workItem) : null);
+  const asker = $derived(workItem && workItem.state.kind !== 'finished' ? askerOf(workItem) : null);
   const branch = $derived(workItem?.branch || mainPr(item.prs)?.branch || null);
   const proposal = $derived(refines[key] ?? null);
 
@@ -430,6 +432,7 @@
       </span>
       <TagChips kind="tickets" itemKey={key} />
     </div>
+    {#if asker}<AskBar session={asker} full />{/if}
     <ActionBar bind:this={bar} {item} {branch} {projectId} resume={workItem !== null} onrun={(a) => run(a)} />
   </header>
 
