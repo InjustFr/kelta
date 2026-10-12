@@ -185,26 +185,40 @@ impl CodeHost for GiteaHost {
     }
 
     async fn list_reviews(&self, q: &ReviewQuery) -> Result<Vec<Review>, KeltaError> {
-        let flag = if q.kind == ReviewKind::ReviewRequested { "review_requested" } else { "created" };
+        // Mine also lists the PRs assigned to me (#374).
+        let flags: &[&str] = if q.kind == ReviewKind::ReviewRequested {
+            &["review_requested"]
+        } else {
+            &["created", "assigned"]
+        };
         // Day granularity keeps the URL (and so the cache entry) stable within a day.
         let cutoff = (OffsetDateTime::now_utc() - time::Duration::days(STALE_AFTER_DAYS))
             .replace_time(time::Time::MIDNIGHT);
-        let rows = self
-            .paged(
+        let lists = futures::future::try_join_all(flags.iter().map(|flag| {
+            self.paged(
                 HttpRequest::get(format!("{}/repos/issues/search", self.api))
                     .query("type", "pulls")
                     .query("state", "open")
-                    .query(flag, "true")
+                    .query(*flag, "true")
                     .query("since", cutoff.format(&Rfc3339).unwrap_or_default())
                     .query("limit", LIMIT)
                     .query("page", "1"),
             )
-            .await?;
+        }))
+        .await?;
         // Search rows carry no branches or head sha: expand each one (a vanished repo is skipped).
-        let found = rows.iter().filter_map(|i| {
-            let repo = i.pointer("/repository/full_name").and_then(Value::as_str)?;
-            Some((repo.to_owned(), i.get("number").and_then(Value::as_u64)?))
-        });
+        let mut found: Vec<(String, u64)> = lists
+            .iter()
+            .flatten()
+            .filter_map(|i| {
+                let repo = i.pointer("/repository/full_name").and_then(Value::as_str)?;
+                Some((repo.to_owned(), i.get("number").and_then(Value::as_u64)?))
+            })
+            .collect();
+        // A self-assigned PR comes back from both searches.
+        let mut seen = std::collections::HashSet::new();
+        found.retain(|f| seen.insert(f.clone()));
+        let found = found.into_iter();
         let pulls = futures::future::join_all(found.map(|(repo, n)| async move {
             let r = self.pull(&repo, n, q.kind).await;
             (repo, n, r)

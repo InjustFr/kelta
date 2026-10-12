@@ -291,6 +291,26 @@ async fn first_review_poll_is_silent() {
 }
 
 #[tokio::test]
+async fn mine_lists_the_prs_waiting_on_me_first() {
+    let tmp = tempfile::tempdir().unwrap();
+    let at = |n: u64, day: &str| {
+        let mut r = review("acme/shop-api", n, ReviewKind::Authored);
+        r.updated_at = format!("2026-10-{day}T09:00:00Z");
+        r
+    };
+    let mut changes = at(1, "01");
+    changes.author_to_act = true;
+    let mut answered = at(2, "02");
+    answered.last_comment_at = Some("2026-10-02T09:00:00Z".into());
+    let mut red = at(3, "03");
+    red.ci = CiState::Failure;
+    let e = env(tmp.path(), vec![changes, at(4, "09"), answered, red, at(5, "08")]);
+    let page = e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
+    let numbers: Vec<u64> = page.items.iter().map(|i| i.review.r#ref.number).collect();
+    assert_eq!(numbers, [3, 2, 1, 4, 5], "waiting on me first, newest first within");
+}
+
+#[tokio::test]
 async fn authored_changes_emit_pr_events() {
     let tmp = tempfile::tempdir().unwrap();
     let mut mine = review("acme/shop-api", 90, ReviewKind::Authored);

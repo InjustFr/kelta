@@ -82,7 +82,7 @@ async fn mount_page2(server: &MockServer) {
 }
 
 #[tokio::test]
-async fn authored_list_uses_created_flag() {
+async fn authored_list_uses_created_and_assigned_flags() {
     let server = MockServer::start().await;
     common(&server).await;
     Mock::given(method("GET"))
@@ -91,8 +91,21 @@ async fn authored_list_uses_created_flag() {
         .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitea/search_pulls_p2.json")))
         .mount(&server)
         .await;
+    // Assigned: 7, the draft 9 and my self-assigned 11 again.
+    let mut assigned: Vec<serde_json::Value> =
+        serde_json::from_str(&fixture_text("gitea/search_pulls.json")).unwrap();
+    assigned.extend(
+        serde_json::from_str::<Vec<serde_json::Value>>(&fixture_text("gitea/search_pulls_p2.json")).unwrap(),
+    );
+    Mock::given(method("GET"))
+        .and(path("/api/v1/repos/issues/search"))
+        .and(query_param("assigned", "true"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(assigned))
+        .mount(&server)
+        .await;
     let list = gt(&server).list_reviews(&query(ReviewKind::Authored, true, false)).await.unwrap();
-    assert_eq!(list.len(), 1);
+    let numbers: Vec<_> = list.iter().map(|r| r.r#ref.number).collect();
+    assert_eq!(numbers, [11, 7], "deduped, the draft dropped");
     assert_eq!((list[0].kind, list[0].my_state), (ReviewKind::Authored, None));
 }
 

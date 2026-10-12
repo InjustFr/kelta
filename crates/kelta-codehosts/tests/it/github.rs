@@ -185,6 +185,30 @@ async fn authored_list() {
 }
 
 #[tokio::test]
+async fn authored_list_adds_the_prs_assigned_to_me() {
+    let server = MockServer::start().await;
+    let mut body: serde_json::Value = serde_json::from_str(&fixture_text("github/gql_list.json")).unwrap();
+    let mut other = body["data"]["authored"]["nodes"][0].clone();
+    other["number"] = json!(77);
+    other["author"]["login"] = json!("anna");
+    other["reviewThreads"]["nodes"] = json!([]);
+    body["data"]["assigned"] = json!({ "nodes": [other] });
+    Mock::given(path("/graphql"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .mount(&server)
+        .await;
+    let list = gh(&server).list_reviews(&query(ReviewKind::Authored, true, false)).await.unwrap();
+    let numbers: Vec<_> = list.iter().map(|r| (r.r#ref.number, r.kind)).collect();
+    assert_eq!(numbers, [(55, ReviewKind::Authored), (77, ReviewKind::Authored)]);
+    assert_eq!(list[1].author.login.as_deref(), Some("anna"));
+    let reqs = bodies(&server, "POST", "/graphql").await;
+    assert_eq!(
+        reqs[0]["variables"]["a"],
+        "is:pr is:open assignee:@me -author:@me archived:false draft:false"
+    );
+}
+
+#[tokio::test]
 async fn ghe_uses_its_own_graphql_endpoint() {
     let server = MockServer::start().await;
     Mock::given(path("/api/graphql"))

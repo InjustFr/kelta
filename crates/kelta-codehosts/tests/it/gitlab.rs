@@ -115,11 +115,18 @@ async fn including_drafts_sends_neither_filter() {
 }
 
 #[tokio::test]
-async fn authored_list_uses_created_by_me() {
+async fn authored_list_uses_created_by_me_and_assigned_to_me() {
     let server = MockServer::start().await;
     common(&server, "gitlab/version_16.json").await;
     Mock::given(path("/api/v4/merge_requests"))
         .and(query_param("scope", "created_by_me"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitlab/mrs_authored.json")))
+        .expect(1)
+        .mount(&server)
+        .await;
+    // Self-assigned: the same MR again, listed once.
+    Mock::given(path("/api/v4/merge_requests"))
+        .and(query_param("scope", "assigned_to_me"))
         .respond_with(ResponseTemplate::new(200).set_body_string(fixture_text("gitlab/mrs_authored.json")))
         .expect(1)
         .mount(&server)
@@ -149,8 +156,14 @@ async fn authored_threads_are_fetched_only_when_the_stamp_moves() {
     let list: serde_json::Value = serde_json::from_str(&fixture_text("gitlab/mrs_authored.json")).unwrap();
     let mut moved = list.clone();
     moved[0]["user_notes_count"] = json!(4);
+    Mock::given(path("/api/v4/merge_requests"))
+        .and(query_param("scope", "assigned_to_me"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("[]"))
+        .mount(&server)
+        .await;
     for (body, polls) in [(list, 2), (moved, 1)] {
         Mock::given(path("/api/v4/merge_requests"))
+            .and(query_param("scope", "created_by_me"))
             .respond_with(ResponseTemplate::new(200).set_body_json(body))
             .up_to_n_times(polls)
             .mount(&server)

@@ -259,6 +259,12 @@ pub fn merge_tickets(
     out
 }
 
+/// A PR of Mine (authored or assigned) waits on me: changes requested on its head, a thread whose
+/// last comment is not mine, or failing CI.
+fn needs_me(r: &Review) -> bool {
+    r.author_to_act || r.last_comment_at.is_some() || matches!(r.ci, CiState::Failure | CiState::Error)
+}
+
 /// De-dup reviews by ref and tag them with the projects binding `(account, repo)`; unbound → `[]`.
 pub fn merge_reviews(reviews: Vec<Review>, bindings: &[(AccountId, String, ProjectId)]) -> Vec<ReviewItem> {
     let mut seen = HashSet::new();
@@ -1842,6 +1848,10 @@ impl Core {
             });
         }
         all.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        if kind == ReviewKind::Authored {
+            // Mine: the PRs waiting on me first (stable, so newest first within each half).
+            all.sort_by_key(|r| !needs_me(r));
+        }
         if kind != ReviewKind::Team {
             let stamps = self.reviewed_stamps().await;
             all.iter_mut().for_each(|r| fill_reviewed_head(r, &stamps));
