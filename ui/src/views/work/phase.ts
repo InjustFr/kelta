@@ -328,23 +328,26 @@ function phaseRow(
   const atPrHead = !git?.unpushed && !git?.dirty;
   if (pr && atPrHead) {
     const onHead = !pr.decision_head || pr.decision_head === pr.head_sha;
+    const red = pr.ci === 'failure' || pr.ci === 'error';
+    const names = pr.failed_check_names;
+    const shown = names.slice(0, 3).join(', ') + (names.length > 3 ? ` +${names.length - 3}` : '');
+    const detail = red && shown ? `${prLabel} · ${shown}` : prLabel;
+    // CI and review are separate axes (#369): the label names the other one too.
     if (pr.decision === 'changes_requested' && onHead)
       return p(
         'changes_requested',
-        t('Changes requested'),
-        prLabel,
+        red ? `${t('Changes requested')} · ${t('checks failed')}` : t('Changes requested'),
+        detail,
         'error',
         'fix',
         t('Fix with Claude'),
         'fix',
       );
-    if (pr.ci === 'failure' || pr.ci === 'error') {
-      const names = pr.failed_check_names;
-      const shown = names.slice(0, 3).join(', ') + (names.length > 3 ? ` +${names.length - 3}` : '');
-      const detail = shown ? `${prLabel} · ${shown}` : prLabel;
+    if (red) {
+      const review = reviewOf(pr);
       return p(
         'checks_failed',
-        t('Checks failed'),
+        review ? `${t('Checks failed')} · ${review}` : t('Checks failed'),
         detail,
         'error',
         'fix_checks',
@@ -418,7 +421,7 @@ function phaseRow(
     return p(
       'in_review',
       t('In review'),
-      `${prLabel}${ci}`.trim(),
+      [`${prLabel}${ci}`.trim(), pr ? reviewOf(pr) : ''].filter(Boolean).join(' · '),
       'none',
       'open_pr',
       t('Open PR'),
@@ -426,6 +429,15 @@ function phaseRow(
     );
   }
   return p('no_changes', t('No changes yet'), '', 'none', 'go_claude', t('Go to Claude'), 'in_flight');
+}
+
+/** The review side of a PR, shown beside its CI (#369); '' when no review is asked for. A
+ *  changes-requested review on an older commit waits for re-review. */
+export function reviewOf(pr: PhasePr): string {
+  const onHead = !pr.decision_head || pr.decision_head === pr.head_sha;
+  if (pr.decision === 'approved') return t('approved');
+  if (pr.decision === 'changes_requested' && onHead) return t('changes requested');
+  return pr.decision ? t('review required') : '';
 }
 
 const RUN_STATE: Record<RunState, string> = {

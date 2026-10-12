@@ -152,7 +152,8 @@ which is also what `g` does in a narrow pane.
 ## Next step
 
 A ticket with work under way shows its lamp and a work icon in its row; hover either for the phase (Claude working, Claude needs
-you, To review, Changes requested, Checks failed, New comments, In review, Merged...): the state Now shows, from the same signals. With the
+you, To review, Changes requested, Checks failed, New comments, In review, Merged...): the state Now shows, from the same signals. Red CI
+never hides the review: a PR still waiting for one reads `Checks failed · review required`. With the
 detail column hidden (or a narrow pane), `Enter` runs the phase's next action, as `Enter` does in Now (the key hints name it); `g` opens
 the detail instead.
 

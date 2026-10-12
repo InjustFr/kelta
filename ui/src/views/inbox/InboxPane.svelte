@@ -49,6 +49,7 @@
     deltaParts,
     outsidePhase,
     questionOf,
+    reviewOf,
     testsMissing,
     workKey,
     type Lamp as LampKind,
@@ -267,7 +268,13 @@
           project: p.name ?? r.ref.repo,
           color: p.color,
           // A plain request reads as who asked; mine and "Updated since your review" read as the reason.
-          reason: !row.mine && row.reason === 'Review requested' ? r.author.name : t(row.reason),
+          // Red CI does not hide a pending review (#369): `Checks failed · review required`.
+          reason:
+            !row.mine && row.reason === 'Review requested'
+              ? r.author.name
+              : [t(row.reason), row.reason === 'Checks failed' ? reviewOf(r) : '']
+                  .filter(Boolean)
+                  .join(' · '),
           tagged: { kind: 'prs', key: reviewKey(r.ref) },
           meta: [...stat, ...(row.mine && chip ? [chip.label] : [])],
           age: age((!row.mine && r.requested_at) || r.updated_at),
