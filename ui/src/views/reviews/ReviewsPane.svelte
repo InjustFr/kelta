@@ -542,6 +542,7 @@
             bind:this={vlist}
             items={rows}
             itemHeight={ROW_HEIGHT}
+            measure
             key={(r) => r.id}
             label={t('Pull requests')}
           >
@@ -560,7 +561,7 @@
                 <button
                   type="button"
                   tabindex="-1"
-                  class="k-row"
+                  class="k-row two"
                   class:selected={cur === r}
                   aria-current={cur === r ? 'true' : undefined}
                   data-key={reviewKey(rv.ref)}
@@ -589,8 +590,8 @@
                     {#if wait}<Badge tone={wait.late ? 'warn' : 'neutral'} title={wait.title}
                         >{wait.label}</Badge
                       >{/if}
-                    <span class="k-narrow-hide"><Badge title={rv.ref.repo}>{chip(r.item)}</Badge></span>
-                    <span class="k-row-meta k-narrow-hide"
+                    <Badge title={rv.ref.repo}>{chip(r.item)}</Badge>
+                    <span class="k-row-meta"
                       >{rv.kind !== 'team'
                         ? rv.author.name
                         : mineKeys.has(reviewKey(rv.ref))
@@ -689,6 +690,29 @@
 {/if}
 
 <style>
+  /* Two-line row (#383): lamp, number and title on line 1; chips and meta under the title, in full,
+     wrapping to a third line rather than cut. */
+  .two {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: center;
+    row-gap: var(--k-space-1);
+    height: auto;
+    padding-block: var(--k-space-2);
+  }
+
+  .two .k-row-title {
+    min-width: 0;
+  }
+
+  .two .k-row-tail {
+    grid-column: 3;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    row-gap: var(--k-space-1);
+    overflow: visible;
+  }
+
   .asof {
     color: var(--k-fg-subtle);
     font-size: var(--k-font-size-xs);

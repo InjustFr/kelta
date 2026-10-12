@@ -194,6 +194,39 @@ describe('components', () => {
     expect(container.querySelector('.spacer')?.getAttribute('style')).toContain('28000px');
     void VirtualList;
   });
+
+  it('VirtualList with measure places rows after their measured heights', async () => {
+    let report: ResizeObserverCallback = () => {};
+    const observed: HTMLElement[] = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(cb: ResizeObserverCallback) {
+          report = cb;
+        }
+        observe(el: HTMLElement) {
+          observed.push(el);
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const items = Array.from({ length: 100 }, (_, i) => `row ${i}`);
+    const { container } = render(VirtualListHarness, { props: { items, measure: true } });
+    const second = observed.find((el) => el.textContent === 'row 1')!;
+    Object.defineProperty(second, 'offsetHeight', { value: 50 });
+    report(
+      observed.map((target) => ({ target }) as unknown as ResizeObserverEntry),
+      {} as ResizeObserver,
+    );
+    await Promise.resolve();
+    expect(container.querySelector('.spacer')?.getAttribute('style')).toContain(`${99 * 28 + 50}px`);
+    const third = [...container.querySelectorAll<HTMLElement>('[role="listitem"]')].find(
+      (el) => el.textContent === 'row 2',
+    );
+    expect(third?.style.top).toBe('78px');
+    vi.unstubAllGlobals();
+  });
 });
 
 describe('labelled primitives', () => {

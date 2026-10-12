@@ -17,6 +17,8 @@ async function select(page: Page, rowId: string): Promise<void> {
 }
 
 test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
+  // Two-line rows (#383): a taller window keeps every Now section rendered.
+  await page.setViewportSize({ width: 1280, height: 1200 });
   await boot(page);
   await page.keyboard.press('Control+Shift+0');
   await expect(now(page)).toBeVisible();
@@ -94,6 +96,7 @@ test('the work menu opens from a terminal with its chord; letters never move', a
 });
 
 test('Now open refreshes review items: a moved head reads Updated since your review', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 1200 });
   await boot(page);
   // A local checkout of #309, which I approved at its current head.
   const id = await page.evaluate(() => {

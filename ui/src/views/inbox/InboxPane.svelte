@@ -661,6 +661,7 @@
           bind:this={vlist}
           items={lines}
           itemHeight={ROW_HEIGHT}
+          measure
           key={(l) => l.id}
           label={t('Now')}
         >
@@ -685,7 +686,7 @@
                 <button
                   type="button"
                   tabindex="-1"
-                  class="row"
+                  class="row two"
                   class:dim={v.dim}
                   class:selected={cur === l.row}
                   aria-current={cur === l.row ? 'true' : undefined}
@@ -699,22 +700,24 @@
                   <span class="slot"><Lamp level={v.lamp} /></span>
                   <span class="id">{v.id}</span>
                   <span class="ttl">{v.title}</span>
-                  {#if v.tagged}<TagChips kind={v.tagged.kind} itemKey={v.tagged.key} />{/if}
-                  {#if v.project}<span class="proj">{v.project}</span>{/if}
-                  <span class="reason">{v.reason}</span>
-                  {#each v.meta as m (m)}<span class="meta" class:warn={m === v.warn}>{m}</span>{/each}
-                  {#if v.ctx}<span
-                      class="meta"
-                      class:hot={v.ctx.hot}
-                      title={v.ctx.hot ? t('Compacts soon') : t('Context window used')}>{v.ctx.text}</span
-                    >{/if}
-                  {#if v.cost}<span
-                      class="meta"
-                      class:over={v.cost.over}
-                      title={v.cost.over ? t('Over budget') : t('Claude spend on this item')}
-                      >{v.cost.text}</span
-                    >{/if}
-                  <span class="meta age">{v.age}</span>
+                  <span class="sub">
+                    {#if v.tagged}<TagChips kind={v.tagged.kind} itemKey={v.tagged.key} />{/if}
+                    {#if v.project}<span class="proj">{v.project}</span>{/if}
+                    <span class="reason">{v.reason}</span>
+                    {#each v.meta as m (m)}<span class="meta" class:warn={m === v.warn}>{m}</span>{/each}
+                    {#if v.ctx}<span
+                        class="meta"
+                        class:hot={v.ctx.hot}
+                        title={v.ctx.hot ? t('Compacts soon') : t('Context window used')}>{v.ctx.text}</span
+                      >{/if}
+                    {#if v.cost}<span
+                        class="meta"
+                        class:over={v.cost.over}
+                        title={v.cost.over ? t('Over budget') : t('Claude spend on this item')}
+                        >{v.cost.text}</span
+                      >{/if}
+                    <span class="meta">{v.age}</span>
+                  </span>
                 </button>
               {:else}
                 <div
@@ -722,10 +725,10 @@
                   style:--hue={resolveProjectColor(v.color) ?? 'transparent'}
                   data-testid="now-detail"
                 >
-                  <span class="msg" title={v.more}>{v.more}</span>
                   {#each v.actions as a (a.key)}
                     <span class="ghost"><Kbd chord={a.key} />{a.label}</span>
                   {/each}
+                  {#if v.more}<span class="msg" title={v.more}>{v.more}</span>{/if}
                 </div>
               {/if}
             {/if}
@@ -879,7 +882,7 @@
     align-items: center;
     gap: var(--k-space-2);
     width: 100%;
-    height: 100%;
+    min-height: var(--k-row-height);
     padding: 0 var(--k-space-3) 0 var(--k-space-4);
     border: 0;
     box-shadow: inset 3px 0 0 var(--hue);
@@ -980,18 +983,35 @@
     padding-left: calc(var(--k-space-4) + 12px + 76px + 3 * var(--k-space-2));
   }
 
-  .age {
-    width: 64px;
-    text-align: right;
+  /* Two-line row (#383): lamp, id and title on line 1; the meta under the title, wrapping rather
+     than cut. */
+  .two {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    column-gap: var(--k-space-2);
+    row-gap: var(--k-space-1);
+    padding-block: var(--k-space-2);
   }
 
+  .sub {
+    grid-column: 3;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--k-space-1) var(--k-space-3);
+    min-width: 0;
+  }
+
+  /* The selected row's key hints, then its message, under the title; hints wrap rather than cut. */
   .detail {
-    gap: var(--k-space-3);
+    flex-wrap: wrap;
+    gap: var(--k-space-1) var(--k-space-3);
+    padding-block: 0 var(--k-space-2);
     padding-left: calc(var(--k-space-4) + 12px + 76px + 3 * var(--k-space-2));
   }
 
   .msg {
-    flex: 1;
+    flex: 1 0 100%;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;

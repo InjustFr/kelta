@@ -105,7 +105,7 @@ test('Reviews rows beside the split detail never cut a chip on the left: it fits
   await boot(page);
   const host = page.getByTestId('global-host');
   await page.getByTestId('rail-reviews').click();
-  await host.getByText('SHOP-150: cache product images').click();
+  await host.locator('.k-row-title', { hasText: 'SHOP-150: cache product images' }).click();
   await expect(host.getByTestId('review-detail')).toBeVisible();
   for (const width of [1440, 1024]) {
     await page.setViewportSize({ width, height: 900 });
