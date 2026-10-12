@@ -392,7 +392,13 @@
     outline-offset: -1px;
   }
 
+  .acts :global(.rb:has(.next)) {
+    min-width: 0;
+  }
+
   .next {
+    overflow: hidden;
+    text-overflow: ellipsis;
     padding: 0 var(--k-space-2);
     border: 1px solid var(--k-border);
     border-radius: var(--k-radius-sm);
@@ -538,6 +544,7 @@
     display: none;
     align-items: center;
     gap: var(--k-space-1);
+    max-width: 100%; /* never over the key cell: the next step's label shrinks first */
     padding-left: var(--k-space-2);
     background: linear-gradient(var(--k-bg-hover), var(--k-bg-hover)), var(--k-well);
   }
