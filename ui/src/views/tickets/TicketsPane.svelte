@@ -1065,10 +1065,6 @@
                   }}
                   onpr={() => openPrOf(r.item, false)}
                   onstart={() => start(r.item)}
-                  ontag={() => {
-                    selKey = r.key;
-                    openTags(r.item);
-                  }}
                 />
               {/if}
             {/snippet}
