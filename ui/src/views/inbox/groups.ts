@@ -240,25 +240,39 @@ export function waitingCount(sections: readonly Section[]): number {
   return WAITING.reduce((n, id) => n + count(sections, id), 0);
 }
 
+/** A Now header chip: a count that scrolls to its section. */
+export interface Chip {
+  section: NowSection;
+  n: number;
+  text: string;
+  /** The section's lamp when it needs Louis (Claude needs you, Fix); null stays muted. */
+  lamp: Lamp | null;
+}
+
 /**
- * The split header in decision order, zero parts dropped:
- * `Claude: 1 asks`, `3 LLM diffs`, `2 PRs waiting`, `Fix 2`, `1 working`, `4 up next`.
+ * The Now header in section order, zero chips dropped:
+ * `1 needs you`, `3 LLM diffs`, `2 to fix`, `2 PRs waiting`, `1 working`, `4 up next`.
  */
-export function headerParts(sections: readonly Section[], working: number): string[] {
+export function headerChips(sections: readonly Section[], working: number): Chip[] {
+  const chip = (section: NowSection, n: number, text: string, lamp: Lamp | null = null): Chip[] =>
+    n ? [{ section, n, text, lamp }] : [];
   const asks = count(sections, 'needs_you');
   const ready = count(sections, 'to_review');
-  const prs = count(sections, 'requests');
   const fix = count(sections, 'fix');
+  const prs = count(sections, 'requests');
   const next = count(sections, 'up_next');
   return [
-    asks ? tn('Claude: {n} asks', 'Claude: {n} asks', asks) : '',
-    ready ? tn('{n} LLM diff', '{n} LLM diffs', ready) : '',
-    prs ? tn('{n} PR waiting', '{n} PRs waiting', prs) : '',
-    fix ? t('Fix {n}', { n: fix }) : '',
-    working ? tn('{n} working', '{n} working', working) : '',
-    next ? t('{n} up next', { n: next }) : '',
-  ].filter(Boolean);
+    ...chip('needs_you', asks, tn('{n} needs you', '{n} need you', asks), 'needs_input'),
+    ...chip('to_review', ready, tn('{n} LLM diff', '{n} LLM diffs', ready)),
+    ...chip('fix', fix, tn('{n} to fix', '{n} to fix', fix), 'error'),
+    ...chip('requests', prs, tn('{n} PR waiting', '{n} PRs waiting', prs)),
+    ...chip('in_flight', working, tn('{n} working', '{n} working', working)),
+    ...chip('up_next', next, t('{n} up next', { n: next })),
+  ];
 }
+
+/** The rail's Now line: the first chip that needs Louis, else the first one. */
+export const topChip = (chips: readonly Chip[]): Chip | undefined => chips.find((c) => c.lamp) ?? chips[0];
 
 // ---- Mod+J (ticket #136) ----------------------------------------------------------------------
 

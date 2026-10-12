@@ -216,7 +216,7 @@
   "Switch project": "Changer de projet",
   "Commands": "Commandes",
   "Split": "Diviser",
-  "need input": "attendent une réponse",
+  "need you": "vous attendent",
   "in error": "en erreur",
   "working": "au travail",
   "done": "terminées",
@@ -231,10 +231,6 @@
   "5h": "5 h",
   "7d": "7 j",
   "{n} {state}: go to the next one": "{n} {state} : aller au suivant",
-  "{n} need input": {
-    "one": "{n} attend une réponse",
-    "other": "{n} attendent une réponse"
-  },
   "{n} ready to review": {
     "one": "{n} prête à relire",
     "other": "{n} prêtes à relire"
@@ -453,17 +449,16 @@
   "Changes requested": "Modifications demandées",
   "Checks failed": "Vérifications en échec",
   "In review": "En revue",
-  "Fix {n}": "Corriger {n}",
+  "{n} to fix": {
+    "one": "{n} à corriger",
+    "other": "{n} à corriger"
+  },
   "{n} up next": "{n} ensuite",
   "needs input": "attend une réponse",
   "error": "erreur",
   "ready for review": "prêt pour la revue",
   "feedback": "retours",
   "review request": "demande de revue",
-  "Claude: {n} asks": {
-    "one": "Claude : {n} question",
-    "other": "Claude : {n} questions"
-  },
   "{n} LLM diffs": {
     "one": "{n} diff LLM",
     "other": "{n} diffs LLM"

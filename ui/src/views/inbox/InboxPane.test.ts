@@ -79,7 +79,7 @@ describe('Now', () => {
       'up_next',
     ]);
     const header = screen.getByTestId('now-header');
-    expect(header.textContent).toContain('Claude: 1 asks');
+    expect(header.textContent).toContain('1 needs you');
     expect(header.textContent).toContain('1 LLM diff');
     // #311, #98, #7 and #101 (updated since my review).
     expect(header.textContent).toMatch(/4 PRs waiting/);
@@ -87,6 +87,20 @@ describe('Now', () => {
     // A work item shows once; its sessions are not listed as plain sessions.
     expect(container.querySelectorAll('[data-row^="w:0199a6b2-0000-7000-8000-00000000a004"]')).toHaveLength(
       1,
+    );
+  });
+
+  it('a header chip selects the first row of its section; only urgent chips take a lamp colour', async () => {
+    const { container } = mountNow();
+    await waitFor(() => expect(sectionIds(container)).toContain('up_next'));
+    const fix = screen.getByTestId('now-chip-fix');
+    expect(fix.classList.contains('error')).toBe(true);
+    expect(screen.getByTestId('now-chip-needs_you').classList.contains('needs_input')).toBe(true);
+    expect(screen.getByTestId('now-chip-to_review').className).not.toMatch(/needs_input|error/);
+    const first = currentSections().find((s) => s.id === 'fix')!.rows[0]!;
+    await fireEvent.click(fix);
+    await waitFor(() =>
+      expect(container.querySelector('.row[aria-current="true"]')?.getAttribute('data-row')).toBe(first.id),
     );
   });
 
