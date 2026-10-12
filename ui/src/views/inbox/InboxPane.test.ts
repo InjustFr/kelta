@@ -64,6 +64,15 @@ const sectionIds = (c: HTMLElement) =>
   [...c.querySelectorAll('[data-section]')].map((e) => e.getAttribute('data-section'));
 
 describe('Now', () => {
+  it('rows are two-line until the Compact switch is on (#383)', async () => {
+    const { container } = mountNow();
+    await screen.findByText('Flaky test in cart service');
+    expect(container.querySelector('button.row.two')).not.toBeNull();
+    await fireEvent.click(screen.getByRole('switch', { name: 'Compact' }));
+    await waitFor(() => expect(container.querySelector('button.row')).not.toBeNull());
+    expect(container.querySelector('button.row.two')).toBeNull();
+  });
+
   it('shows every section in order, with the split header', async () => {
     const { container } = mountNow();
     await waitFor(() => expect(sectionIds(container)).toContain('up_next'));

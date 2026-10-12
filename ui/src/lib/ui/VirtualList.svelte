@@ -1,10 +1,12 @@
 <script lang="ts" generics="T">
-  import type { Snippet } from 'svelte';
+  import { untrack, type Snippet } from 'svelte';
 
   interface Props {
     items: readonly T[];
-    /** Fixed row height in px. */
+    /** Fixed row height in px; with `measure`, the height assumed for a row not rendered yet. */
     itemHeight: number;
+    /** Rows take their content's height (two-line rows whose chips wrap) instead of `itemHeight`. */
+    measure?: boolean;
     /** Extra rows rendered above/below the viewport. */
     overscan?: number;
     /** Stable key per item (defaults to the index). */
@@ -22,6 +24,7 @@
   let {
     items,
     itemHeight,
+    measure = false,
     overscan = 6,
     key = (_item: T, index: number) => index,
     row,
@@ -35,24 +38,74 @@
   let scrollTop = $state(0);
   let height = $state(0);
 
+  /** Measured heights by row key (`measure` only). */
+  let sizes = $state<Record<string, number>>({});
+  /** tops[i] is row i's offset; tops[items.length] the total height. Null on fixed heights. */
+  const tops = $derived.by(() => {
+    if (!measure) return null;
+    const out = [0];
+    items.forEach((item, i) => out.push(out[i] + (sizes[String(key(item, i))] ?? itemHeight)));
+    return out;
+  });
+  const top = (i: number): number => (tops ? tops[i] : i * itemHeight);
+  /** Index of the row at offset `y`. */
+  function at(y: number): number {
+    if (!tops) return Math.floor(y / itemHeight);
+    let lo = 0;
+    let hi = items.length;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (tops[mid] <= y) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  }
+
   const visibleCount = $derived(Math.ceil((height || itemHeight * 20) / itemHeight));
-  const start = $derived(Math.max(0, Math.floor(scrollTop / itemHeight) - overscan));
-  const end = $derived(Math.min(items.length, Math.floor(scrollTop / itemHeight) + visibleCount + overscan));
+  const start = $derived(Math.max(0, at(scrollTop) - overscan));
+  const end = $derived(
+    Math.min(
+      items.length,
+      (tops ? at(scrollTop + (height || itemHeight * 20)) + 1 : at(scrollTop) + visibleCount) + overscan,
+    ),
+  );
   const heads = $derived(sticky ? items.flatMap((item, i) => (sticky(item) ? [i] : [])) : []);
   // The last header scrolled above the top, pushed up by the next one as it arrives. It is the row
   // itself, sticky instead of placed, so the list never holds a header twice and keeps its order.
   const pinned = $derived.by(() => {
-    const first = scrollTop / itemHeight;
-    const at = heads.findLastIndex((i) => i < first);
-    if (at < 0) return null;
-    const next = heads[at + 1];
-    const shift = next === undefined ? 0 : Math.min(0, (next - 1) * itemHeight - scrollTop);
-    return { item: items[heads[at]!]!, index: heads[at]!, shift };
+    const h = heads.findLastIndex((i) => top(i) < scrollTop);
+    if (h < 0) return null;
+    const index = heads[h]!;
+    const next = heads[h + 1];
+    const shift = next === undefined ? 0 : Math.min(0, top(next) - (top(index + 1) - top(index)) - scrollTop);
+    return { item: items[index]!, index, shift };
   });
   const slice = $derived([
     ...(pinned && pinned.index < start ? [pinned] : []),
     ...items.slice(start, end).map((item, i) => ({ item, index: start + i })),
   ]);
+
+  let observer: ResizeObserver | undefined;
+  const observed = new WeakMap<Element, string>();
+  /** Observes every row, so toggling `measure` on later still sizes the rows already mounted. */
+  function sized(el: HTMLElement, k: string) {
+    if (typeof ResizeObserver === 'undefined') return;
+    observer ??= new ResizeObserver((entries) => {
+      for (const e of entries) {
+        const id = observed.get(e.target);
+        const h = (e.target as HTMLElement).offsetHeight;
+        if (measure && id !== undefined && h > 0 && sizes[id] !== h) sizes[id] = h;
+      }
+      // Measuring shifts every later offset: land the followed row again until the user takes over.
+      if (followed !== undefined) scrollTo(followed);
+    });
+    observed.set(el, k);
+    observer.observe(el);
+    return {
+      update: (next: string) => observed.set(el, next),
+      destroy: () => observer?.unobserve(el),
+    };
+  }
 
   let endNotifiedAt = -1;
   $effect(() => {
@@ -67,16 +120,28 @@
     if (viewport) scrollTop = viewport.scrollTop;
   }
 
-  /** Scrolls the minimum amount so that row `index` is fully visible. */
+  /** Row the last `scrollToIndex` targeted; re-applied after each measurement, cleared by user input. */
+  let followed: number | undefined;
+  const unpin = () => (followed = undefined);
+
+  function scrollTo(index: number): void {
+    // Untracked: reading `tops` must not re-run the callers' effects on every row measurement.
+    untrack(() => {
+      if (!viewport) return;
+      // Keep a row clear of the pinned header above it.
+      const y = top(index) - (heads.length > 0 && !heads.includes(index) ? itemHeight : 0);
+      const bottom = top(index + 1);
+      if (y < viewport.scrollTop) viewport.scrollTop = y;
+      else if (bottom > viewport.scrollTop + viewport.clientHeight)
+        viewport.scrollTop = bottom - viewport.clientHeight;
+      scrollTop = viewport.scrollTop;
+    });
+  }
+
+  /** Scrolls the minimum amount so that row `index` is fully visible, and keeps it so while rows measure. */
   export function scrollToIndex(index: number): void {
-    if (!viewport) return;
-    const bottom = (index + 1) * itemHeight;
-    // Keep a row clear of the pinned header above it.
-    const top = index * itemHeight - (heads.length > 0 && !heads.includes(index) ? itemHeight : 0);
-    if (top < viewport.scrollTop) viewport.scrollTop = top;
-    else if (bottom > viewport.scrollTop + viewport.clientHeight)
-      viewport.scrollTop = bottom - viewport.clientHeight;
-    scrollTop = viewport.scrollTop;
+    followed = index;
+    scrollTo(index);
   }
 </script>
 
@@ -85,18 +150,37 @@
   bind:this={viewport}
   bind:clientHeight={height}
   {onscroll}
+  onwheel={unpin}
+  onpointerdown={unpin}
+  ontouchmove={unpin}
   role="list"
   aria-label={label}
 >
-  <div class="spacer" style:height="{items.length * itemHeight}px">
+  <div class="spacer" style:height="{top(items.length)}px">
     {#each slice as { item, index } (key(item, index))}
       {#if index === pinned?.index}
         <!-- In flow at the top of the spacer (the rows are absolute), so sticky pins it. -->
-        <div class="pin" role="listitem" style:height="{itemHeight}px" style:translate="0 {pinned.shift}px">
+        <div
+          class="pin"
+          class:measured={measure}
+          role="listitem"
+          style:height={measure ? undefined : `${itemHeight}px`}
+          style:min-height={measure ? `${itemHeight}px` : undefined}
+          style:translate="0 {pinned.shift}px"
+          use:sized={String(key(item, index))}
+        >
           {@render row(item, index)}
         </div>
       {:else}
-        <div class="row" role="listitem" style:top="{index * itemHeight}px" style:height="{itemHeight}px">
+        <div
+          class="row"
+          class:measured={measure}
+          role="listitem"
+          style:top="{top(index)}px"
+          style:height={measure ? undefined : `${itemHeight}px`}
+          style:min-height={measure ? `${itemHeight}px` : undefined}
+          use:sized={String(key(item, index))}
+        >
           {@render row(item, index)}
         </div>
       {/if}
@@ -127,5 +211,10 @@
     position: absolute;
     left: 0;
     right: 0;
+  }
+
+  /* The one grid track stretches to the min-height, so a `height: 100%` child still fills the row. */
+  .measured {
+    display: grid;
   }
 </style>

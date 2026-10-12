@@ -487,7 +487,7 @@ pub enum PaneContent {                       // serde tag = "kind"
   Terminal{ session_id: SessionId }, Web{ tool_instance_id: ToolInstanceId },
   PluginScreen{ plugin_id: PluginId, screen_id: String, instance_id: ScreenInstanceId, params: serde_json::Value },
   Tickets{ scope: Scope, view_id: Option<String>, source_id: Option<String>, mode: TicketsMode /*List|Board*/, who: Option<Who>, group: Option<TicketGroupBy> /*Flow|Status|Priority|Sprint|Assignee|Source|None; None = Flow*/, sort: Option<TicketSort> /*Priority|Updated|Age|Key; None = Priority*/, person: Option<String> /*assignee id, client-side*/ }, TicketDetail{ ticket: TicketRef },
-  Reviews{ scope: Scope, tab: Option<ReviewKind> }, ReviewDetail{ review: ReviewRef }, Inbox, WorkItem{ id: WorkItemId },
+  Reviews{ scope: Scope, tab: Option<ReviewKind>, density: Option<RowDensity> /*Comfortable|Compact; None = Comfortable*/ }, ReviewDetail{ review: ReviewRef }, Inbox{ density: Option<RowDensity> }, WorkItem{ id: WorkItemId },
   Settings{ section: Option<String> }, Diagnostics, Welcome, Empty }
 pub struct OpenPaneRequest { content: PaneContent, placement: Placement, focus: bool, tab_title: Option<String>, work_item_id: Option<WorkItemId> }
 pub enum Placement { NewTab, SplitRight, SplitDown, ReplaceFocused, Focused /*focus existing pane with same content if any*/ }

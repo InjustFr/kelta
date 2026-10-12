@@ -4,7 +4,7 @@
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import type { AccountError, ReviewItem, ReviewKind, WorkItem } from '$lib/gen';
+  import type { AccountError, ReviewItem, ReviewKind, RowDensity, WorkItem } from '$lib/gen';
   import { openExternal, reviewNudge } from '$lib/ipc/commands';
   import { GLOBAL, projects, reviews, settings, tags, tickets, toasts, ui, work } from '$lib/stores';
   import { reviewKey } from '$lib/stores/reducers';
@@ -65,6 +65,15 @@
     const t = tabOverride ?? content.tab ?? 'review_requested';
     return tabs.some((x) => x.kind === t) ? t : 'review_requested';
   });
+
+  let densityOverride = $state<RowDensity | null>(null);
+  /** Compact keeps the single 32px line (#383); comfortable is the two-line row. */
+  const compact = $derived((densityOverride ?? content.density) === 'compact');
+
+  function setCompact(on: boolean): void {
+    densityOverride = on ? 'compact' : 'comfortable';
+    persistPaneContent(projectId, paneId, { density: densityOverride });
+  }
 
   function setTab(k: ReviewKind): void {
     tabOverride = k;
@@ -469,6 +478,7 @@
       />
     {/if}
     <Toggle label={t('Drafts')} bind:checked={includeDrafts} />
+    <Toggle label={t('Compact')} checked={compact} onchange={setCompact} />
     {#if shown.fetchedAt}
       <!-- shortcut: the age is computed on render (no timers), it ages with the next re-render. -->
       <span class="asof" data-testid="reviews-asof"
@@ -542,6 +552,7 @@
             bind:this={vlist}
             items={rows}
             itemHeight={ROW_HEIGHT}
+            measure={!compact}
             key={(r) => r.id}
             label={t('Pull requests')}
             sticky={(r) => r.type === 'header'}
@@ -562,6 +573,7 @@
                   type="button"
                   tabindex="-1"
                   class="k-row"
+                  class:two={!compact}
                   class:selected={cur === r}
                   aria-current={cur === r ? 'true' : undefined}
                   data-key={reviewKey(rv.ref)}
@@ -590,8 +602,10 @@
                     {#if wait}<Badge tone={wait.late ? 'warn' : 'neutral'} title={wait.title}
                         >{wait.label}</Badge
                       >{/if}
-                    <span class="k-narrow-hide"><Badge title={rv.ref.repo}>{chip(r.item)}</Badge></span>
-                    <span class="k-row-meta k-narrow-hide"
+                    <span class:k-narrow-hide={compact}
+                      ><Badge title={rv.ref.repo}>{chip(r.item)}</Badge></span
+                    >
+                    <span class="k-row-meta" class:k-narrow-hide={compact}
                       >{rv.kind !== 'team'
                         ? rv.author.name
                         : mineKeys.has(reviewKey(rv.ref))
@@ -690,6 +704,29 @@
 {/if}
 
 <style>
+  /* Two-line row (#383): lamp, number and title on line 1; chips and meta under the title, in full,
+     wrapping to a third line rather than cut. */
+  .two {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: center;
+    row-gap: var(--k-space-1);
+    height: auto;
+    padding-block: var(--k-space-2);
+  }
+
+  .two .k-row-title {
+    min-width: 0;
+  }
+
+  .two .k-row-tail {
+    grid-column: 3;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    row-gap: var(--k-space-1);
+    overflow: visible;
+  }
+
   .asof {
     color: var(--k-fg-subtle);
     font-size: var(--k-font-size-xs);

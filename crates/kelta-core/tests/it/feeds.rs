@@ -1235,7 +1235,7 @@ async fn team_is_polled_only_while_its_tab_is_shown() {
     let e = team_env(tmp.path(), vec![]);
     e.h.cfg.update(|s| s.notifications.enabled = false);
     settle().await;
-    let view = |tab| PaneContent::Reviews { scope: Scope::All, tab };
+    let view = |tab| PaneContent::Reviews { scope: Scope::All, tab, density: None };
     show_global(&e.h.core, Some(view(None)));
     settle().await;
     assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 2, "For me + Mine");
