@@ -2,6 +2,28 @@
 
 All notable changes are listed here, generated from the commit messages at each release. Versions follow semver.
 
+## [1.1.0](https://github.com/InjustFr/kelta/compare/v1.0.0...v1.1.0) (2026-10-12)
+
+### Features
+
+* **reviews:** list PRs assigned to me in Mine, those waiting on me first ([5457cca](https://github.com/InjustFr/kelta/commit/5457cca71549226f80c77733706a2104451210ee))
+* **tickets:** open tickets and reviews side by side in one tab ([8a727e6](https://github.com/InjustFr/kelta/commit/8a727e63d41ff267dfc0d7f531638f16e54e798a))
+* **tickets:** show the row state in words and the next step as a button ([#373](https://github.com/InjustFr/kelta/issues/373)) ([64f609e](https://github.com/InjustFr/kelta/commit/64f609ee456e00f1796ca9127db6f95e13b03943))
+* **tickets:** show the workflow question in the Tickets list and ticket detail ([#375](https://github.com/InjustFr/kelta/issues/375)) ([5fda4ec](https://github.com/InjustFr/kelta/commit/5fda4ec083f49b4bfa875dee5dfa925b745ebba1))
+* **tickets:** status and assignee filter chips, group by epic or parent ([6ec4de1](https://github.com/InjustFr/kelta/commit/6ec4de157ba219631fc64ba729d1555867baa99a)), closes [#376](https://github.com/InjustFr/kelta/issues/376)
+* **ui:** default tool icons, honour 1-2 char icons, rail Workflows section ([1a1a800](https://github.com/InjustFr/kelta/commit/1a1a800676bfbc2e791613d85b49e58a89fd81b4)), closes [#377](https://github.com/InjustFr/kelta/issues/377)
+* **ui:** shared filter bar with active filter chips in Now, Reviews and Tickets ([63a6c0f](https://github.com/InjustFr/kelta/commit/63a6c0fb513192d8ee542ddae51d5c679e41fc6e)), closes [#370](https://github.com/InjustFr/kelta/issues/370)
+* **ui:** show review state beside red CI on PR phases ([92c8fcb](https://github.com/InjustFr/kelta/commit/92c8fcb8f9ed3ea04bdfaeaf74369b3d8eea6d6b)), closes [#369](https://github.com/InjustFr/kelta/issues/369)
+* **ui:** show waiting Claude sessions in the top bar and list ages ([#372](https://github.com/InjustFr/kelta/issues/372)) ([748f364](https://github.com/InjustFr/kelta/commit/748f364152c91f0765816195860f5c330f0557da))
+
+### Bug Fixes
+
+* **reviews:** keep assigned PRs out of events, Now and the author-side sort ([752496b](https://github.com/InjustFr/kelta/commit/752496bc3759ff6db95ce068faf5853398cc8044))
+* **reviews:** key detail lists by index and contain detail crashes ([0f929a5](https://github.com/InjustFr/kelta/commit/0f929a5a785b3f107cec46cc8989c61a4f7be661)), closes [#371](https://github.com/InjustFr/kelta/issues/371)
+* **tickets:** keep the row's next-step button inside the title cell ([8ebc817](https://github.com/InjustFr/kelta/commit/8ebc81744b0da266b613da4134779a43353da0ce))
+* **trackers:** skip Jira fields Kelta already shows among chosen ticket fields ([#373](https://github.com/InjustFr/kelta/issues/373)) ([79c0642](https://github.com/InjustFr/kelta/commit/79c0642ba09d4341ce0078c34af9ad2bacd04957))
+* **ui:** block draft toggle on PRs assigned to me ([393d646](https://github.com/InjustFr/kelta/commit/393d646c256b607da35171a6d99c38be336d16d2))
+
 ## 1.0.0 (2026-10-11)
 
 ### Features
