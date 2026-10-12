@@ -152,7 +152,8 @@
             name={phase.lamp === 'error' ? 'circle-alert' : phase.id === 'elsewhere' ? 'bot' : 'git-branch'}
             size={14}
           /><span class="k-visually-hidden">{phase.label}</span></span
-        >{#if word}<span class="word" data-phase-word aria-hidden="true">{word}</span>{/if}{/if}
+        >{#if word}<span class="word" data-phase-word data-lamp={phase.lamp} aria-hidden="true">{word}</span
+          >{/if}{/if}
     </span>
     <span class="sig sig-pr">
       {#if pr && ci}<span class="pr" class:draft={pr.state === 'open' && pr.draft} data-pr
@@ -260,10 +261,17 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-weight: var(--k-weight-medium);
+    color: var(--k-fg-strong);
+  }
+
+  .k-row.selected .text {
+    font-weight: var(--k-weight-strong);
   }
 
   /* The source's blocked marker (#348), ahead of the title. */
   .blocked {
+    font-weight: normal;
     margin-right: var(--k-space-2);
     padding: 0 var(--k-space-1);
     border: 1px solid var(--k-danger);
@@ -274,6 +282,7 @@
 
   .parent {
     display: inline-block;
+    font-weight: normal;
     max-width: 16ch;
     overflow: hidden;
     margin-right: var(--k-space-2);
@@ -334,12 +343,21 @@
     white-space: nowrap;
   }
 
-  .sig-icon.error + .word {
-    color: var(--k-lamp-error);
+  /* The phase word takes its lamp's colour (#382), so the state reads without the tooltip. Mixed toward --k-fg: the raw lamps are non-text marks (3:1). */
+  .word[data-lamp='needs_input'] {
+    color: color-mix(in oklab, var(--k-lamp-needs-input) 75%, var(--k-fg));
   }
 
-  .sig-icon.ask + .word {
-    color: var(--k-warn);
+  .word[data-lamp='working'] {
+    color: color-mix(in oklab, var(--k-lamp-working) 75%, var(--k-fg));
+  }
+
+  .word[data-lamp='error'] {
+    color: color-mix(in oklab, var(--k-lamp-error) 75%, var(--k-fg));
+  }
+
+  .word[data-lamp='done'] {
+    color: color-mix(in oklab, var(--k-lamp-done) 75%, var(--k-fg));
   }
 
   .sig-icon.error {
