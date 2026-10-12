@@ -1,4 +1,5 @@
 // Vitest setup (jsdom). Every test starts with the in-memory mock transport installed.
+import { cleanup } from '@testing-library/svelte';
 import { afterEach, beforeEach } from 'vitest';
 
 import { createMockTransport } from '$lib/ipc/mock';
@@ -17,6 +18,9 @@ beforeEach(() => {
   setTransport(createMockTransport().transport);
 });
 
+// No vitest globals, so testing-library registers no auto-cleanup: unmount here, or every test's
+// components stay mounted and keep reacting to the shared stores (a later test then waits seconds).
 afterEach(() => {
+  cleanup();
   document.body.innerHTML = '';
 });
