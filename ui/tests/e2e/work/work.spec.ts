@@ -180,7 +180,8 @@ test.describe('now', () => {
     await boot(page);
     await openNow(page);
     const now = page.getByTestId('inbox-pane');
-    await expect(now.getByText('Checkout: show tax breakdown')).toBeVisible();
+    // The list is virtual: the filter bar leaves room for fewer rows, so j scrolls the ticket into view.
+    await expect(now.locator('.row').first()).toBeVisible();
     await now.focus();
     for (let i = 0; i < 30; i += 1) {
       const id = await now.locator('.row[aria-current="true"]').getAttribute('data-row');

@@ -426,10 +426,8 @@
   "No ticket source yet": "Aucune source de tickets pour l’instant",
   "Pick a board": "Choisir un tableau",
   "Add a ticket source: pick a board": "Ajoutez une source de tickets : choisissez un tableau",
-  "Nothing matches \"{filter}\".": "Rien ne correspond à « {filter} ».",
   "Nothing needs you right now": "Rien ne vous attend pour l’instant",
   "Claude sessions that ask a question, pull requests waiting for your review and tickets assigned to you show up here.": "Les sessions Claude qui posent une question, les pull requests qui attendent votre revue et les tickets qui vous sont assignés apparaissent ici.",
-  "Clear filter": "Effacer le filtre",
   "{n} more, show all": "{n} de plus, tout afficher",
   "Claude spend on this item": "Dépense Claude pour cet élément",
   "Next action": "Action suivante",
@@ -674,7 +672,6 @@
   "Review re-requested": "Revue redemandée",
   "Nudge": "Relancer",
   "Other": "Autre",
-  "Filter (/)": "Filtrer (/)",
   "Filter reviews": "Filtrer les revues",
   "All projects": "Tous les projets",
   "Repository": "Dépôt",
@@ -1234,7 +1231,6 @@
   "Show team": "Afficher l’équipe",
   "Every ticket on {source} has an owner.": "Chaque ticket de {source} a un responsable.",
   "No open tickets on {source}.": "Aucun ticket ouvert sur {source}.",
-  "No tickets match \"{filter}\".": "Aucun ticket ne correspond à « {filter} ».",
   "Nothing in flow; older done tickets are hidden.": "Rien en cours ; les tickets terminés plus anciens sont masqués.",
   "By status": "Par statut",
   "Loading more tickets": "Chargement d’autres tickets",
@@ -2391,5 +2387,19 @@
   "Run {workflow}": "Lancer {workflow}",
   "The palette: a run with no ticket.": "La palette : une exécution sans ticket.",
   "Where a config workflow is offered (`[[workflows]] on`).": "Où un workflow de configuration est proposé (`[[workflows]] on`).",
-  "{workflow} started": "{workflow} lancé"
+  "{workflow} started": "{workflow} lancé",
+  "Active filters": "Filtres actifs",
+  "Remove filter {name}": "Retirer le filtre {name}",
+  "Clear all": "Tout effacer",
+  "Tag: {name}": "Étiquette : {name}",
+  "No match: {n} filters on ({list}).": {
+    "one": "Aucune correspondance : {n} filtre actif ({list}).",
+    "other": "Aucune correspondance : {n} filtres actifs ({list})."
+  },
+  "Filter id, title, project, branch (/)": "Filtrer id, titre, projet, branche (/)",
+  "Repository: {name}": "Dépôt : {name}",
+  "No drafts": "Sans brouillons",
+  "Filter title, repo, number, author, branch, ticket (/)": "Filtrer titre, dépôt, numéro, auteur, branche, ticket (/)",
+  "Person: {name}": "Personne : {name}",
+  "Filter key, title, status, type, labels, assignee (/)": "Filtrer clé, titre, statut, type, libellés, assigné (/)"
 }

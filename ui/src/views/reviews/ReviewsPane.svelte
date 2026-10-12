@@ -38,6 +38,8 @@
   import TagChips from '../tags/TagChips.svelte';
   import TagFilter from '../tags/TagFilter.svelte';
   import TagMenu from '../tags/TagMenu.svelte';
+  import FilterBar from '../filters/FilterBar.svelte';
+  import { clearAll, commonFilters, noMatch, type ActiveFilter } from '../filters/filters';
 
   import { toggleDraft } from './draft';
   import { nudgedRecently, pingBody, waitingChip } from './nudge';
@@ -120,6 +122,19 @@
         ),
       ),
   );
+
+  const activeFilters = $derived<ActiveFilter[]>([
+    ...commonFilters(
+      filter,
+      () => (filter = ''),
+      tagFilter,
+      () => (tagFilter = null),
+    ),
+    ...(repo !== ''
+      ? [{ id: 'repo', label: t('Repository: {name}', { name: repo }), clear: () => (repo = '') }]
+      : []),
+    ...(includeDrafts ? [] : [{ id: 'drafts', label: t('No drafts'), clear: () => (includeDrafts = true) }]),
+  ]);
 
   function matches(i: ReviewItem): boolean {
     const r = i.review;
@@ -399,14 +414,6 @@
   {onkeydown}
 >
   <header class="k-toolbar">
-    <input
-      class="k-filter"
-      bind:this={filterInput}
-      bind:value={filter}
-      placeholder={t('Filter (/)')}
-      aria-label={t('Filter reviews')}
-      onkeydown={filterKeys}
-    />
     <Tabs
       label={t('Reviews')}
       items={tabs.map((x) => {
@@ -437,6 +444,14 @@
       >{t('Refresh')}</Button
     >
   </header>
+  <FilterBar
+    bind:value={filter}
+    bind:input={filterInput}
+    active={activeFilters}
+    placeholder={t('Filter title, repo, number, author, branch, ticket (/)')}
+    aria-label={t('Filter reviews')}
+    onkeydown={filterKeys}
+  />
 
   {#if shown.loading && !shown.data}
     <Loading label={t('Loading reviews')} />
@@ -479,6 +494,11 @@
           : undefined}
       >
         {#snippet actions()}<Button onclick={refresh}>{t('Refresh')}</Button>{/snippet}
+      </EmptyState>
+    {:else if rows.length === 0}
+      <EmptyState icon="search" title={noMatch(activeFilters)}>
+        {#snippet actions()}<Button onclick={() => clearAll(activeFilters)}>{t('Clear all')}</Button
+          >{/snippet}
       </EmptyState>
     {:else}
       <div class="k-split">

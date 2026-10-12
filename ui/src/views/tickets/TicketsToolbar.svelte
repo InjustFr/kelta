@@ -10,13 +10,11 @@
 
   // The Tickets toolbar (DESIGN §6.8), in two groups. Left, what you look at: source, then whose
   // tickets. Right, how it is arranged: one View menu (person, sprint, grouping, sort), the list/board
-  // toggle, the filter and Refresh. The pane owns the state and the keys; this only shows them.
+  // toggle and Refresh. The text filter is in the shared filter bar below (#370). The pane owns the
+  // state and the keys; this only shows them.
   interface Props {
     /** "All projects" title (the rail's Tickets view). */
     allProjects: boolean;
-    filter: string;
-    filterInput?: HTMLInputElement;
-    onfilterkey: (e: KeyboardEvent) => void;
     /** Who tabs, person and arrangement need a source. */
     hasSource: boolean;
     who: { id: Who; label: string }[];
@@ -52,9 +50,6 @@
 
   let {
     allProjects,
-    filter = $bindable(),
-    filterInput = $bindable(),
-    onfilterkey,
     hasSource,
     who,
     whoTab,
@@ -226,14 +221,6 @@
       onchange={onmode}
     />
   {/if}
-  <input
-    class="k-filter"
-    bind:this={filterInput}
-    bind:value={filter}
-    placeholder={t('Filter (/)')}
-    aria-label={t('Filter tickets')}
-    onkeydown={onfilterkey}
-  />
   <IconButton icon="refresh-cw" label={t('Refresh')} chord="shift+r" size="sm" onclick={onrefresh} />
 </header>
 
@@ -248,11 +235,6 @@
     padding-block: var(--k-space-2);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
-  }
-
-  .bar .k-filter {
-    flex: 0 1 200px;
-    min-width: 96px;
   }
 
   .source {

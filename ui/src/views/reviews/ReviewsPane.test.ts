@@ -65,6 +65,19 @@ describe('ReviewsPane linked tickets', () => {
   });
 });
 
+describe('ReviewsPane filters', () => {
+  it('a filter that hides every PR says which filters are on; Clear all brings them back (#370)', async () => {
+    const { container } = mountReviews();
+    await waitFor(() => expect(container.querySelectorAll('.k-row').length).toBeGreaterThan(0));
+    await fireEvent.click(screen.getByRole('switch', { name: 'Drafts' }));
+    await fireEvent.input(screen.getByLabelText('Filter reviews'), { target: { value: 'zzzz' } });
+    expect(await screen.findByText('No match: 2 filters on ("zzzz", No drafts).')).toBeTruthy();
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Clear all' })[0]!);
+    await waitFor(() => expect(container.querySelectorAll('.k-row').length).toBeGreaterThan(0));
+    expect(container.querySelector('[data-filter]')).toBeNull();
+  });
+});
+
 describe('ReviewsPane in the rail Reviews view', () => {
   it("Enter opens the review in the PR's project and leaves the view", async () => {
     await projects.load();

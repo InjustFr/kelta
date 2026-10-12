@@ -426,10 +426,8 @@
   "No ticket source yet": "Noch keine Ticketquelle",
   "Pick a board": "Board wählen",
   "Add a ticket source: pick a board": "Ticketquelle hinzufügen: Board wählen",
-  "Nothing matches \"{filter}\".": "Nichts passt zu „{filter}“.",
   "Nothing needs you right now": "Gerade wartet nichts auf Sie",
   "Claude sessions that ask a question, pull requests waiting for your review and tickets assigned to you show up here.": "Claude-Sitzungen mit einer Frage, Pull Requests, die auf Ihr Review warten, und Ihnen zugewiesene Tickets erscheinen hier.",
-  "Clear filter": "Filter löschen",
   "{n} more, show all": "{n} weitere, alle anzeigen",
   "Claude spend on this item": "Claude-Kosten für dieses Element",
   "Next action": "Nächste Aktion",
@@ -674,7 +672,6 @@
   "Review re-requested": "Review erneut angefordert",
   "Nudge": "Erinnern",
   "Other": "Andere",
-  "Filter (/)": "Filtern (/)",
   "Filter reviews": "Reviews filtern",
   "All projects": "Alle Projekte",
   "Repository": "Repository",
@@ -1234,7 +1231,6 @@
   "Show team": "Team anzeigen",
   "Every ticket on {source} has an owner.": "Jedes Ticket in {source} hat einen Verantwortlichen.",
   "No open tickets on {source}.": "Keine offenen Tickets in {source}.",
-  "No tickets match \"{filter}\".": "Keine Tickets passen zu „{filter}“.",
   "Nothing in flow; older done tickets are hidden.": "Nichts im Fluss; ältere erledigte Tickets sind ausgeblendet.",
   "By status": "Nach Status",
   "Loading more tickets": "Weitere Tickets werden geladen",
@@ -2391,5 +2387,19 @@
   "Run {workflow}": "{workflow} ausführen",
   "The palette: a run with no ticket.": "Die Palette: ein Lauf ohne Ticket.",
   "Where a config workflow is offered (`[[workflows]] on`).": "Wo ein Konfigurations-Workflow angeboten wird (`[[workflows]] on`).",
-  "{workflow} started": "{workflow} gestartet"
+  "{workflow} started": "{workflow} gestartet",
+  "Active filters": "Aktive Filter",
+  "Remove filter {name}": "Filter {name} entfernen",
+  "Clear all": "Alle löschen",
+  "Tag: {name}": "Tag: {name}",
+  "No match: {n} filters on ({list}).": {
+    "one": "Kein Treffer: {n} Filter aktiv ({list}).",
+    "other": "Kein Treffer: {n} Filter aktiv ({list})."
+  },
+  "Filter id, title, project, branch (/)": "ID, Titel, Projekt, Branch filtern (/)",
+  "Repository: {name}": "Repository: {name}",
+  "No drafts": "Ohne Entwürfe",
+  "Filter title, repo, number, author, branch, ticket (/)": "Titel, Repo, Nummer, Autor, Branch, Ticket filtern (/)",
+  "Person: {name}": "Person: {name}",
+  "Filter key, title, status, type, labels, assignee (/)": "Schlüssel, Titel, Status, Typ, Labels, Zuständige filtern (/)"
 }
