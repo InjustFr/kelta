@@ -17,6 +17,7 @@ const THEME_TOKENS = [
   '--k-bg-hover',
   '--k-bg-active',
   '--k-bg-selected',
+  '--k-bg-selected-row',
   '--k-fg',
   '--k-fg-muted',
   '--k-fg-subtle',

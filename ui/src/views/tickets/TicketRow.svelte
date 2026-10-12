@@ -551,7 +551,7 @@
 
   .k-row.selected .acts,
   .k-row.picked .acts {
-    background: var(--k-bg-selected);
+    background: var(--k-bg-selected-row);
   }
 
   .k-row:hover .acts,
@@ -561,7 +561,7 @@
   }
 
   .k-row.picked {
-    background: var(--k-bg-selected);
+    background: var(--k-bg-selected-row);
     --k-fg-subtle: var(--k-fg-subtle-sel);
     --k-fg-muted: var(--k-fg-muted-sel);
   }

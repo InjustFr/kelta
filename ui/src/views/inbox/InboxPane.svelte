@@ -847,7 +847,7 @@
 
   .selected,
   .detail {
-    background: var(--k-bg-selected);
+    background: var(--k-bg-selected-row);
     --k-fg-subtle: var(--k-fg-subtle-sel);
     --k-fg-muted: var(--k-fg-muted-sel);
   }
@@ -915,7 +915,7 @@
 
   .msgline {
     padding-left: calc(var(--k-space-4) + 12px + 76px + 3 * var(--k-space-2));
-    background: var(--k-bg-selected);
+    background: var(--k-bg-selected-row);
     --k-fg-muted: var(--k-fg-muted-sel);
     font-size: var(--k-font-size-sm);
     color: var(--k-fg-muted);
