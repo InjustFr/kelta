@@ -582,15 +582,28 @@
               {@const pid = home ?? cur.item.project_ids[0] ?? projects.activeId}
               {#if pid}
                 <!-- Keyed: the "PR changed" banner and an open dialog belong to one PR. -->
-                {#key cur.id}<ReviewDetailPane
-                    projectId={pid}
-                    {tabId}
-                    {paneId}
-                    content={{ kind: 'review_detail', review: cur.item.review.ref }}
-                    visible
-                    focused={false}
-                    embedded
-                  />{/key}
+                {#key cur.id}
+                  <!-- A crash in one PR's detail stays in the side panel; the list keeps working. -->
+                  <svelte:boundary
+                    onerror={(e) => console.error(`[kelta] review detail ${cur.id} crashed`, e)}
+                  >
+                    <ReviewDetailPane
+                      projectId={pid}
+                      {tabId}
+                      {paneId}
+                      content={{ kind: 'review_detail', review: cur.item.review.ref }}
+                      visible
+                      focused={false}
+                      embedded
+                    />
+                    {#snippet failed(error)}
+                      <ErrorState
+                        error={error instanceof Error ? error : String(error)}
+                        title={t('Could not show this pull request')}
+                      />
+                    {/snippet}
+                  </svelte:boundary>
+                {/key}
               {/if}
             {:else}
               <p class="k-split-empty">{t('Select a pull request to see it here.')}</p>

@@ -267,7 +267,7 @@
     </header>
     <div class="body">
       {#key boundaryKey}
-        <svelte:boundary onerror={(e) => console.error(`[kelta] pane ${content.kind} crashed`, e)}>
+        <svelte:boundary onerror={(e) => console.error(`[kelta] pane ${content.kind} crashed`, content, e)}>
           {#if content.kind === 'empty'}
             <EmptyPane onclose={close} />
           {:else if Component}

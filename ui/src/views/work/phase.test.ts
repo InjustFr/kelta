@@ -223,6 +223,33 @@ describe('phaseOf: the 18 rows of FLOW §2.2', () => {
     expect(failed(['a', 'b', 'c', 'd', 'e']).detail).toBe(`#${n} · a, b, c +2`);
   });
 
+  it('shows CI and review side by side (#369)', () => {
+    const n = samples.reviewDetail.review.ref.number;
+    const at = (patch: Partial<PhasePr>) => phaseOf(item(withPr), null, pr(patch), git());
+    const awaiting = at({ ci: 'failure', decision: 'review_required', failed_check_names: ['e2e'] });
+    expect([awaiting.id, awaiting.label, awaiting.detail, awaiting.primary]).toEqual([
+      'checks_failed',
+      'Checks failed · review required',
+      `#${n} · e2e`,
+      'fix_checks',
+    ]);
+    expect(at({ ci: 'failure', decision: 'approved' }).label).toBe('Checks failed · approved');
+    expect(at({ ci: 'failure', decision: null }).label).toBe('Checks failed');
+    const both = at({ ci: 'failure', decision: 'changes_requested', failed_check_names: ['e2e'] });
+    expect([both.id, both.label, both.detail]).toEqual([
+      'changes_requested',
+      'Changes requested · checks failed',
+      `#${n} · e2e`,
+    ]);
+    expect(at({ decision: 'changes_requested' }).detail).toBe(`#${n}`);
+    expect(at({ ci: 'pending', decision: 'review_required' }).detail).toBe(
+      `#${n} checks pending · review required`,
+    );
+    // A changes-requested review on an older commit waits for re-review.
+    const stale = at({ ci: 'failure', decision: 'changes_requested', head_sha: 'b', decision_head: 'a' });
+    expect([stale.id, stale.label]).toEqual(['checks_failed', 'Checks failed · review required']);
+  });
+
   it('a missing worktree offers Recreate', () => {
     const got = phaseOf(item(), null, null, git({ missing: true }));
     expect([got.id, got.primary, got.lamp]).toEqual(['missing', 'recreate', 'error']);
