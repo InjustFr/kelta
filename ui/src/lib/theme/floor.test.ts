@@ -6,6 +6,7 @@ import { settingsDefault } from '$lib/gen/fixtures';
 
 import { BUILTIN } from './builtin';
 import { BEZEL_UI, contrast, floor, type FloorUi } from './floor';
+import { oklab, parseHex } from './hex';
 import { resolveTheme } from './index';
 
 const SURFACES = ['well', 'bezel', 'bezel_raised', 'bg_float'] as const;
@@ -82,5 +83,51 @@ describe('contrast floor', () => {
     });
     expect(r.notes).toEqual(notes);
     expect(resolveTheme(settingsDefault, 'dark').notes).toEqual([]);
+  });
+});
+
+// oklab [L, a, b] back to #rrggbb, clipped to sRGB.
+function hexOf([L, a, b]: number[]): string {
+  const [l, m, s] = [
+    L! + 0.3963377774 * a! + 0.2158037573 * b!,
+    L! - 0.1055613458 * a! - 0.0638541728 * b!,
+    L! - 0.0894841775 * a! - 1.291485548 * b!,
+  ].map((v) => v ** 3);
+  const lin = [
+    4.0767416621 * l! - 3.3077115913 * m! + 0.2309699292 * s!,
+    -1.2684380046 * l! + 2.6097574011 * m! - 0.3413193965 * s!,
+    -0.0041960863 * l! - 0.7034186147 * m! + 1.707614701 * s!,
+  ];
+  return (
+    '#' +
+    lin
+      .map((v) =>
+        Math.round(
+          255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.max(0, Math.min(1, v)) ** (1 / 2.4) - 0.055),
+        )
+          .toString(16)
+          .padStart(2, '0'),
+      )
+      .join('')
+  );
+}
+const lerp = (x: number[], y: number[], p: number) => x.map((v, i) => v + (y[i]! - v) * p);
+
+// tokens.css: --k-bg-selected mixes the accent into the well (dark 28% of L .74 C .09, light 14% of L .5 C .11)
+// and selected rows take --k-fg-subtle-sel, 60% of the way from subtle to fg.
+describe('subtle text on a selected row', () => {
+  it.each(Object.entries(BUILTIN))('%s keeps 4.5:1 at every project hue', (_id, def) => {
+    const ui = {
+      ...BEZEL_UI[def.base],
+      ...Object.fromEntries(Object.entries(def.ui).filter(([, v]) => v)),
+    } as FloorUi;
+    const [L, C, share] = def.base === 'dark' ? [0.74, 0.09, 0.28] : [0.5, 0.11, 0.14];
+    const [well, fg, subtle] = [ui.well, ui.fg, ui.fg_subtle].map((h) => oklab(parseHex(h)!));
+    const text = hexOf(lerp(subtle!, fg!, 0.6));
+    for (let h = 0; h < 360; h += 5) {
+      const rad = (h * Math.PI) / 180;
+      const selected = hexOf(lerp(well!, [L!, C! * Math.cos(rad), C! * Math.sin(rad)], share!));
+      expect(contrast(text, selected), `hue ${h}`).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });
