@@ -119,7 +119,7 @@ function toSymbol(name: string, svg: string): string {
 }
 
 const symbols = Object.entries(SPRITE_ICONS).map(([name, svg]) => toSymbol(name, svg));
-export const spriteSvg = `<svg xmlns="http://www.w3.org/2000/svg" style="display:none">${symbols.join('')}</svg>`;
+export const spriteSvg = `<svg xmlns="http://www.w3.org/2000/svg" style="display:none"><!-- Lucide (https://lucide.dev), ISC License, Copyright (c) Lucide Icons and Contributors -->${symbols.join('')}</svg>`;
 
 const SPRITE_ID = 'kelta-sprite';
 
