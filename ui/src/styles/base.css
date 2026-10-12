@@ -239,7 +239,7 @@ pre,
   text-overflow: ellipsis;
   font-family: var(--k-font-mono);
   font-size: var(--k-font-size-sm);
-  color: var(--k-fg-muted);
+  color: var(--k-info); /* one hue for keys in every list (#382), never a lamp colour */
 }
 
 .k-row-title {
@@ -247,6 +247,12 @@ pre,
   min-width: 14ch;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-weight: var(--k-weight-medium);
+  color: var(--k-fg-strong);
+}
+
+.k-row.selected .k-row-title {
+  font-weight: var(--k-weight-strong);
 }
 
 /* Chips and meta after the title. Overflow is clipped on the left, so the age and diffstat at the

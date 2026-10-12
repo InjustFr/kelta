@@ -913,7 +913,7 @@
     white-space: nowrap;
     font-family: var(--k-font-mono);
     font-size: var(--k-font-size-sm);
-    color: var(--k-fg-muted);
+    color: var(--k-info);
   }
 
   .ttl {
@@ -922,6 +922,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-weight: var(--k-weight-medium);
+    color: var(--k-fg-strong);
+  }
+
+  .selected .ttl {
+    font-weight: var(--k-weight-strong);
   }
 
   .proj {
