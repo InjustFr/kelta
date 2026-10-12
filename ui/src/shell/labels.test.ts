@@ -7,12 +7,13 @@ import { runState, toolIcon } from './labels';
 const tool = (id: string, icon: string | null = null, label = id) => ({ id, label, icon });
 
 describe('toolIcon (#377)', () => {
-  it('honours a sprite name or 1-2 characters, then a well-known tool, then the monogram', () => {
+  it('honours a Lucide name or 1-2 characters, then a well-known tool, then the monogram', () => {
     expect(toolIcon(tool('k9s', 'cpu'))).toBe('cpu');
+    expect(toolIcon(tool('k9s', 'ship-wheel'))).toBe('ship-wheel'); // outside the startup sprite (#388)
     expect(toolIcon(tool('k9s', 'K'))).toBe('K');
     expect(toolIcon(tool('k9s', 'K9'))).toBe('K9');
     expect(toolIcon(tool('lazygit', 'branch'))).toBe('git-branch'); // unknown name: not text either
-    expect(toolIcon(tool('lazydocker'))).toBe('box');
+    expect(toolIcon(tool('lazydocker'))).toBe('container');
     expect(toolIcon(tool('my-shell', null, 'Zsh'))).toBe('terminal');
     expect(toolIcon(tool('k9s'))).toBe('k9');
   });

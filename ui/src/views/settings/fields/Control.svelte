@@ -318,7 +318,7 @@
             />
           {/if}
           {#if !readonly}<IconButton
-              icon="trash-2"
+              icon="trash"
               label={t('Remove {name}', { name: k })}
               size="sm"
               onclick={() => removeMapEntry(k)}

@@ -98,7 +98,7 @@
                 onclick={() => edit(tag)}
               />
               <IconButton
-                icon="trash-2"
+                icon="trash"
                 label={t('Delete {name}', { name: tag.name })}
                 size="sm"
                 onclick={() => (removing = tag.name)}

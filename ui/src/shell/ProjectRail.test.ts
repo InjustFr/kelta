@@ -168,7 +168,7 @@ describe('ProjectRail', () => {
     ui.sheets = [];
   });
 
-  it('tools: a tool without a sprite icon shows a well-known icon, its 1-2 characters, else a monogram', async () => {
+  it('tools: a tool without a Lucide icon shows a well-known icon, its 1-2 characters, else a monogram', async () => {
     const r = await setup();
     for (const [k, slot] of Object.entries(tools.byProject))
       tools.byProject = {
@@ -184,6 +184,6 @@ describe('ProjectRail', () => {
     const row = (id: string) => r.container.querySelector(`[data-testid="rail-tool"][data-tool-id="${id}"]`)!;
     await expect.poll(() => row('lazygit').querySelector('.abbr')?.textContent).toBe('LG');
     expect(row('lazydocker').querySelector('.abbr')).toBeNull();
-    expect(row('lazydocker').querySelector('use')?.getAttribute('href')).toBe('#i-box');
+    expect(row('lazydocker').querySelector('use')?.getAttribute('href')).toBe('#i-container');
   });
 });
