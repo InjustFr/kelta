@@ -67,6 +67,11 @@ latestReviews(first:50){ nodes{ state body submittedAt author{ login } } } } } }
 const RESOLVE_THREAD: &str =
     "mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread{ id isResolved } } }";
 
+/// GitHub's own verdict on a PR for the detail (#379): the REST check runs keep the cancelled runs
+/// of superseded suites, and the REST reviews know nothing of the required approval count.
+const PR_VERDICT: &str = "query($o:String!,$n:String!,$num:Int!){ repository(owner:$o,name:$n){ pullRequest(number:$num){ reviewDecision \
+commits(last:1){ nodes{ commit{ oid statusCheckRollup{ state contexts(first:100){ nodes{ ... on CheckRun{ name conclusion } ... on StatusContext{ context state } } } } } } } } } }";
+
 const PR_ID: &str = "query($o:String!,$n:String!,$num:Int!){ repository(owner:$o,name:$n){ pullRequest(number:$num){ id mergeStateStatus } } }";
 
 const ARM_AUTO_MERGE: &str = "mutation($id:ID!,$m:PullRequestMergeMethod!){ \
@@ -206,6 +211,7 @@ impl GithubHost {
         };
         let decision = decision_from(s(n, "reviewDecision"));
         let head_sha = s(n, "headRefOid").unwrap_or("").to_owned();
+        let (ci, failed_check_names) = rollup(n.pointer("/commits/nodes/0/commit").unwrap_or(&Value::Null));
         let (unresolved_threads, last_comment_at) = thread_state(n, me);
         let (waiting_on, since) = waiting_state(n, &head_sha);
         let (requested_at, blocking) = match kind {
@@ -233,22 +239,8 @@ impl GithubHost {
             head_sha,
             source_branch: branch.clone(),
             target_branch: s(n, "baseRefName").unwrap_or("").to_owned(),
-            ci: ci_from_rollup(
-                n.pointer("/commits/nodes/0/commit/statusCheckRollup/state").and_then(Value::as_str),
-            ),
-            failed_check_names: n
-                .pointer("/commits/nodes/0/commit/statusCheckRollup/contexts/nodes")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter(|c| {
-                    matches!(
-                        s(c, "conclusion").or(s(c, "state")),
-                        Some("FAILURE" | "TIMED_OUT" | "STARTUP_FAILURE" | "ACTION_REQUIRED" | "ERROR")
-                    )
-                })
-                .filter_map(|c| s(c, "name").or(s(c, "context")).map(str::to_owned))
-                .collect(),
+            ci,
+            failed_check_names,
             decision,
             my_state,
             mergeable: mergeable_from(s(n, "mergeable")),
@@ -432,6 +424,26 @@ fn ci_from_rollup(state: Option<&str>) -> CiState {
         Some("PENDING" | "EXPECTED") => CiState::Pending,
         _ => CiState::None,
     }
+}
+
+/// A commit's `statusCheckRollup`: GitHub's state, which ignores superseded suites, and the failed
+/// contexts (a cancelled run is left out of the names but still keeps the state off green).
+fn rollup(commit: &Value) -> (CiState, Vec<String>) {
+    let ci = ci_from_rollup(commit.pointer("/statusCheckRollup/state").and_then(Value::as_str));
+    let failed = commit
+        .pointer("/statusCheckRollup/contexts/nodes")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|c| {
+            matches!(
+                s(c, "conclusion").or(s(c, "state")),
+                Some("FAILURE" | "TIMED_OUT" | "STARTUP_FAILURE" | "ACTION_REQUIRED" | "ERROR")
+            )
+        })
+        .filter_map(|c| s(c, "name").or(s(c, "context")).map(str::to_owned))
+        .collect();
+    (ci, failed)
 }
 
 fn decision_from(state: Option<&str>) -> Option<ReviewDecision> {
@@ -797,11 +809,15 @@ impl CodeHost for GithubHost {
     async fn get(&self, r: &ReviewRef) -> Result<ReviewDetail, KeltaError> {
         let pull_url = self.repo_url(&r.repo, &format!("/pulls/{}", r.number))?;
         let me = self.me().await?;
-        let (pull, reviews, files) = tokio::join!(
+        let (owner, name) = r.repo.split_once('/').unwrap_or((r.repo.as_str(), ""));
+        let (pull, reviews, files, verdict) = tokio::join!(
             self.rest(HttpRequest::get(&pull_url)),
             self.paged(HttpRequest::get(format!("{pull_url}/reviews")).query("per_page", "100")),
             self.paged(HttpRequest::get(format!("{pull_url}/files")).query("per_page", "100")),
+            graphql(&self.auth, &self.graphql, PR_VERDICT, json!({ "o": owner, "n": name, "num": r.number })),
         );
+        // Best effort: without the verdict, CI and decision are recomputed from the REST lists.
+        let verdict = verdict.ok().and_then(|d| d.pointer("/repository/pullRequest").cloned());
         let pull = pull?.body;
         let (reviews, files) = (reviews?, files?);
         let kind = if pull.pointer("/user/login").and_then(Value::as_str) == me.login.as_deref() {
@@ -844,15 +860,29 @@ impl CodeHost for GithubHost {
                 });
             }
         }
-        review.ci = combine_ci(&checks);
-        review.failed_check_names = checks
-            .iter()
-            .filter(|c| matches!(c.state, CiState::Failure | CiState::Error))
-            .map(|c| c.name.clone())
-            .collect();
+        // The checks stay for display; the rollup of the head (not an older commit) decides.
+        let head = verdict
+            .as_ref()
+            .and_then(|v| v.pointer("/commits/nodes/0/commit"))
+            .filter(|c| s(c, "oid") == Some(sha.as_str()));
+        (review.ci, review.failed_check_names) = match head {
+            Some(c) => rollup(c),
+            None => (
+                combine_ci(&checks),
+                checks
+                    .iter()
+                    .filter(|c| matches!(c.state, CiState::Failure | CiState::Error))
+                    .map(|c| c.name.clone())
+                    .collect(),
+            ),
+        };
 
         let by_reviewer = latest_by_reviewer(&reviews);
-        review.decision = Some(decision_from_reviews(&by_reviewer));
+        // `reviewDecision` is null when the base branch requires no review.
+        review.decision = verdict
+            .as_ref()
+            .and_then(|v| decision_from(s(v, "reviewDecision")))
+            .or_else(|| Some(decision_from_reviews(&by_reviewer)));
         review.decision_head = reviews
             .iter()
             .rev()

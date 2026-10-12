@@ -1,0 +1,183 @@
+{
+  "data": {
+    "viewer": {
+      "login": "louis"
+    },
+    "reviewRequested": {
+      "nodes": [
+        {
+          "number": 101,
+          "title": "SHOP-142 add rate limiter",
+          "url": "https://github.com/acme/shop/pull/101",
+          "isDraft": false,
+          "headRefOid": "abc123",
+          "headRefName": "feature/SHOP-142-limit",
+          "baseRefName": "main",
+          "updatedAt": "2026-10-12T09:00:00Z",
+          "mergeable": "MERGEABLE",
+          "mergeStateStatus": "BLOCKED",
+          "reviewDecision": "REVIEW_REQUIRED",
+          "author": {
+            "login": "carol"
+          },
+          "repository": {
+            "nameWithOwner": "acme/shop"
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "oid": "abc123",
+                  "statusCheckRollup": {
+                    "state": "SUCCESS",
+                    "contexts": {
+                      "nodes": [
+                        {
+                          "name": "lint",
+                          "conclusion": "SUCCESS"
+                        },
+                        {
+                          "name": "unit-tests",
+                          "conclusion": "SUCCESS"
+                        },
+                        {
+                          "name": "e2e (shard 1/2)",
+                          "conclusion": "SUCCESS"
+                        },
+                        {
+                          "name": "lint",
+                          "conclusion": "CANCELLED"
+                        },
+                        {
+                          "name": "unit-tests",
+                          "conclusion": "CANCELLED"
+                        },
+                        {
+                          "name": "e2e (shard ${{ matrix.shard }}/${{ matrix.shardTotal }})",
+                          "conclusion": "CANCELLED"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "latestOpinionatedReviews": {
+            "nodes": [
+              {
+                "state": "APPROVED",
+                "submittedAt": "2026-10-12T08:00:00Z",
+                "commit": {
+                  "oid": "abc123"
+                },
+                "author": {
+                  "login": "bob"
+                }
+              }
+            ]
+          },
+          "latestReviews": {
+            "nodes": [
+              {
+                "commit": {
+                  "oid": "abc123"
+                },
+                "author": {
+                  "login": "bob"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "repository": {
+      "pullRequest": {
+        "number": 101,
+        "title": "SHOP-142 add rate limiter",
+        "url": "https://github.com/acme/shop/pull/101",
+        "isDraft": false,
+        "headRefOid": "abc123",
+        "headRefName": "feature/SHOP-142-limit",
+        "baseRefName": "main",
+        "updatedAt": "2026-10-12T09:00:00Z",
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "BLOCKED",
+        "reviewDecision": "REVIEW_REQUIRED",
+        "author": {
+          "login": "carol"
+        },
+        "repository": {
+          "nameWithOwner": "acme/shop"
+        },
+        "commits": {
+          "nodes": [
+            {
+              "commit": {
+                "oid": "abc123",
+                "statusCheckRollup": {
+                  "state": "SUCCESS",
+                  "contexts": {
+                    "nodes": [
+                      {
+                        "name": "lint",
+                        "conclusion": "SUCCESS"
+                      },
+                      {
+                        "name": "unit-tests",
+                        "conclusion": "SUCCESS"
+                      },
+                      {
+                        "name": "e2e (shard 1/2)",
+                        "conclusion": "SUCCESS"
+                      },
+                      {
+                        "name": "lint",
+                        "conclusion": "CANCELLED"
+                      },
+                      {
+                        "name": "unit-tests",
+                        "conclusion": "CANCELLED"
+                      },
+                      {
+                        "name": "e2e (shard ${{ matrix.shard }}/${{ matrix.shardTotal }})",
+                        "conclusion": "CANCELLED"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "latestOpinionatedReviews": {
+          "nodes": [
+            {
+              "state": "APPROVED",
+              "submittedAt": "2026-10-12T08:00:00Z",
+              "commit": {
+                "oid": "abc123"
+              },
+              "author": {
+                "login": "bob"
+              }
+            }
+          ]
+        },
+        "latestReviews": {
+          "nodes": [
+            {
+              "commit": {
+                "oid": "abc123"
+              },
+              "author": {
+                "login": "bob"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
