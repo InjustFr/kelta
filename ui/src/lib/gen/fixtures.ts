@@ -2131,6 +2131,7 @@ export const settingsDefault: Settings = {
   "env": {},
   "keys": {
     "bindings": {},
+    "hints": true,
     "list_keys": true,
     "prefix": "ctrl+shift+space",
     "prefix_bindings": {

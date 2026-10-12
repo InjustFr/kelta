@@ -8,7 +8,8 @@
 // Catppuccin (c) 2021 Catppuccin, https://github.com/catppuccin/catppuccin
 // The terminal palettes are upstream's (their official terminal ports). Surfaces and accents are
 // upstream colours; text and status tokens are nudged toward white / black where upstream is below
-// 4.5:1 on Kelta's surfaces (DESIGN §2.2, builtin.test.ts). Borders are mixed from well and fg.
+// 4.5:1 on Kelta's surfaces (DESIGN §2.2, builtin.test.ts). Borders are mixed from well and fg,
+// border_strong toward fg until 3:1 on well and bezel (floor.ts).
 
 import type { ThemeDef, ThemeTerminal, ThemeUi } from '$lib/gen';
 
@@ -31,7 +32,7 @@ export const BUILTIN: Record<string, ThemeDef> = {
       fg_subtle: '#9eabaf',
       fg_chrome: '#9daaac',
       border: '#1d424a',
-      border_strong: '#567072',
+      border_strong: '#6b8181',
       danger: '#e87a78',
       warn: '#bc9519',
       ok: '#91a319',
@@ -76,7 +77,7 @@ export const BUILTIN: Record<string, ThemeDef> = {
       fg_subtle: '#606969',
       fg_chrome: '#576a71',
       border: '#deddcf',
-      border_strong: '#a1aca6',
+      border_strong: '#748888',
       danger: '#c22c29',
       warn: '#816100',
       ok: '#5e6d00',
@@ -166,7 +167,7 @@ export const BUILTIN: Record<string, ThemeDef> = {
       fg_subtle: '#6e6359',
       fg_chrome: '#665c54',
       border: '#ded5b1',
-      border_strong: '#a59e86',
+      border_strong: '#867f6e',
       danger: '#9d0006',
       warn: '#8b5b0f',
       ok: '#6c670c',
@@ -211,7 +212,7 @@ export const BUILTIN: Record<string, ThemeDef> = {
       fg_subtle: '#c9cdd3',
       fg_chrome: '#d8dee9',
       border: '#4a505b',
-      border_strong: '#848891',
+      border_strong: '#898d96',
       danger: '#d9a2a7',
       warn: '#ebcb8b',
       ok: '#a3be8c',
@@ -301,7 +302,7 @@ export const BUILTIN: Record<string, ThemeDef> = {
       fg_subtle: '#b2b8cf',
       fg_chrome: '#bac2de',
       border: '#383a4c',
-      border_strong: '#6d7187',
+      border_strong: '#777b92',
       danger: '#f38ba8',
       warn: '#f9e2af',
       ok: '#a6e3a1',
@@ -346,7 +347,7 @@ export const BUILTIN: Record<string, ThemeDef> = {
       fg_subtle: '#5e6174',
       fg_chrome: '#5c5f77',
       border: '#d7d9e0',
-      border_strong: '#a6a8b6',
+      border_strong: '#797c90',
       danger: '#c30e35',
       warn: '#885712',
       ok: '#2d701e',

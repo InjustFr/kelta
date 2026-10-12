@@ -1,7 +1,7 @@
 <script lang="ts">
   // Now (FLOW §3): one screen across projects answering "review Claude's work, or grab a feature?".
   // It keeps the Inbox slot (rail top tile, ⌘0, `inbox.open`, pane kind `inbox`).
-  import { t, tn } from '$lib/i18n/index.svelte';
+  import { msg, t, tn } from '$lib/i18n/index.svelte';
   import { tick, untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
@@ -56,6 +56,7 @@
     type NowSection,
     type WorkActionId,
   } from '../work/phase';
+  import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
@@ -449,6 +450,19 @@
     openView('tickets');
   }
 
+  /** The full key list (`?`); the footer shows the first five. */
+  let keysOpen = $state(false);
+  const hints: [string, string][] = [
+    ['j k', msg('Move')],
+    ['enter', msg('Next action')],
+    ['g', msg('Go to')],
+    ['/', msg('Filter')],
+    ['space', msg('Mark ticket')],
+    ['o', msg('Open in browser')],
+    ['shift+r', msg('Refresh')],
+    ['mod+enter', msg('Start marked')],
+  ];
+
   function onkeydown(e: KeyboardEvent): void {
     const ticket =
       cur?.type === 'ticket'
@@ -479,6 +493,9 @@
         break;
       case 'g':
         if (cur) void goToRow(cur);
+        break;
+      case '?':
+        keysOpen = true;
         break;
       case '/':
         filtering = true;
@@ -718,18 +735,18 @@
     {/if}
   {/if}
 
-  <footer class="hints">
-    <span><Kbd chord="j" /><Kbd chord="k" /> {t('Move')}</span>
-    <span><Kbd chord="enter" /> {t('Next action')}</span>
-    <span><Kbd chord="g" /> {t('Go to')}</span>
-    <span><Kbd chord="o" /> {t('Open in browser')}</span>
-    <span><Kbd chord="/" /> {t('Filter')}</span>
-    <span><Kbd chord="shift+r" /> {t('Refresh')}</span>
-    <span><Kbd chord="space" /> {t('Mark ticket')}</span>
-    <span><Kbd chord="mod+enter" /> {t('Start marked')}</span>
-  </footer>
+  <KeyHints {hints} />
 </div>
 
+{#if keysOpen}
+  <KeyHints
+    {hints}
+    onclose={() => {
+      keysOpen = false;
+      root?.focus();
+    }}
+  />
+{/if}
 {#if queueMenu}
   {@const item = queueMenu.row.item}
   <Menu
@@ -996,29 +1013,5 @@
     padding-left: calc(var(--k-space-4) + 12px + 2 * var(--k-space-2));
     color: var(--k-accent);
     cursor: pointer;
-  }
-
-  /* One line tall: hints that wrap fall out of view instead of adding a second line. */
-  .hints {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0 var(--k-space-5);
-    flex: none;
-    margin-top: auto; /* bottom of the pane even above an empty, error or loading state */
-    height: var(--k-statusbar-height);
-    overflow: hidden;
-    padding: 0 var(--k-space-3);
-    border-top: 1px solid var(--k-border);
-    font-size: var(--k-font-size-xs);
-    color: var(--k-fg-muted);
-    white-space: nowrap;
-  }
-
-  .hints > span {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    height: var(--k-statusbar-height);
   }
 </style>

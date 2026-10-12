@@ -5,6 +5,7 @@ import type { Settings, ThemeDef, ThemeUi } from '$lib/gen';
 import { colors, type Colors, type ThemeMode } from '$lib/terminal/theme';
 
 import { BUILTIN } from './builtin';
+import { BEZEL_UI, floor } from './floor';
 
 export interface ResolvedTheme {
   id: string;
@@ -14,6 +15,8 @@ export interface ResolvedTheme {
   /** Hue for --k-project when the active project has no colour (still goes through projectAccent). */
   accent: string | null;
   terminal: Colors;
+  /** English notes (translate with `t`) on what the contrast floor changed or could not fix. */
+  notes: string[];
 }
 
 /** `#rrggbb` lowercased, or null for anything else (defence behind the schema pattern). */
@@ -31,11 +34,14 @@ export function resolveTheme(settings: Settings | null | undefined, mode: ThemeM
     def = BUILTIN[fallback]!;
   }
 
-  const vars: Record<string, string> = {};
+  const ui: Partial<Record<keyof ThemeUi, string>> = {};
   for (const [key, value] of Object.entries(def.ui ?? {}) as [keyof ThemeUi, string | null][]) {
     const v = hex(value);
-    if (v && key !== 'accent') vars[`--k-${key.replace(/_/g, '-')}`] = v;
+    if (v && key !== 'accent') ui[key] = v;
   }
+  const { fixed, notes } = floor({ ...BEZEL_UI[mode], ...ui });
+  const vars: Record<string, string> = {};
+  for (const [key, v] of Object.entries({ ...ui, ...fixed })) vars[`--k-${key.replace(/_/g, '-')}`] = v;
 
   const base = colors(mode);
   const t = def.terminal ?? {};
@@ -57,7 +63,7 @@ export function resolveTheme(settings: Settings | null | undefined, mode: ThemeM
   if (set.cursor) vars['--k-term-cursor'] = set.cursor;
   if (set.selection) vars['--k-term-selection'] = set.selection;
 
-  return { id, def, vars, accent: hex(def.ui?.accent), terminal };
+  return { id, def, vars, accent: hex(def.ui?.accent), terminal, notes };
 }
 
 export * from './projectColor';

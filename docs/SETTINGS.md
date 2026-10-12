@@ -56,6 +56,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `bindings` | map<ActionId, list<Chord>> | `{}` (overrides only; platform defaults per SPEC §4 live in the ActionId catalog, `ui/src/lib/gen/actions.ts`, so the schema is OS-independent) | effective = catalog default ⊕ override; `[]` unbinds |
 | `prefix_bindings` | map<ActionId, str> | SPEC §4 | single key after prefix |
 | `list_keys` | bool | `true` | single-key shortcuts of lists and boards. `false`: plain printable keys (letters, digits, `?`, `/`, with or without Shift, no Ctrl/Cmd/Alt) no longer reach the panes, `j`/`k` included; arrows, `Enter`, `Escape`, `Space`, `Home`/`End`, `Tab` and every Ctrl/Cmd/Alt chord still work, as do text fields, terminals, dialogs, menus and a Kelta action you bound to a plain key. Applies at once |
+| `hints` | bool | `true` | the key hint line under Tickets, Reviews and Now (five keys and `?`, DESIGN §6.8). `false` hides it; `?` still opens the full key list. Applies at once |
 
 Every action id, label and default chord per platform is in the ActionId catalog (`crates/kelta-proto/src/actions.rs`, generated to `ui/src/lib/gen/actions.ts`); SPEC §4 lists them. Settings → Keys records a chord, flags conflicts and unbinds. `window.toggle` has no in-app chord: bind `kelta-ctl toggle` in your compositor. Work-flow actions (FLOW §7), rebindable through `bindings` / `prefix_bindings` like any ActionId:
 

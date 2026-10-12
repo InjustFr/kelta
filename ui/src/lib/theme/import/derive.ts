@@ -28,6 +28,11 @@ export function mix(a: string, b: string, p: number): string {
   return toHex(x.map((v, i) => v + (y[i]! - v) * p));
 }
 
+/** Chrome surface steps from the well toward fg, for a theme that gives none or collapses them. */
+export function surfaces(well: string, fg: string): { bezel: string; bezel_raised: string } {
+  return { bezel: mix(well, fg, 0.06), bezel_raised: mix(well, fg, 0.1) };
+}
+
 /** `v` as `#rrggbb`, its alpha composited over `under`; null when unparsable. */
 function over(v: string | undefined, under: string): string | null {
   const c = parseHex(v);
@@ -51,12 +56,13 @@ export function complete(p: PartialTheme): ThemeDef {
   const t = p.terminal;
   const background = over(t.background, well) ?? well;
   const ansi = bezel.ansi.map((c, i) => over(t.ansi?.[i], background) ?? c);
-  const raised = on('bezel_raised', mix(well, fg, 0.1));
+  const step = surfaces(well, fg);
+  const raised = on('bezel_raised', step.bezel_raised);
   const muted = on('fg_muted', mix(fg, well, 0.25));
   const accent = on('accent', ansi[4]!);
 
   const ui: ThemeUi = {
-    bezel: on('bezel', mix(well, fg, 0.06)),
+    bezel: on('bezel', step.bezel),
     bezel_raised: raised,
     well,
     bg_float: on('bg_float', raised),

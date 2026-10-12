@@ -2,38 +2,16 @@
   import { msg, t, tn } from '$lib/i18n/index.svelte';
   import { dispatch } from '$lib/actions';
   import type { SessionInfo } from '$lib/gen';
-  import { lampOf, projects, sessions, settings, work, type GlobalView, type LampLevel } from '$lib/stores';
-  import { Kbd, Lamp } from '$lib/ui';
+  import { lampOf, projects, sessions, settings, work, type LampLevel } from '$lib/stores';
+  import { Lamp } from '$lib/ui';
 
   import { claudeSlots } from '../views/work/batch.svelte';
   import { sessionLabel } from '../views/work/live';
-  import { chordFor } from './labels';
-  import { focusedPane, focusedSessionId, revealSession } from './nav';
+  import { focusedSessionId, revealSession } from './nav';
   import { clock, itemCost, latestWindow, meter as bar, usd } from './usage';
 
-  interface Props {
-    prefixArmed: boolean;
-    /** Global view shown (no branch or session); `null` = the active project. */
-    view: GlobalView | null;
-  }
-
-  let { prefixArmed, view }: Props = $props();
-
-  // The hint line teaches the keyboard: the user's own chords, skipped when unbound. Split and
-  // Close pane only show where they act: a project with a focused pane, not a global view or the welcome screen.
-  const HINTS: { id: string; verb: string; pane?: true }[] = [
-    { id: 'palette.open', verb: msg('Commands') },
-    { id: 'session.new', verb: msg('New session') },
-    { id: 'pane.split_right', verb: msg('Split'), pane: true },
-    { id: 'pane.close', verb: msg('Close pane'), pane: true },
-    { id: 'attention.next', verb: msg('Next waiting') },
-  ];
-  const panes = $derived(!view && focusedPane() !== null);
-  const hints = $derived(
-    HINTS.filter((h) => panes || !h.pane)
-      .map((h) => ({ ...h, chord: chordFor(h.id) }))
-      .filter((h): h is { id: string; verb: string; chord: string } => !!h.chord),
-  );
+  // Exceptions only: no key hints here (the views' `?` dialogs and the palette list the global chords).
+  let { prefixArmed }: { prefixArmed: boolean } = $props();
 
   // Lamp meter: one button per non-zero state; clicking walks the sessions in that state.
   const METER: { lamp: LampLevel; label: string }[] = [
@@ -93,11 +71,6 @@
 </script>
 
 <footer class="statusbar k-num" data-testid="statusbar">
-  <p class="hints">
-    {#each hints as h (h.id)}
-      <span class="hint"><Kbd chord={h.chord} />{t(h.verb)}</span>
-    {/each}
-  </p>
   {#if prefixArmed}
     <span class="seg prefix" data-testid="status-prefix" role="status">{t('Prefix: press a key')}</span>
   {/if}
@@ -144,6 +117,7 @@
   .statusbar {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: var(--k-space-4);
     height: var(--k-statusbar-height);
     flex: none;
@@ -152,28 +126,6 @@
     color: var(--k-fg-chrome);
     font-size: var(--k-font-size-xs);
     white-space: nowrap;
-  }
-
-  /* One line tall: a hint that does not fit wraps out of view whole instead of being cut. */
-  .hints {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0 var(--k-space-5);
-    flex: 1;
-    min-width: 0;
-    height: var(--k-statusbar-height);
-    margin: 0;
-    overflow: hidden;
-    white-space: nowrap;
-  }
-
-  .hint {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    flex: none;
-    height: var(--k-statusbar-height);
   }
 
   .seg {

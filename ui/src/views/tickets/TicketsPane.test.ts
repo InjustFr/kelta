@@ -528,13 +528,30 @@ describe('TicketsPane workbench', () => {
     expect(ui.sheet).toBeNull();
   });
 
-  it('the footer shows five keys and ?, which lists them all', async () => {
+  it('the footer shows five keys and ?, which lists them all and the global chords', async () => {
     const { container } = mountBoard('list');
     await ready(container);
     expect(container.querySelectorAll('.hints .hint')).toHaveLength(6);
     await press('?');
-    const keys = await screen.findByRole('dialog', { name: 'Ticket keys' });
+    const keys = await screen.findByRole('dialog', { name: 'All keys' });
     expect(keys.textContent).toContain('Current sprint');
+    expect(keys.textContent).toContain('Next waiting');
+  });
+
+  it('keys.hints = false hides the footer', async () => {
+    const { container } = mountBoard('list');
+    await ready(container);
+    await waitFor(() => expect(settings.value()).not.toBeNull());
+    const global = settings.effective[''];
+    const value = settings.value()!;
+    settings.effective = {
+      '': {
+        ...global!,
+        data: { ...global!.data!, value: { ...value, keys: { ...value.keys, hints: false } } },
+      },
+    };
+    await tick();
+    expect(container.querySelector('.hints')).toBeNull();
   });
 
   it('shows the PR chip of a ticket linked by a review', async () => {
