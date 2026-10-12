@@ -130,7 +130,7 @@
                     onclick={() => edit(p)}
                   />
                   <IconButton
-                    icon="trash-2"
+                    icon="trash"
                     label={t('Remove {name}', { name: p.name })}
                     size="sm"
                     onclick={() => (removing = p)}

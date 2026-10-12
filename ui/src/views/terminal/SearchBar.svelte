@@ -51,7 +51,7 @@
   <IconButton icon="chevron-up" label={t('Previous match')} size="sm" onclick={() => void find(true)} />
   <IconButton icon="chevron-down" label={t('Next match')} size="sm" onclick={() => void find()} />
   <IconButton
-    icon="filter"
+    icon="funnel"
     label={t('Match case')}
     size="sm"
     active={caseSensitive}

@@ -179,7 +179,7 @@
       { id: 'copy', label: t('Copy'), icon: 'copy', disabled: !view?.term.hasSelection() },
       { id: 'paste', label: t('Paste'), icon: 'clipboard' },
       { id: 'search', label: t('Search…'), icon: 'search', separator: true },
-      { id: 'clear', label: t('Clear screen'), icon: 'trash-2' },
+      { id: 'clear', label: t('Clear screen'), icon: 'trash' },
     ];
   }
 

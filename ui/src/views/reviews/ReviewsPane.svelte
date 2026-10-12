@@ -555,6 +555,7 @@
             measure={!compact}
             key={(r) => r.id}
             label={t('Pull requests')}
+            sticky={(r) => r.type === 'header'}
           >
             {#snippet row(r)}
               {#if r.type === 'header'}

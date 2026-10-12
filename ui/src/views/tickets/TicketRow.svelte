@@ -37,7 +37,6 @@
     onmove: () => void;
     onpr: () => void;
     onstart: () => void;
-    ontag: () => void;
   }
 
   let {
@@ -59,7 +58,6 @@
     onmove,
     onpr,
     onstart,
-    ontag,
   }: Props = $props();
 
   const tk = $derived(item.ticket);
@@ -92,6 +90,8 @@
         : '',
       ...signals,
       t('Updated {ago}', { ago: relativeTime(Date.parse(tk.updated_at)) }),
+      // The row shows two actions (#384): the others by key.
+      t('Keys: s start work, m move, p open pull request, t tags'),
     ]
       .filter(Boolean)
       .join('\n'),
@@ -127,21 +127,16 @@
         >{/if}{tk.title}</span
     >{#each tk.fields ?? [] as f, i (i)}<span class="field" data-field title={fieldText(f)}
         >{fieldText(f)}</span
-      >{/each}<TagChips kind="tickets" itemKey={rowKey} /><span class="acts" data-acts>
-      {#if next}<RowButton label={next} onclick={onnext}><span class="next" data-next>{next}</span></RowButton
-        >{/if}
-      <RowButton icon="arrow-right" label={t('Move (m)')} onclick={onmove} />
-      <RowButton
-        icon="git-pull-request"
-        label={item.prs.length > 0 ? t('Open pull request (p)') : t('No pull request linked')}
-        disabled={item.prs.length === 0}
-        onclick={onpr}
-      />
-      <RowButton
-        icon="play"
-        label={hasWork ? t('Resume work (s)') : t('Start work (s)')}
-        onclick={onstart}
-      /><RowButton icon="tag" label={t('Tags (t)')} onclick={ontag} /></span
+      >{/each}<TagChips kind="tickets" itemKey={rowKey} /><span class="acts" data-acts
+      >{#if next}<RowButton label={next} onclick={onnext}
+          ><span class="act primary" data-next>{next}</span></RowButton
+        >{:else}<RowButton label={hasWork ? t('Resume work (s)') : t('Start work (s)')} onclick={onstart}
+          ><span class="act primary"
+            ><Icon name="play" size={14} />{hasWork ? t('Resume work') : t('Start work')}</span
+          ></RowButton
+        >{/if}<RowButton label={t('Move (m)')} onclick={onmove}
+        ><span class="act"><Icon name="arrow-right" size={14} />{t('Move')}</span></RowButton
+      ></span
     ></span
   >
   <!-- Fixed slots: work, pull request, waiting, marked. Icons, and words where the list has room (#373). -->
@@ -157,7 +152,8 @@
             name={phase.lamp === 'error' ? 'circle-alert' : phase.id === 'elsewhere' ? 'bot' : 'git-branch'}
             size={14}
           /><span class="k-visually-hidden">{phase.label}</span></span
-        >{#if word}<span class="word" data-phase-word aria-hidden="true">{word}</span>{/if}{/if}
+        >{#if word}<span class="word" data-phase-word data-lamp={phase.lamp} aria-hidden="true">{word}</span
+          >{/if}{/if}
     </span>
     <span class="sig sig-pr">
       {#if pr && ci}<span class="pr" class:draft={pr.state === 'open' && pr.draft} data-pr
@@ -265,10 +261,17 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-weight: var(--k-weight-medium);
+    color: var(--k-fg-strong);
+  }
+
+  .k-row.selected .text {
+    font-weight: var(--k-weight-strong);
   }
 
   /* The source's blocked marker (#348), ahead of the title. */
   .blocked {
+    font-weight: normal;
     margin-right: var(--k-space-2);
     padding: 0 var(--k-space-1);
     border: 1px solid var(--k-danger);
@@ -279,6 +282,7 @@
 
   .parent {
     display: inline-block;
+    font-weight: normal;
     max-width: 16ch;
     overflow: hidden;
     margin-right: var(--k-space-2);
@@ -339,12 +343,21 @@
     white-space: nowrap;
   }
 
-  .sig-icon.error + .word {
-    color: var(--k-lamp-error);
+  /* The phase word takes its lamp's colour (#382), so the state reads without the tooltip. Mixed toward --k-fg: the raw lamps are non-text marks (3:1). */
+  .word[data-lamp='needs_input'] {
+    color: color-mix(in oklab, var(--k-lamp-needs-input) 75%, var(--k-fg));
   }
 
-  .sig-icon.ask + .word {
-    color: var(--k-warn);
+  .word[data-lamp='working'] {
+    color: color-mix(in oklab, var(--k-lamp-working) 75%, var(--k-fg));
+  }
+
+  .word[data-lamp='error'] {
+    color: color-mix(in oklab, var(--k-lamp-error) 75%, var(--k-fg));
+  }
+
+  .word[data-lamp='done'] {
+    color: color-mix(in oklab, var(--k-lamp-done) 75%, var(--k-fg));
   }
 
   .sig-icon.error {
@@ -392,19 +405,37 @@
     outline-offset: -1px;
   }
 
-  .acts :global(.rb:has(.next)) {
+  /* Row actions read as buttons (#384): outlined, icon and word; the next step's outline is the accent. */
+  .acts :global(.rb) {
+    flex: none;
+  }
+
+  /* Only the step's label gives way, ellipsised, once the actions reach their share of the title cell. */
+  .acts :global(.rb:has(.primary)) {
+    flex: 0 1 auto;
     min-width: 0;
   }
 
-  .next {
+  .act {
+    display: block;
+    line-height: 18px;
     overflow: hidden;
-    text-overflow: ellipsis;
     padding: 0 var(--k-space-2);
-    border: 1px solid var(--k-border);
+    border: 1px solid var(--k-border-strong);
     border-radius: var(--k-radius-sm);
     color: var(--k-fg);
     font-size: var(--k-font-size-sm);
+    text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .act :global(svg) {
+    margin-right: var(--k-space-1);
+    vertical-align: -2px;
+  }
+
+  .act.primary {
+    border-color: var(--k-accent);
   }
 
   .c-status {
@@ -534,34 +565,31 @@
     }
   }
 
-  /* Compact row actions: on the selected row, on hover and on focus-within (DESIGN §7), laid over
-     the end of the title on the row's own backing so showing them never reflows the row. */
+  /* Row actions on the selected row only (#384), after the title and its chips: the title gives way to
+     them instead of being covered. */
   .acts {
-    position: absolute;
-    /* the title cell is one line tall: reach the row's full height */
-    inset: calc((var(--k-line-height) * 1em - var(--k-row-height)) / 2) 0
-      calc((var(--k-line-height) * 1em - var(--k-row-height)) / 2) auto;
     display: none;
+    flex: none;
     align-items: center;
     gap: var(--k-space-1);
-    max-width: 100%; /* never over the key cell: the next step's label shrinks first */
+    max-width: 60%;
+    margin-left: auto;
     padding-left: var(--k-space-2);
-    background: linear-gradient(var(--k-bg-hover), var(--k-bg-hover)), var(--k-well);
   }
 
   .k-row.selected .acts,
   .k-row.picked .acts {
-    background: var(--k-bg-selected);
+    background: var(--k-bg-selected-row);
   }
 
-  .k-row:hover .acts,
-  .k-row.selected .acts,
-  .k-row:focus-within .acts {
+  .k-row.selected .acts {
     display: inline-flex;
   }
 
   .k-row.picked {
-    background: var(--k-bg-selected);
+    background: var(--k-bg-selected-row);
+    --k-fg-subtle: var(--k-fg-subtle-sel);
+    --k-fg-muted: var(--k-fg-muted-sel);
   }
 
   .k-row.picked .k-row-lamp {

@@ -9,13 +9,13 @@ Kelta is the **bezel around a set of screens**. The terminals are the screens: f
 
 Three rules:
 
-1. **Chrome has no brand colour.** Its only accent is the active project's own colour, remapped in oklch to a fixed lightness and chroma. The window takes the hue of the project you are in.
+1. **Chrome has no brand colour.** Its only accent is the active project's own colour, remapped in oklch to a fixed lightness and chroma. The window takes the hue of the project you are in. List rows are content, not chrome: their keys wear one fixed hue (`--k-info`, #382), which never stands for a state.
 2. **Saturated colour in the chrome means state.** Lamps (needs input, working, error, done, activity) are the only saturated marks, and each has its own silhouette, so colour is never the only signal.
 3. **Density without noise.** a bezel gap and a thin ring instead of boxed panes, shadows only on floating surfaces, tabular figures for every count, monospace only for strings you could paste into a terminal.
 
 ## 2. Tokens
 
-Every earlier `--k-*` name is kept, so components that only read tokens need no edit. Names the redesign added: `--k-bezel`, `--k-bezel-raised`, `--k-well`, `--k-bg-float`, `--k-fg-chrome`, `--k-project`, `--k-gap`, `--k-gutter-hit`, `--k-pane-header-height`, `--k-lamp-*`, `--k-lit` and `--k-lit-mix` (the call light), `--k-term-selection`, `--k-measure`, `--k-radius-screen`, and for the sidebar `--k-rail-width`, `--k-rail-width-compact`, `--k-sidebar-row-height`, `--k-rail-item`. (`--k-swatch-*` was dropped by #253: project colours come from the theme's ANSI slots, §2.1.)
+Every earlier `--k-*` name is kept, so components that only read tokens need no edit. Names the redesign added: `--k-fg-strong` (#382), `--k-bezel`, `--k-bezel-raised`, `--k-well`, `--k-bg-float`, `--k-fg-chrome`, `--k-project`, `--k-gap`, `--k-gutter-hit`, `--k-pane-header-height`, `--k-lamp-*`, `--k-lit` and `--k-lit-mix` (the call light), `--k-term-selection`, `--k-measure`, `--k-radius-screen`, and for the sidebar `--k-rail-width`, `--k-rail-width-compact`, `--k-sidebar-row-height`, `--k-rail-item`. (`--k-swatch-*` was dropped by #253: project colours come from the theme's ANSI slots, §2.1.)
 
 `src/styles/tokens.css` is:
 
@@ -90,6 +90,7 @@ Every earlier `--k-*` name is kept, so components that only read tokens need no 
   --k-bg-active: rgba(22, 27, 33, 0.1);
   --k-bg-selected: #dde9f1; /* hex fallback, overridden below */
   --k-fg: #161b21; /* 13.7 on bezel */
+  --k-fg-strong: var(--k-fg); /* list and detail titles: a step past --k-fg, mixed below */
   --k-fg-muted: #46505b; /* 6.5 on bezel, 5.3 on lit */
   --k-fg-subtle: #535d68; /* 5.3 on bezel; never on lit */
   --k-fg-chrome: #434d57; /* 6.8 on bezel: chrome now carries labels */
@@ -133,6 +134,8 @@ Every earlier `--k-*` name is kept, so components that only read tokens need no 
     --k-bg-selected: color-mix(in oklab, var(--k-accent) 14%, var(--k-well));
     /* one declaration serves both themes: the vars resolve per theme on :root */
     --k-lit: color-mix(in oklab, var(--k-lamp-needs-input) var(--k-lit-mix), var(--k-bezel));
+    /* mixed from the theme's own --k-fg, so every theme gets its brighter step */
+    --k-fg-strong: color-mix(in oklab, var(--k-fg) 60%, #000);
   }
 }
 :root {
@@ -184,6 +187,7 @@ Every earlier `--k-*` name is kept, so components that only read tokens need no 
   @supports (color: color-mix(in oklab, red, blue)) {
     :root:not([data-theme='light']) {
       --k-bg-selected: color-mix(in oklab, var(--k-accent) 16%, var(--k-well));
+      --k-fg-strong: color-mix(in oklab, var(--k-fg) 60%, #fff);
     }
   }
 }
@@ -231,6 +235,7 @@ Every earlier `--k-*` name is kept, so components that only read tokens need no 
 @supports (color: color-mix(in oklab, red, blue)) {
   :root[data-theme='dark'] {
     --k-bg-selected: color-mix(in oklab, var(--k-accent) 16%, var(--k-well));
+    --k-fg-strong: color-mix(in oklab, var(--k-fg) 60%, #fff);
   }
 }
 ```
@@ -256,6 +261,7 @@ Every earlier `--k-*` name is kept, so components that only read tokens need no 
 | accent (any hue, fixed L) on well | at least 3:1 (focus marks, non-text) | at least 3:1 |
 
 Every text token clears 4.5:1 on every surface it can sit on, so 12-13px labels and state words may use it. Exception: `--k-fg-subtle` is never used on the call light (`--k-lit`); the lit pane header switches it to `--k-fg-muted`.
+Lamp colours are non-text marks (3:1); as text, such as the phase word on a ticket row, they only appear through `color-mix(in oklab, var(--k-lamp-*) 75%, var(--k-fg))`.
 Measured (WCAG 2 relative luminance). Recheck with a script after any token edit.
 
 Every theme meets the floor too, custom and imported ones included (`lib/theme/floor.ts`, #387). When a theme paints `--k-bezel` and `--k-bezel-raised` within 0.015 in oklab of `--k-well`, they (and a collapsed `--k-bg-float`) are re-derived from well toward fg like a theme that leaves them out. `--k-fg-muted`, `--k-fg-subtle` and `--k-fg-chrome` move toward `--k-fg` until 4.5:1 on the four surfaces, and `--k-border-strong` until 3:1 on well and bezel and stronger than `--k-border`. Settings → Theme lists each fix on the theme's card, or that some pair still fails (when `--k-fg` itself does). The built-ins need no fix.
@@ -271,14 +277,15 @@ No web fonts and no bundled woff2. Terminals already render in the user's chosen
 |---|---|---|---|
 | xs | 12 / 1.43 | 400 | the floor: ages, priorities, counts, kbd, badges, chips, status strip, sidebar sub-lines |
 | sm | 13 / 1.43 | 400, 500, 600 | tabs, pane headers, toolbars, small buttons, group headers (600, `--k-fg-muted`) |
-| base | 14 / 1.43 | 400 | list rows, forms, settings, menus, sidebar names |
+| base | 14 / 1.43 | 400, 500 | list rows (titles 500 `--k-fg-strong`, 600 on the selected row), forms, settings, menus, sidebar names |
 | lg | 16 / 1.43 | 600 | view titles, dialog and sheet titles, palette input |
-| xl | 20 / 1.43 | 600 | ticket / review detail title only |
+| xl | 20 / 1.43 | 600 | ticket / review detail title only, `--k-fg-strong` |
 | display | 26 | 600 | welcome heading only |
 | read | 14 / 1.55 | 400 | HtmlContent bodies, max-width `--k-measure` (68ch); headings inside stay 1em/600 |
 
 Rules:
-- Weights 400, 500 and 600. 600 is for the focused pane title, view titles and group headers; 500 (`--k-weight-medium`) for unfocused pane titles and palette group headers.
+- Weights 400, 500 and 600. 600 is for the focused pane title, view titles, group headers and the selected list row's title; 500 (`--k-weight-medium`) for unfocused pane titles, palette group headers and list row titles (#382).
+- Titles in lists and detail panes take `--k-fg-strong`, a step past `--k-fg` (mixed 40% toward black in light, white in dark, from the theme's own `--k-fg`), so a row's title stands out from its other text.
 - Nothing is set below 12px, bar the initials in a 20px avatar (10px). A label that does not fit is shortened or dropped, never shrunk (§6.14).
 - `font-variant-numeric: tabular-nums` is on `body`, so every count, age and diffstat lines up; `.k-num` stays for explicit cases.
 - Sentence case everywhere. No all-caps, no tracked labels, no eyebrows. Board lanes keep the tracker's own casing.
@@ -290,8 +297,8 @@ Rules:
 - **Spacing**: 2 / 4 / 8 / 12 / 16 / 24 / 32 / 48. Row inner padding is 8px horizontal. Detail panes pad 16px; dialogs 16px; nothing pads a terminal.
 - **Radius encodes layer**: marks (chips, badges, kbd) 3px, controls (buttons, inputs, rows, tabs, tiles) 6px, panes 8px (`--k-radius-screen`, screens set into the housing), floating surfaces 10px.
 - **Elevation has three levels and only the top one casts a shadow**:
-  1. Bezel (`--k-bezel`): rail, the housing around and between panes, board lanes.
-  2. Bezel-raised (`--k-bezel-raised`): tab bar, pane headers, status strip, list toolbars.
+  1. Bezel (`--k-bezel`): rail, the housing around and between panes, board lanes, the split view's detail column (so list and detail read as two surfaces). In dark themes the rail (`--k-rail`) sits one step below the well (`--k-well` mixed 30% toward black), so the content reads as the lit part of the window.
+  2. Bezel-raised (`--k-bezel-raised`): tab bar, pane headers, status strip, list toolbars, list group headers (Tickets, Now, Reviews: a full-width band with a 1px `--k-border` rule under it, pinned at the top of the list while its group is in view).
   3. Well (`--k-well`): terminals, lists, detail panes, inputs.
   4. Float (`--k-bg-float` + `--k-shadow` + `--k-radius-lg`): menus, palette, dialogs, sheets, toasts. The only shadows in the app.
 - Borders only where they separate data (board cards, inputs, table rows in settings when needed). A pane has a 1px `--k-border` ring instead (§6.4).
@@ -398,19 +405,21 @@ One bar across the top of the window, above the rail and the panes: `--k-context
 ### 6.8 Lists (tickets, reviews, inbox)
 
 One row grammar for all three, so they read as one instrument:
-`lamp | id (mono 12, --k-fg-muted, 76px) | title (13, fills) | meta (11, right-aligned, tabular)`.
+`lamp | id (mono 13, --k-info, 76px) | title (14/500, --k-fg-strong, fills) | meta (12, right-aligned, tabular)`.
+
+- Hierarchy (#382): the title is the brightest text in the row (500, 600 on the selected row), the key wears one hue in every list (`--k-info`, never a lamp colour) so the eye runs down the key column, the state word takes its lamp's colour, and everything else stays muted.
 
 - Rows `ROW_HEIGHT` (32px, `$lib/ui`), no row borders, no zebra. Reviews and Now rows have two lines (#383): lamp, id and title on line 1, then the chips and meta left-aligned under the title, in full, wrapping to a third line rather than cut (`VirtualList` `measure`). A Compact switch in their toolbars (saved in the pane's `density`) brings back the one-line 32px row (no `measure`).
-- Selected: `--k-bg-selected` plus `box-shadow: inset 2px 0 0 var(--k-accent)`. Hover: `--k-bg-hover`.
-- Tickets rows are a CSS grid on fixed tracks every row shares (`TicketRow.svelte`), so optional data never shifts a column: lamp (16px) | key (mono 13 `--k-fg-muted`, as wide as the longest key in view, capped at 12 characters) | title (14, `1fr`, takes all spare width) | signals (90px) | status (112px) | age (44px, right-aligned, tabular) | source (124px, 12 `--k-fg-subtle`, truncated, only with more than one source and a grouping other than Source) | assignee initials (20px circle on `--k-bezel`, 10px letters, Team and Unassigned only). Each cell carries its own left padding inside its track, so a dropped track takes no gap with it.
+- Selected: `--k-bg-selected` (accent 14% into the well in light, 28% in dark: at least 1.6:1 on the well) plus `box-shadow: inset 2px 0 0 var(--k-accent)`. Hover: `--k-bg-hover`.
+- Tickets rows are a CSS grid on fixed tracks every row shares (`TicketRow.svelte`), so optional data never shifts a column: lamp (16px) | key (mono 13 `--k-info`, as wide as the longest key in view, capped at 12 characters) | title (14, `1fr`, takes all spare width) | signals (90px) | status (112px) | age (44px, right-aligned, tabular) | source (124px, 12 `--k-fg-subtle`, truncated, only with more than one source and a grouping other than Source) | assignee initials (20px circle on `--k-bezel`, 10px letters, Team and Unassigned only). Each cell carries its own left padding inside its track, so a dropped track takes no gap with it.
 - Chips in the title cell. Before the title: **Blocked** (#348, 1px `--k-danger` border and text, radius 3, 12px) and the **parent** key (#350, `--k-bg-hover` fill, `--k-fg-muted`, 13px, 16ch at most; not shown when the list is grouped by Parent). After the title: the source's chosen tracker **fields** (#351) as `label: value` chips (`--k-bg-hover`, 12px, 4 to 20ch, ellipsised; the value alone when the label is empty), then the local **tags** (#349). A tag is the one pill in the app: radius 999, 1px `--k-border`, a 6px dot in the tag's colour (`--k-fg-subtle` without one), 120px at most, never shrunk. The title ellipsises first, then the field chips; the row's compact actions lay over the end of the title and never reflow it.
 - One baseline: text cells align on their baseline and the line is centred in the row (`--k-row-height`); lamps, signal icons and status dots are centred on the row.
 - Title first: the sprint, the work phase in words, the PR state, who it waits on and the updated time live in the row tooltip and the detail column, not in the row.
-- Signals: fixed slots, icons with tooltips (and the words for screen readers), `--k-fg-subtle`: local work (`git-branch`; `circle-alert` in `--k-lamp-error` when the work failed), the pull request (`git-pull-request` plus the PR lamp, a button opening it), waiting on someone (`clock`, `--k-warn` when late), marked for a batch start (`layers`, `--k-accent`). An error keeps the error lamp in the lamp track too.
+- Signals: fixed slots, icons with tooltips (and the words for screen readers), `--k-fg-subtle`; the phase word (#373, wide lists) takes its lamp's colour (needs input, working, error, done), the others stay `--k-fg-subtle`: local work (`git-branch`; `circle-alert` in `--k-lamp-error` when the work failed), the pull request (`git-pull-request` plus the PR lamp, a button opening it), waiting on someone (`clock`, `--k-warn` when late), marked for a batch start (`layers`, `--k-accent`). An error keeps the error lamp in the lamp track too.
 - Status: a 7px dot in the source's colour for that status (`status_colors`, SETTINGS §2), else the category colour (`--k-info`, `--k-warn`, `--k-ok`, `--k-border-strong`), centred on the cap height, then the tracker's own status name (12, `--k-fg-muted`); a button opening the StatusPicker. No chip, no bar: the bordered pill appears only in the detail header, where it is the picker.
 - Narrow lists: below 720px of list width the source and assignee tracks and the field chips drop (the split view at 1440 leaves the list about 670px, so the age stays); below 480px the age drops; below 420px the signals drop too (they stay in the row tooltip and the lamp's). Key, title, status, Blocked, parent and tags never drop. An optional mark hides whole; it is never cut in half (§6.14).
 - Age: `7d` tabular text after 7 days in a non-done status, `--k-fg-subtle`; `--k-warn` text from 14, `--k-danger` text from 21. No fill, no border (a lamp must stay the only coloured shape). Empty below 7 days; its track stays.
-- Compact row actions (Move, pull request, Start) appear in the row on the selected row, on hover and on focus-within; they are icon buttons with a tooltip carrying the key, and take no space when hidden.
+- Row actions (#384) appear on the selected row only, after the title and its chips (the title gives way, never covered): the next step (accent outline), or Start / Resume work, then Move, both outlined with an icon and a word, keys in their tooltips. The other actions (pull request `p`, Tags `t`) are keys, named in the row tooltip. Signals (work, PR lamp, waiting) stay in their own column, never mixed with actions.
 - Multi-select: marked rows get `--k-bg-selected` and an accent lamp; `Esc` clears.
 - Reviews meta (line 2): `+214 −38` in mono tabular (`--k-ok` / `--k-danger`), checks lamp. Toolbar: filter, then the For me / Team / Mine tabs (tabular counts, omitted when unknown). Team rows show `@author` (or "you") in place of the name; grouped by ticket (`G`), each group has a 13/600 `--k-fg-muted` header `SHOP-142 Checkout timeout` with a tabular count, not selectable (`j` `k` skip it).
 - Now: sections in the order to work in, Claude needs you first (FLOW §3.1), under 13/600 `--k-fg-muted` sentence-case headers that carry the lamp shape. Rows of Claude sessions Kelta did not start (Elsewhere) are dimmed. The selected row's key hints, then its message, sit under its meta, aligned with the title, wrapping rather than cut.
@@ -425,14 +434,14 @@ One row grammar for all three, so they read as one instrument:
 
 ### 6.9 Detail panes (ticket, review) *(meta grid and measure from Spine)*
 
-- Key in mono 13 (copyable), title 18/600, then a label/value meta grid: `display: grid; grid-template-columns: auto 1fr auto 1fr`, labels 12 `--k-fg-muted`, values 13. Stacks to `auto 1fr` under 480px pane width.
+- Key in mono 13 (copyable), title 20/600 `--k-fg-strong`, then a label/value meta grid: `display: grid; grid-template-columns: auto 1fr auto 1fr`, labels 12 `--k-fg-muted`, values 13. Stacks to `auto 1fr` under 480px pane width.
 - Section heads (Description, Discussion, Checks) are `.k-section-title`: content size, 600, a 1px `--k-border` rule above with 12px padding and 24px margin. They are the largest headings in the pane after the title.
 - `HtmlContent`: 13/1.5, `max-width: var(--k-measure)`, links `--k-accent` underlined, code/pre mono on `--k-bezel-raised` radius 2, blockquote 2px `--k-border-strong` left rule.
 - `HtmlContent` headings never outgrow the section heads: `h1`-`h6` at 1em/600 (`h4`-`h6` `--k-fg-muted`), `margin: 1em 0 0.4em`, none above a first child. Lists 1.5em indent, 0.2em between items; task-list checkboxes hang in the bullet gutter, read-only. `hr` is a 1px `--k-border` rule. A ticket description sits in an indented block with a 1px `--k-border` left rule, so its headings read as content.
 - Reviews: `feat/x into main` in mono 12 under the title, diffstat tabular.
 - Tickets: a `Pull request` row (PR chip, CI lamp, review state in words); the status value is a button opening the StatusPicker of §6.8. Order: key, title, status, action bar, meta grid (assignee, priority, sprint, estimate, due, labels, updated; assignee `u` and priority `!` are buttons opening a filtered picker), Pull request rows, description, comments with a compose box.
 - Pull request rows: one line each, `#N` chip, title filling, then CI lamp and review state in words; wraps under the title when narrow.
-- Action bar: the primary `sm` Button (Start / Resume work), then one row of quiet ghost `sm` Buttons: Move `m`, Open PR `p`, Assign to me `a`, Comment `c`, and More (`Cmd+.`, `Ctrl+Shift+.` on Linux), a menu with Unassign `Shift+A`, Block / Unblock ticket `b`, Refine with Claude `r`, Copy branch `y`, Open in browser `o`. Keys show in the tooltips and in the menu, not as caps on the buttons; every key works without the bar. Plugin actions follow. A refine shows its proposal under the sub-tasks as mono pre-wrapped Markdown on `--k-bezel-raised`, with Post as comment (primary), Copy and Discard. An action that cannot run keeps its place at 55% opacity with `aria-disabled` and the reason as tooltip; it stays reachable with Tab.
+- Action bar: the primary `sm` Button (Start / Resume work), then one row of outlined ghost `sm` Buttons: Move `m`, Open PR `p`, Assign to me `a`, Comment `c`, and More (`Cmd+.`, `Ctrl+Shift+.` on Linux), a menu with Unassign `Shift+A`, Block / Unblock ticket `b`, Refine with Claude `r`, Copy branch `y`, Open in browser `o`. Keys show in the tooltips and in the menu, not as caps on the buttons; every key works without the bar. Plugin actions follow. A refine shows its proposal under the sub-tasks as mono pre-wrapped Markdown on `--k-bezel-raised`, with Post as comment (primary), Copy and Discard. An action that cannot run keeps its place at 55% opacity with `aria-disabled` and the reason as tooltip; it stays reachable with Tab.
 - Embedded in the split view (Tickets and Reviews, list | detail on `--k-well` with a 1px `--k-border` gap, 720px and wider) the detail drops the pane padding it would double, and shows the 2px `--k-focus` bar when it holds the keys.
 
 ### 6.10 Board
@@ -450,7 +459,7 @@ One row grammar for all three, so they read as one instrument:
 
 ### 6.12 Forms (Button, TextInput, Select, Toggle, Tabs, Kbd)
 
-- Button: height 32 (28 for `sm`), radius 6. Default: `--k-bezel-raised` + 1px `--k-border`. Primary: `--k-accent` fill + `--k-accent-fg`. Danger: `--k-danger` fill. Ghost: text only until hover. Labels name the action ("Start work", "Request changes").
+- Button: height 32 (28 for `sm`), radius 6. Default: `--k-bezel-raised` + 1px `--k-border`. Primary: `--k-accent` fill + `--k-accent-fg`. Danger: `--k-danger` fill. Ghost: transparent with a 1px `--k-border-strong` outline, so it reads as a control (#384). Labels name the action ("Start work", "Request changes").
 - TextInput / Select: `--k-well` face, 1px `--k-border`, radius 6; they read as small screens on raised toolbars. Focus = focus ring, border unchanged.
 - Toggle: track `--k-bezel`, thumb `--k-well`; on = accent track. The thumb carries a 1px notch on the on side so state is not colour-only *(from Faceplate)*.
 - Tabs (in-view segmented): text only, active = `--k-fg` 600 + 2px accent underline, same grammar as the tab bar.

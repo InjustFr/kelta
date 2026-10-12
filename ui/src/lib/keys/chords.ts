@@ -1,6 +1,6 @@
-// Chord parsing, physical-key matching and conflict detection (SPEC §4). Pure: no DOM state, no
-// stores. Matching uses `KeyboardEvent.code` (physical keys) so keyboard layouts do not break digits
-// or punctuation chords.
+// Chord parsing, key matching and conflict detection (SPEC §4). No DOM state, no stores. Letters and
+// punctuation match the character the active layout types (AZERTY Z is Z, not W); digits and named
+// keys match `KeyboardEvent.code` (physical keys) so the AZERTY top row still gives `ctrl+1`.
 
 import { currentPlatform } from '$lib/ui/format';
 
@@ -168,11 +168,39 @@ export function chordToString(chord: Chord): string {
   return [...mods, codeToKeyName(chord.code)].join('+');
 }
 
-/** Physical code of an event, falling back to `key` for virtual keyboards that omit `code`. */
-function eventCode(event: Pick<KeyboardEvent, 'code' | 'key'>): string {
-  if (event.code) return event.code;
+/** Unshifted character each physical key types on the active layout, learned from plain presses. */
+const layoutChars = new Map<string, string>();
+
+/**
+ * Code of the QWERTY key that types the same letter or punctuation as the pressed key on the active
+ * layout (AZERTY Z, code `KeyW` → `KeyZ`). Digits, named keys and characters with no QWERTY key
+ * (Cyrillic, `é`) keep the physical code. Falls back to `key` for virtual keyboards that omit `code`.
+ */
+export function eventCode(
+  event: Pick<KeyboardEvent, 'code' | 'key' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey'> & {
+    getModifierState?: (key: string) => boolean;
+  },
+): string {
   const key = event.key ?? '';
-  return key.length === 1 ? (keyNameToCode(key) ?? '') : '';
+  if (!event.code) return key.length === 1 ? (keyNameToCode(key) ?? '') : '';
+  const name = codeToKeyName(event.code);
+  if (name.length !== 1 || /[0-9]/.test(name)) return event.code;
+  const plain =
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    !event.metaKey &&
+    !event.getModifierState?.('AltGraph');
+  if (plain && key.length === 1) layoutChars.set(event.code, key.toLowerCase());
+  // Ctrl/Shift only change a letter's case; macOS Option composes another character.
+  const letter = /^[a-z]$/i.test(key) && !(event.altKey && currentPlatform() === 'macos');
+  // Shift changes punctuation (`,` → `?`): use the unshifted character once the key has been seen
+  // without modifiers, the physical position until then.
+  const char = letter
+    ? key.toLowerCase()
+    : (layoutChars.get(event.code) ?? (!event.shiftKey && !event.altKey ? key : ''));
+  const code = keyNameToCode(char);
+  return code && !code.startsWith('Digit') ? code : event.code;
 }
 
 export function matchChord(chord: Chord, event: KeyboardEvent): boolean {

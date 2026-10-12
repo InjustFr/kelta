@@ -71,7 +71,7 @@
       <SettingsRow label={t("Kelta's ticket tools in Claude Code")} actions data-testid="claude-mcp">
         {#snippet control()}
           {#if installed !== null}
-            <Button size="sm" icon={installed ? 'trash-2' : 'plug'} loading={busy} onclick={toggle}>
+            <Button size="sm" icon={installed ? 'trash' : 'plug'} loading={busy} onclick={toggle}>
               {installed ? t('Remove') : t('Install')}
             </Button>
           {/if}
@@ -90,7 +90,7 @@
     {#if hooks !== undefined && hooks !== null}
       <SettingsRow label={t('Claude sessions started outside Kelta')} actions data-testid="claude-hooks">
         {#snippet control()}
-          <Button size="sm" icon={hooks ? 'trash-2' : 'plug'} loading={hooksBusy} onclick={toggleHooks}>
+          <Button size="sm" icon={hooks ? 'trash' : 'plug'} loading={hooksBusy} onclick={toggleHooks}>
             {hooks ? t('Remove') : t('Install')}
           </Button>
         {/snippet}

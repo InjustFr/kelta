@@ -17,14 +17,19 @@ import Tabs from './Tabs.svelte';
 import Toggle from './Toggle.svelte';
 import VirtualList from './VirtualList.svelte';
 import { formatChord, relativeTime } from './format';
-import { ICON_NAMES, injectSprite, spriteSvg } from './icons';
+import { ICON_NAMES, ensureIcon, injectSprite, isIconName, spriteSvg } from './icons';
 import VirtualListHarness from './VirtualListHarness.test.svelte';
 
 describe('icons', () => {
-  it('every icon name has a symbol in the sprite and vice versa', () => {
-    const ids = [...spriteSvg.matchAll(/<symbol id="i-([a-z0-9-]+)"/g)].map((m) => m[1]);
-    expect(ids.sort()).toEqual([...ICON_NAMES].sort());
-    expect(ICON_NAMES.length).toBeGreaterThanOrEqual(60);
+  it('names every Lucide icon and builds the sprite from them', () => {
+    expect(ICON_NAMES.length).toBeGreaterThan(1500);
+    expect(isIconName('container')).toBe(true);
+    expect(isIconName('not-an-icon')).toBe(false);
+    const ids = [...spriteSvg.matchAll(/<symbol id="i-([a-z0-9-]+)" viewBox="0 0 24 24"><path /g)].map(
+      (m) => m[1],
+    );
+    expect(ids).toContain('x');
+    expect(ids.every((id) => isIconName(id))).toBe(true);
   });
 
   it('injects the sprite once', () => {
@@ -32,6 +37,16 @@ describe('icons', () => {
     injectSprite();
     expect(document.querySelectorAll('#kelta-sprite')).toHaveLength(1);
     expect(document.querySelector('#i-x')).not.toBeNull();
+  });
+
+  it('loads an icon outside the sprite on first use', async () => {
+    injectSprite();
+    expect(ensureIcon('x')).toBeUndefined();
+    expect(ensureIcon('not-an-icon')).toBeUndefined();
+    expect(document.querySelector('#i-a-arrow-down')).toBeNull();
+    await Promise.all([ensureIcon('a-arrow-down'), ensureIcon('a-arrow-down')]);
+    expect(document.querySelectorAll('#kelta-sprite svg > #i-a-arrow-down path').length).toBeGreaterThan(0);
+    expect(ensureIcon('a-arrow-down')).toBeUndefined();
   });
 });
 
@@ -323,6 +338,37 @@ describe('components', () => {
     expect(y).toBeGreaterThanOrEqual(viewport.scrollTop);
     expect(y).toBeLessThan(viewport.scrollTop + 300);
     vi.unstubAllGlobals();
+  });
+
+  it('VirtualList pins the header of the group in view, pushed up by the next one', async () => {
+    const items = Array.from({ length: 100 }, (_, i) => (i % 10 === 0 ? `head ${i}` : `row ${i}`));
+    const { container } = render(VirtualListHarness, {
+      props: { items, sticky: (s) => s.startsWith('head') },
+    });
+    const list = container.querySelector<HTMLElement>('.k-vlist')!;
+    const pin = () => container.querySelector<HTMLElement>('.pin');
+    const scroll = async (top: number) => {
+      Object.defineProperty(list, 'scrollTop', { value: top, configurable: true });
+      await fireEvent.scroll(list);
+    };
+    expect(pin()).toBeNull(); // the first header is in the list itself
+    await scroll(28 * 12);
+    expect(pin()?.textContent).toBe('head 10');
+    expect(pin()?.style.translate).toBe('0 0px');
+    await scroll(28 * 19 + 10); // head 20 is 18px below the top: head 10 slides up 10px
+    expect(pin()?.textContent).toBe('head 10');
+    expect(pin()?.style.translate).toBe('0 -10px');
+  });
+
+  it('VirtualList scrolls a row clear of the pinned header', () => {
+    const items = Array.from({ length: 100 }, (_, i) => (i % 10 === 0 ? `head ${i}` : `row ${i}`));
+    const { container, component } = render(VirtualListHarness, {
+      props: { items, sticky: (s) => s.startsWith('head') },
+    });
+    const vp = container.querySelector<HTMLElement>('.k-vlist')!;
+    vp.scrollTop = 28 * 15;
+    component.scrollToIndex(12);
+    expect(vp.scrollTop).toBe(28 * 11);
   });
 });
 

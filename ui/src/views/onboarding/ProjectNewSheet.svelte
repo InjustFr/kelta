@@ -162,7 +162,7 @@
               {#if repo.code_host}<Badge tone="info">{repo.code_host.repo}</Badge>{/if}
               <span class="spacer"></span>
               <IconButton
-                icon="trash-2"
+                icon="trash"
                 label={t('Remove repository')}
                 onclick={() => draft && (draft.repos = removeRepo(draft.repos, i))}
               />

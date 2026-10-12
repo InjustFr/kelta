@@ -833,14 +833,17 @@ describe('TicketsPane list: PRs, status chip, selection, row actions', () => {
     expect(container.querySelectorAll('.picked').length).toBe(0);
   });
 
-  it('shows compact row actions; a missing PR disables its action with the reason', async () => {
+  it('row actions are two labelled buttons; the other actions are keys named in the tooltip', async () => {
     const { container } = mountBoard('list');
     await ready(container, 'SHOP-151');
     const acts = row(container, 'SHOP-151').querySelector<HTMLElement>('[data-acts]')!;
-    const pr = acts.querySelector('[aria-label="No pull request linked"]');
-    expect(pr?.getAttribute('aria-disabled')).toBe('true');
-    await fireEvent.click(pr!);
-    expect(screen.queryByRole('menu')).toBeNull();
+    expect([...acts.querySelectorAll('[role="button"]')].map((b) => b.textContent)).toEqual([
+      'Start work',
+      'Move',
+    ]);
+    expect(row(container, 'SHOP-151').title).toContain(
+      'Keys: s start work, m move, p open pull request, t tags',
+    );
     await fireEvent.click(acts.querySelector('[aria-label="Move (m)"]')!);
     expect(await screen.findByRole('menu', { name: 'Move SHOP-151' })).toBeTruthy();
     await fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });

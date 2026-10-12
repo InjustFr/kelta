@@ -17,6 +17,8 @@
     /** Called when the user scrolls within `threshold` rows of the end (load more). */
     onend?: () => void;
     endThreshold?: number;
+    /** Group headers: the one of the group in view stays pinned at the top while scrolling. */
+    sticky?: (item: T) => boolean;
   }
 
   let {
@@ -29,6 +31,7 @@
     label,
     onend,
     endThreshold = 10,
+    sticky,
   }: Props = $props();
 
   let viewport = $state<HTMLDivElement>();
@@ -66,7 +69,21 @@
       (tops ? at(scrollTop + (height || itemHeight * 20)) + 1 : at(scrollTop) + visibleCount) + overscan,
     ),
   );
-  const slice = $derived(items.slice(start, end).map((item, i) => ({ item, index: start + i })));
+  const heads = $derived(sticky ? items.flatMap((item, i) => (sticky(item) ? [i] : [])) : []);
+  // The last header scrolled above the top, pushed up by the next one as it arrives. It is the row
+  // itself, sticky instead of placed, so the list never holds a header twice and keeps its order.
+  const pinned = $derived.by(() => {
+    const h = heads.findLastIndex((i) => top(i) < scrollTop);
+    if (h < 0) return null;
+    const index = heads[h]!;
+    const next = heads[h + 1];
+    const shift = next === undefined ? 0 : Math.min(0, top(next) - (top(index + 1) - top(index)) - scrollTop);
+    return { item: items[index]!, index, shift };
+  });
+  const slice = $derived([
+    ...(pinned && pinned.index < start ? [pinned] : []),
+    ...items.slice(start, end).map((item, i) => ({ item, index: start + i })),
+  ]);
 
   let observer: ResizeObserver | undefined;
   const observed = new WeakMap<Element, string>();
@@ -80,7 +97,7 @@
         if (measure && id !== undefined && h > 0 && sizes[id] !== h) sizes[id] = h;
       }
       // Measuring shifts every later offset: land the followed row again until the user takes over.
-      if (pinned !== undefined) scrollTo(pinned);
+      if (followed !== undefined) scrollTo(followed);
     });
     observed.set(el, k);
     observer.observe(el);
@@ -104,14 +121,15 @@
   }
 
   /** Row the last `scrollToIndex` targeted; re-applied after each measurement, cleared by user input. */
-  let pinned: number | undefined;
-  const unpin = () => (pinned = undefined);
+  let followed: number | undefined;
+  const unpin = () => (followed = undefined);
 
   function scrollTo(index: number): void {
     // Untracked: reading `tops` must not re-run the callers' effects on every row measurement.
     untrack(() => {
       if (!viewport) return;
-      const y = top(index);
+      // Keep a row clear of the pinned header above it.
+      const y = top(index) - (heads.length > 0 && !heads.includes(index) ? itemHeight : 0);
       const bottom = top(index + 1);
       if (y < viewport.scrollTop) viewport.scrollTop = y;
       else if (bottom > viewport.scrollTop + viewport.clientHeight)
@@ -122,7 +140,7 @@
 
   /** Scrolls the minimum amount so that row `index` is fully visible, and keeps it so while rows measure. */
   export function scrollToIndex(index: number): void {
-    pinned = index;
+    followed = index;
     scrollTo(index);
   }
 </script>
@@ -140,17 +158,32 @@
 >
   <div class="spacer" style:height="{top(items.length)}px">
     {#each slice as { item, index } (key(item, index))}
-      <div
-        class="row"
-        class:measured={measure}
-        role="listitem"
-        style:top="{top(index)}px"
-        style:height={measure ? undefined : `${itemHeight}px`}
-        style:min-height={measure ? `${itemHeight}px` : undefined}
-        use:sized={String(key(item, index))}
-      >
-        {@render row(item, index)}
-      </div>
+      {#if index === pinned?.index}
+        <!-- In flow at the top of the spacer (the rows are absolute), so sticky pins it. -->
+        <div
+          class="pin"
+          class:measured={measure}
+          role="listitem"
+          style:height={measure ? undefined : `${itemHeight}px`}
+          style:min-height={measure ? `${itemHeight}px` : undefined}
+          style:translate="0 {pinned.shift}px"
+          use:sized={String(key(item, index))}
+        >
+          {@render row(item, index)}
+        </div>
+      {:else}
+        <div
+          class="row"
+          class:measured={measure}
+          role="listitem"
+          style:top="{top(index)}px"
+          style:height={measure ? undefined : `${itemHeight}px`}
+          style:min-height={measure ? `${itemHeight}px` : undefined}
+          use:sized={String(key(item, index))}
+        >
+          {@render row(item, index)}
+        </div>
+      {/if}
     {/each}
   </div>
 </div>
@@ -166,6 +199,12 @@
   .spacer {
     position: relative;
     width: 100%;
+  }
+
+  .pin {
+    position: sticky;
+    top: 0;
+    z-index: 1;
   }
 
   .row {

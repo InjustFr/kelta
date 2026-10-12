@@ -63,11 +63,14 @@
   --k-bg: var(--k-well);
   --k-bg-elev: var(--k-bezel-raised);
   --k-bg-sunken: var(--k-bezel);
+  --k-rail: var(--k-bezel); /* dark themes take a step below the well, so the content reads lit */
   --k-bg-float: #ffffff;
   --k-bg-hover: rgba(22, 27, 33, 0.06);
   --k-bg-active: rgba(22, 27, 33, 0.1);
   --k-bg-selected: #dde9f1; /* hex fallback, overridden below */
+  --k-bg-selected-row: #dde9f1;
   --k-fg: #161b21; /* 13.7 on bezel */
+  --k-fg-strong: var(--k-fg); /* list and detail titles: a step past --k-fg, mixed below */
   --k-fg-muted: #46505b; /* 6.5 on bezel, 5.3 on lit */
   --k-fg-subtle: #535d68; /* 5.3 on bezel; never on lit */
   --k-fg-chrome: #434d57; /* 6.8 on bezel: chrome now carries labels */
@@ -91,6 +94,8 @@
   --k-lamp-activity: #626b76;
   --k-lit-mix: 14%; /* call light: needs-input share of the surface */
   --k-lit: #ddcccf; /* call light fallback; color-mix version below */
+  --k-fg-subtle-sel: var(--k-fg-muted); /* subtle text on a selected row; color-mix version below */
+  --k-fg-muted-sel: var(--k-fg); /* muted text on a selected row; color-mix version below */
 
   /* terminal (mirror of lib/terminal/theme.ts LIGHT, which is the source of truth) */
   --k-term-bg: #fafbfb;
@@ -109,8 +114,14 @@
 @supports (color: color-mix(in oklab, red, blue)) {
   :root {
     --k-bg-selected: color-mix(in oklab, var(--k-accent) 14%, var(--k-well));
+    --k-bg-selected-row: color-mix(in oklab, var(--k-accent) 14%, var(--k-well));
     /* one declaration serves both themes: the vars resolve per theme on :root */
     --k-lit: color-mix(in oklab, var(--k-lamp-needs-input) var(--k-lit-mix), var(--k-bezel));
+    /* 60% toward fg: 4.5:1 on the selected mix at any project hue in every built-in theme (#381) */
+    --k-fg-subtle-sel: color-mix(in oklab, var(--k-fg) 60%, var(--k-fg-subtle));
+    --k-fg-muted-sel: color-mix(in oklab, var(--k-fg) 60%, var(--k-fg-muted));
+    /* mixed from the theme's own --k-fg, so every theme gets its brighter step */
+    --k-fg-strong: color-mix(in oklab, var(--k-fg) 60%, #000);
   }
 }
 :root {
@@ -127,6 +138,8 @@
     --k-bg-hover: rgba(225, 230, 236, 0.07);
     --k-bg-active: rgba(225, 230, 236, 0.11);
     --k-bg-selected: #1d2b35;
+    --k-bg-selected-row: #2a3c49;
+    --k-rail: #07080b;
     --k-fg: #e1e6ec; /* 13.3 on bezel, 8.4 on lit */
     --k-fg-muted: #aab4bf; /* 8.0 on bezel, 5.0 on lit */
     --k-fg-subtle: #97a1ad; /* 5.2 on float; never on lit */
@@ -161,7 +174,11 @@
   }
   @supports (color: color-mix(in oklab, red, blue)) {
     :root:not([data-theme='light']) {
+      /* rows take 28%: at least 1.6:1 on the well in every built-in dark theme (#381); other consumers keep 16% */
       --k-bg-selected: color-mix(in oklab, var(--k-accent) 16%, var(--k-well));
+      --k-bg-selected-row: color-mix(in oklab, var(--k-accent) 28%, var(--k-well));
+      --k-rail: color-mix(in oklab, var(--k-well) 70%, #000);
+      --k-fg-strong: color-mix(in oklab, var(--k-fg) 60%, #fff);
     }
   }
 }
@@ -174,6 +191,8 @@
   --k-bg-hover: rgba(225, 230, 236, 0.07);
   --k-bg-active: rgba(225, 230, 236, 0.11);
   --k-bg-selected: #1d2b35;
+  --k-bg-selected-row: #2a3c49;
+  --k-rail: #07080b;
   --k-fg: #e1e6ec; /* 13.3 on bezel, 8.4 on lit */
   --k-fg-muted: #aab4bf; /* 8.0 on bezel, 5.0 on lit */
   --k-fg-subtle: #97a1ad; /* 5.2 on float; never on lit */
@@ -208,6 +227,10 @@
 }
 @supports (color: color-mix(in oklab, red, blue)) {
   :root[data-theme='dark'] {
+    /* rows take 28%: at least 1.6:1 on the well in every built-in dark theme (#381); other consumers keep 16% */
     --k-bg-selected: color-mix(in oklab, var(--k-accent) 16%, var(--k-well));
+    --k-bg-selected-row: color-mix(in oklab, var(--k-accent) 28%, var(--k-well));
+    --k-rail: color-mix(in oklab, var(--k-well) 70%, #000);
+    --k-fg-strong: color-mix(in oklab, var(--k-fg) 60%, #fff);
   }
 }

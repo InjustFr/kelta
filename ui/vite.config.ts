@@ -1,14 +1,30 @@
 /// <reference types="vitest/config" />
+import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 
 const isVitest = process.env.VITEST !== undefined;
+
+/** `virtual:lucide-names`: every Lucide icon name, without the loaders `import.meta.glob` would bring along. */
+function lucideNames(): Plugin {
+  const id = 'virtual:lucide-names';
+  const dir = fileURLToPath(new URL('./node_modules/lucide-static/icons', import.meta.url));
+  return {
+    name: 'kelta-lucide-names',
+    resolveId: (source) => (source === id ? `\0${id}` : undefined),
+    load(resolved) {
+      if (resolved !== `\0${id}`) return undefined;
+      const names = readdirSync(dir).flatMap((f) => (f.endsWith('.svg') ? [f.slice(0, -4)] : []));
+      return `export default ${JSON.stringify(names.join(' '))}.split(' ');`;
+    },
+  };
+}
 
 // Kelta UI (Svelte 5, no SvelteKit). Tauri loads `dist/` (tauri.conf.json frontendDist) and uses
 // http://localhost:5173 as devUrl. `VITE_IPC=mock` swaps the Tauri IPC for the in-memory mock.
 export default defineConfig({
-  plugins: [svelte()],
+  plugins: [svelte(), lucideNames()],
   clearScreen: false,
   resolve: {
     alias: {
