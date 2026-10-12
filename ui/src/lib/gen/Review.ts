@@ -54,6 +54,11 @@ author_since?: string | null,
  */
 nudged_at?: string | null, 
 /**
+ * A PR of someone else listed in Mine because it is assigned to me (authored only): the
+ * author-side fields (`author_to_act`, CI, threads) concern its author, not me.
+ */
+assigned: boolean, 
+/**
  * Unresolved review threads (authored only; GitHub and GitLab).
  */
 unresolved_threads?: number | null, 

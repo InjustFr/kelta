@@ -304,10 +304,44 @@ async fn mine_lists_the_prs_waiting_on_me_first() {
     answered.last_comment_at = Some("2026-10-02T09:00:00Z".into());
     let mut red = at(3, "03");
     red.ci = CiState::Failure;
-    let e = env(tmp.path(), vec![changes, at(4, "09"), answered, red, at(5, "08")]);
+    // Someone else's PR assigned to me: changes requested / red CI wait on its author, not on me.
+    let mut theirs = at(6, "10");
+    theirs.assigned = true;
+    theirs.author_to_act = true;
+    theirs.ci = CiState::Failure;
+    let mut moved = at(7, "00");
+    moved.assigned = true;
+    moved.reviewed_head = Some("older".into());
+    let list = vec![changes, at(4, "09"), answered, red, at(5, "08"), theirs, moved];
+    let e = env(tmp.path(), list);
     let page = e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
     let numbers: Vec<u64> = page.items.iter().map(|i| i.review.r#ref.number).collect();
-    assert_eq!(numbers, [3, 2, 1, 4, 5], "waiting on me first, newest first within");
+    assert_eq!(
+        numbers,
+        [3, 2, 1, 7, 6, 4, 5],
+        "waiting on me first (head moved since my review for assigned)"
+    );
+}
+
+#[tokio::test]
+async fn assigned_prs_raise_no_pr_events_or_notifications() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut theirs = review("acme/shop-api", 91, ReviewKind::Authored);
+    theirs.assigned = true;
+    theirs.ci = CiState::Pending;
+    let e = env(tmp.path(), vec![theirs]);
+    e.h.ui.set_window_state(WindowState { exists: true, visible: true, focused: false });
+    let mut rx = e.h.core.subscribe();
+    e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
+    {
+        let mut l = e.host.reviews.lock();
+        l[0].ci = CiState::Failure;
+        l[0].decision = Some(kelta_proto::codehost::ReviewDecision::ChangesRequested);
+    }
+    let page = e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
+    assert_eq!(page.items.len(), 1, "still listed in Mine");
+    assert!(bus_names(&mut rx).iter().all(|ev| !ev.name.starts_with("pr.")));
+    assert!(e.h.ui.notifications().is_empty());
 }
 
 #[tokio::test]

@@ -763,6 +763,8 @@ impl CodeHost for GithubHost {
         let mut requested: Vec<_> = requested.collect();
         if kind == ReviewKind::Authored {
             self.last_comments(&mut requested, &listed, &me).await;
+            // The authored search only returns my own PRs: the others came from `assigned`.
+            requested.iter_mut().for_each(|r| r.assigned = r.author.login.as_deref() != Some(me.as_str()));
         }
         // A re-requested PR matches both searches.
         let updated: Vec<_> = updated.filter(|u| !requested.iter().any(|r| r.r#ref == u.r#ref)).collect();

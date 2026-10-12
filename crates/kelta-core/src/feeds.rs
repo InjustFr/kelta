@@ -259,9 +259,12 @@ pub fn merge_tickets(
     out
 }
 
-/// A PR of Mine (authored or assigned) waits on me: changes requested on its head, a thread whose
-/// last comment is not mine, or failing CI.
+/// A PR of Mine waits on me. Own PR: changes requested on its head, a thread whose last comment
+/// is not mine, or failing CI. Assigned PR (those concern its author): its head moved since my review.
 fn needs_me(r: &Review) -> bool {
+    if r.assigned {
+        return r.reviewed_head.as_ref().is_some_and(|h| *h != r.head_sha);
+    }
     r.author_to_act || r.last_comment_at.is_some() || matches!(r.ci, CiState::Failure | CiState::Error)
 }
 
@@ -1451,10 +1454,12 @@ impl Core {
         match kind {
             ReviewKind::ReviewRequested => self.diff_requested(account, &list).await?,
             ReviewKind::Authored => {
-                for gone in self.diff_authored(account, &list) {
+                // Assigned PRs are Mine rows only: no events, notifications or work-item joins.
+                let own: Vec<Review> = list.iter().filter(|r| !r.assigned).cloned().collect();
+                for gone in self.diff_authored(account, &own) {
                     self.pr_left_open(&gone).await;
                 }
-                self.join_work_prs(account, &list).await;
+                self.join_work_prs(account, &own).await;
             }
             // Team raises no events: For me and Mine already do for what concerns me.
             ReviewKind::Team => {}
@@ -1848,13 +1853,13 @@ impl Core {
             });
         }
         all.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-        if kind == ReviewKind::Authored {
-            // Mine: the PRs waiting on me first (stable, so newest first within each half).
-            all.sort_by_key(|r| !needs_me(r));
-        }
         if kind != ReviewKind::Team {
             let stamps = self.reviewed_stamps().await;
             all.iter_mut().for_each(|r| fill_reviewed_head(r, &stamps));
+        }
+        if kind == ReviewKind::Authored {
+            // Mine: the PRs waiting on me first (stable, so newest first within each half).
+            all.sort_by_key(|r| !needs_me(r));
         }
         if kind == ReviewKind::Authored {
             let nudges = self.store.call(|c| q::nudges(c)).await.unwrap_or_default();

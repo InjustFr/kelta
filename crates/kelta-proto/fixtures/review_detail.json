@@ -17,6 +17,7 @@
   "pending_comments": 0,
   "review": {
     "additions": 120,
+    "assigned": false,
     "author": {
       "avatar_url": null,
       "email": null,

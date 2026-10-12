@@ -224,10 +224,14 @@ impl CodeHost for GiteaHost {
             (repo, n, r)
         }))
         .await;
+        let me = if q.kind == ReviewKind::Authored { self.me().await?.login } else { None };
         let mut out = Vec::new();
         for (repo, n, r) in pulls {
             match r {
-                Ok(r) if q.include_drafts || !r.draft => out.push(r),
+                Ok(mut r) if q.include_drafts || !r.draft => {
+                    r.assigned = me.is_some() && r.author.login != me;
+                    out.push(r);
+                }
                 Ok(_) => {}
                 Err(e) if matches!(e.code, ErrorCode::NeedsAuth | ErrorCode::RateLimited) => return Err(e),
                 Err(e) => tracing::debug!(%repo, n, code = %e.code, "gitea pull request skipped"),

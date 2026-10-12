@@ -576,6 +576,7 @@ impl CodeHost for GitlabHost {
             futures::future::join_all(list.iter_mut().map(|(r, n)| async {
                 self.waiting_state(r).await;
                 self.thread_state(r, *n, me.as_deref()).await;
+                r.assigned = me.is_some() && r.author.login != me;
             }))
             .await;
             self.threads.lock().retain(|(repo, n), _| {

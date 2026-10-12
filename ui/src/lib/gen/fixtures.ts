@@ -848,6 +848,7 @@ export const reviewPage: ReviewPage = {
       ],
       "review": {
         "additions": 120,
+        "assigned": false,
         "author": {
           "avatar_url": null,
           "email": null,
@@ -915,6 +916,7 @@ export const reviewDetail: ReviewDetail = {
   "pending_comments": 0,
   "review": {
     "additions": 120,
+    "assigned": false,
     "author": {
       "avatar_url": null,
       "email": null,
