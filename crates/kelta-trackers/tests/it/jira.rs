@@ -899,7 +899,7 @@ async fn the_flagged_field_marks_blocked_and_block_sets_the_flag_or_a_label() {
 }
 
 #[tokio::test]
-async fn chosen_fields_are_fetched_and_shown_and_an_unknown_id_is_left_out() {
+async fn chosen_fields_are_fetched_and_shown_and_unknown_or_built_in_ids_are_left_out() {
     let server = MockServer::start().await;
     mount_get(
         &server,
@@ -908,8 +908,10 @@ async fn chosen_fields_are_fetched_and_shown_and_an_unknown_id_is_left_out() {
     )
     .await;
     mount_get(&server, "/rest/api/3/priority", json!([])).await;
-    let set =
-        issue(json!({"customfield_10050": {"id": "1", "value": "Yes"}, "customfield_10051": ["eu", "us"]}));
+    let set = issue(json!({
+        "customfield_10050": {"id": "1", "value": "Yes"}, "customfield_10051": ["eu", "us"],
+        "assignee": {"accountId": "a1", "displayName": "Ada"},
+    }));
     Mock::given(method("POST"))
         .and(path("/rest/api/3/search/jql"))
         .respond_with(
@@ -924,6 +926,7 @@ async fn chosen_fields_are_fetched_and_shown_and_an_unknown_id_is_left_out() {
             chosen("customfield_10050", "Verified"),
             chosen("customfield_10051", ""),
             chosen("nope", "X"),
+            chosen("assignee", "Assignee"), // built in: shown already, not twice (#373)
         ],
         ..jql_view()
     };

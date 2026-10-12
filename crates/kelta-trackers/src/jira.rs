@@ -89,10 +89,13 @@ fn field_text(v: &Value) -> Option<String> {
     Some(t).filter(|t| !t.trim().is_empty())
 }
 
-/// The chosen fields of an issue's `fields` that have a value, in the source's order.
-fn chosen_fields(f: &Value, chosen: &[SourceField]) -> Vec<TicketField> {
+/// The chosen fields of an issue's `fields` that have a value, in the source's order. Fields Kelta
+/// already reads into the ticket (assignee, status, sprint, ...) are left out: they show already (#373).
+fn chosen_fields(f: &Value, chosen: &[SourceField], lk: &Lookups) -> Vec<TicketField> {
+    let built_in = lk.fields();
     chosen
         .iter()
+        .filter(|c| !built_in.contains(&c.id.as_str()))
         .filter_map(|c| Some(TicketField { label: c.label.clone(), value: field_text(f.get(&c.id)?)? }))
         .collect()
 }
@@ -1045,7 +1048,7 @@ impl JiraTracker {
     ) -> Result<Vec<Ticket>, KeltaError> {
         let ticket = |i: &Value| {
             let mut t = self.ticket_from(self.account(), i, lk).ok()?;
-            t.fields = chosen_fields(i.get("fields").unwrap_or(&Value::Null), chosen);
+            t.fields = chosen_fields(i.get("fields").unwrap_or(&Value::Null), chosen, lk);
             Some(t)
         };
         Ok(v.get("issues")

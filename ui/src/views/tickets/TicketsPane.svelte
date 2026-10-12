@@ -44,11 +44,12 @@
   import { runPrimary } from '../work/actions';
   import AskBar from '../work/AskBar.svelte';
   import { askerOf, phaseNow } from '../work/live';
-  import { outsidePhase } from '../work/phase';
+  import { outsidePhase, questionOf } from '../work/phase';
   import CommentDialog from './CommentDialog.svelte';
   import MoveDialogs from './MoveDialogs.svelte';
   import StatusPicker from './StatusPicker.svelte';
   import TicketDetail from './TicketDetail.svelte';
+  import { assigneeChips, statusChips } from './chips';
   import { GROUP_BYS, flowOf, groupTickets, sortTickets, type GroupBy, type TicketGroup } from './group';
   import { MoveController } from './move.svelte';
   import { ensureReviews, openPr, openPrs, prMenuItems } from './prs';
@@ -57,6 +58,7 @@
   import { pickWorkflow } from './workflow.svelte';
   import TagChips from '../tags/TagChips.svelte';
   import TagMenu from '../tags/TagMenu.svelte';
+  import CountChips from '../filters/CountChips.svelte';
   import FilterBar from '../filters/FilterBar.svelte';
   import { clearAll, commonFilters, noMatch, type ActiveFilter } from '../filters/filters';
 
@@ -182,6 +184,8 @@
   let filter = $state('');
   /** The toolbar's tag chip (#349). shortcut: per mount, not persisted. */
   let tagFilter = $state<string | null>(null);
+  /** The filter bar's status chip (#376), by name. shortcut: per mount like the tag chip, not persisted. */
+  let statusFilter = $state<string | null>(null);
   const shown = $derived.by(() => {
     const needle = filter.trim().toLowerCase();
     const tag = tags.live(tagFilter);
@@ -190,6 +194,7 @@
       if (person && !isPerson(t)) return false;
       if (currentSprint && !t.sprint?.active) return false;
       if (tag && !tags.has('tickets', keyOf(i), tag)) return false;
+      if (statusFilter && t.status.name.toLowerCase() !== statusFilter.toLowerCase()) return false;
       return (
         needle === '' ||
         `${t.ref.key} ${t.title} ${t.status.name} ${t.kind ?? ''} ${t.labels.join(' ')} ${t.assignee?.name ?? ''}`
@@ -237,6 +242,15 @@
       : []),
     ...(currentSprint
       ? [{ id: 'sprint', label: t('Current sprint'), clear: () => (currentSprint = false) }]
+      : []),
+    ...(statusFilter
+      ? [
+          {
+            id: 'status',
+            label: t('Status: {name}', { name: statusFilter }),
+            clear: () => (statusFilter = null),
+          },
+        ]
       : []),
   ]);
 
@@ -286,8 +300,8 @@
   type Row =
     | { kind: 'group'; key: string; group: TicketGroup; open: boolean }
     | { kind: 'ticket'; key: string; item: TicketItem }
-    /** A workflow's question (#356) under its ticket: the option buttons. */
-    | { kind: 'ask'; key: string; session: SessionInfo };
+    /** A workflow's question (#356) under its ticket: the question line, then the option buttons. */
+    | { kind: 'ask'; key: string; session: SessionInfo; line: 'question' | 'options' };
 
   const keyOf = (i: TicketItem): string => ticketKey(i.ticket.ref);
   /** Groups the user opened or closed (`groupBy:id`); Done groups start closed. */
@@ -315,7 +329,12 @@
     const w = liveWork(item);
     const asker = w ? askerOf(w) : null;
     const row: Row = { kind: 'ticket', key: keyOf(item), item };
-    return asker ? [row, { kind: 'ask', key: `ask:${row.key}`, session: asker }] : [row];
+    if (!asker) return [row];
+    return [
+      row,
+      { kind: 'ask', key: `ask-q:${row.key}`, session: asker, line: 'question' },
+      { kind: 'ask', key: `ask:${row.key}`, session: asker, line: 'options' },
+    ];
   };
   const rows = $derived.by<Row[]>(() => {
     if (groupBy === 'none') return sorted.flatMap(ticketRows);
@@ -350,6 +369,11 @@
     const w = liveWork(item);
     return w ? phaseNow(w) : null;
   };
+  /** The work item's next step, as Enter runs it on a list row (`runPrimary`); null without work. */
+  const nextLabel = (item: TicketItem): string | null => {
+    const ph = phaseFor(item);
+    return ph ? (ph.primary ? ph.primaryLabel : t('Go to work tab')) : null;
+  };
   /** Shown: the work item's phase, else a Claude session Kelta did not start on the ticket (#345). */
   const shownPhase = (item: TicketItem) => {
     const key = ticketKey(item.ticket.ref);
@@ -368,10 +392,9 @@
       : (shown.find((i) => keyOf(i) === selKey) ?? null),
   );
   /** What Enter will do on the selected row, named before it is pressed (mirrors the Enter key below). */
-  const enterLabel = $derived.by(() => {
-    const ph = cur && mode === 'list' && !splitShown ? phaseFor(cur) : null;
-    return ph ? (ph.primary ? ph.primaryLabel : t('Go to work tab')) : t('Open');
-  });
+  const enterLabel = $derived.by(
+    () => (cur && mode === 'list' && !splitShown && nextLabel(cur)) || t('Open'),
+  );
 
   /** The selected row's last index: a row that leaves the list (moved to Done) hands over to its neighbour. */
   let lastIndex: number | null = null;
@@ -884,6 +907,7 @@
     {mode}
     onmode={setMode}
     onrefresh={refresh}
+    fetchedAt={list.fetchedAt}
     tagKeys={items.map(keyOf)}
     tag={tagFilter}
     ontag={(name) => (tagFilter = name)}
@@ -895,7 +919,26 @@
     placeholder={t('Filter key, title, status, type, labels, assignee (/)')}
     aria-label={t('Filter tickets')}
     onkeydown={filterKeys}
-  />
+  >
+    <CountChips
+      label={t('Filter by status')}
+      chips={statusChips(items, statusFilter)}
+      value={statusFilter}
+      onchange={(s) => (statusFilter = s)}
+    />
+    {#if whoTab === 'anyone'}
+      <CountChips
+        label={t('Filter by assignee')}
+        chips={assigneeChips(
+          items,
+          people,
+          person ? { id: personEntry?.key ?? person, name: personEntry?.name ?? person } : null,
+        )}
+        value={personEntry?.key ?? person}
+        onchange={setPerson}
+      />
+    {/if}
+  </FilterBar>
 
   {#if noSource}
     <EmptyState icon="ticket" title={t('Add a ticket source: pick a board')}>
@@ -988,7 +1031,12 @@
                     >{/if}
                 </button>
               {:else if r.kind === 'ask'}
-                <div class="ask-line"><AskBar session={r.session} /></div>
+                {#if r.line === 'question'}
+                  {@const q = questionOf(r.session)?.question ?? ''}
+                  <div class="ask-line ask-q" title={q}>{q}</div>
+                {:else}
+                  <div class="ask-line"><AskBar session={r.session} /></div>
+                {/if}
               {:else}
                 <TicketRow
                   item={r.item}
@@ -997,6 +1045,7 @@
                   picked={picked.includes(r.key)}
                   picking={picked.length > 0}
                   phase={shownPhase(r.item)}
+                  next={nextLabel(r.item)}
                   hasWork={hasWork(r.item)}
                   marked={batch.has(r.item.ticket.ref)}
                   {groupBy}
@@ -1007,6 +1056,11 @@
                     if (e.metaKey || e.ctrlKey) togglePick(r.key);
                   }}
                   onopen={() => openDetail(r.item)}
+                  onnext={() => {
+                    selKey = r.key;
+                    const w = liveWork(r.item);
+                    if (w) void runPrimary(w);
+                  }}
                   onmove={() => {
                     selKey = r.key;
                     pickOrMove(r.item);
@@ -1243,6 +1297,15 @@
     align-items: center;
     height: 100%;
     padding: 0 var(--k-space-3) 0 calc(var(--key-chars, 8) * 0.6 * var(--k-font-size-sm) + 40px);
+  }
+
+  .ask-q {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    line-height: var(--k-row-height);
   }
 
   .head.wip {

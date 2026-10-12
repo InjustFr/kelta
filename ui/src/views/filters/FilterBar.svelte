@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import type { HTMLInputAttributes } from 'svelte/elements';
 
   import { t } from '$lib/i18n/index.svelte';
@@ -7,18 +8,21 @@
   import { clearAll, type ActiveFilter } from './filters';
 
   // The filter bar Now, Reviews and Tickets share (#370): the `/` text filter, whose placeholder names
-  // the fields it matches, then every filter on as a removable chip, with Clear all.
+  // the fields it matches, the view's own filter chips (`children`), then every filter on as a removable
+  // chip, with Clear all.
   interface Props extends HTMLInputAttributes {
     value: string;
     input?: HTMLInputElement;
     active: readonly ActiveFilter[];
+    children?: Snippet;
   }
 
-  let { value = $bindable(), input = $bindable(), active, ...rest }: Props = $props();
+  let { value = $bindable(), input = $bindable(), active, children, ...rest }: Props = $props();
 </script>
 
 <div class="bar" data-testid="filter-bar">
   <input class="k-filter" bind:this={input} bind:value {...rest} />
+  {#if children}<span class="own">{@render children()}</span>{/if}
   {#if active.length > 0}
     <span class="chips" role="group" aria-label={t('Active filters')}>
       {#each active as f (f.id)}
@@ -49,6 +53,21 @@
 
   .bar .k-filter {
     flex: 0 1 360px;
+  }
+
+  /* The view's chips keep to one line and scroll: a dozen statuses must not push the list down. */
+  .own {
+    display: flex;
+    flex: 1 1 0;
+    gap: var(--k-space-2);
+    min-width: 160px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .own :global(.chips) {
+    flex: none;
+    flex-wrap: nowrap;
   }
 
   .chips {

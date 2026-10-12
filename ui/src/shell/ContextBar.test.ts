@@ -197,3 +197,32 @@ describe('context bar as the title bar (custom decorations)', () => {
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 });
+
+describe('context bar: Claude sessions waiting on me (#372)', () => {
+  const ZSH = '0199a6b2-0000-7000-8000-000000000003';
+  const chip = () => screen.queryByTestId('context-asking');
+
+  it('one jumps straight to it; several open a menu of them; hidden at 0', async () => {
+    render(ContextBar);
+    // The mock's work item Claude replied on, in Billing.
+    await waitFor(() => expect(chip()?.textContent?.trim()).toBe('1 needs you'));
+    await fireEvent.click(chip()!);
+    await waitFor(() => expect(crumb()).toMatch(/^Billing › /));
+    expect(screen.queryByRole('menu')).toBeNull();
+
+    sessions.byId = { ...sessions.byId, [ZSH]: { ...sessions.byId[ZSH]!, status: 'needs_input' } };
+    await waitFor(() => expect(chip()?.textContent?.trim()).toBe('2 need you'));
+    await fireEvent.click(chip()!);
+    const items = await screen.findAllByRole('menuitem');
+    expect(items.map((x) => x.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+      'zsh',
+      'wip/retry-queue-spike Claude replied',
+    ]);
+
+    work.byId = {};
+    sessions.byId = Object.fromEntries(
+      sessions.all.map((x) => [x.id, { ...x, status: x.status === 'needs_input' ? 'running' : x.status }]),
+    );
+    await waitFor(() => expect(chip()).toBeNull());
+  });
+});

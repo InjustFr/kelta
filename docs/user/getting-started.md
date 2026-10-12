@@ -56,6 +56,7 @@ Tools, and Settings.
 - **Collapse.** `Cmd+B` (`Ctrl+Shift+S` on Linux), the button at the bottom of the rail, or `Enter` on the edge
   folds the rail into an icon column. It starts folded when the window is narrower than 1100 px. The width and
   the state are remembered. In a narrow rail the shortcut hints hide before a label is cut.
+- **Workflows** lists the Claude workflow runs with their phase ([details](claude-code.md#workflows)).
 - **Elsewhere** lists Claude sessions started outside Kelta, once the relay is installed
   ([details](claude-code.md#sessions-started-outside-kelta)).
 

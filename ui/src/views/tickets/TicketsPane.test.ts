@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -541,10 +541,10 @@ describe('TicketsPane workbench', () => {
     const { container } = mountBoard('list');
     await waitFor(() => {
       const chip = card(container, 'SHOP-120')?.querySelector('[data-pr]');
-      expect(chip?.textContent?.trim()).toBe('#305');
-      // CI passed but changes requested: one lamp, the review wins; the label names both
-      const lamp = chip?.querySelector('[data-attention="needs_input"]');
-      expect(lamp?.getAttribute('aria-label')).toBe('CI passed, changes requested');
+      expect(chip?.textContent?.trim()).toBe('#305Changes requested');
+      // CI and review apart (#373): the lamp is CI's, the review is in words
+      const lamp = chip?.querySelector('[data-attention="done"]');
+      expect(lamp?.getAttribute('aria-label')).toBe('CI passed');
     });
     expect(card(container, 'SHOP-151')?.querySelector('[data-pr]')).toBeNull();
   });
@@ -680,6 +680,32 @@ describe('TicketsPane list: group, sort, age, sprint, person', () => {
     expect(savedContent()).toMatchObject({ person: 'jira-acme:u-bob', who: 'anyone' });
     await press('1'); // a who tab clears the person
     expect(savedContent()).toMatchObject({ person: null, who: 'mine' });
+  });
+
+  it('status chips narrow to one status; on Team, assignee chips pick the person (#376)', async () => {
+    inLayout();
+    const { container } = mountBoard('list');
+    await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
+    const name = mock.state.tickets.find((i) => i.ticket.ref.key === 'SHOP-142')!.ticket.status.name;
+    const chip = within(screen.getByRole('group', { name: 'Filter by status' })).getByRole('button', {
+      name: new RegExp(`^${name}`),
+    });
+    await fireEvent.click(chip);
+    await waitFor(() => expect(row(container, 'SHOP-151')).toBeNull());
+    expect(row(container, 'SHOP-142')).not.toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: `Remove filter Status: ${name}` }));
+    await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
+    expect(chip.getAttribute('aria-pressed')).toBe('false');
+
+    expect(screen.queryByRole('group', { name: 'Filter by assignee' })).toBeNull();
+    await press('3');
+    const bob = await waitFor(() =>
+      within(screen.getByRole('group', { name: 'Filter by assignee' })).getByRole('button', { name: /Bob/ }),
+    );
+    await fireEvent.click(bob);
+    await waitFor(() => expect(row(container, 'SHOP-151')).toBeNull());
+    expect(row(container, 'SHOP-120')).not.toBeNull();
+    expect(savedContent()).toMatchObject({ person: 'jira-acme:u-bob', who: 'anyone' });
   });
 
   it('a person id saved before team people still filters', async () => {
@@ -895,7 +921,15 @@ describe('TicketsPane split view', () => {
     const { container } = mountBoard('list');
     await ready(container, 'SHOP-142');
     expect(row(container, 'SHOP-142').querySelector('[data-phase]')?.textContent).toBe('To review');
+    expect(row(container, 'SHOP-142').querySelector('[data-phase-word]')?.textContent).toBe('Your turn');
     expect(row(container, 'SHOP-151').querySelector('[data-phase]')).toBeNull();
+    // The next step as a labelled row button (#373); none without work
+    expect(row(container, 'SHOP-151').querySelector('[data-next]')).toBeNull();
+    vi.mocked(runPrimary).mockClear();
+    await fireEvent.click(
+      row(container, 'SHOP-142').querySelector('[data-acts] [aria-label="Review changes"]')!,
+    );
+    expect(vi.mocked(runPrimary)).toHaveBeenCalledWith(expect.objectContaining({ id: w.id }));
     await press('Enter'); // detail shown: Enter focuses it
     await waitFor(() => expect(document.activeElement).toBe(detail()));
     await fireEvent.keyDown(detail()!, { key: 'Escape' });

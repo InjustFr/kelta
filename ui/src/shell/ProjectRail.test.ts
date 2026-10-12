@@ -12,6 +12,8 @@ import ProjectRail from './ProjectRail.svelte';
 
 const SHOP_SHELL = '0199a6b2-0000-7000-8000-000000000003';
 const LAZYDOCKER = '0199a6b2-0000-7000-8000-000000000004';
+const SHOP_CLAUDE = '0199a6b2-0000-7000-8000-000000000001';
+const BILLING_CLAUDE = '0199a6b2-0000-7000-8000-000000000005';
 
 let m: MockControls;
 
@@ -134,5 +136,54 @@ describe('ProjectRail', () => {
     expect(l.tabs.find((t) => t.id === 'shop-t2')!.focused_pane).toBe(
       r.getByTestId('rail-tool-instance').dataset.paneId,
     );
+  });
+
+  it('workflows: each session current run with its phase or Needs input; a click opens its runs', async () => {
+    const r = await setup();
+    expect(r.queryByTestId('rail-workflows')).toBeNull();
+    const base = {
+      name: 'kelta-ticket-pass',
+      status: 'running',
+      phases: [{ title: 'Implement', agents: [{ id: 'a', label: 'impl', done: false }] }],
+      duration_ms: null,
+      total_tokens: null,
+      total_tool_calls: null,
+      result: null,
+      logs: [],
+    };
+    sessions.apply({ type: 'workflow.updated', run: { ...base, run_id: 'wf_a', session_id: SHOP_CLAUDE } });
+    sessions.apply({
+      type: 'workflow.updated',
+      run: { ...base, run_id: 'wf_b', session_id: BILLING_CLAUDE },
+    });
+    await expect.poll(() => r.queryAllByTestId('rail-workflow').length).toBe(2);
+    const row = (id: string) => r.container.querySelector(`[data-run-id="${id}"]`) as HTMLElement;
+    expect(row('wf_a').textContent).toContain('kelta-ticket-pass · Implement');
+    expect(row('wf_a').dataset.attention).toBe('working');
+    expect(row('wf_b').textContent).toContain('Needs input');
+    expect(row('wf_b').dataset.attention).toBe('needs_input');
+
+    await fireEvent.click(row('wf_a'));
+    expect(ui.sheet).toEqual({ key: 'claude_runs', props: { sessionId: SHOP_CLAUDE } });
+    ui.sheets = [];
+  });
+
+  it('tools: a tool without a sprite icon shows a well-known icon, its 1-2 characters, else a monogram', async () => {
+    const r = await setup();
+    for (const [k, slot] of Object.entries(tools.byProject))
+      tools.byProject = {
+        ...tools.byProject,
+        [k]: {
+          ...slot,
+          data:
+            slot.data?.map((x) =>
+              x.id === 'lazydocker' ? { ...x, icon: null } : x.id === 'lazygit' ? { ...x, icon: 'LG' } : x,
+            ) ?? null,
+        },
+      };
+    const row = (id: string) => r.container.querySelector(`[data-testid="rail-tool"][data-tool-id="${id}"]`)!;
+    await expect.poll(() => row('lazygit').querySelector('.abbr')?.textContent).toBe('LG');
+    expect(row('lazydocker').querySelector('.abbr')).toBeNull();
+    expect(row('lazydocker').querySelector('use')?.getAttribute('href')).toBe('#i-box');
   });
 });

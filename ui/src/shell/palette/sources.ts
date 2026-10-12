@@ -12,7 +12,7 @@ import { paneSession } from '$lib/layout';
 import { trackerAssign } from '$lib/ipc/commands';
 import { plugins, projects, reviews, sessions, settings, tickets, toasts, ui, work } from '$lib/stores';
 import { attentionRank, lampOf, type LampLevel } from '$lib/stores/reducers';
-import { currentPlatform } from '$lib/ui';
+import { currentPlatform, isIconName } from '$lib/ui';
 
 import { reviewCtx, ticketCtx, workCtx } from '../../views/plugins/actions';
 import { configWorkflows, pickWorkflow, runWorkflowOn } from '../../views/tickets/workflow.svelte';
@@ -21,7 +21,7 @@ import { phaseNow, sessionLabel, unfinishedWork, workTitle } from '../../views/w
 import { goToWork } from '../../views/work/nav';
 import { startWorkOnTicket } from '../../views/work/startWork';
 import { workKey } from '../../views/work/phase';
-import { sessionIcon, sessionKindName, statusLabel } from '../labels';
+import { sessionIcon, sessionKindName, statusLabel, toolIcon } from '../labels';
 import { activateProject, focusedPane, openContent, railTools, revealSession } from '../nav';
 
 export type PaletteGroup =
@@ -145,13 +145,14 @@ export function actionItems(): PaletteItem[] {
 
 export function toolItems(): PaletteItem[] {
   return railTools().flatMap((tool) => {
+    const mark = toolIcon(tool);
     const item = {
       id: `tool:${tool.id}`,
       group: 'Tools' as const,
       label: t('Open {name}', { name: tool.label }),
       detail: tool.installed === false ? t('not installed') : (tool.description ?? undefined),
       kbd: tool.keybinding ?? undefined,
-      icon: tool.icon && tool.icon.length > 0 ? tool.icon : 'wrench',
+      icon: isIconName(mark) ? mark : 'wrench',
       run: () => void dispatch('tools.open', { tool_id: tool.id }),
     };
     if (!tool.needs_project) return [item];
