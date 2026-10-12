@@ -134,8 +134,8 @@ export function runState(run: ClaudeRun, session: SessionInfo): { label: string;
 
 // Well-known tools without an `icon`, by id or lower-cased label (#377).
 const TOOL_ICONS: Record<string, string> = {
-  lazydocker: 'box',
-  docker: 'box',
+  lazydocker: 'container',
+  docker: 'container',
   lazygit: 'git-branch',
   gitui: 'git-branch',
   tig: 'git-branch',
@@ -152,7 +152,7 @@ const TOOL_ICONS: Record<string, string> = {
   hx: 'file-code',
 };
 
-/** A tool's mark: its `icon` (sprite name or 1-2 characters), a well-known tool's icon, else its label's first two letters. */
+/** A tool's mark: its `icon` (Lucide name or 1-2 characters), a well-known tool's icon, else its label's first two letters. */
 export function toolIcon(tool: Pick<ToolInfo, 'id' | 'label' | 'icon'>): string {
   const icon = tool.icon?.trim();
   if (icon && (isIconName(icon) || [...icon].length <= 2)) return icon;

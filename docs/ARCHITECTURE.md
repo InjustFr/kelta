@@ -98,6 +98,7 @@ All versions exact (`=x.y.z` in Cargo, no `^`/`~` in package.json). The pins are
 | @xterm/xterm | 6.0.0 | exact |
 | @xterm/addon-fit / -unicode11 / -web-links | 0.11.0 / 0.9.0 / 0.12.0 | eager |
 | @xterm/addon-webgl / -search | 0.19.0 / 0.16.0 | dynamic import |
+| lucide-static | 1.50.0 | icons (ISC): the UI's own names are tree-shaken into the startup sprite, any other Lucide name is a lazy chunk (`ui/src/lib/ui/icons.ts`) |
 | vitest / jsdom / @testing-library/svelte | 5.0.3 / 30.1.2 / 5.4.2 | |
 | @xterm/headless | 6.0.0 | dev only: parser-hook tests (query swallowing) |
 | @playwright/test | 1.64.0 | UI e2e against Vite dev server + IPC mock |
@@ -108,7 +109,7 @@ All versions exact (`=x.y.z` in Cargo, no `^`/`~` in package.json). The pins are
 
 `jsdom 30.1.2` declares `engines.node ^22.22.2`; it runs on Node 22.16+, and `.npmrc` sets `engine-strict=false`. `packageManager` is `pnpm@9.12.1`.
 
-**Not used:** `@xterm/addon-canvas` (dead), `@xterm/addon-serialize` (Rust snapshots), `@xterm/addon-clipboard` (OSC 52 handled by the Rust model), any CSS framework, icon font, web font, markdown lib, state lib, i18n lib. Icons: one inline SVG sprite.
+**Not used:** `@xterm/addon-canvas` (dead), `@xterm/addon-serialize` (Rust snapshots), `@xterm/addon-clipboard` (OSC 52 handled by the Rust model), any CSS framework, icon font, web font, markdown lib, state lib, i18n lib. Icons: one inline SVG sprite built from `lucide-static`.
 
 **Interface language (#344):** `app.language` = `system` (default) | `en` | `fr` | `de`, applied without a restart. The webview translates with `ui/src/lib/i18n/index.svelte.ts`: English text is the key (`t('Close')`, `tn(one, other, n)` for plurals, `msg()` marks English kept as data), `fr.json` / `de.json` are lazy chunks loaded on first use, `system` follows `navigator.language`, and `i18n.test.ts` fails when a key used in the source is missing from a catalog. Text emitted outside the webview (OS notification titles, the native macOS menu) goes through `kelta_proto::i18n::tr`, a small fr/de table; `System` resolves to the OS language the desktop records at startup (macOS `NSLocale.preferredLanguages`, else `LC_ALL` / `LANG`). Toasts and errors built by the core stay English.
 

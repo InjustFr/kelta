@@ -50,7 +50,7 @@
       {#snippet actions()}
         {#if editor.layerValue(entryPath) !== undefined && access.editable}
           <IconButton
-            icon="trash-2"
+            icon="trash"
             size="sm"
             label={t('Remove {name} from this layer', { name: key })}
             onclick={() => editor.reset(entryPath)}
