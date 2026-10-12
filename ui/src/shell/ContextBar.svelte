@@ -18,7 +18,7 @@
   import { workTitle } from '../views/work/live';
   import { workKey } from '../views/work/phase';
   import { backTarget, type JumpLoc } from './jumplist';
-  import { chordFor, runStatusLabel } from './labels';
+  import { chordFor, currentRun, runPhase } from './labels';
   import { lazyComponents } from './lazy.svelte';
   import {
     activateProject,
@@ -117,16 +117,9 @@
 
   // ---- the focused session's Claude workflow run (#272) -----------------------------------------
 
-  const run = $derived.by(() => {
-    const list = session ? sessions.runs[session.id] : undefined;
-    return list?.findLast((r) => r.status === 'running') ?? list?.at(-1) ?? null;
-  });
+  const run = $derived(currentRun(session ? sessions.runs[session.id] : undefined));
   /** `<workflow> · <phase with a running agent>`, or its final status. */
-  const runChip = $derived.by(() => {
-    if (!run) return null;
-    const phase = run.phases.findLast((p) => p.agents.some((a) => !a.done)) ?? run.phases.at(-1);
-    return `${run.name ?? t('workflow')} · ${run.status === 'running' ? (phase?.title ?? t('starting')) : runStatusLabel(run.status)}`;
-  });
+  const runChip = $derived(run ? `${run.name ?? t('workflow')} · ${runPhase(run)}` : null);
   $effect(() => {
     if (session?.kind.type === 'claude') void sessions.loadRuns(session.id);
   });
