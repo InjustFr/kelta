@@ -520,7 +520,7 @@
             {#snippet actions()}
               <Button size="sm" loading={r === 'running'} onclick={() => test(a.id)}>{t('Test')}</Button>
               {#if !globalOnly}<IconButton
-                  icon="trash-2"
+                  icon="trash"
                   size="sm"
                   label={t('Remove {name}', { name: a.id })}
                   onclick={() => remove(a.id)}

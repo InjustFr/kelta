@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { IconName } from './icons';
+  import { ensureIcon, type IconName } from './icons';
 
   interface Props {
     name: IconName | (string & {});
@@ -10,6 +10,10 @@
   }
 
   let { name, size = 16, label, class: className = '' }: Props = $props();
+
+  // A Lucide icon outside the startup sprite loads on first use; `<use>` is rebuilt once its symbol is in.
+  let loaded = $state(0);
+  $effect(() => void ensureIcon(name)?.then(() => loaded++));
 </script>
 
 <svg
@@ -21,7 +25,7 @@
   aria-hidden={label ? undefined : 'true'}
   focusable="false"
 >
-  <use href="#i-{name}" />
+  {#key loaded}<use href="#i-{name}" />{/key}
 </svg>
 
 <style>

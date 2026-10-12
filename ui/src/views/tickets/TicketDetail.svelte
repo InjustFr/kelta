@@ -717,6 +717,7 @@
     font-size: var(--k-font-size-xl);
     font-weight: var(--k-weight-strong);
     line-height: 1.28;
+    color: var(--k-fg-strong);
   }
 
   .line {

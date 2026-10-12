@@ -17,14 +17,19 @@ import Tabs from './Tabs.svelte';
 import Toggle from './Toggle.svelte';
 import VirtualList from './VirtualList.svelte';
 import { formatChord, relativeTime } from './format';
-import { ICON_NAMES, injectSprite, spriteSvg } from './icons';
+import { ICON_NAMES, ensureIcon, injectSprite, isIconName, spriteSvg } from './icons';
 import VirtualListHarness from './VirtualListHarness.test.svelte';
 
 describe('icons', () => {
-  it('every icon name has a symbol in the sprite and vice versa', () => {
-    const ids = [...spriteSvg.matchAll(/<symbol id="i-([a-z0-9-]+)"/g)].map((m) => m[1]);
-    expect(ids.sort()).toEqual([...ICON_NAMES].sort());
-    expect(ICON_NAMES.length).toBeGreaterThanOrEqual(60);
+  it('names every Lucide icon and builds the sprite from them', () => {
+    expect(ICON_NAMES.length).toBeGreaterThan(1500);
+    expect(isIconName('container')).toBe(true);
+    expect(isIconName('not-an-icon')).toBe(false);
+    const ids = [...spriteSvg.matchAll(/<symbol id="i-([a-z0-9-]+)" viewBox="0 0 24 24"><path /g)].map(
+      (m) => m[1],
+    );
+    expect(ids).toContain('x');
+    expect(ids.every((id) => isIconName(id))).toBe(true);
   });
 
   it('injects the sprite once', () => {
@@ -32,6 +37,16 @@ describe('icons', () => {
     injectSprite();
     expect(document.querySelectorAll('#kelta-sprite')).toHaveLength(1);
     expect(document.querySelector('#i-x')).not.toBeNull();
+  });
+
+  it('loads an icon outside the sprite on first use', async () => {
+    injectSprite();
+    expect(ensureIcon('x')).toBeUndefined();
+    expect(ensureIcon('not-an-icon')).toBeUndefined();
+    expect(document.querySelector('#i-a-arrow-down')).toBeNull();
+    await Promise.all([ensureIcon('a-arrow-down'), ensureIcon('a-arrow-down')]);
+    expect(document.querySelectorAll('#kelta-sprite svg > #i-a-arrow-down path').length).toBeGreaterThan(0);
+    expect(ensureIcon('a-arrow-down')).toBeUndefined();
   });
 });
 
@@ -72,13 +87,13 @@ describe('components', () => {
     expect(onretry).toHaveBeenCalledOnce();
   });
 
-  it('Kbd shows one cap on macOS and one cap per key on Linux', () => {
+  it('Kbd shows one mark per chord', () => {
     const caps = (platform: 'macos' | 'linux') =>
       [...render(Kbd, { props: { chord: 'mod+k', platform } }).container.querySelectorAll('kbd')].map(
         (k) => k.textContent,
       );
     expect(caps('macos')).toEqual(['⌘K']);
-    expect(caps('linux')).toEqual(['Ctrl', 'Shift', 'K']);
+    expect(caps('linux')).toEqual(['Ctrl+Shift+K']);
   });
 
   it('Tabs selects with click and arrows', async () => {

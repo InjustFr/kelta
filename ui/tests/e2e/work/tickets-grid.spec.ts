@@ -129,6 +129,36 @@ for (const scheme of ['light', 'dark'] as const) {
         contentType: 'image/png',
       });
     });
+
+    test('keys take --k-info, titles --k-fg-strong at 500 and 600 on the selected row (#382)', async ({
+      page,
+    }) => {
+      await openRailTickets(page);
+      const s = await rows(page).evaluateAll((els) => {
+        const token = (name: string): string => {
+          const probe = document.createElement('span');
+          probe.style.color = `var(${name})`;
+          document.body.append(probe);
+          const c = getComputedStyle(probe).color;
+          probe.remove();
+          return c;
+        };
+        const title = (r: Element | undefined) => getComputedStyle(r!.querySelector('.c-title .text')!);
+        return {
+          info: token('--k-info'),
+          fg: token('--k-fg'),
+          strong: token('--k-fg-strong'),
+          keys: [...new Set(els.map((r) => getComputedStyle(r.querySelector('.c-key')!).color))],
+          titleColor: title(els[0]).color,
+          selected: title(els.find((r) => r.classList.contains('selected'))).fontWeight,
+          other: title(els.find((r) => !r.classList.contains('selected'))).fontWeight,
+        };
+      });
+      expect(s.keys).toEqual([s.info]);
+      expect(s.strong).not.toBe(s.fg);
+      expect(s.titleColor).toBe(s.strong);
+      expect([s.other, s.selected]).toEqual(['500', '600']);
+    });
   });
 }
 

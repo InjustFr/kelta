@@ -91,7 +91,7 @@ check = ["lazygit", "--version"]
 [[tools]]
 id = "isl"
 label = "Sapling ISL"
-icon = "branch"
+icon = "git-branch"
 kind = "web"
 start = { command = "sl", args = ["web", "--no-open", "--foreground", "--json", "--port", "{port}", "--cwd", "{repo.path}"],
           ready = { stdout_json = "url" }, ready_timeout_ms = 10000, stop = { signal = "TERM", grace_ms = 3000 } }

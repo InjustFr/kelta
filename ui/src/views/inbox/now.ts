@@ -17,11 +17,13 @@ import { phaseNow, unfinishedWork } from '../work/live';
 import { goToWork, openFromNow, openReview } from '../work/nav';
 import { reviewLocally, startWorkOnTicket } from '../work/startWork';
 import {
-  headerParts,
+  headerChips,
   jumpQueue,
   nowSections,
   rowKey,
+  topChip,
   waitingCount,
+  type Chip,
   type NowRow,
   type Section,
 } from './groups';
@@ -59,19 +61,22 @@ export function workingCount(): number {
 
 export interface NowSummary {
   sections: Section[];
-  parts: string[];
-  /** The header as one line (rail tooltip). */
+  chips: Chip[];
+  /** The header as one line (its tooltip). */
   header: string;
+  /** The rail's Now line: the most urgent chip only. */
+  top: string;
   waiting: number;
 }
 
 export function nowSummary(): NowSummary {
   const sections = currentSections();
-  const parts = headerParts(sections, workingCount());
+  const chips = headerChips(sections, workingCount());
   return {
     sections,
-    parts,
-    header: parts.join('\u2002\u2002') || t('Nothing waiting'),
+    chips,
+    header: chips.map((c) => c.text).join('\u2002\u2002') || t('Nothing waiting'),
+    top: topChip(chips)?.text ?? t('Nothing waiting'),
     waiting: waitingCount(sections),
   };
 }

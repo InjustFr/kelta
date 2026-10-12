@@ -237,7 +237,6 @@
 
   button :global(.k-kbd) {
     margin-left: auto;
-    justify-content: flex-end;
     color: var(--k-fg-muted);
   }
 </style>

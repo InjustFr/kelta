@@ -2,7 +2,7 @@
   {
     "id": "lazydocker",
     "label": "lazydocker",
-    "icon": "box",
+    "icon": "container",
     "kind": "pty",
     "installed": true,
     "source": {

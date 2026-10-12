@@ -85,6 +85,37 @@ describe('matchChord', () => {
     expect(matchChord(chord, key({ code: 'Digit2', key: '@', ctrlKey: true, shiftKey: true }))).toBe(false);
   });
 
+  it('matches letters on the character of the active layout', () => {
+    const p = (text: string) => parseChord(text, 'linux')!;
+    // AZERTY: the key labelled Z sends code KeyW, key 'Z' with Shift held.
+    const azertyZ = key({ code: 'KeyW', key: 'Z', ctrlKey: true, shiftKey: true });
+    expect(matchChord(p('ctrl+shift+z'), azertyZ)).toBe(true);
+    expect(matchChord(p('ctrl+shift+w'), azertyZ)).toBe(false);
+    // QWERTZ: Y and Z are swapped.
+    expect(
+      matchChord(p('ctrl+shift+y'), key({ code: 'KeyZ', key: 'Y', ctrlKey: true, shiftKey: true })),
+    ).toBe(true);
+    // Digits still go by position on AZERTY.
+    expect(matchChord(p('ctrl+1'), key({ code: 'Digit1', key: '&', ctrlKey: true }))).toBe(true);
+    // Russian layout: no Latin letter, fall back to the position.
+    expect(
+      matchChord(p('ctrl+shift+z'), key({ code: 'KeyZ', key: 'Я', ctrlKey: true, shiftKey: true })),
+    ).toBe(true);
+  });
+
+  it('matches punctuation on the unshifted character once the key has been seen', () => {
+    const chord = parseChord('ctrl+shift+,', 'linux')!;
+    // AZERTY: `,` sits on KeyM and types `?` with Shift.
+    const press = key({ code: 'KeyM', key: '?', ctrlKey: true, shiftKey: true });
+    expect(matchChord(chord, press)).toBe(false); // not seen yet: QWERTY position (M)
+    chordFromEvent(key({ code: 'KeyM', key: ',' }));
+    expect(matchChord(chord, press)).toBe(true);
+    // Without Shift the character is already the unshifted one.
+    expect(matchChord(parseChord('ctrl+;', 'linux')!, key({ code: 'Comma', key: ';', ctrlKey: true }))).toBe(
+      true,
+    );
+  });
+
   it('falls back to key when code is empty', () => {
     const chord = parseChord('cmd+k', 'macos')!;
     expect(matchChord(chord, key({ code: '', key: 'k', metaKey: true }))).toBe(true);

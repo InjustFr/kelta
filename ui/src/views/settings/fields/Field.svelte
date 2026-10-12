@@ -97,7 +97,7 @@
           >{/if}
         {#if setHere && access.editable}
           <IconButton
-            icon="history"
+            icon="rotate-ccw-clock"
             size="sm"
             label={t('Reset {name} at this layer', { name: label })}
             data-testid="reset"

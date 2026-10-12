@@ -98,6 +98,7 @@ All versions exact (`=x.y.z` in Cargo, no `^`/`~` in package.json). The pins are
 | @xterm/xterm | 6.0.0 | exact |
 | @xterm/addon-fit / -unicode11 / -web-links | 0.11.0 / 0.9.0 / 0.12.0 | eager |
 | @xterm/addon-webgl / -search | 0.19.0 / 0.16.0 | dynamic import |
+| lucide-static | 1.50.0 | icons (ISC): the UI's own names are tree-shaken into the startup sprite, any other Lucide name is a lazy chunk (`ui/src/lib/ui/icons.ts`) |
 | vitest / jsdom / @testing-library/svelte | 5.0.3 / 30.1.2 / 5.4.2 | |
 | @xterm/headless | 6.0.0 | dev only: parser-hook tests (query swallowing) |
 | @playwright/test | 1.64.0 | UI e2e against Vite dev server + IPC mock |
@@ -108,7 +109,7 @@ All versions exact (`=x.y.z` in Cargo, no `^`/`~` in package.json). The pins are
 
 `jsdom 30.1.2` declares `engines.node ^22.22.2`; it runs on Node 22.16+, and `.npmrc` sets `engine-strict=false`. `packageManager` is `pnpm@9.12.1`.
 
-**Not used:** `@xterm/addon-canvas` (dead), `@xterm/addon-serialize` (Rust snapshots), `@xterm/addon-clipboard` (OSC 52 handled by the Rust model), any CSS framework, icon font, web font, markdown lib, state lib, i18n lib. Icons: one inline SVG sprite.
+**Not used:** `@xterm/addon-canvas` (dead), `@xterm/addon-serialize` (Rust snapshots), `@xterm/addon-clipboard` (OSC 52 handled by the Rust model), any CSS framework, icon font, web font, markdown lib, state lib, i18n lib. Icons: one inline SVG sprite built from `lucide-static`.
 
 **Interface language (#344):** `app.language` = `system` (default) | `en` | `fr` | `de`, applied without a restart. The webview translates with `ui/src/lib/i18n/index.svelte.ts`: English text is the key (`t('Close')`, `tn(one, other, n)` for plurals, `msg()` marks English kept as data), `fr.json` / `de.json` are lazy chunks loaded on first use, `system` follows `navigator.language`, and `i18n.test.ts` fails when a key used in the source is missing from a catalog. Text emitted outside the webview (OS notification titles, the native macOS menu) goes through `kelta_proto::i18n::tr`, a small fr/de table; `System` resolves to the OS language the desktop records at startup (macOS `NSLocale.preferredLanguages`, else `LC_ALL` / `LANG`). Toasts and errors built by the core stay English.
 
@@ -966,7 +967,7 @@ Kelta acts as the IDE of the Claude sessions it spawns, with the protocol of the
 Alt-screen state with main scrollback (`?1049`), last N history lines (`terminal.view_scrollback`, default 1000), visible grid with SGR runs incl. colon underline styles (`4:3` undercurl), underline colour (`58`), truecolor/256, OSC 8 hyperlinks, wide + combining chars, DECSTBM + origin mode, saved cursor (DECSC), G0/G1 charsets (DEC line drawing), cursor position/shape (DECSCUSR)/visibility (`?25`), modes DECCKM (`?1`), DECKPAM, bracketed paste `?2004`, mouse `?1000/1002/1003` + encodings `?1005/1006/1015`, focus `?1004`, sync `?2026` (always emitted off), title (OSC 2), cwd (OSC 7). Budget: ≤ 150 KB and ≤ 15 ms for 200×60 + 1000 lines.
 
 ### 9.4 Keyboard routing
-`attachCustomKeyEventHandler`: Kelta chords (from `keys.*`, matched on `KeyboardEvent.code` + modifiers) and the prefix key return `false` (consumed); everything else reaches xterm → `onData` → `session_write`. Per-kind remaps (`terminal.shift_enter`): Claude default `esc-cr` (`\x1b\r`), others `passthrough`. Never send unsolicited CSI-u. macOS `Option as Meta` via `macOptionIsMeta` (+ left/right-only handling in the key handler). Default webview shortcuts (reload, zoom, find, context menu) are disabled.
+`attachCustomKeyEventHandler`: Kelta chords (from `keys.*`, matched on the layout character for letters and punctuation, `KeyboardEvent.code` otherwise, + modifiers) and the prefix key return `false` (consumed); everything else reaches xterm → `onData` → `session_write`. Per-kind remaps (`terminal.shift_enter`): Claude default `esc-cr` (`\x1b\r`), others `passthrough`. Never send unsolicited CSI-u. macOS `Option as Meta` via `macOptionIsMeta` (+ left/right-only handling in the key handler). Default webview shortcuts (reload, zoom, find, context menu) are disabled.
 
 ### 9.5 Memory budget for scrollback (L1)
 Scrollback per kind (`terminal.scrollback`: shell 3000, claude 3000, editor 500, tool 500, setup 1000). Global cap `terminal.memory_cap_mb` (default 160): computed from `history_lines × cols × 24 B` per session, updated on line growth (counter, event-driven). On exceed: shrink history of least-recently-viewed sessions to 500 lines (never below), oldest first; the host emits `TerminalEvent::MemoryCapReached` once and core raises a warning toast. Snapshots carry `terminal.view_scrollback` history lines (`TerminalLimits.view_scrollback`).
