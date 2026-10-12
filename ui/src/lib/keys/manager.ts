@@ -4,8 +4,9 @@
 // Routing rules:
 // - Kelta chords and the prefix key are consumed (preventDefault + stopPropagation; the xterm
 //   custom key handler returns false). Everything else reaches the focused element untouched.
-// - Matching is on `KeyboardEvent.code` (physical keys). After the prefix, the next key is matched
-//   on `KeyboardEvent.key` (characters such as `%`, `"`, `(`, `N`).
+// - Letters and punctuation match the character of the active layout, digits and named keys the
+//   physical key (`eventCode`). After the prefix, the next key is matched on `KeyboardEvent.key`
+//   (characters such as `%`, `"`, `(`, `N`).
 // - Default chords never use plain Ctrl+letter, Alt/Meta chords, Ctrl+Alt, Shift+Tab, Ctrl+Space or
 //   Ctrl+\ on Linux (checked by the unit tests against the generated catalog).
 
