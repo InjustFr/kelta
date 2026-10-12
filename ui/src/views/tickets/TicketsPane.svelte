@@ -49,6 +49,7 @@
   import MoveDialogs from './MoveDialogs.svelte';
   import StatusPicker from './StatusPicker.svelte';
   import TicketDetail from './TicketDetail.svelte';
+  import { assigneeChips, statusChips } from './chips';
   import { GROUP_BYS, flowOf, groupTickets, sortTickets, type GroupBy, type TicketGroup } from './group';
   import { MoveController } from './move.svelte';
   import { ensureReviews, openPr, openPrs, prMenuItems } from './prs';
@@ -57,6 +58,7 @@
   import { pickWorkflow } from './workflow.svelte';
   import TagChips from '../tags/TagChips.svelte';
   import TagMenu from '../tags/TagMenu.svelte';
+  import CountChips from '../filters/CountChips.svelte';
   import FilterBar from '../filters/FilterBar.svelte';
   import { clearAll, commonFilters, noMatch, type ActiveFilter } from '../filters/filters';
 
@@ -182,6 +184,8 @@
   let filter = $state('');
   /** The toolbar's tag chip (#349). shortcut: per mount, not persisted. */
   let tagFilter = $state<string | null>(null);
+  /** The filter bar's status chip (#376), by name. shortcut: per mount like the tag chip, not persisted. */
+  let statusFilter = $state<string | null>(null);
   const shown = $derived.by(() => {
     const needle = filter.trim().toLowerCase();
     const tag = tags.live(tagFilter);
@@ -190,6 +194,7 @@
       if (person && !isPerson(t)) return false;
       if (currentSprint && !t.sprint?.active) return false;
       if (tag && !tags.has('tickets', keyOf(i), tag)) return false;
+      if (statusFilter && t.status.name.toLowerCase() !== statusFilter.toLowerCase()) return false;
       return (
         needle === '' ||
         `${t.ref.key} ${t.title} ${t.status.name} ${t.kind ?? ''} ${t.labels.join(' ')} ${t.assignee?.name ?? ''}`
@@ -237,6 +242,15 @@
       : []),
     ...(currentSprint
       ? [{ id: 'sprint', label: t('Current sprint'), clear: () => (currentSprint = false) }]
+      : []),
+    ...(statusFilter
+      ? [
+          {
+            id: 'status',
+            label: t('Status: {name}', { name: statusFilter }),
+            clear: () => (statusFilter = null),
+          },
+        ]
       : []),
   ]);
 
@@ -901,7 +915,26 @@
     placeholder={t('Filter key, title, status, type, labels, assignee (/)')}
     aria-label={t('Filter tickets')}
     onkeydown={filterKeys}
-  />
+  >
+    <CountChips
+      label={t('Filter by status')}
+      chips={statusChips(items, statusFilter)}
+      value={statusFilter}
+      onchange={(s) => (statusFilter = s)}
+    />
+    {#if whoTab === 'anyone'}
+      <CountChips
+        label={t('Filter by assignee')}
+        chips={assigneeChips(
+          items,
+          people,
+          person ? { id: personEntry?.key ?? person, name: personEntry?.name ?? person } : null,
+        )}
+        value={personEntry?.key ?? person}
+        onchange={setPerson}
+      />
+    {/if}
+  </FilterBar>
 
   {#if noSource}
     <EmptyState icon="ticket" title={t('Add a ticket source: pick a board')}>

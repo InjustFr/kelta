@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -680,6 +680,32 @@ describe('TicketsPane list: group, sort, age, sprint, person', () => {
     expect(savedContent()).toMatchObject({ person: 'jira-acme:u-bob', who: 'anyone' });
     await press('1'); // a who tab clears the person
     expect(savedContent()).toMatchObject({ person: null, who: 'mine' });
+  });
+
+  it('status chips narrow to one status; on Team, assignee chips pick the person (#376)', async () => {
+    inLayout();
+    const { container } = mountBoard('list');
+    await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
+    const name = mock.state.tickets.find((i) => i.ticket.ref.key === 'SHOP-142')!.ticket.status.name;
+    const chip = within(screen.getByRole('group', { name: 'Filter by status' })).getByRole('button', {
+      name: new RegExp(`^${name}`),
+    });
+    await fireEvent.click(chip);
+    await waitFor(() => expect(row(container, 'SHOP-151')).toBeNull());
+    expect(row(container, 'SHOP-142')).not.toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: `Remove filter Status: ${name}` }));
+    await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
+    expect(chip.getAttribute('aria-pressed')).toBe('false');
+
+    expect(screen.queryByRole('group', { name: 'Filter by assignee' })).toBeNull();
+    await press('3');
+    const bob = await waitFor(() =>
+      within(screen.getByRole('group', { name: 'Filter by assignee' })).getByRole('button', { name: /Bob/ }),
+    );
+    await fireEvent.click(bob);
+    await waitFor(() => expect(row(container, 'SHOP-151')).toBeNull());
+    expect(row(container, 'SHOP-120')).not.toBeNull();
+    expect(savedContent()).toMatchObject({ person: 'jira-acme:u-bob', who: 'anyone' });
   });
 
   it('a person id saved before team people still filters', async () => {
