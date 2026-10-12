@@ -4,11 +4,11 @@
   import { Icon, Lamp, relativeTime } from '$lib/ui';
 
   import { ciGlyph, initials } from '../work/common';
-  import type { Phase } from '../work/phase';
+  import { phaseWord, type Phase } from '../work/phase';
   import { waitChip } from '../people/waiting';
   import { fieldText } from './fields';
   import { ageDays, ageLevel, type GroupBy } from './group';
-  import { mainPr, prLabel, prLamp, reviewWord } from './prs';
+  import { mainPr, prLabel, reviewWord } from './prs';
   import RowButton from './RowButton.svelte';
   import StatusChip from './StatusChip.svelte';
   import TagChips from '../tags/TagChips.svelte';
@@ -23,6 +23,8 @@
     /** A multi-selection exists: the row says whether it is in it. */
     picking: boolean;
     phase: Phase | null;
+    /** What Enter runs on this row (the phase's next step), null without work under way. */
+    next: string | null;
     hasWork: boolean;
     marked: boolean;
     groupBy: GroupBy;
@@ -31,6 +33,7 @@
     showAssignee: boolean;
     onselect: (e: MouseEvent) => void;
     onopen: () => void;
+    onnext: () => void;
     onmove: () => void;
     onpr: () => void;
     onstart: () => void;
@@ -44,6 +47,7 @@
     picked,
     picking,
     phase,
+    next,
     hasWork,
     marked,
     groupBy,
@@ -51,6 +55,7 @@
     showAssignee,
     onselect,
     onopen,
+    onnext,
     onmove,
     onpr,
     onstart,
@@ -59,10 +64,12 @@
 
   const tk = $derived(item.ticket);
   const pr = $derived(mainPr(item.prs));
-  const prWords = $derived(pr ? `${ciGlyph(pr.ci).label}, ${reviewWord(pr).toLowerCase()}` : '');
+  const ci = $derived(pr ? ciGlyph(pr.ci) : null);
+  const prWords = $derived(pr && ci ? `${ci.label}, ${reviewWord(pr).toLowerCase()}` : '');
   const wait = $derived(waitChip(item.waiting.filter((w) => w.why !== 'assigned')));
   const age = $derived(ageLevel(tk, Date.now()));
   const phaseText = $derived(phase ? (phase.id === 'run' && phase.detail ? phase.detail : phase.label) : '');
+  const word = $derived(phase ? phaseWord(phase) : '');
   /** The signals in words: the lamp's tooltip once the signals column drops (narrow lists). */
   const signals = $derived(
     [
@@ -121,6 +128,8 @@
     >{#each tk.fields ?? [] as f, i (i)}<span class="field" data-field title={fieldText(f)}
         >{fieldText(f)}</span
       >{/each}<TagChips kind="tickets" itemKey={rowKey} /><span class="acts" data-acts>
+      {#if next}<RowButton label={next} onclick={onnext}><span class="next" data-next>{next}</span></RowButton
+        >{/if}
       <RowButton icon="arrow-right" label={t('Move (m)')} onclick={onmove} />
       <RowButton
         icon="git-pull-request"
@@ -135,7 +144,7 @@
       /><RowButton icon="tag" label={t('Tags (t)')} onclick={ontag} /></span
     ></span
   >
-  <!-- Fixed slots: work, pull request, waiting, marked. Icons with the words for tooltips and readers. -->
+  <!-- Fixed slots: work, pull request, waiting, marked. Icons, and words where the list has room (#373). -->
   <span class="c-signals">
     <span class="sig">
       {#if phase}<span
@@ -148,13 +157,16 @@
             name={phase.lamp === 'error' ? 'circle-alert' : phase.id === 'elsewhere' ? 'bot' : 'git-branch'}
             size={14}
           /><span class="k-visually-hidden">{phase.label}</span></span
-        >{/if}
+        >{#if word}<span class="word" data-phase-word aria-hidden="true">{word}</span>{/if}{/if}
     </span>
     <span class="sig sig-pr">
-      {#if pr}<span class="pr" data-pr
+      {#if pr && ci}<span class="pr" class:draft={pr.state === 'open' && pr.draft} data-pr
           ><RowButton label={t('Open {name} (p)', { name: prLabel(pr) })} onclick={onpr}
-            ><Icon name="git-pull-request" size={14} /><span class="k-visually-hidden">{prLabel(pr)}</span
-            ><Lamp level={prLamp(pr)} title={prWords} /></RowButton
+            ><span class="pr-icon"><Icon name="git-pull-request" size={14} /></span><span class="num"
+              >{prLabel(pr)}</span
+            ><Lamp level={ci.lamp} title={ci.label} /><span class="word" aria-hidden="true"
+              >{reviewWord(pr)}</span
+            ></RowButton
           ></span
         >{/if}
     </span>
@@ -197,7 +209,9 @@
      key in view (`--key-chars`, set by the list; a mono ch is 0.6em). */
   .tk {
     --tk-key: calc(var(--key-chars, 8) * 0.6 * var(--k-font-size-sm) + 12px);
-    --tk-signals: 90px; /* 8 + slots 16 28 16 16 + 3 gaps */
+    --tk-signals: 90px; /* 8 + slots 16 28 16 16 + 3 gaps; the words widen the first two */
+    --tk-phase: 16px;
+    --tk-pr: 28px;
     --tk-status: 112px;
     --tk-age: 44px;
     --tk-source: 0px;
@@ -298,7 +312,7 @@
     grid-area: signals;
     align-self: center;
     display: grid;
-    grid-template-columns: 16px 28px 16px 16px;
+    grid-template-columns: var(--tk-phase) var(--tk-pr) 16px 16px;
     gap: var(--k-space-1);
     padding-left: var(--k-space-3);
     color: var(--k-fg-subtle);
@@ -307,11 +321,30 @@
   .sig {
     display: inline-flex;
     align-items: center;
+    min-width: 0;
     height: 20px;
   }
 
   .sig-icon {
     display: inline-flex;
+  }
+
+  .sig .word {
+    display: none;
+    min-width: 0;
+    margin-left: var(--k-space-1);
+    overflow: hidden;
+    font-size: var(--k-font-size-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sig-icon.error + .word {
+    color: var(--k-lamp-error);
+  }
+
+  .sig-icon.ask + .word {
+    color: var(--k-warn);
   }
 
   .sig-icon.error {
@@ -327,11 +360,45 @@
     color: var(--k-accent);
   }
 
+  .pr {
+    min-width: 0;
+  }
+
   .pr :global(.rb) {
     gap: var(--k-space-1);
+    max-width: 100%;
     height: 20px;
     padding: 0 var(--k-space-1);
     color: var(--k-fg-subtle);
+    font-size: var(--k-font-size-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pr .word {
+    margin-left: 0;
+  }
+
+  .pr .num {
+    display: none;
+  }
+
+  .pr-icon {
+    display: inline-flex;
+  }
+
+  /* A draft PR reads as one at every width: a dashed outline round its number (#373). */
+  .pr.draft :global(.rb) {
+    outline: 1px dashed var(--k-border-strong);
+    outline-offset: -1px;
+  }
+
+  .next {
+    padding: 0 var(--k-space-2);
+    border: 1px solid var(--k-border);
+    border-radius: var(--k-radius-sm);
+    color: var(--k-fg);
+    font-size: var(--k-font-size-sm);
+    white-space: nowrap;
   }
 
   .c-status {
@@ -386,6 +453,41 @@
     width: 20px;
     height: 20px;
     font-size: 10px;
+  }
+
+  /* Wide lists show the signals in words (#373): the phase and the PR number from 800px, the PR state
+     from 1040px. The split view's list (~710px at 1440 wide) keeps the icons and its title width. */
+  @container (width >= 800px) {
+    .tk {
+      --tk-phase: 84px;
+      --tk-pr: 52px;
+      --tk-signals: 182px;
+    }
+
+    .pr :global(.rb) {
+      gap: var(--k-space-2);
+    }
+
+    .sig .word,
+    .pr .num {
+      display: block;
+    }
+
+    .pr .word,
+    .pr-icon {
+      display: none;
+    }
+  }
+
+  @container (width >= 1040px) {
+    .tk {
+      --tk-pr: 156px;
+      --tk-signals: 290px;
+    }
+
+    .pr .word {
+      display: block;
+    }
   }
 
   /* Narrow lists: source, who and the field chips drop first (the split view at 1440 wide leaves the list ~670px, and

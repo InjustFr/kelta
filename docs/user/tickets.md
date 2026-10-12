@@ -51,7 +51,8 @@ Settings > Sources has one card per source. Besides the account, views, columns 
 - **Ticket fields.** Add a tracker field Kelta has no column for (a Jira custom field, a GitHub Projects v2
   field). Each field with a value shows as a `label: value` chip on the row, and as a line of the detail. An
   empty label shows the value alone. Settings lists the fields of the tracker to pick from; an id the tracker
-  does not have shows nothing and is flagged *Unknown field*.
+  does not have shows nothing and is flagged *Unknown field*. A Jira field Kelta already shows (assignee,
+  status, priority, sprint...) is not repeated as a chip.
 - **Blocked.** Says how the tracker marks a ticket blocked (`blocked` in the TOML): `status`, `flag`,
   `relation` or `{ label = "<name>" }`. Unset, Jira uses its flag, Linear a "blocked by" relation and the others
   the status name. See [blocked tickets](#blocked-tickets).
@@ -151,11 +152,14 @@ which is also what `g` does in a narrow pane.
 
 ## Next step
 
-A ticket with work under way shows its lamp and a work icon in its row; hover either for the phase (Claude working, Claude needs
+A ticket with work under way shows its lamp and a work icon in its row, followed by a word when the list is wide enough
+(from about 800px, so not beside the detail column): *Needs you*, *Working*, *Your turn* or *Resume* (parked work), and no word
+while the work waits on others. Hover for the phase (Claude working, Claude needs
 you, To review, Changes requested, Checks failed, New comments, In review, Merged...): the state Now shows, from the same signals. Red CI
 never hides the review: a PR still waiting for one reads `Checks failed · review required`. With the
 detail column hidden (or a narrow pane), `Enter` runs the phase's next action, as `Enter` does in Now (the key hints name it); `g` opens
-the detail instead.
+the detail instead. The selected or hovered row also shows that next action as a labelled button (Rebase, Send failures to Claude,
+Mark ready...).
 
 From top to bottom: key, title, status (a button: it opens the status picker), the action bar, a grid with
 assignee, priority, sprint, estimate, due date, labels and last update, the pull requests, the description (task
@@ -170,9 +174,10 @@ request, Start work).
 
 ## Pull requests
 
-A row shows the pull request linked to the ticket as a pull request icon with one lamp for CI and review (hover it for `#12`, `!12` on GitLab):
-halo dot changes requested, diamond CI failed, ring CI running, dot approved (or passed with no review needed),
-small dot waiting for review. Hover it for both states. A ticket links to the pull requests of its work item and to any pull request in your
+A row shows the pull request linked to the ticket as a pull request icon and a CI lamp: diamond CI failed, ring CI
+running, dot passed. A wide list (from about 800px) shows its number (`#12`, `!12` on GitLab) instead of the icon and,
+from about 1040px, its state in words: Draft, Review required, Approved, Changes requested, Merged or Closed. A draft
+pull request has a dashed outline at every width. Hover it for both states. A ticket links to the pull requests of its work item and to any pull request in your
 review lists whose branch or title carries the ticket key. The detail lists each with its title, state, CI,
 review state and branch. `p` opens it in Kelta's review detail when its repository is bound to a code host
 account, else in the browser; `P` always opens the browser. With several pull requests a small menu asks which.
