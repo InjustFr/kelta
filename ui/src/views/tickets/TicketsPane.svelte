@@ -44,7 +44,7 @@
   import { runPrimary } from '../work/actions';
   import AskBar from '../work/AskBar.svelte';
   import { askerOf, phaseNow } from '../work/live';
-  import { outsidePhase } from '../work/phase';
+  import { outsidePhase, questionOf } from '../work/phase';
   import CommentDialog from './CommentDialog.svelte';
   import MoveDialogs from './MoveDialogs.svelte';
   import StatusPicker from './StatusPicker.svelte';
@@ -286,8 +286,8 @@
   type Row =
     | { kind: 'group'; key: string; group: TicketGroup; open: boolean }
     | { kind: 'ticket'; key: string; item: TicketItem }
-    /** A workflow's question (#356) under its ticket: the option buttons. */
-    | { kind: 'ask'; key: string; session: SessionInfo };
+    /** A workflow's question (#356) under its ticket: the question line, then the option buttons. */
+    | { kind: 'ask'; key: string; session: SessionInfo; line: 'question' | 'options' };
 
   const keyOf = (i: TicketItem): string => ticketKey(i.ticket.ref);
   /** Groups the user opened or closed (`groupBy:id`); Done groups start closed. */
@@ -315,7 +315,12 @@
     const w = liveWork(item);
     const asker = w ? askerOf(w) : null;
     const row: Row = { kind: 'ticket', key: keyOf(item), item };
-    return asker ? [row, { kind: 'ask', key: `ask:${row.key}`, session: asker }] : [row];
+    if (!asker) return [row];
+    return [
+      row,
+      { kind: 'ask', key: `ask-q:${row.key}`, session: asker, line: 'question' },
+      { kind: 'ask', key: `ask:${row.key}`, session: asker, line: 'options' },
+    ];
   };
   const rows = $derived.by<Row[]>(() => {
     if (groupBy === 'none') return sorted.flatMap(ticketRows);
@@ -988,7 +993,12 @@
                     >{/if}
                 </button>
               {:else if r.kind === 'ask'}
-                <div class="ask-line"><AskBar session={r.session} /></div>
+                {#if r.line === 'question'}
+                  {@const q = questionOf(r.session)?.question ?? ''}
+                  <div class="ask-line ask-q" title={q}>{q}</div>
+                {:else}
+                  <div class="ask-line"><AskBar session={r.session} /></div>
+                {/if}
               {:else}
                 <TicketRow
                   item={r.item}
@@ -1243,6 +1253,15 @@
     align-items: center;
     height: 100%;
     padding: 0 var(--k-space-3) 0 calc(var(--key-chars, 8) * 0.6 * var(--k-font-size-sm) + 40px);
+  }
+
+  .ask-q {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    line-height: var(--k-row-height);
   }
 
   .head.wip {
