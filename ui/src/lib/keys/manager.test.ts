@@ -14,6 +14,7 @@ function keys(over: Partial<KeysSettings> = {}): KeysSettings {
     bindings: {},
     prefix_bindings: {},
     list_keys: true,
+    hints: true,
     ...over,
   };
 }

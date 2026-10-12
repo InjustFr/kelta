@@ -17,4 +17,8 @@ prefix_bindings: { [key in string]: string },
 /**
  * Single-key shortcuts in lists/boards.
  */
-list_keys: boolean, };
+list_keys: boolean, 
+/**
+ * The key hint line under lists; `?` still lists every key.
+ */
+hints: boolean, };

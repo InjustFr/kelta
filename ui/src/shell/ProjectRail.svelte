@@ -844,11 +844,17 @@
     white-space: nowrap;
   }
 
+  /* Search and Settings: the chord shows on hover and focus only (the tooltip names it too). */
   .kbd {
     display: inline-flex;
     align-items: center;
     flex: none;
     height: 100%;
+    visibility: hidden;
+  }
+
+  button:is(:hover, :focus-visible) > .kbd {
+    visibility: visible;
   }
 
   /* Global views (44px, name over status word); session and tool rows are 32px, one line. */

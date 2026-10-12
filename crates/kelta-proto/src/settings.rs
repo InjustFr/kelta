@@ -389,6 +389,8 @@ pub struct KeysSettings {
     pub prefix_bindings: BTreeMap<String, String>,
     /// Single-key shortcuts in lists/boards.
     pub list_keys: bool,
+    /// The key hint line under lists; `?` still lists every key.
+    pub hints: bool,
 }
 
 impl Default for KeysSettings {
@@ -399,6 +401,7 @@ impl Default for KeysSettings {
             bindings: BTreeMap::new(),
             prefix_bindings: crate::actions::default_prefix_bindings(),
             list_keys: true,
+            hints: true,
         }
     }
 }

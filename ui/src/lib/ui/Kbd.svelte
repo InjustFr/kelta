@@ -9,30 +9,20 @@
 
   let { chord, platform }: Props = $props();
   const os = $derived(platform ?? currentPlatform());
-  // macOS writes a chord as one word (⌘⇧K); Linux keeps one cap per key (Ctrl Shift K).
-  const parts = $derived(os === 'macos' ? [formatChord(chord, os).join('')] : formatChord(chord, os));
+  // One quiet mark per chord: macOS writes it as one word (⌘⇧K), Linux joins the keys (Ctrl+Shift+K).
+  const text = $derived(formatChord(chord, os).join(os === 'macos' ? '' : '+'));
 </script>
 
-<span class="k-kbd" aria-label={chord}>
-  {#each parts as part, i (i)}<kbd>{part}</kbd>{/each}
-</span>
+<kbd class="k-kbd" aria-label={chord}>{text}</kbd>
 
 <style>
   .k-kbd {
-    display: inline-flex;
-    gap: 2px;
-    color: var(--k-fg-subtle);
-  }
-
-  kbd {
     display: inline-block;
     min-width: 18px;
-    min-height: 18px;
     padding: 0 4px;
     border: 1px solid var(--k-border);
-    border-bottom-width: 2px;
     border-radius: var(--k-radius-sm);
-    color: inherit;
+    color: var(--k-fg-subtle);
     font-size: var(--k-font-size-xs);
     font-family: var(--k-font-mono);
     text-align: center;
