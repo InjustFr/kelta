@@ -2369,6 +2369,8 @@
   "Field": "Feld",
   "Fields": "Felder",
   "Tracker fields shown on this source's tickets, rows and detail, when they have a value. An entry\nwithout an id is dropped with a warning.": "Trackerfelder, die bei den Tickets dieser Quelle in Zeilen und Details angezeigt werden, wenn sie einen Wert haben. Ein Eintrag ohne ID wird mit einer Warnung verworfen.",
+  "Waiting statuses": "Wartende Status",
+  "Status names (as the tracker spells them) that count as done for Now: my part is over, the\nticket waits on something else (a deployment). Left out of Up next, Next up and New for you;\nTickets still lists them.": "Statusnamen (so geschrieben wie im Tracker), die für Jetzt als erledigt gelten: Mein Teil ist fertig, das Ticket wartet auf etwas anderes (ein Deployment). Nicht in Demnächst, Als Nächstes und Neu für Sie; Tickets listet sie weiterhin.",
   "A tracker field to show on the tickets.": "Ein Trackerfeld, das bei den Tickets angezeigt wird.",
   "The tracker's field: a Jira field id (`customfield_10042`), a GitHub project field name.": "Das Feld des Trackers: eine Jira-Feld-ID (`customfield_10042`), ein GitHub-Projektfeldname.",
   "Shown before the value; empty shows the value alone.": "Wird vor dem Wert angezeigt; leer zeigt nur den Wert.",

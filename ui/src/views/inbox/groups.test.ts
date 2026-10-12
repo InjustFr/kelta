@@ -244,6 +244,30 @@ describe('nowSections', () => {
     expect(ids('new')).toEqual(['t:jira:T-2']);
     expect(ids('up_next')).toEqual(['t:jira:T-1']);
   });
+
+  it("a source's waiting statuses count as done: out of Up next, New and Next up", () => {
+    const shipping = (key: string, source: string): TicketItem => {
+      const t = ticket(key, 'in_progress');
+      return {
+        ...t,
+        ticket: { ...t.ticket, status: { ...t.ticket.status, name: 'A MEPP' } },
+        source_ids: [source],
+      };
+    };
+    const sections = nowSections({
+      ...empty,
+      tickets: [
+        shipping('T-1', 'mine'),
+        shipping('T-2', 'mine'),
+        shipping('T-3', 'other'),
+        ticket('T-4', 'todo'),
+      ],
+      nextUp: [shipping('N-1', 'mine')],
+      fresh: new Set(['jira:T-2']),
+      waiting: new Map([['mine', ['A MEPP', 'A MEP']]]),
+    });
+    expect(sections.flatMap((s) => s.rows.map((r) => r.id))).toEqual(['t:jira:T-3', 't:jira:T-4']);
+  });
 });
 
 describe('header and badge', () => {

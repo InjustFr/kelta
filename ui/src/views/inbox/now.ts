@@ -25,7 +25,7 @@ import {
   type NowRow,
   type Section,
 } from './groups';
-import { loadPool, nextUp, ticketPool } from './nextUp.svelte';
+import { loadPool, nextUp, ticketPool, waitingStatuses } from './nextUp.svelte';
 
 const ALL = { kind: 'all' } as const;
 /** Up next is my tickets across every source, whatever each view's own `who` says. */
@@ -48,6 +48,7 @@ export function currentSections(): Section[] {
     nextUp: nextUp.ordered(now).flatMap((e) => pool.get(ticketKey(e.ticket)) ?? []),
     parked: keys((ref) => nextUp.parked(ref, now)),
     fresh: keys((ref) => nextUp.isNew(ref)),
+    waiting: waitingStatuses(),
   });
 }
 
