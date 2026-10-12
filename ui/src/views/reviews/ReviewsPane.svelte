@@ -308,6 +308,26 @@
     }
   }
 
+  /** The full key list (`?`); the footer shows the first five. */
+  let keysOpen = $state(false);
+  const hints = $derived<[string, string][]>([
+    ['j k', msg('Move')],
+    ['enter', msg('Open')],
+    ['s', msg('Review locally')],
+    ['/', msg('Filter')],
+    ['space', msg('Split')],
+    ['1 2 3', msg('Tab')],
+    ...(tab === 'team' ? [['shift+g', msg('Group by ticket')] as [string, string]] : []),
+    ['shift+enter', msg('Own pane')],
+    ['n', msg('Nudge (my PRs)')],
+    ['d', msg('Mark ready / draft (my PRs)')],
+    ['t', msg('Tags')],
+    ['w', msg('Run workflow')],
+    ['o', msg('Open in browser')],
+    ['shift+m', msg('Merge when ready')],
+    ['shift+r', msg('Refresh')],
+  ]);
+
   function onkeydown(e: KeyboardEvent): void {
     const target = e.target as HTMLElement;
     if (target.closest('input, textarea, select, [role="dialog"]')) return;
@@ -346,6 +366,9 @@
         break;
       case '/':
         filterInput?.focus();
+        break;
+      case '?':
+        keysOpen = true;
         break;
       case 'R':
         refresh();
@@ -626,26 +649,18 @@
     {/if}
   {/if}
 
-  <KeyHints
-    hints={[
-      ['j k', msg('Move')],
-      ['1 2 3', msg('Tab')],
-      ...(tab === 'team' ? [['shift+g', msg('Group by ticket')] as [string, string]] : []),
-      ['space', msg('Split')],
-      ['enter', msg('Open')],
-      ['shift+enter', msg('Own pane')],
-      ['/', msg('Filter')],
-      ['s', msg('Review locally')],
-      ['n', msg('Nudge (my PRs)')],
-      ['d', msg('Mark ready / draft (my PRs)')],
-      ['t', msg('Tags')],
-      ['w', msg('Run workflow')],
-      ['o', msg('Open in browser')],
-      ['shift+m', msg('Merge when ready')],
-      ['shift+r', msg('Refresh')],
-    ]}
-  />
+  <KeyHints {hints} />
 </div>
+
+{#if keysOpen}
+  <KeyHints
+    {hints}
+    onclose={() => {
+      keysOpen = false;
+      root?.focus();
+    }}
+  />
+{/if}
 
 {#if tagMenu}
   <TagMenu
