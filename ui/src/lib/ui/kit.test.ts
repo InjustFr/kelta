@@ -209,6 +209,37 @@ describe('components', () => {
     expect(container.querySelector('.spacer')?.getAttribute('style')).toContain('28000px');
     void VirtualList;
   });
+
+  it('VirtualList pins the header of the group in view, pushed up by the next one', async () => {
+    const items = Array.from({ length: 100 }, (_, i) => (i % 10 === 0 ? `head ${i}` : `row ${i}`));
+    const { container } = render(VirtualListHarness, {
+      props: { items, sticky: (s) => s.startsWith('head') },
+    });
+    const list = container.querySelector<HTMLElement>('.k-vlist')!;
+    const pin = () => container.querySelector<HTMLElement>('.pin');
+    const scroll = async (top: number) => {
+      Object.defineProperty(list, 'scrollTop', { value: top, configurable: true });
+      await fireEvent.scroll(list);
+    };
+    expect(pin()).toBeNull(); // the first header is in the list itself
+    await scroll(28 * 12);
+    expect(pin()?.textContent).toBe('head 10');
+    expect(pin()?.style.translate).toBe('0 0px');
+    await scroll(28 * 19 + 10); // head 20 is 18px below the top: head 10 slides up 10px
+    expect(pin()?.textContent).toBe('head 10');
+    expect(pin()?.style.translate).toBe('0 -10px');
+  });
+
+  it('VirtualList scrolls a row clear of the pinned header', () => {
+    const items = Array.from({ length: 100 }, (_, i) => (i % 10 === 0 ? `head ${i}` : `row ${i}`));
+    const { container, component } = render(VirtualListHarness, {
+      props: { items, sticky: (s) => s.startsWith('head') },
+    });
+    const vp = container.querySelector<HTMLElement>('.k-vlist')!;
+    vp.scrollTop = 28 * 15;
+    component.scrollToIndex(12);
+    expect(vp.scrollTop).toBe(28 * 11);
+  });
 });
 
 describe('labelled primitives', () => {

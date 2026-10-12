@@ -663,6 +663,7 @@
           itemHeight={ROW_HEIGHT}
           key={(l) => l.id}
           label={t('Now')}
+          sticky={(l) => l.type === 'section'}
         >
           {#snippet row(l)}
             {#if l.type === 'section'}
@@ -858,6 +859,8 @@
     font-size: var(--k-font-size-sm);
     font-weight: 600;
     color: var(--k-fg-muted);
+    background: var(--k-bezel-raised);
+    box-shadow: inset 0 -1px 0 var(--k-border);
   }
 
   .count {
@@ -902,7 +905,9 @@
 
   .selected,
   .detail {
-    background: var(--k-bg-selected);
+    background: var(--k-bg-selected-row);
+    --k-fg-subtle: var(--k-fg-subtle-sel);
+    --k-fg-muted: var(--k-fg-muted-sel);
   }
 
   .id {
@@ -974,7 +979,8 @@
 
   .msgline {
     padding-left: calc(var(--k-space-4) + 12px + 76px + 3 * var(--k-space-2));
-    background: var(--k-bg-selected);
+    background: var(--k-bg-selected-row);
+    --k-fg-muted: var(--k-fg-muted-sel);
     font-size: var(--k-font-size-sm);
     color: var(--k-fg-muted);
     white-space: pre;

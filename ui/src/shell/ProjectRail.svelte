@@ -790,7 +790,7 @@
     min-height: 0;
     padding: var(--k-space-3);
     border-right: 1px solid var(--k-border);
-    background: var(--k-bezel);
+    background: var(--k-rail);
   }
 
   button {

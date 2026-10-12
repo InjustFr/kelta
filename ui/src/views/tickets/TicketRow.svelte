@@ -577,12 +577,19 @@
     padding-left: var(--k-space-2);
   }
 
+  .k-row.selected .acts,
+  .k-row.picked .acts {
+    background: var(--k-bg-selected-row);
+  }
+
   .k-row.selected .acts {
     display: inline-flex;
   }
 
   .k-row.picked {
-    background: var(--k-bg-selected);
+    background: var(--k-bg-selected-row);
+    --k-fg-subtle: var(--k-fg-subtle-sel);
+    --k-fg-muted: var(--k-fg-muted-sel);
   }
 
   .k-row.picked .k-row-lamp {
