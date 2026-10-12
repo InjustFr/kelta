@@ -55,6 +55,35 @@ describe('L9 actions', () => {
     expect(l && findContent(l, (c) => c.kind === 'tickets' && c.mode === 'board')).toBeTruthy();
   });
 
+  it('tickets.overview opens my tickets beside For me over Mine, once per project', async () => {
+    ui.view = 'reviews';
+    await dispatch('tickets.overview');
+    expect(ui.view).toBeNull();
+    const l = layout.get('shop');
+    expect(l?.active_tab).toBe('overview');
+    const root = l?.tabs.find((t) => t.id === 'overview')?.root;
+    expect(root).toMatchObject({
+      type: 'split',
+      dir: 'row',
+      children: [
+        { type: 'pane', content: { kind: 'tickets', scope: { kind: 'project', id: 'shop' }, who: 'mine' } },
+        {
+          type: 'split',
+          dir: 'column',
+          children: [
+            { type: 'pane', content: { kind: 'reviews', tab: 'review_requested' } },
+            { type: 'pane', content: { kind: 'reviews', tab: 'authored' } },
+          ],
+        },
+      ],
+    });
+    const tabs = l?.tabs.length;
+    layout.update('shop', (x) => ({ ...x, active_tab: x.tabs[0]!.id }));
+    await dispatch('tickets.overview');
+    expect(layout.get('shop')?.tabs.length).toBe(tabs);
+    expect(layout.get('shop')?.active_tab).toBe('overview');
+  });
+
   it('reviews.open {project_id} opens the reviews pane', async () => {
     expect(await dispatch('reviews.open', { project_id: 'shop' })).toBe(true);
     const l = layout.get('shop');

@@ -192,3 +192,13 @@ test.describe('now', () => {
     await expect(page.getByTestId('ticket-detail')).toBeVisible();
   });
 });
+
+test.describe('tickets and reviews side by side', () => {
+  test('one action opens my tickets beside For me over Mine', async ({ page }) => {
+    const errors = await boot(page);
+    await dispatch(page, 'tickets.overview');
+    await expect(page.getByRole('tab', { name: /^For me/, selected: true })).toHaveCount(1);
+    await expect(page.getByRole('tab', { name: /^Mine/, selected: true })).toHaveCount(2);
+    expect(errors).toEqual([]);
+  });
+});
