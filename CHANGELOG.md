@@ -2,6 +2,35 @@
 
 All notable changes are listed here, generated from the commit messages at each release. Versions follow semver.
 
+## [1.2.0](https://github.com/InjustFr/kelta/compare/v1.1.0...v1.2.0) (2026-10-12)
+
+### Features
+
+* **now:** clickable header chips, one urgent item in the rail ([68784fd](https://github.com/InjustFr/kelta/commit/68784fd5eaff9dce26407d4ed05aed685b2c3447)), closes [#386](https://github.com/InjustFr/kelta/issues/386)
+* **now:** waiting_statuses on a source count as done for Now ([83fcbaa](https://github.com/InjustFr/kelta/commit/83fcbaa5c9866257f8e327eca1a4c21182ce2ac0))
+* **theme:** keep surface steps and the contrast floor for every theme ([9a0dc08](https://github.com/InjustFr/kelta/commit/9a0dc08a7b41e21d7f88e598f1d9611e973872fd)), closes [#387](https://github.com/InjustFr/kelta/issues/387)
+* **ui:** Compact switch for Reviews and Now rows ([#383](https://github.com/InjustFr/kelta/issues/383)) ([ce0ce04](https://github.com/InjustFr/kelta/commit/ce0ce040a072c64ac93d4ab6f0134abc6f5ef498))
+* **ui:** fewer key hints on screen, one mark per chord ([#385](https://github.com/InjustFr/kelta/issues/385)) ([70749ce](https://github.com/InjustFr/kelta/commit/70749ce130b0a32a81dd8560c7ae0f4d44879152))
+* **ui:** layered surfaces for list group headers, selection and detail ([e0a70c9](https://github.com/InjustFr/kelta/commit/e0a70c9eaeaa70ca31a72263aa64550555985612)), closes [#381](https://github.com/InjustFr/kelta/issues/381)
+* **ui:** outlined ghost buttons and labelled row actions ([#384](https://github.com/InjustFr/kelta/issues/384)) ([32386e6](https://github.com/InjustFr/kelta/commit/32386e63d6a97d58dc8201ef9572c328fc6497cf))
+* **ui:** two-line rows in Reviews and Now ([#383](https://github.com/InjustFr/kelta/issues/383)) ([189410a](https://github.com/InjustFr/kelta/commit/189410a3fa250b177bf257ffc7e91289153a4053))
+* **ui:** use the full Lucide icon set from lucide-static ([ff8132f](https://github.com/InjustFr/kelta/commit/ff8132f59761a6d3012f553a00407dde70d1cda2)), closes [#388](https://github.com/InjustFr/kelta/issues/388)
+* **ui:** visual hierarchy in list rows: strong titles, hued keys, coloured phase word ([#382](https://github.com/InjustFr/kelta/issues/382)) ([8671203](https://github.com/InjustFr/kelta/commit/86712036776093b94362d7f97b9a7d0b4455714c))
+
+### Bug Fixes
+
+* **codehosts:** take GitHub PR detail CI and review decision from GraphQL ([6fe030d](https://github.com/InjustFr/kelta/commit/6fe030dc3fc344d4121b0bbea0c153be8f3fd0af)), closes [#379](https://github.com/InjustFr/kelta/issues/379)
+* **keys:** match letters and punctuation on the active layout ([fb2f8b1](https://github.com/InjustFr/kelta/commit/fb2f8b10e7e53e22f7e56eba0b8adfe0c0533cb3)), closes [#389](https://github.com/InjustFr/kelta/issues/389)
+* **now:** grooming skips tickets in a waiting status like Now does ([5a41173](https://github.com/InjustFr/kelta/commit/5a411736b1972741e84ade4d4560057d00e9b967))
+* **ui:** keep --k-bg-selected at 16%, add --k-bg-selected-row for list rows ([4224568](https://github.com/InjustFr/kelta/commit/42245687614ac10e21fb62d46ac19c59bd1fe49c))
+* **ui:** keep a followed row in view while VirtualList rows measure ([7f5a851](https://github.com/InjustFr/kelta/commit/7f5a8511352b80a7a56f1bb5a4cd2c65a3488bac))
+* **ui:** keep scrollToIndex from re-running on row measurements ([d391861](https://github.com/InjustFr/kelta/commit/d391861531ea94e8a34d68e597f22e05208a53a4))
+* **ui:** keep subtle text at 4.5:1 on selected list rows ([5ec1802](https://github.com/InjustFr/kelta/commit/5ec18021a77001c0664ba8350c3b43bfd163d7c7))
+* **ui:** mix phase word lamp colours toward fg to clear 4.5:1 ([98b587e](https://github.com/InjustFr/kelta/commit/98b587e142804923c5f0380ef48a5d177362c413))
+* **ui:** observe every VirtualList row so toggling Compact off measures mounted rows ([#383](https://github.com/InjustFr/kelta/issues/383)) ([c412b85](https://github.com/InjustFr/kelta/commit/c412b85fc9d161b43c7044e4a627ce7572cd7fd1))
+* **ui:** remap subtle and muted text on every selected surface ([bf9bd1a](https://github.com/InjustFr/kelta/commit/bf9bd1a85a1add0f0604bc58eedaf43978caa6cc))
+* **ui:** ship the Lucide ISC notice inside the inlined sprite ([1724432](https://github.com/InjustFr/kelta/commit/172443240a16cb85763176db6f1b98b0a25038b5))
+
 ## [1.1.0](https://github.com/InjustFr/kelta/compare/v1.0.0...v1.1.0) (2026-10-12)
 
 ### Features
