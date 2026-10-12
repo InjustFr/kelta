@@ -8,6 +8,16 @@ export interface ActiveFilter {
   clear: () => void;
 }
 
+/** One toggle chip (CountChips): what it keeps, how many items it matches, a colour dot or an avatar. */
+export interface CountChip {
+  id: string;
+  label: string;
+  n: number;
+  title: string;
+  dot?: string;
+  avatar?: boolean;
+}
+
 /** The `/` text and the toolbar tag chip, the filters the views share; `null` tag = the view has none. */
 export function commonFilters(
   text: string,
