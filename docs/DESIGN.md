@@ -261,6 +261,7 @@ Every earlier `--k-*` name is kept, so components that only read tokens need no 
 | accent (any hue, fixed L) on well | at least 3:1 (focus marks, non-text) | at least 3:1 |
 
 Every text token clears 4.5:1 on every surface it can sit on, so 12-13px labels and state words may use it. Exception: `--k-fg-subtle` is never used on the call light (`--k-lit`); the lit pane header switches it to `--k-fg-muted`.
+Lamp colours are non-text marks (3:1); as text, such as the phase word on a ticket row, they only appear through `color-mix(in oklab, var(--k-lamp-*) 75%, var(--k-fg))`.
 Measured (WCAG 2 relative luminance). Recheck with a script after any token edit.
 
 Every theme meets the floor too, custom and imported ones included (`lib/theme/floor.ts`, #387). When a theme paints `--k-bezel` and `--k-bezel-raised` within 0.015 in oklab of `--k-well`, they (and a collapsed `--k-bg-float`) are re-derived from well toward fg like a theme that leaves them out. `--k-fg-muted`, `--k-fg-subtle` and `--k-fg-chrome` move toward `--k-fg` until 4.5:1 on the four surfaces, and `--k-border-strong` until 3:1 on well and bezel and stronger than `--k-border`. Settings → Theme lists each fix on the theme's card, or that some pair still fails (when `--k-fg` itself does). The built-ins need no fix.

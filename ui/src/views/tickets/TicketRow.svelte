@@ -343,21 +343,21 @@
     white-space: nowrap;
   }
 
-  /* The phase word takes its lamp's colour (#382), so the state reads without the tooltip. */
+  /* The phase word takes its lamp's colour (#382), so the state reads without the tooltip. Mixed toward --k-fg: the raw lamps are non-text marks (3:1). */
   .word[data-lamp='needs_input'] {
-    color: var(--k-lamp-needs-input);
+    color: color-mix(in oklab, var(--k-lamp-needs-input) 75%, var(--k-fg));
   }
 
   .word[data-lamp='working'] {
-    color: var(--k-lamp-working);
+    color: color-mix(in oklab, var(--k-lamp-working) 75%, var(--k-fg));
   }
 
   .word[data-lamp='error'] {
-    color: var(--k-lamp-error);
+    color: color-mix(in oklab, var(--k-lamp-error) 75%, var(--k-fg));
   }
 
   .word[data-lamp='done'] {
-    color: var(--k-lamp-done);
+    color: color-mix(in oklab, var(--k-lamp-done) 75%, var(--k-fg));
   }
 
   .sig-icon.error {
