@@ -114,16 +114,16 @@ function hexOf([L, a, b]: number[]): string {
 const lerp = (x: number[], y: number[], p: number) => x.map((v, i) => v + (y[i]! - v) * p);
 
 // tokens.css: --k-bg-selected mixes the accent into the well (dark 28% of L .74 C .09, light 14% of L .5 C .11)
-// and selected rows take --k-fg-subtle-sel, 60% of the way from subtle to fg.
-describe('subtle text on a selected row', () => {
+// and selected rows take --k-fg-subtle-sel / --k-fg-muted-sel, 60% of the way from subtle / muted to fg.
+describe.each(['fg_subtle', 'fg_muted'] as const)('%s text on a selected row', (token) => {
   it.each(Object.entries(BUILTIN))('%s keeps 4.5:1 at every project hue', (_id, def) => {
     const ui = {
       ...BEZEL_UI[def.base],
       ...Object.fromEntries(Object.entries(def.ui).filter(([, v]) => v)),
     } as FloorUi;
     const [L, C, share] = def.base === 'dark' ? [0.74, 0.09, 0.28] : [0.5, 0.11, 0.14];
-    const [well, fg, subtle] = [ui.well, ui.fg, ui.fg_subtle].map((h) => oklab(parseHex(h)!));
-    const text = hexOf(lerp(subtle!, fg!, 0.6));
+    const [well, fg, from] = [ui.well, ui.fg, ui[token]].map((h) => oklab(parseHex(h)!));
+    const text = hexOf(lerp(from!, fg!, 0.6));
     for (let h = 0; h < 360; h += 5) {
       const rad = (h * Math.PI) / 180;
       const selected = hexOf(lerp(well!, [L!, C! * Math.cos(rad), C! * Math.sin(rad)], share!));

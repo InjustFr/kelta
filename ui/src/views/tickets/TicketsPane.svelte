@@ -1293,6 +1293,8 @@
 
   .head.selected {
     background: var(--k-bg-selected);
+    --k-fg-subtle: var(--k-fg-subtle-sel);
+    --k-fg-muted: var(--k-fg-muted-sel);
     box-shadow:
       inset 2px 0 0 var(--k-accent),
       inset 0 -1px 0 var(--k-border);
@@ -1384,6 +1386,8 @@
 
   .card.selected {
     background: var(--k-bg-selected);
+    --k-fg-subtle: var(--k-fg-subtle-sel);
+    --k-fg-muted: var(--k-fg-muted-sel);
     box-shadow: inset 2px 0 0 var(--k-accent);
   }
 

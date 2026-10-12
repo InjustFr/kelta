@@ -848,6 +848,8 @@
   .selected,
   .detail {
     background: var(--k-bg-selected);
+    --k-fg-subtle: var(--k-fg-subtle-sel);
+    --k-fg-muted: var(--k-fg-muted-sel);
   }
 
   .id {
@@ -914,6 +916,7 @@
   .msgline {
     padding-left: calc(var(--k-space-4) + 12px + 76px + 3 * var(--k-space-2));
     background: var(--k-bg-selected);
+    --k-fg-muted: var(--k-fg-muted-sel);
     font-size: var(--k-font-size-sm);
     color: var(--k-fg-muted);
     white-space: pre;

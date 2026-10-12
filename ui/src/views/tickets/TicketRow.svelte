@@ -562,6 +562,8 @@
 
   .k-row.picked {
     background: var(--k-bg-selected);
+    --k-fg-subtle: var(--k-fg-subtle-sel);
+    --k-fg-muted: var(--k-fg-muted-sel);
   }
 
   .k-row.picked .k-row-lamp {

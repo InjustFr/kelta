@@ -93,6 +93,7 @@
   --k-lit-mix: 14%; /* call light: needs-input share of the surface */
   --k-lit: #ddcccf; /* call light fallback; color-mix version below */
   --k-fg-subtle-sel: var(--k-fg-muted); /* subtle text on a selected row; color-mix version below */
+  --k-fg-muted-sel: var(--k-fg); /* muted text on a selected row; color-mix version below */
 
   /* terminal (mirror of lib/terminal/theme.ts LIGHT, which is the source of truth) */
   --k-term-bg: #fafbfb;
@@ -115,6 +116,7 @@
     --k-lit: color-mix(in oklab, var(--k-lamp-needs-input) var(--k-lit-mix), var(--k-bezel));
     /* 60% toward fg: 4.5:1 on the selected mix at any project hue in every built-in theme (#381) */
     --k-fg-subtle-sel: color-mix(in oklab, var(--k-fg) 60%, var(--k-fg-subtle));
+    --k-fg-muted-sel: color-mix(in oklab, var(--k-fg) 60%, var(--k-fg-muted));
   }
 }
 :root {
