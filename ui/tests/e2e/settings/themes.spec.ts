@@ -61,3 +61,38 @@ test('importing a VS Code theme adds its card, selects it and re-themes the wind
     .poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue('--k-well')))
     .toBe('#011627');
 });
+
+test('an imported theme with one flat surface keeps its steps and says what it raised', async ({ page }) => {
+  await boot(page);
+  await dispatch(page, 'settings.open', { section: 'general' });
+  const flat = '#212337';
+  const theme = {
+    name: 'Flat Moon',
+    type: 'dark',
+    colors: {
+      'editor.background': flat,
+      'editor.foreground': '#d8dbf3',
+      'sideBar.background': flat,
+      'tab.inactiveBackground': flat,
+      'tab.inactiveForeground': '#5b5e75',
+    },
+  };
+  await page.getByTestId('theme-import-input').setInputFiles({
+    name: 'flat-moon-color-theme.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(theme)),
+  });
+
+  const card = page.getByRole('listbox', { name: /Dark theme/ }).locator('[data-theme-id="flat-moon"]');
+  await expect(card).toHaveAttribute('aria-selected', 'true');
+  await expect(card.getByTestId('theme-note')).toHaveText([
+    'Surface steps derived from the background',
+    'Subtle text raised to 4.5:1',
+    'Strong border raised to 3:1',
+  ]);
+  const css = (name: string) =>
+    page.evaluate((n) => document.documentElement.style.getPropertyValue(n), name);
+  await expect.poll(() => css('--k-well')).toBe(flat);
+  expect(await css('--k-bezel')).not.toBe(flat);
+  expect(await css('--k-fg-subtle')).not.toBe('#5b5e75');
+});
