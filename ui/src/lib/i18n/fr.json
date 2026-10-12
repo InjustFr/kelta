@@ -636,6 +636,7 @@
   "This pull request is gone": "Cette pull request n’existe plus",
   "It may have been merged, closed or deleted.": "Elle a peut-être été fusionnée, fermée ou supprimée.",
   "Could not load the review": "Impossible de charger la revue",
+  "Could not show this pull request": "Impossible d’afficher cette pull request",
   "Open settings": "Ouvrir les paramètres",
   "PR changed, refresh. The head moved since you opened it, nothing was approved.": "La PR a changé, actualisez. La tête a bougé depuis que vous l’avez ouverte, rien n’a été approuvé.",
   "draft": "brouillon",

@@ -305,7 +305,7 @@
           <p class="muted">{t('No reviewers.')}</p>
         {:else}
           <ul class="plain">
-            {#each detail.reviewers as r (r.user.id)}
+            {#each detail.reviewers as r, i (i)}
               <li>
                 {r.user.name}
                 {#if r.state}<Badge tone={myStateInfo(r.state)?.tone ?? 'neutral'}
@@ -323,7 +323,8 @@
           <p class="muted">{t('No checks reported.')}</p>
         {:else}
           <ul class="plain">
-            {#each detail.checks as c (c.name)}
+            <!-- Index keys: a host can report two checks with one name (check run + commit status). -->
+            {#each detail.checks as c, i (i)}
               {@const g = ciGlyph(c.state)}
               <li>
                 <span class="k-row-lamp"><Lamp level={g.lamp} title={g.label} /></span>
@@ -348,7 +349,7 @@
       <section aria-label={t('Files')}>
         <h2 class="k-section-title">{t('Files')} <span class="muted k-num">{detail.files.length}</span></h2>
         <ul class="plain files">
-          {#each detail.files as f (f.path)}
+          {#each detail.files as f, i (i)}
             <li>
               <code>{f.path}</code>
               <span class="k-mono k-num"

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { ReviewRef } from '$lib/gen';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
+import { reviewDetail } from '$lib/gen/fixtures';
 import { findContent } from '$lib/layout';
 import { layout, plugins, reviews, toasts } from '$lib/stores';
 import { idle } from '$lib/stores/loadable';
@@ -185,5 +186,20 @@ describe('ReviewDetailPane', () => {
     mock.clearFailures();
     await fireEvent.click(screen.getByRole('button', { name: /retry/i }));
     expect(await screen.findByTestId('head-sha')).toBeTruthy();
+  });
+
+  it('renders two checks with the same name (check run + commit status) without crashing', async () => {
+    const saved = structuredClone(reviewDetail);
+    const check = reviewDetail.checks[0]!;
+    reviewDetail.checks.push({ ...check, state: 'failure', url: null });
+    reviewDetail.files.push({ ...reviewDetail.files[0]! });
+    try {
+      mountDetail();
+      const checks = within(await screen.findByRole('region', { name: 'Checks' }));
+      expect(checks.getAllByText(check.name)).toHaveLength(2);
+      expect(within(screen.getByRole('region', { name: /Files/ })).getAllByRole('listitem')).toHaveLength(2);
+    } finally {
+      Object.assign(reviewDetail, saved);
+    }
   });
 });
