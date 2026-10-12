@@ -1,5 +1,5 @@
 // MCP `ask` (#356) on the IPC mock: the question's options as buttons on the ticket row, in Now and
-// in Peek; a button types the option and Enter; a prompt open in the session disables them; typing
+// in Peek; the Tickets list shows the question above them, the ticket detail its body too (#375); a button types the option and Enter; a prompt open in the session disables them; typing
 // in the terminal clears the question too.
 import { expect, test, type Page } from '@playwright/test';
 
@@ -55,6 +55,12 @@ test('Now and the ticket row show the options; a button answers and clears the q
   await expect(page.locator('[data-key="jira-acme:SHOP-142"]')).toBeVisible();
   const row = page.locator(`.ask-line [data-testid="ask"][data-session-id="${SID}"]`);
   await expect(row.getByRole('button')).toHaveText(['Alpha', 'Beta', 'Gamma']);
+  await expect(page.locator('.ask-q')).toHaveText('Which candidate?');
+  await page.locator('[data-key="jira-acme:SHOP-142"] .k-row-key').click();
+  const detail = page.getByTestId('ticket-detail').getByTestId('ask');
+  await expect(detail).toContainText('Which candidate?');
+  await expect(detail).toContainText('Three candidates');
+  await expect(detail.getByRole('button')).toHaveText(['Alpha', 'Beta', 'Gamma']);
   await row.getByRole('button', { name: 'Beta' }).click();
   await expect.poll(() => writes(page)).toEqual(['\x1b[200~Beta\x1b[201~', '\r']);
   await expect(page.getByTestId('ask')).toHaveCount(0);
