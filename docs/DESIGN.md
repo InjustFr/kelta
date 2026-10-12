@@ -258,6 +258,8 @@ Every earlier `--k-*` name is kept, so components that only read tokens need no 
 Every text token clears 4.5:1 on every surface it can sit on, so 12-13px labels and state words may use it. Exception: `--k-fg-subtle` is never used on the call light (`--k-lit`); the lit pane header switches it to `--k-fg-muted`.
 Measured (WCAG 2 relative luminance). Recheck with a script after any token edit.
 
+Every theme meets the floor too, custom and imported ones included (`lib/theme/floor.ts`, #387). When a theme paints `--k-bezel` and `--k-bezel-raised` within 0.015 in oklab of `--k-well`, they (and a collapsed `--k-bg-float`) are re-derived from well toward fg like a theme that leaves them out. `--k-fg-muted`, `--k-fg-subtle` and `--k-fg-chrome` move toward `--k-fg` until 4.5:1 on the four surfaces, and `--k-border-strong` until 3:1 on well and bezel and stronger than `--k-border`. Settings → Theme lists each fix on the theme's card, or that some pair still fails (when `--k-fg` itself does). The built-ins need no fix.
+
 ## 3. Typography
 
 No web fonts and no bundled woff2. Terminals already render in the user's chosen mono font, so the identity lives there.
