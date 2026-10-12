@@ -4,12 +4,8 @@ import type { ThemeDef, ThemeUi } from '$lib/gen';
 
 import { projectAccent } from '../../shell/accent';
 import { BUILTIN } from './builtin';
+import { contrast } from './floor';
 import { luminance } from './import/derive';
-
-const contrast = (a: string, b: string) => {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (hi! + 0.05) / (lo! + 0.05);
-};
 
 const TEXT = ['fg', 'fg_muted', 'fg_chrome', 'fg_subtle'] as const;
 const SURFACES = ['well', 'bezel', 'bezel_raised', 'bg_float'] as const;
