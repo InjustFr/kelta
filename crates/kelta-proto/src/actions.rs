@@ -98,6 +98,8 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("tickets.board", "Open project board", [], [], None, Global),
     a!("tickets.groom", "Groom tickets", [], [], None, Global),
     a!("reviews.open", "Open reviews", ["cmd+shift+r"], ["ctrl+shift+r"], Some("r"), Global),
+    // The active project's Tickets beside Reviews For me over Reviews Mine, in one tab (#374).
+    a!("tickets.overview", "Open tickets and reviews side by side", [], [], None, Global),
     a!("attention.next", "Next waiting", ["cmd+j"], ["ctrl+shift+j"], Some("u"), Global),
     // Linux: Mod is ctrl+shift, so Mod+Shift+J does not exist there.
     a!("attention.prev", "Previous waiting", ["cmd+shift+j"], [], Some("U"), Global),

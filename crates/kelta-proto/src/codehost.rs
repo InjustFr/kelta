@@ -131,6 +131,10 @@ pub struct Review {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub nudged_at: Option<String>,
+    /// A PR of someone else listed in Mine because it is assigned to me (authored only): the
+    /// author-side fields (`author_to_act`, CI, threads) concern its author, not me.
+    #[serde(default)]
+    pub assigned: bool,
     /// Unresolved review threads (authored only; GitHub and GitLab).
     #[serde(default)]
     #[ts(optional = nullable)]

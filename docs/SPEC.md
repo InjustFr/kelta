@@ -162,6 +162,7 @@ Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chord
 | `tickets.board` ("Open project board": the active project's Tickets tab as a board; palette only) | — | — | — |
 | `tickets.groom` ("Groom tickets": one ticket at a time across every bound tracker, mine and unassigned, triaged into my Next up list; palette only) | — | — | — |
 | `reviews.open` (the Reviews view; with `project_id`, that project's Reviews tab) | Cmd+Shift+R | Ctrl+Shift+R | `r` |
+| `tickets.overview` ("Open tickets and reviews side by side": a tab of the active project, my Tickets beside Reviews For me stacked over Reviews Mine; focused when already open; palette only) | — | — | — |
 | `attention.next` / `attention.prev` ("Next waiting", Mod+J: any project, cycling, in priority bands: Claude needs input, error or rate-limited, ready for review, feedback or red CI on my PRs, review requests blocking first; oldest first within a band; HUD `2/7 · needs input · SHOP-142`, or `nothing waiting` with `Enter` opening Up next / Tickets) | Cmd+J / Cmd+Shift+J | Ctrl+Shift+J / (prefix only) | `u` / `U` |
 | `attention.peek` ("Peek waiting session": popover with the last 15 lines, a detected permission menu as `1`/`2`/`3` buttons and a reply field; `Tab` next needs-input session, `Mod+Enter` go to it, `Esc` back; also on hovering a rail row, a tab lamp or a Now row) | Cmd+Shift+Y | Ctrl+Shift+Y | `y` |
 | `nav.back` / `nav.forward` (jumplist of every focus change, 100 places) | Cmd+Ctrl+← / → | (prefix only) | `-` / `=` |

@@ -725,13 +725,19 @@ impl CodeHost for GithubHost {
         // request finds the PRs I reviewed; they only come back when the head moved since (below).
         let reviewed =
             format!("is:pr is:open reviewed-by:@me -author:@me archived:false{draft} sort:updated-desc");
+        // Mine also lists the PRs assigned to me (#374), from a second search in the same request.
+        let assigned = format!("is:pr is:open assignee:@me -author:@me archived:false{draft}");
         let (decl, extra, vars) = match kind {
             ReviewKind::ReviewRequested => (
                 ",$r:String!",
                 " reviewedByMe: search(query:$r, type:ISSUE, first:50){ nodes{ ...Pr } }",
                 json!({ "s": search, "r": reviewed }),
             ),
-            ReviewKind::Authored | ReviewKind::Team => ("", "", json!({ "s": search })),
+            ReviewKind::Authored | ReviewKind::Team => (
+                ",$a:String!",
+                " assigned: search(query:$a, type:ISSUE, first:20){ nodes{ ...Pr ...Threads } }",
+                json!({ "s": search, "a": assigned }),
+            ),
         };
         let (spread, threads) =
             if kind == ReviewKind::Authored { (" ...Threads", THREADS_FRAGMENT) } else { ("", "") };
@@ -747,14 +753,18 @@ impl CodeHost for GithubHost {
         let nodes = |alias: &str| {
             data.pointer(&format!("/{alias}/nodes")).and_then(Value::as_array).cloned().unwrap_or_default()
         };
-        let requested = nodes(alias).into_iter().filter_map(|n| self.graphql_pr(&n, kind, &me));
+        let mut listed = nodes(alias);
+        listed.extend(nodes("assigned"));
+        let requested = listed.iter().filter_map(|n| self.graphql_pr(n, kind, &me));
         let updated = nodes("reviewedByMe")
             .into_iter()
             .filter_map(|n| self.graphql_pr(&n, kind, &me))
             .filter(|r| r.reviewed_head.as_deref().is_some_and(|h| h != r.head_sha));
         let mut requested: Vec<_> = requested.collect();
         if kind == ReviewKind::Authored {
-            self.last_comments(&mut requested, &nodes(alias), &me).await;
+            self.last_comments(&mut requested, &listed, &me).await;
+            // The authored search only returns my own PRs: the others came from `assigned`.
+            requested.iter_mut().for_each(|r| r.assigned = r.author.login.as_deref() != Some(me.as_str()));
         }
         // A re-requested PR matches both searches.
         let updated: Vec<_> = updated.filter(|u| !requested.iter().any(|r| r.r#ref == u.r#ref)).collect();

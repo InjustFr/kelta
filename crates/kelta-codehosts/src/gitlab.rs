@@ -531,11 +531,27 @@ impl CodeHost for GitlabHost {
     }
 
     async fn list_reviews(&self, q: &ReviewQuery) -> Result<Vec<Review>, KeltaError> {
-        let mut req = HttpRequest::get(format!("{}/merge_requests", self.api));
-        for (k, v) in self.list_query(q.kind, q.include_drafts).await? {
-            req = req.query(k, v);
+        let params = self.list_query(q.kind, q.include_drafts).await?;
+        // Mine also lists the MRs assigned to me (#374); a self-assigned MR comes back from both.
+        let scopes: &[Option<&str>] =
+            if q.kind == ReviewKind::Authored { &[None, Some("assigned_to_me")] } else { &[None] };
+        let lists = futures::future::try_join_all(scopes.iter().map(|scope| {
+            let req =
+                params.iter().fold(HttpRequest::get(format!("{}/merge_requests", self.api)), |r, (k, v)| {
+                    r.query(
+                        k.clone(),
+                        scope.filter(|_| k == "scope").map_or_else(|| v.clone(), str::to_owned),
+                    )
+                });
+            self.paged(req.with_etag())
+        }))
+        .await?;
+        let mut rows: Vec<Value> = Vec::new();
+        for m in lists.into_iter().flatten() {
+            if !rows.iter().any(|r| r.get("id") == m.get("id")) {
+                rows.push(m);
+            }
         }
-        let rows = self.paged(req.with_etag()).await?;
         // Only the review-requested list answers what the gate saw change.
         if q.kind == ReviewKind::ReviewRequested {
             self.gate.lock().pending = false;
@@ -560,6 +576,7 @@ impl CodeHost for GitlabHost {
             futures::future::join_all(list.iter_mut().map(|(r, n)| async {
                 self.waiting_state(r).await;
                 self.thread_state(r, *n, me.as_deref()).await;
+                r.assigned = me.is_some() && r.author.login != me;
             }))
             .await;
             self.threads.lock().retain(|(repo, n), _| {

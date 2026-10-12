@@ -110,7 +110,13 @@
   /** `G` on Team: rows grouped by their first linked ticket. shortcut: per mount, not persisted. */
   let grouped = $state(false);
   /** My open PRs (Mine lists them all): Team rows read "you" as their author. */
-  const mineKeys = $derived(new Set((lists.authored.data?.items ?? []).map((i) => reviewKey(i.review.ref))));
+  const mineKeys = $derived(
+    new Set(
+      (lists.authored.data?.items ?? [])
+        .filter((i) => !i.review.assigned)
+        .map((i) => reviewKey(i.review.ref)),
+    ),
+  );
   /** No source feeds a project (of the scope) bound to a repository: Team has nothing to list. */
   const noTeamReach = $derived(
     settings.value() !== null &&
@@ -265,7 +271,7 @@
   const slaHours = $derived(settings.value()?.reviews.sla_hours ?? 24);
 
   function openNudge(item: ReviewItem): void {
-    if (item.review.kind !== 'authored') return;
+    if (item.review.kind !== 'authored' || item.review.assigned) return;
     const r = root?.querySelector('.k-row.selected')?.getBoundingClientRect();
     nudgeMenu = { x: r ? r.right - 220 : 40, y: (r?.bottom ?? 40) + 2, item };
   }

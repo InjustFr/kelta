@@ -209,6 +209,11 @@ describe('nowSections', () => {
     expect(all.some((r) => r.includes('#11'))).toBe(false);
   });
 
+  it('leaves PRs assigned to me out of Now', () => {
+    const sections = nowSections({ ...empty, authored: [review(5, { assigned: true, ci: 'failure' })] });
+    expect(sections.flatMap((s) => s.rows)).toEqual([]);
+  });
+
   it('Up next: not done, not started, in progress first, at most 10', () => {
     const started = entry('working', 'in_flight', { ticket: { account: 'jira', key: 'T-2', id: 'T-2' } });
     const tickets = [

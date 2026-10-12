@@ -149,6 +149,7 @@ pub fn review() -> Review {
         waiting_since: None,
         author_since: None,
         nudged_at: None,
+        assigned: false,
         unresolved_threads: None,
         last_comment_at: None,
     }

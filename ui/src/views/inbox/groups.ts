@@ -159,7 +159,8 @@ export function nowSections(input: NowInput): Section[] {
     );
   }
   for (const a of input.authored) {
-    if (ownedPrs.has(prKey(a))) continue;
+    // Assigned PRs (someone else's) are Mine rows only.
+    if (a.review.assigned || ownedPrs.has(prKey(a))) continue;
     const reason =
       a.review.decision === 'changes_requested'
         ? msg('Changes requested')

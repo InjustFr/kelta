@@ -13,12 +13,15 @@ Gitea/Forgejo ([Bitbucket](bitbucket.md), [Gitea](gitea.md)).
 |---|---|
 | For me | review requests addressed to you, or to a team you are in (`reviews.include_team_requests`). Drafts are left out unless `reviews.include_drafts` is on |
 | Team | pull requests of the repositories your ticket sources reach. In a project's tab it is offered only when a source feeds that project. `G` groups the rows by their linked ticket |
-| Mine | your own open pull requests, drafts included |
+| Mine | your own open pull requests and those assigned to you (GitHub, GitLab, Gitea; Bitbucket has no assignees), drafts included. The ones waiting on you come first: changes requested, a thread waiting for your answer, or red CI |
 
 Each row shows the number and title, the CI lamp, a draft or new badge, the review state, the linked tickets (a
 ticket key in the branch or title, `reviews.ticket_key_regex`), the repository, author, size and age. A row
 whose pull request waits on someone shows `waiting on Anna · 26h` (`+2` for several); it turns amber after
 `reviews.sla_hours` (24).
+
+Palette **Open tickets and reviews side by side** opens a tab in the active project with your tickets on the
+left and For me over Mine on the right; run it again to come back to that tab.
 
 A detail column on the right follows the selection, as in [Tickets](tickets.md#the-detail-column): `Space` hides
 or shows it, `Enter` moves the keys into it, `Esc` gives them back, `Shift+Enter` opens it as its own pane.
