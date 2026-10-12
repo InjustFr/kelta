@@ -5,7 +5,9 @@ import * as samples from '$lib/gen/fixtures';
 import {
   deltaChip,
   maxLamp,
+  outsidePhase,
   phaseOf,
+  phaseWord,
   testsMissing,
   type PhaseGit,
   type PhaseItem,
@@ -427,5 +429,26 @@ describe('New comments (#208): the Fix with Claude watermark', () => {
     expect(phaseOf(item(withPr), claude('done'), commented, git({ unpushed: true, ahead: 1 })).id).toBe(
       'new_comments',
     );
+  });
+});
+
+describe('phaseWord (#373)', () => {
+  const word = (...args: Parameters<typeof phaseOf>) => phaseWord(phaseOf(...args));
+
+  it('names who holds the item', () => {
+    expect(word(item(), claude('needs_input'), null, null)).toBe('Needs you');
+    expect(word(item(), claude('working'), null, null)).toBe('Working');
+    expect(word(item({ review_due: true }), null, null, null)).toBe('Your turn');
+    expect(word(item({ ...withPr }), null, pr({ ci: 'failure' }), git())).toBe('Your turn');
+    expect(word(item({ state: { kind: 'failed', step: 'x', message: 'y' } }), null, null, null)).toBe(
+      'Your turn',
+    );
+    const parked = item({ review_due: true, parked_at: '2026-10-10T08:00:00Z' });
+    expect(word(parked, null, null, null)).toBe('Resume');
+  });
+
+  it('says nothing while the item waits on others', () => {
+    expect(word(item({ ...withPr }), null, pr({ ci: 'success' }), git())).toBe('');
+    expect(phaseWord(outsidePhase({ status: 'working', preview: null }))).toBe('Working');
   });
 });

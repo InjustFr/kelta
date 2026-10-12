@@ -369,6 +369,11 @@
     const w = liveWork(item);
     return w ? phaseNow(w) : null;
   };
+  /** The work item's next step, as Enter runs it on a list row (`runPrimary`); null without work. */
+  const nextLabel = (item: TicketItem): string | null => {
+    const ph = phaseFor(item);
+    return ph ? (ph.primary ? ph.primaryLabel : t('Go to work tab')) : null;
+  };
   /** Shown: the work item's phase, else a Claude session Kelta did not start on the ticket (#345). */
   const shownPhase = (item: TicketItem) => {
     const key = ticketKey(item.ticket.ref);
@@ -387,10 +392,9 @@
       : (shown.find((i) => keyOf(i) === selKey) ?? null),
   );
   /** What Enter will do on the selected row, named before it is pressed (mirrors the Enter key below). */
-  const enterLabel = $derived.by(() => {
-    const ph = cur && mode === 'list' && !splitShown ? phaseFor(cur) : null;
-    return ph ? (ph.primary ? ph.primaryLabel : t('Go to work tab')) : t('Open');
-  });
+  const enterLabel = $derived.by(
+    () => (cur && mode === 'list' && !splitShown && nextLabel(cur)) || t('Open'),
+  );
 
   /** The selected row's last index: a row that leaves the list (moved to Done) hands over to its neighbour. */
   let lastIndex: number | null = null;
@@ -1041,6 +1045,7 @@
                   picked={picked.includes(r.key)}
                   picking={picked.length > 0}
                   phase={shownPhase(r.item)}
+                  next={nextLabel(r.item)}
                   hasWork={hasWork(r.item)}
                   marked={batch.has(r.item.ticket.ref)}
                   {groupBy}
@@ -1051,6 +1056,11 @@
                     if (e.metaKey || e.ctrlKey) togglePick(r.key);
                   }}
                   onopen={() => openDetail(r.item)}
+                  onnext={() => {
+                    selKey = r.key;
+                    const w = liveWork(r.item);
+                    if (w) void runPrimary(w);
+                  }}
                   onmove={() => {
                     selKey = r.key;
                     pickOrMove(r.item);

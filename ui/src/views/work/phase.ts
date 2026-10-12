@@ -431,6 +431,17 @@ function phaseRow(
   return p('no_changes', t('No changes yet'), '', 'none', 'go_claude', t('Go to Claude'), 'in_flight');
 }
 
+/** The phase as one word a list row can show (#373): who holds the item, '' while it waits on others. */
+export function phaseWord(ph: Phase): string {
+  if (ph.lamp === 'parked') return t('Resume');
+  if (ph.section === 'needs_you') return t('Needs you');
+  if (ph.lamp === 'working') return t('Working');
+  const mine = ph.lamp === 'error' || ph.lamp === 'done' || YOUR_TURN.includes(ph.section);
+  return mine ? t('Your turn') : '';
+}
+
+const YOUR_TURN: NowSection[] = ['fix', 'to_review', 'ship', 'requests'];
+
 /** The review side of a PR, shown beside its CI (#369); '' when no review is asked for. A
  *  changes-requested review on an older commit waits for re-review. */
 export function reviewOf(pr: PhasePr): string {

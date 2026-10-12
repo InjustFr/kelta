@@ -541,10 +541,10 @@ describe('TicketsPane workbench', () => {
     const { container } = mountBoard('list');
     await waitFor(() => {
       const chip = card(container, 'SHOP-120')?.querySelector('[data-pr]');
-      expect(chip?.textContent?.trim()).toBe('#305');
-      // CI passed but changes requested: one lamp, the review wins; the label names both
-      const lamp = chip?.querySelector('[data-attention="needs_input"]');
-      expect(lamp?.getAttribute('aria-label')).toBe('CI passed, changes requested');
+      expect(chip?.textContent?.trim()).toBe('#305Changes requested');
+      // CI and review apart (#373): the lamp is CI's, the review is in words
+      const lamp = chip?.querySelector('[data-attention="done"]');
+      expect(lamp?.getAttribute('aria-label')).toBe('CI passed');
     });
     expect(card(container, 'SHOP-151')?.querySelector('[data-pr]')).toBeNull();
   });
@@ -921,7 +921,15 @@ describe('TicketsPane split view', () => {
     const { container } = mountBoard('list');
     await ready(container, 'SHOP-142');
     expect(row(container, 'SHOP-142').querySelector('[data-phase]')?.textContent).toBe('To review');
+    expect(row(container, 'SHOP-142').querySelector('[data-phase-word]')?.textContent).toBe('Your turn');
     expect(row(container, 'SHOP-151').querySelector('[data-phase]')).toBeNull();
+    // The next step as a labelled row button (#373); none without work
+    expect(row(container, 'SHOP-151').querySelector('[data-next]')).toBeNull();
+    vi.mocked(runPrimary).mockClear();
+    await fireEvent.click(
+      row(container, 'SHOP-142').querySelector('[data-acts] [aria-label="Review changes"]')!,
+    );
+    expect(vi.mocked(runPrimary)).toHaveBeenCalledWith(expect.objectContaining({ id: w.id }));
     await press('Enter'); // detail shown: Enter focuses it
     await waitFor(() => expect(document.activeElement).toBe(detail()));
     await fireEvent.keyDown(detail()!, { key: 'Escape' });
