@@ -20,11 +20,9 @@
   import {
     Badge,
     Button,
-    Dialog,
     EmptyState,
     ErrorState,
     Icon,
-    Kbd,
     Lamp,
     Menu,
     ROW_HEIGHT,
@@ -1172,7 +1170,7 @@
     {/if}
   {/if}
 
-  <KeyHints hints={[...hints.slice(0, 5), ['?', msg('All keys')]]} />
+  <KeyHints {hints} />
 </div>
 
 {#if picker}
@@ -1231,53 +1229,16 @@
 {/if}
 <MoveDialogs {move} />
 {#if keysOpen}
-  <Dialog
-    title={t('Ticket keys')}
-    width={420}
+  <KeyHints
+    {hints}
     onclose={() => {
       keysOpen = false;
       root?.focus();
     }}
-  >
-    <dl class="keys">
-      {#each hints as [keys, label] (keys)}
-        <dt>
-          {#each keys.split(' ') as k (k)}{#if k === 'then'}<span class="then">{t('then')}</span>{:else}<Kbd
-                chord={k}
-              />{/if}{/each}
-        </dt>
-        <dd>{t(label)}</dd>
-      {/each}
-    </dl>
-  </Dialog>
+  />
 {/if}
 
 <style>
-  .keys {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: var(--k-space-3) var(--k-space-5);
-    margin: 0;
-    align-items: center;
-  }
-
-  .keys dt {
-    display: inline-flex;
-    gap: var(--k-space-1);
-    justify-self: end;
-  }
-
-  .keys dd {
-    margin: 0;
-    color: var(--k-fg-muted);
-  }
-
-  .then {
-    padding: 0 2px;
-    font-size: var(--k-font-size-xs);
-    color: var(--k-fg-subtle);
-  }
-
   .head {
     width: 100%;
     border: 0;

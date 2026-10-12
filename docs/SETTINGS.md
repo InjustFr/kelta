@@ -56,6 +56,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `bindings` | map<ActionId, list<Chord>> | `{}` (overrides only; platform defaults per SPEC §4 live in the ActionId catalog, `ui/src/lib/gen/actions.ts`, so the schema is OS-independent) | effective = catalog default ⊕ override; `[]` unbinds |
 | `prefix_bindings` | map<ActionId, str> | SPEC §4 | single key after prefix |
 | `list_keys` | bool | `true` | single-key shortcuts of lists and boards. `false`: plain printable keys (letters, digits, `?`, `/`, with or without Shift, no Ctrl/Cmd/Alt) no longer reach the panes, `j`/`k` included; arrows, `Enter`, `Escape`, `Space`, `Home`/`End`, `Tab` and every Ctrl/Cmd/Alt chord still work, as do text fields, terminals, dialogs, menus and a Kelta action you bound to a plain key. Applies at once |
+| `hints` | bool | `true` | the key hint line under Tickets, Reviews and Now (five keys and `?`, DESIGN §6.8). `false` hides it; `?` still opens the full key list. Applies at once |
 
 Every action id, label and default chord per platform is in the ActionId catalog (`crates/kelta-proto/src/actions.rs`, generated to `ui/src/lib/gen/actions.ts`); SPEC §4 lists them. Settings → Keys records a chord, flags conflicts and unbinds. `window.toggle` has no in-app chord: bind `kelta-ctl toggle` in your compositor. Work-flow actions (FLOW §7), rebindable through `bindings` / `prefix_bindings` like any ActionId:
 
@@ -331,6 +332,8 @@ blocked = { label = "blocked" }    # how this tracker marks a ticket blocked (be
 status_colors = { "In QA" = "theme:magenta", "Ready for release" = "#2f8c86" }
 # tracker fields shown on the tickets (below)
 fields = [{ id = "customfield_10042", label = "Verified" }, { id = "customfield_10051", label = "" }]
+# statuses that count as done for Now (below)
+waiting_statuses = ["A MEPP", "A MEP"]
 
 [sources.tracker]                  # the §3 tracker binding without repo_rules
 account = "jira-acme"
@@ -348,6 +351,8 @@ options = [{ label = "Auto", values = ["--auto"] }, { label = "Mode", values = [
 `blocked` says how the tracker marks a ticket blocked without changing its status: `"status"` (the status name reads blocked, on hold, waiting or impediment), `"flag"` (the Jira flag), `"relation"` (a Linear "blocked by" an open issue) or `{ label = "<name>" }`. Unset, it follows the provider: `flag` on Jira, `relation` on Linear, `status` elsewhere. A blocked ticket shows a Blocked chip, goes to Waiting in Flow and sorts last in its group; **Block / Unblock** (`b` in the detail) sets the flag, adds or removes the label (Jira, GitHub, GitLab, Gitea), or moves a `status` ticket to a blocked status and back to in progress (else to do). A Linear relation, or a label on Linear or Redmine, is set in the tracker: the action is off with that reason. A status name that reads blocked still puts the ticket in Waiting whatever the setting.
 
 `fields` shows tracker fields Kelta has no column for (a Jira custom field, a GitHub Projects v2 field) on the source's tickets: each field with a value is a `label: value` chip on the row (the value alone when `label` is empty) and a line of the detail's meta grid. `id` is the Jira field id or the GitHub project field name (any case); Settings → Sources lists the tracker's fields to pick from (Jira, GitHub project views) and takes a typed id elsewhere. The values come with the list call; other trackers show none yet. An id the tracker does not have shows nothing and is flagged *Unknown field* in the settings, never a list error.
+
+`waiting_statuses` names statuses (as the tracker spells them, exact match) where your part is over and the ticket waits on something else, such as a deployment. Now treats a ticket of this source in one of them as done: it leaves Up next, New for you and Next up, even when another view (a follow-up view with `who = "anyone"`) lists it. Tickets and the views that ask for these statuses still show it.
 
 A route is the first one in order whose `match` fits the ticket; an empty `match` never fits. `component` is compared with the ticket's labels (tickets carry no component field), `label` with its labels, `type` with its issue type. `options` are the route's Start options (see `[[session_templates]]`).
 

@@ -58,7 +58,7 @@
   const rail = $derived(railProjects());
   const reorderable = $derived(rail.filter((p) => !p.builtin));
 
-  // Now's tile: badge = what waits on Louis (first four sections), tooltip = the split header.
+  // Now's tile: badge = what waits on Louis (first four sections), sub line = the most urgent chip (#386).
   const now = $derived(nowSummary());
   // Tickets and Reviews counts are muted: the red badge stays on Now, so nothing is counted twice.
   const ALL = { kind: 'all' } as const;
@@ -404,7 +404,7 @@
   </button>
 
   {@render place('tickets', 'ticket', 'tickets', t('{n} mine', { n: mine }), mine, true)}
-  {@render place('now', 'inbox', 'inbox', now.header || t('Nothing waiting'), now.waiting, false)}
+  {@render place('now', 'inbox', 'inbox', now.top, now.waiting, false)}
   {@render place(
     'reviews',
     'git-pull-request',
@@ -844,11 +844,17 @@
     white-space: nowrap;
   }
 
+  /* Search and Settings: the chord shows on hover and focus only (the tooltip names it too). */
   .kbd {
     display: inline-flex;
     align-items: center;
     flex: none;
     height: 100%;
+    visibility: hidden;
+  }
+
+  button:is(:hover, :focus-visible) > .kbd {
+    visibility: visible;
   }
 
   /* Global views (44px, name over status word); session and tool rows are 32px, one line. */

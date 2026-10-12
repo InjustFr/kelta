@@ -44,6 +44,7 @@
       ansi: r.terminal.ansi.slice(1, 7),
       // Bezel's accent follows the project hue, so the live one is its honest preview.
       accent: r.accent ?? 'var(--k-accent)',
+      notes: r.notes,
     };
   }
 
@@ -181,6 +182,9 @@
               </span>
             </div>
             <div class="bar" style:background={c.preview.accent}></div>
+            {#each c.preview.notes as note (note)}
+              <span class="note" data-testid="theme-note">{t(note)}</span>
+            {/each}
           </div>
         {/each}
       </div>
@@ -299,5 +303,10 @@
   .bar {
     height: 3px;
     border-radius: 2px;
+  }
+
+  .note {
+    font-size: var(--k-font-size-xs);
+    color: var(--k-fg-muted);
   }
 </style>

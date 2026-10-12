@@ -13,7 +13,7 @@
 
   import { blockedReason } from '../tickets/caps';
   import TicketDetail from '../tickets/TicketDetail.svelte';
-  import { groomQueue, loadPool, nextUp, SNOOZE_DAYS, ticketPool } from './nextUp.svelte';
+  import { groomQueue, loadPool, nextUp, SNOOZE_DAYS, ticketPool, waitingStatuses } from './nextUp.svelte';
 
   let { onclose }: SheetProps = $props();
 
@@ -25,6 +25,7 @@
       nextUp.entries,
       (k) => nextUp.isNewKey(k),
       (t) => work.forTicket(t.ticket.ref) !== null,
+      waitingStatuses(),
       Date.now(),
     ),
   );

@@ -336,7 +336,7 @@
       {:else}
         <div class="grow"></div>
       {/if}
-      <StatusBar {prefixArmed} view={ui.view} />
+      <StatusBar {prefixArmed} />
     {/if}
   </div>
 

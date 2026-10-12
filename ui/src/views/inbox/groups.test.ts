@@ -4,7 +4,16 @@ import type { OutsideSession, ReviewItem, SessionInfo, TicketItem, UiEvent, Work
 import * as samples from '$lib/gen/fixtures';
 
 import type { Phase, PhaseId, NowSection } from '../work/phase';
-import { headerParts, jumpQueue, nowSections, rowKey, waitingCount, type NowInput } from './groups';
+import {
+  headerChips,
+  jumpQueue,
+  nowSections,
+  rowKey,
+  topChip,
+  waitingCount,
+  type NowInput,
+  type WorkEntry,
+} from './groups';
 
 let n = 0;
 function entry(id: PhaseId, section: NowSection, patch: Partial<WorkItem> = {}) {
@@ -244,25 +253,69 @@ describe('nowSections', () => {
     expect(ids('new')).toEqual(['t:jira:T-2']);
     expect(ids('up_next')).toEqual(['t:jira:T-1']);
   });
+
+  it("a source's waiting statuses count as done: out of Up next, New and Next up", () => {
+    const shipping = (key: string, source: string): TicketItem => {
+      const t = ticket(key, 'in_progress');
+      return {
+        ...t,
+        ticket: { ...t.ticket, status: { ...t.ticket.status, name: 'A MEPP' } },
+        source_ids: [source],
+      };
+    };
+    const sections = nowSections({
+      ...empty,
+      tickets: [
+        shipping('T-1', 'mine'),
+        shipping('T-2', 'mine'),
+        shipping('T-3', 'other'),
+        ticket('T-4', 'todo'),
+      ],
+      nextUp: [shipping('N-1', 'mine')],
+      fresh: new Set(['jira:T-2']),
+      waiting: new Map([['mine', ['A MEPP', 'A MEP']]]),
+    });
+    expect(sections.flatMap((s) => s.rows.map((r) => r.id))).toEqual(['t:jira:T-3', 't:jira:T-4']);
+  });
 });
 
 describe('header and badge', () => {
-  it('splits the header in decision order and drops zero parts', () => {
+  it('chips in section order, zero ones dropped, lamp only where Louis is needed', () => {
     const sections = nowSections({
       ...empty,
-      work: [entry('replied', 'needs_you'), entry('to_review', 'to_review'), entry('to_review', 'to_review')],
+      work: [
+        entry('replied', 'needs_you'),
+        entry('to_review', 'to_review'),
+        entry('to_review', 'to_review'),
+        entry('checks_failed', 'fix'),
+      ],
       requested: [review(1), review(2), review(3)],
       tickets: [ticket('T-1', 'todo')],
     });
-    expect(headerParts(sections, 1)).toEqual([
-      'Claude: 1 asks',
-      '2 LLM diffs',
-      '3 PRs waiting',
-      '1 working',
-      '1 up next',
+    const chips = headerChips(sections, 1);
+    expect(chips.map((c) => [c.section, c.text, c.lamp])).toEqual([
+      ['needs_you', '1 needs you', 'needs_input'],
+      ['to_review', '2 LLM diffs', null],
+      ['fix', '1 to fix', 'error'],
+      ['requests', '3 PRs waiting', null],
+      ['in_flight', '1 working', null],
+      ['up_next', '1 up next', null],
     ]);
-    expect(waitingCount(sections)).toBe(6);
-    expect(headerParts(nowSections(empty), 0)).toEqual([]);
+    expect(waitingCount(sections)).toBe(7);
+    expect(headerChips(nowSections(empty), 0)).toEqual([]);
+  });
+
+  it('the rail shows the most urgent chip only', () => {
+    const chips = (work: WorkEntry[]) =>
+      headerChips(nowSections({ ...empty, work, tickets: [ticket('T-1', 'todo')] }), 0);
+    expect(topChip(chips([entry('replied', 'needs_you'), entry('checks_failed', 'fix')]))?.text).toBe(
+      '1 needs you',
+    );
+    expect(topChip(chips([entry('to_review', 'to_review'), entry('checks_failed', 'fix')]))?.text).toBe(
+      '1 to fix',
+    );
+    expect(topChip(chips([]))?.text).toBe('1 up next');
+    expect(topChip([])).toBeUndefined();
   });
 });
 

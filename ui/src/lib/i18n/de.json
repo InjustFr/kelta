@@ -216,7 +216,7 @@
   "Switch project": "Projekt wechseln",
   "Commands": "Befehle",
   "Split": "Teilen",
-  "need input": "brauchen eine Eingabe",
+  "need you": "warten auf Sie",
   "in error": "mit Fehler",
   "working": "arbeiten",
   "done": "fertig",
@@ -231,10 +231,6 @@
   "5h": "5 Std.",
   "7d": "7 T.",
   "{n} {state}: go to the next one": "{n} {state}: zum nächsten",
-  "{n} need input": {
-    "one": "{n} braucht eine Eingabe",
-    "other": "{n} brauchen eine Eingabe"
-  },
   "{n} ready to review": {
     "one": "{n} bereit zur Prüfung",
     "other": "{n} bereit zur Prüfung"
@@ -453,17 +449,16 @@
   "Changes requested": "Änderungen angefordert",
   "Checks failed": "Prüfungen fehlgeschlagen",
   "In review": "Im Review",
-  "Fix {n}": "Beheben {n}",
+  "{n} to fix": {
+    "one": "{n} zu beheben",
+    "other": "{n} zu beheben"
+  },
   "{n} up next": "{n} demnächst",
   "needs input": "braucht Eingabe",
   "error": "Fehler",
   "ready for review": "bereit zum Review",
   "feedback": "Feedback",
   "review request": "Review-Anfrage",
-  "Claude: {n} asks": {
-    "one": "Claude: {n} Frage",
-    "other": "Claude: {n} Fragen"
-  },
   "{n} LLM diffs": {
     "one": "{n} LLM-Diff",
     "other": "{n} LLM-Diffs"
@@ -752,6 +747,12 @@
   "Replace": "Ersetzen",
   "Imported {name} (used in dark mode)": "{name} importiert (im dunklen Modus verwendet)",
   "Imported {name} (used in light mode)": "{name} importiert (im hellen Modus verwendet)",
+  "Muted text raised to 4.5:1": "Gedämpfter Text auf 4,5:1 angehoben",
+  "Subtle text raised to 4.5:1": "Dezenter Text auf 4,5:1 angehoben",
+  "Chrome text raised to 4.5:1": "Rahmentext auf 4,5:1 angehoben",
+  "Strong border raised to 3:1": "Starker Rahmen auf 3:1 angehoben",
+  "Surface steps derived from the background": "Flächenstufen aus dem Hintergrund abgeleitet",
+  "Some text or borders stay below the contrast floor": "Einige Texte oder Rahmen bleiben unter dem Mindestkontrast",
   "Delete \"{name}\"?": "„{name}“ löschen?",
   "It will be removed from config.toml.": "Es wird aus config.toml entfernt.",
   "Delete": "Löschen",
@@ -1246,7 +1247,6 @@
   "Could not load columns": "Spalten konnten nicht geladen werden",
   "All keys": "Alle Tasten",
   "Open pull request": "Pull Request öffnen",
-  "Ticket keys": "Ticket-Tasten",
   "then": "dann",
   "By flow": "Nach Fluss",
   "By priority": "Nach Priorität",
@@ -1922,6 +1922,8 @@
   "Mksession": "Mksession",
   "The diff editor's arguments: appended for review sessions and used by Review diff on own work\nitems, e.g. `[\"-c\",\"DiffviewOpen {range}\"]` (`{range}` = `<remote>/<base>` for own items, merge\nbase to working tree; `<remote>/<base>...HEAD` for review checkouts). Empty: `git diff` in a shell.": "Die Argumente des Diff-Editors: werden für Review-Sitzungen angehängt und von „Diff prüfen“ bei eigenen Arbeits-\nelementen verwendet, z. B. `[\"-c\",\"DiffviewOpen {range}\"]` (`{range}` = `<remote>/<base>` für eigene Elemente, Merge-\nBasis bis Arbeitsbaum; `<remote>/<base>...HEAD` für Review-Checkouts). Leer: `git diff` in einer Shell.",
   "Environment added to every session of the project (project/repo files).": "Umgebung, die jeder Sitzung des Projekts hinzugefügt wird (Projekt-/Repo-Dateien).",
+  "Hints": "Tastenhinweise",
+  "The key hint line under lists; `?` still lists every key.": "Die Zeile mit Tastenhinweisen unter Listen; `?` listet weiterhin alle Tasten.",
   "List keys": "Listentasten",
   "Prefix": "Präfix",
   "Prefix bindings": "Präfix-Belegungen",
@@ -2369,6 +2371,8 @@
   "Field": "Feld",
   "Fields": "Felder",
   "Tracker fields shown on this source's tickets, rows and detail, when they have a value. An entry\nwithout an id is dropped with a warning.": "Trackerfelder, die bei den Tickets dieser Quelle in Zeilen und Details angezeigt werden, wenn sie einen Wert haben. Ein Eintrag ohne ID wird mit einer Warnung verworfen.",
+  "Waiting statuses": "Wartende Status",
+  "Status names (as the tracker spells them) that count as done for Now: my part is over, the\nticket waits on something else (a deployment). Left out of Up next, Next up and New for you;\nTickets still lists them.": "Statusnamen (so geschrieben wie im Tracker), die für Jetzt als erledigt gelten: Mein Teil ist fertig, das Ticket wartet auf etwas anderes (ein Deployment). Nicht in Demnächst, Als Nächstes und Neu für Sie; Tickets listet sie weiterhin.",
   "A tracker field to show on the tickets.": "Ein Trackerfeld, das bei den Tickets angezeigt wird.",
   "The tracker's field: a Jira field id (`customfield_10042`), a GitHub project field name.": "Das Feld des Trackers: eine Jira-Feld-ID (`customfield_10042`), ein GitHub-Projektfeldname.",
   "Shown before the value; empty shows the value alone.": "Wird vor dem Wert angezeigt; leer zeigt nur den Wert.",

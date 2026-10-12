@@ -61,11 +61,27 @@ describe('groomQueue', () => {
       entries,
       (k) => k === 'jira:G',
       (t) => t.ticket.ref.key === 'F',
+      new Map(),
       now,
     );
     expect(got.map((t) => t.ticket.ref.key)).toEqual(['G', 'A', 'D']);
     expect(isSnoozed(entries['jira:C'], now)).toBe(true);
     expect(isSnoozed(entries['jira:D'], now)).toBe(false);
+  });
+
+  it('a ticket in a waiting status of its source is left out (#378)', () => {
+    const [a, b] = [ticket('A', 'in_progress'), ticket('B', 'in_progress')];
+    a.ticket.status.name = 'A MEPP';
+    const waiting = new Map(a.source_ids.map((id) => [id, ['A MEPP']]));
+    const got = groomQueue(
+      [a, b],
+      {},
+      (k) => k === 'jira:A',
+      () => false,
+      waiting,
+      now,
+    );
+    expect(got.map((t) => t.ticket.ref.key)).toEqual(['B']);
   });
 });
 

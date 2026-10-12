@@ -2243,6 +2243,7 @@
       "additionalProperties": false,
       "default": {
         "bindings": {},
+        "hints": true,
         "list_keys": true,
         "prefix": "ctrl+shift+space",
         "prefix_bindings": {
@@ -2302,6 +2303,11 @@
           "default": {},
           "description": "ActionId → chords. Overrides only: unlisted actions use the platform defaults of the\nActionId catalog (`ui/src/lib/gen/actions.ts`); `[]` unbinds.",
           "type": "object"
+        },
+        "hints": {
+          "default": true,
+          "description": "The key hint line under lists; `?` still lists every key.",
+          "type": "boolean"
         },
         "list_keys": {
           "default": true,
@@ -4139,6 +4145,13 @@
               }
             },
             "type": "object"
+          },
+          "waiting_statuses": {
+            "description": "Status names (as the tracker spells them) that count as done for Now: my part is over, the\nticket waits on something else (a deployment). Left out of Up next, Next up and New for you;\nTickets still lists them.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "type": "object"

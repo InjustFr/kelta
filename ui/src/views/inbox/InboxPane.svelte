@@ -1,8 +1,8 @@
 <script lang="ts">
   // Now (FLOW §3): one screen across projects answering "review Claude's work, or grab a feature?".
   // It keeps the Inbox slot (rail top tile, ⌘0, `inbox.open`, pane kind `inbox`).
-  import { t, tn } from '$lib/i18n/index.svelte';
-  import { untrack } from 'svelte';
+  import { msg, t, tn } from '$lib/i18n/index.svelte';
+  import { tick, untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
@@ -53,8 +53,10 @@
     testsMissing,
     workKey,
     type Lamp as LampKind,
+    type NowSection,
     type WorkActionId,
   } from '../work/phase';
+  import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
@@ -395,6 +397,16 @@
       root.focus({ preventScroll: true });
   });
 
+  /** A header chip: selects its section's first row and brings the section heading into view. */
+  async function jumpTo(id: NowSection): Promise<void> {
+    const first = visible.find((s) => s.id === id)?.rows[0];
+    if (!first) return;
+    selId = first.id;
+    root?.focus({ preventScroll: true });
+    await tick();
+    vlist?.scrollToIndex(lines.findIndex((l) => l.type === 'section' && l.section.id === id));
+  }
+
   function step(delta: number): void {
     if (selectable.length === 0) return;
     const at = cur ? selectable.indexOf(cur) : -1;
@@ -438,6 +450,19 @@
     openView('tickets');
   }
 
+  /** The full key list (`?`); the footer shows the first five. */
+  let keysOpen = $state(false);
+  const hints: [string, string][] = [
+    ['j k', msg('Move')],
+    ['enter', msg('Next action')],
+    ['g', msg('Go to')],
+    ['/', msg('Filter')],
+    ['space', msg('Mark ticket')],
+    ['o', msg('Open in browser')],
+    ['shift+r', msg('Refresh')],
+    ['mod+enter', msg('Start marked')],
+  ];
+
   function onkeydown(e: KeyboardEvent): void {
     const ticket =
       cur?.type === 'ticket'
@@ -468,6 +493,9 @@
         break;
       case 'g':
         if (cur) void goToRow(cur);
+        break;
+      case '?':
+        keysOpen = true;
         break;
       case '/':
         filtering = true;
@@ -554,7 +582,20 @@
       <span class="subtitle">{t('Everything waiting on you, across projects')}</span>
     </span>
     <span class="split" data-testid="now-header" title={summary.header}>
-      {#each summary.parts as part (part)}<span>{part}</span>{/each}
+      {#each summary.chips as c (c.section)}
+        {@const at = c.text.indexOf(String(c.n))}
+        <Button
+          size="sm"
+          variant="ghost"
+          class="count {c.lamp ?? ''}"
+          disabled={!visible.some((s) => s.id === c.section && s.rows.length > 0)}
+          data-testid="now-chip-{c.section}"
+          onclick={() => void jumpTo(c.section)}
+          >{#if at < 0}{c.text}{:else}{c.text.slice(0, at)}<b class="k-num">{c.n}</b>{c.text.slice(
+              at + String(c.n).length,
+            )}{/if}</Button
+        >
+      {/each}
     </span>
     {#if stale}<span class="asof" data-testid="now-asof"
         >{t('Updated {ago}', { ago: relativeTime(stale.ms) })}</span
@@ -694,18 +735,18 @@
     {/if}
   {/if}
 
-  <footer class="hints">
-    <span><Kbd chord="j" /><Kbd chord="k" /> {t('Move')}</span>
-    <span><Kbd chord="enter" /> {t('Next action')}</span>
-    <span><Kbd chord="g" /> {t('Go to')}</span>
-    <span><Kbd chord="o" /> {t('Open in browser')}</span>
-    <span><Kbd chord="/" /> {t('Filter')}</span>
-    <span><Kbd chord="shift+r" /> {t('Refresh')}</span>
-    <span><Kbd chord="space" /> {t('Mark ticket')}</span>
-    <span><Kbd chord="mod+enter" /> {t('Start marked')}</span>
-  </footer>
+  <KeyHints {hints} />
 </div>
 
+{#if keysOpen}
+  <KeyHints
+    {hints}
+    onclose={() => {
+      keysOpen = false;
+      root?.focus();
+    }}
+  />
+{/if}
 {#if queueMenu}
   {@const item = queueMenu.row.item}
   <Menu
@@ -763,13 +804,30 @@
 
   .split {
     display: inline-flex;
-    gap: var(--k-space-4);
+    gap: var(--k-space-1);
     min-width: 0;
     overflow: hidden;
     font-size: var(--k-font-size-sm);
     font-variant-numeric: tabular-nums;
     color: var(--k-fg-muted);
     white-space: nowrap;
+  }
+
+  .split :global(.count) {
+    color: var(--k-fg-muted);
+  }
+
+  .split :global(.count b) {
+    font-weight: 600;
+  }
+
+  /* Only the sections that need Louis take their lamp colour. */
+  .split :global(.count.needs_input) {
+    color: var(--k-lamp-needs-input);
+  }
+
+  .split :global(.count.error) {
+    color: var(--k-lamp-error);
   }
 
   .subtitle {
@@ -955,29 +1013,5 @@
     padding-left: calc(var(--k-space-4) + 12px + 2 * var(--k-space-2));
     color: var(--k-accent);
     cursor: pointer;
-  }
-
-  /* One line tall: hints that wrap fall out of view instead of adding a second line. */
-  .hints {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0 var(--k-space-5);
-    flex: none;
-    margin-top: auto; /* bottom of the pane even above an empty, error or loading state */
-    height: var(--k-statusbar-height);
-    overflow: hidden;
-    padding: 0 var(--k-space-3);
-    border-top: 1px solid var(--k-border);
-    font-size: var(--k-font-size-xs);
-    color: var(--k-fg-muted);
-    white-space: nowrap;
-  }
-
-  .hints > span {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    height: var(--k-statusbar-height);
   }
 </style>

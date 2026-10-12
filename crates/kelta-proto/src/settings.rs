@@ -389,6 +389,8 @@ pub struct KeysSettings {
     pub prefix_bindings: BTreeMap<String, String>,
     /// Single-key shortcuts in lists/boards.
     pub list_keys: bool,
+    /// The key hint line under lists; `?` still lists every key.
+    pub hints: bool,
 }
 
 impl Default for KeysSettings {
@@ -399,6 +401,7 @@ impl Default for KeysSettings {
             bindings: BTreeMap::new(),
             prefix_bindings: crate::actions::default_prefix_bindings(),
             list_keys: true,
+            hints: true,
         }
     }
 }
@@ -1849,6 +1852,12 @@ pub struct Source {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[ts(as = "Option<Vec<SourceField>>", optional)]
     pub fields: Vec<SourceField>,
+    /// Status names (as the tracker spells them) that count as done for Now: my part is over, the
+    /// ticket waits on something else (a deployment). Left out of Up next, Next up and New for you;
+    /// Tickets still lists them.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<String>>", optional)]
+    pub waiting_statuses: Vec<String>,
 }
 
 /// A tracker field to show on the tickets.
