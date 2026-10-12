@@ -3,7 +3,7 @@
   // row (a drag region), what that row is about, and the `+` menu. Custom decorations: it is also the
   // window's title bar (macOS traffic-light inset, or Kelta's own controls and resize handles).
   // Native decorations: the breadcrumb is the window title.
-  import { t } from '$lib/i18n/index.svelte';
+  import { t, tn } from '$lib/i18n/index.svelte';
   import { onMount } from 'svelte';
 
   import { tabHeaderRegistry, type AnyComponent } from '$app/registry';
@@ -11,12 +11,14 @@
   import { appInfo } from '$lib/ipc';
   import { GLOBAL, layout, projects, sessions, toasts, tools, ui, work, type GlobalView } from '$lib/stores';
   import { resolveProjectColor } from '$lib/theme';
-  import { Button, currentPlatform, Icon, IconButton, Kbd, Menu, type MenuItem } from '$lib/ui';
+  import { Button, currentPlatform, Icon, IconButton, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
 
+  import { rowKey } from '../views/inbox/groups';
+  import { currentSections, goToRow } from '../views/inbox/now';
   import { workTitle } from '../views/work/live';
   import { workKey } from '../views/work/phase';
   import { backTarget, type JumpLoc } from './jumplist';
-  import { chordFor, runStatusLabel } from './labels';
+  import { chordFor, currentRun, runPhase } from './labels';
   import { lazyComponents } from './lazy.svelte';
   import {
     activateProject,
@@ -115,16 +117,9 @@
 
   // ---- the focused session's Claude workflow run (#272) -----------------------------------------
 
-  const run = $derived.by(() => {
-    const list = session ? sessions.runs[session.id] : undefined;
-    return list?.findLast((r) => r.status === 'running') ?? list?.at(-1) ?? null;
-  });
+  const run = $derived(currentRun(session ? sessions.runs[session.id] : undefined));
   /** `<workflow> · <phase with a running agent>`, or its final status. */
-  const runChip = $derived.by(() => {
-    if (!run) return null;
-    const phase = run.phases.findLast((p) => p.agents.some((a) => !a.done)) ?? run.phases.at(-1);
-    return `${run.name ?? t('workflow')} · ${run.status === 'running' ? (phase?.title ?? t('starting')) : runStatusLabel(run.status)}`;
-  });
+  const runChip = $derived(run ? `${run.name ?? t('workflow')} · ${runPhase(run)}` : null);
   $effect(() => {
     if (session?.kind.type === 'claude') void sessions.loadRuns(session.id);
   });
@@ -146,6 +141,27 @@
       (ownerItem && tabs.find((x) => x.work_item_id === ownerItem.id)) ??
       tabs.find((x) => !isToolTab(x, lines));
     if (tb) selectRow(project.id, tb.id);
+  }
+
+  // ---- Claude sessions waiting on me, wherever they run (#372): Now's "Claude needs you" ----------
+
+  const asking = $derived(currentSections().find((s) => s.id === 'needs_you')?.rows ?? []);
+  let askMenu = $state<{ x: number; y: number } | null>(null);
+  const ASKING: MenuItem[] = $derived(
+    asking.map((r) =>
+      r.type === 'work'
+        ? { id: r.id, label: workTitle(r.item), detail: r.phase.label }
+        : { id: r.id, label: rowKey(r) },
+    ),
+  );
+
+  function onAsking(e: MouseEvent): void {
+    // One waiting: straight to it (attention.next would cycle past it once it was the last jump).
+    if (asking.length === 1) void goToRow(asking[0]!);
+    else {
+      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      askMenu = { x: r.left, y: r.bottom + 2 };
+    }
   }
 
   let plusMenu = $state<{ x: number; y: number } | null>(null);
@@ -287,6 +303,19 @@
     >
   {/if}
 
+  {#if asking.length > 0}
+    <Button
+      size="sm"
+      variant="ghost"
+      class="chip"
+      title={t('Claude needs you')}
+      aria-haspopup={asking.length > 1 ? 'menu' : undefined}
+      data-testid="context-asking"
+      onclick={onAsking}
+      ><Lamp level="needs_input" label={tn('{n} needs you', '{n} need you', asking.length)} /></Button
+    >
+  {/if}
+
   <Button
     variant="ghost"
     size="sm"
@@ -314,6 +343,20 @@
   {#each HANDLES as dir (dir)}
     <div class="handle {dir}" aria-hidden="true" onpointerdown={(e) => void resize(e, dir)}></div>
   {/each}
+{/if}
+
+{#if askMenu}
+  <Menu
+    items={ASKING}
+    x={askMenu.x}
+    y={askMenu.y}
+    label={t('Claude needs you')}
+    onselect={(id) => {
+      const row = asking.find((r) => r.id === id);
+      if (row) void goToRow(row);
+    }}
+    onclose={() => (askMenu = null)}
+  />
 {/if}
 
 {#if plusMenu}

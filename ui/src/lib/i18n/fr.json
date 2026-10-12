@@ -2403,5 +2403,9 @@
   "No drafts": "Sans brouillons",
   "Filter title, repo, number, author, branch, ticket (/)": "Filtrer titre, dépôt, numéro, auteur, branche, ticket (/)",
   "Person: {name}": "Personne : {name}",
-  "Filter key, title, status, type, labels, assignee (/)": "Filtrer clé, titre, statut, type, libellés, assigné (/)"
+  "Filter key, title, status, type, labels, assignee (/)": "Filtrer clé, titre, statut, type, libellés, assigné (/)",
+  "{n} need you": {
+    "one": "{n} vous attend",
+    "other": "{n} vous attendent"
+  }
 }

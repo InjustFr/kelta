@@ -3,7 +3,7 @@
   import { tick } from 'svelte';
 
   import type { TicketSort, TicketsMode, Who } from '$lib/gen';
-  import { Button, Icon, IconButton, Select, Tabs } from '$lib/ui';
+  import { Button, Icon, IconButton, relativeTime, Select, Tabs } from '$lib/ui';
 
   import TagFilter from '../tags/TagFilter.svelte';
   import { GROUP_BYS, SORTS, type GroupBy } from './group';
@@ -42,6 +42,8 @@
     mode: TicketsMode;
     onmode: (m: TicketsMode) => void;
     onrefresh: () => void;
+    /** When the list was last fetched (#372). */
+    fetchedAt: number | null;
     /** The list's ticket keys and the tag chip picked (#349). */
     tagKeys: readonly string[];
     tag: string | null;
@@ -73,6 +75,7 @@
     mode,
     onmode,
     onrefresh,
+    fetchedAt,
     tagKeys,
     tag,
     ontag,
@@ -221,6 +224,11 @@
       onchange={onmode}
     />
   {/if}
+  {#if fetchedAt}
+    <!-- shortcut: the age is computed on render (no timers), it ages with the next re-render. -->
+    <span class="asof" data-testid="tickets-asof">{t('Updated {ago}', { ago: relativeTime(fetchedAt) })}</span
+    >
+  {/if}
   <IconButton icon="refresh-cw" label={t('Refresh')} chord="shift+r" size="sm" onclick={onrefresh} />
 </header>
 
@@ -235,6 +243,11 @@
     padding-block: var(--k-space-2);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+  }
+
+  .asof {
+    color: var(--k-fg-subtle);
+    font-size: var(--k-font-size-xs);
   }
 
   .source {
