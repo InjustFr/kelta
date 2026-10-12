@@ -2370,6 +2370,8 @@
   "Field": "Champ",
   "Fields": "Champs",
   "Tracker fields shown on this source's tickets, rows and detail, when they have a value. An entry\nwithout an id is dropped with a warning.": "Champs du tracker affichés sur les tickets de cette source, lignes et détail, quand ils ont une valeur. Une entrée sans identifiant est ignorée avec un avertissement.",
+  "Waiting statuses": "Statuts en attente",
+  "Status names (as the tracker spells them) that count as done for Now: my part is over, the\nticket waits on something else (a deployment). Left out of Up next, Next up and New for you;\nTickets still lists them.": "Noms de statuts (tels que le tracker les écrit) qui comptent comme terminés pour Maintenant : ma part est finie, le ticket attend autre chose (un déploiement). Exclus de Ensuite, À suivre et Nouveau pour vous ; Tickets les liste toujours.",
   "A tracker field to show on the tickets.": "Un champ du tracker à afficher sur les tickets.",
   "The tracker's field: a Jira field id (`customfield_10042`), a GitHub project field name.": "Le champ du tracker : un identifiant de champ Jira (`customfield_10042`), un nom de champ de projet GitHub.",
   "Shown before the value; empty shows the value alone.": "Affiché avant la valeur ; vide, la valeur s’affiche seule.",

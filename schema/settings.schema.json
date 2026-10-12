@@ -3613,6 +3613,13 @@
               }
             },
             "type": "object"
+          },
+          "waiting_statuses": {
+            "description": "Status names (as the tracker spells them) that count as done for Now: my part is over, the\nticket waits on something else (a deployment). Left out of Up next, Next up and New for you;\nTickets still lists them.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "type": "object"

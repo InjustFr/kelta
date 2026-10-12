@@ -392,6 +392,42 @@ async fn detail_of_my_approved_and_failing_pull_requests() {
     assert_eq!(d.state, PrState::Merged, "merged_at set");
 }
 
+/// #379: a suite cancelled and superseded on the same head, one approval of the two required.
+#[tokio::test]
+async fn list_and_detail_follow_githubs_rollup_and_review_decision() {
+    let server = MockServer::start().await;
+    mount_detail(
+        &server,
+        "github/pull.json",
+        "github/reviews_approved.json",
+        "github/check_runs_superseded.json",
+    )
+    .await;
+    mount(&server, "POST", "/graphql", 200, "github/gql_superseded.json").await;
+    let h = gh(&server);
+    let listed = h.list_reviews(&query(ReviewKind::ReviewRequested, true, false)).await.unwrap();
+    let d = h.get(&rref("github-work", "acme/shop", 101)).await.unwrap();
+    for r in [&listed[0], &d.review] {
+        assert_eq!(r.ci, CiState::Success, "the cancelled runs were superseded");
+        assert!(r.failed_check_names.is_empty());
+        assert_eq!(r.decision, Some(ReviewDecision::ReviewRequired), "one approval of two");
+    }
+    assert_eq!(d.checks.len(), 7, "every run still shows, plus the legacy status");
+
+    // Without GitHub's verdict, the detail falls back to the REST lists.
+    let server = MockServer::start().await;
+    mount_detail(
+        &server,
+        "github/pull.json",
+        "github/reviews_approved.json",
+        "github/check_runs_superseded.json",
+    )
+    .await;
+    let d = gh(&server).get(&rref("github-work", "acme/shop", 101)).await.unwrap();
+    assert_eq!(d.review.ci, CiState::Failure);
+    assert_eq!(d.review.decision, Some(ReviewDecision::Approved));
+}
+
 #[tokio::test]
 async fn approve_posts_the_review_with_commit_id_and_maps_a_stale_head_to_conflict() {
     let server = MockServer::start().await;
@@ -828,7 +864,8 @@ async fn reviews_follow_the_link_header() {
         0,
         "no second pending review"
     );
-    assert_eq!(bodies(&server, "POST", "/graphql").await[0]["variables"]["id"], "PRR_9");
+    // The detail's verdict query came first.
+    assert_eq!(bodies(&server, "POST", "/graphql").await.last().unwrap()["variables"]["id"], "PRR_9");
 }
 
 #[tokio::test]

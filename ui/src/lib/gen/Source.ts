@@ -31,4 +31,10 @@ blocked?: BlockedMarker,
  * Tracker fields shown on this source's tickets, rows and detail, when they have a value. An entry
  * without an id is dropped with a warning.
  */
-fields?: Array<SourceField>, };
+fields?: Array<SourceField>, 
+/**
+ * Status names (as the tracker spells them) that count as done for Now: my part is over, the
+ * ticket waits on something else (a deployment). Left out of Up next, Next up and New for you;
+ * Tickets still lists them.
+ */
+waiting_statuses?: Array<string>, };

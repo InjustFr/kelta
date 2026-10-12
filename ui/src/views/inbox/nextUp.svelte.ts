@@ -5,8 +5,10 @@
 import { t } from '$lib/i18n/index.svelte';
 import type { NextUpItem, ProjectId, TicketItem, TicketRef } from '$lib/gen';
 import { nextUpList, nextUpPut, nextUpRemove, ticketSeen } from '$lib/ipc/commands';
-import { projects, tickets, toasts, work } from '$lib/stores';
+import { projects, settings, tickets, toasts, work } from '$lib/stores';
 import { ticketKey } from '$lib/stores/tickets.svelte';
+
+import { waits, type Waiting } from './groups';
 
 const ALL = { kind: 'all' } as const;
 const DAY_MS = 24 * 3600 * 1000;
@@ -32,7 +34,13 @@ export function movedRank(ranks: readonly number[], i: number, delta: 1 | -1): n
 export const isSnoozed = (it: NextUpItem | undefined, now: number): boolean =>
   !!it?.snoozed_until && Date.parse(it.snoozed_until) > now;
 
-const isOpen = (t: TicketItem): boolean => t.ticket.status.category !== 'done';
+const isOpen = (t: TicketItem, waiting?: Waiting): boolean =>
+  t.ticket.status.category !== 'done' && !waits(t, waiting);
+
+/** Source id → its `waiting_statuses` (#378). */
+export const waitingStatuses = (): Waiting =>
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- rebuilt per call, not state
+  new Map((settings.value()?.sources ?? []).map((s) => [s.id, s.waiting_statuses ?? []]));
 
 /**
  * The grooming pass: open tickets not started, not in Next up and not snoozed; New ones first, then
@@ -43,11 +51,12 @@ export function groomQueue(
   entries: Readonly<Record<string, NextUpItem>>,
   isNew: (key: string) => boolean,
   started: (t: TicketItem) => boolean,
+  waiting: Waiting,
   now: number,
 ): TicketItem[] {
   const open = pool.filter((t) => {
     const e = entries[ticketKey(t.ticket.ref)];
-    return isOpen(t) && !started(t) && e?.rank == null && !isSnoozed(e, now);
+    return isOpen(t, waiting) && !started(t) && e?.rank == null && !isSnoozed(e, now);
   });
   const fresh = open.filter((t) => isNew(ticketKey(t.ticket.ref)));
   return [...fresh, ...open.filter((t) => !fresh.includes(t))];
