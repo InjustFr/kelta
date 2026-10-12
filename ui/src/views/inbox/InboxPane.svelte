@@ -622,6 +622,7 @@
           itemHeight={ROW_HEIGHT}
           key={(l) => l.id}
           label={t('Now')}
+          sticky={(l) => l.type === 'section'}
         >
           {#snippet row(l)}
             {#if l.type === 'section'}
@@ -800,6 +801,8 @@
     font-size: var(--k-font-size-sm);
     font-weight: 600;
     color: var(--k-fg-muted);
+    background: var(--k-bezel-raised);
+    box-shadow: inset 0 -1px 0 var(--k-border);
   }
 
   .count {

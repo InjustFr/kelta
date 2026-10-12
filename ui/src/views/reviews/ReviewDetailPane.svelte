@@ -415,6 +415,11 @@
     color: var(--k-fg);
   }
 
+  /* The split view's column paints the surface (base.css .k-split-side). */
+  .embedded {
+    background: none;
+  }
+
   /* Split view: list and detail share one pane, so mark which side has the keys (DESIGN §7). */
   .embedded:focus-visible {
     box-shadow: inset 2px 0 0 var(--k-focus);

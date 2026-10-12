@@ -155,10 +155,12 @@ pre,
   container-type: inline-size;
   background: var(--k-well);
 }
+/* The detail sits a step down on the bezel, so list and detail read as two surfaces (#381); the
+   bezel-raised fill of its badges and buttons still steps up from it. */
 .k-split-side {
   flex: 0 0 clamp(320px, 44%, 640px);
   min-width: 0;
-  background: var(--k-well);
+  background: var(--k-bezel);
 }
 .k-split-empty {
   margin: 0;
@@ -310,6 +312,9 @@ pre,
   font-size: var(--k-font-size-sm);
   font-weight: var(--k-weight-strong);
   color: var(--k-fg-muted);
+  /* A band with a rule under it, so a group start never reads as a row (#381). */
+  background: var(--k-bezel-raised);
+  box-shadow: inset 0 -1px 0 var(--k-border);
 }
 
 .k-avatar {

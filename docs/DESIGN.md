@@ -290,8 +290,8 @@ Rules:
 - **Spacing**: 2 / 4 / 8 / 12 / 16 / 24 / 32 / 48. Row inner padding is 8px horizontal. Detail panes pad 16px; dialogs 16px; nothing pads a terminal.
 - **Radius encodes layer**: marks (chips, badges, kbd) 3px, controls (buttons, inputs, rows, tabs, tiles) 6px, panes 8px (`--k-radius-screen`, screens set into the housing), floating surfaces 10px.
 - **Elevation has three levels and only the top one casts a shadow**:
-  1. Bezel (`--k-bezel`): rail, the housing around and between panes, board lanes.
-  2. Bezel-raised (`--k-bezel-raised`): tab bar, pane headers, status strip, list toolbars.
+  1. Bezel (`--k-bezel`): rail, the housing around and between panes, board lanes, the split view's detail column (so list and detail read as two surfaces). In dark themes the rail (`--k-rail`) sits one step below the well (`--k-well` mixed 30% toward black), so the content reads as the lit part of the window.
+  2. Bezel-raised (`--k-bezel-raised`): tab bar, pane headers, status strip, list toolbars, list group headers (Tickets, Now, Reviews: a full-width band with a 1px `--k-border` rule under it, pinned at the top of the list while its group is in view).
   3. Well (`--k-well`): terminals, lists, detail panes, inputs.
   4. Float (`--k-bg-float` + `--k-shadow` + `--k-radius-lg`): menus, palette, dialogs, sheets, toasts. The only shadows in the app.
 - Borders only where they separate data (board cards, inputs, table rows in settings when needed). A pane has a 1px `--k-border` ring instead (§6.4).
@@ -401,7 +401,7 @@ One row grammar for all three, so they read as one instrument:
 `lamp | id (mono 12, --k-fg-muted, 76px) | title (13, fills) | meta (11, right-aligned, tabular)`.
 
 - Rows `ROW_HEIGHT` (32px, `$lib/ui`), no row borders, no zebra.
-- Selected: `--k-bg-selected` plus `box-shadow: inset 2px 0 0 var(--k-accent)`. Hover: `--k-bg-hover`.
+- Selected: `--k-bg-selected` (accent 14% into the well in light, 28% in dark: at least 1.6:1 on the well) plus `box-shadow: inset 2px 0 0 var(--k-accent)`. Hover: `--k-bg-hover`.
 - Tickets rows are a CSS grid on fixed tracks every row shares (`TicketRow.svelte`), so optional data never shifts a column: lamp (16px) | key (mono 13 `--k-fg-muted`, as wide as the longest key in view, capped at 12 characters) | title (14, `1fr`, takes all spare width) | signals (90px) | status (112px) | age (44px, right-aligned, tabular) | source (124px, 12 `--k-fg-subtle`, truncated, only with more than one source and a grouping other than Source) | assignee initials (20px circle on `--k-bezel`, 10px letters, Team and Unassigned only). Each cell carries its own left padding inside its track, so a dropped track takes no gap with it.
 - Chips in the title cell. Before the title: **Blocked** (#348, 1px `--k-danger` border and text, radius 3, 12px) and the **parent** key (#350, `--k-bg-hover` fill, `--k-fg-muted`, 13px, 16ch at most; not shown when the list is grouped by Parent). After the title: the source's chosen tracker **fields** (#351) as `label: value` chips (`--k-bg-hover`, 12px, 4 to 20ch, ellipsised; the value alone when the label is empty), then the local **tags** (#349). A tag is the one pill in the app: radius 999, 1px `--k-border`, a 6px dot in the tag's colour (`--k-fg-subtle` without one), 120px at most, never shrunk. The title ellipsises first, then the field chips; the row's compact actions lay over the end of the title and never reflow it.
 - One baseline: text cells align on their baseline and the line is centred in the row (`--k-row-height`); lamps, signal icons and status dots are centred on the row.

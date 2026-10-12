@@ -1000,6 +1000,7 @@
             itemHeight={ROW_HEIGHT}
             key={(r) => r.key}
             label={t('Tickets')}
+            sticky={(r) => r.kind === 'group'}
             onend={() =>
               void tickets
                 .loadMore(scope, viewPick, who, sourcePick)
@@ -1278,17 +1279,23 @@
     color: var(--k-fg-subtle);
   }
 
+  /* The split view's column paints the surface (base.css .k-split-side). */
+  .k-split-side > :global(.detail) {
+    background: none;
+  }
+
   .head {
     width: 100%;
     border: 0;
-    background: transparent;
     text-align: left;
     cursor: default;
   }
 
   .head.selected {
     background: var(--k-bg-selected);
-    box-shadow: inset 2px 0 0 var(--k-accent);
+    box-shadow:
+      inset 2px 0 0 var(--k-accent),
+      inset 0 -1px 0 var(--k-border);
   }
 
   /* Under the title column: past the lamp and key columns. */
