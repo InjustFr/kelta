@@ -73,7 +73,7 @@ The first matching row wins. "Claude" below means the item's Claude session `sta
 | 8 | `review_due` | To review (the delta chip) | done | Review changes | Ready for review |
 | 9 | `claude_replied` | Claude replied (`ClaudeMeta.preview`) | needs input | Go to Claude | Claude needs you |
 | 10 | PR exists, `git.remote_new > 0` | Remote has new commits (n) | error | Rebase onto {remote}/{branch} | Fix |
-| 11 | PR `decision = changes_requested` or `ci = failure` on the PR head, **and** the local HEAD is the PR head (`unpushed = 0`, not dirty) | Changes requested (#n) / Checks failed (#n and the failed check names: the first 3, then `+n`) | error | Fix with Claude / Send failures to Claude (`fix_checks`) | Fix |
+| 11 | PR `decision = changes_requested` or `ci = failure` on the PR head, **and** the local HEAD is the PR head (`unpushed = 0`, not dirty) | Changes requested (#n) / Checks failed (#n and the failed check names: the first 3, then `+n`). CI and review are separate axes (#369): the label names the other one too, `Checks failed · review required` (or `· approved`), `Changes requested · checks failed` | error | Fix with Claude / Send failures to Claude (`fix_checks`) | Fix |
 | 11a | PR `last_comment_at` newer than the item's `feedback_at` (or `feedback_at` unset): an unresolved thread whose last comment is not mine. No local-HEAD condition: unpushed work does not hide it | New comments (n unresolved threads) | error | Fix with Claude | Fix |
 | 12 | PR `mergeable = false` | Conflicts with {base} (n behind) | error | Rebase | Fix |
 | 13 | `git.diverged` (§4.4: own rewrite, PR exists) | Rebased (push rewrites #n) | none | Force push… | Ship and clean up |
@@ -81,7 +81,7 @@ The first matching row wins. "Claude" below means the item's Claude session `sta
 | 15 | no PR, `ahead > 0` | Ready to ship (n commits) | none | Ship | Ship and clean up |
 | 15a | PR is a draft (pushed: rows 13-14 come first; row 16 comes after) | Draft (#n, and `checks failure` when red) | none | Mark ready… (`d`, asks first; `review_set_draft`, #353), or Open PR while checks are red | Ship and clean up (In flight when red) |
 | 16 | PR approved, checks pass | Approved (#n) | none | Open PR (merge there) | Ship and clean up |
-| 17 | PR open otherwise | In review (#n, checks, approvals) | none | Open PR | In flight |
+| 17 | PR open otherwise | In review (#n, checks, review state: `#n checks pending · review required`) | none | Open PR | In flight |
 | 18 | no PR, `ahead = 0` | No changes yet | none | Go to Claude | In flight |
 
 Notes:
