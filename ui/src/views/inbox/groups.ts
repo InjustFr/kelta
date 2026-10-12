@@ -37,8 +37,14 @@ export interface NowInput {
   /** Ticket keys assigned to me I have not looked at yet (`New for you`). */
   fresh?: ReadonlySet<string>;
   /** Source id → its `waiting_statuses`: tickets there count as done for Now (#378). */
-  waiting?: ReadonlyMap<string, readonly string[]>;
+  waiting?: Waiting;
 }
+
+export type Waiting = ReadonlyMap<string, readonly string[]>;
+
+/** In a status its source lists as waiting (#378): done as far as Now and grooming go. */
+export const waits = (t: TicketItem, waiting?: Waiting): boolean =>
+  t.source_ids.some((id) => waiting?.get(id)?.includes(t.ticket.status.name));
 
 export interface Section {
   id: NowSection;
@@ -188,10 +194,8 @@ export function nowSections(input: NowInput): Section[] {
   const started = new Set(
     input.work.flatMap(({ item }) => (item.ticket ? [`${item.ticket.account}:${item.ticket.key}`] : [])),
   );
-  const waits = (t: TicketItem): boolean =>
-    t.source_ids.some((id) => input.waiting?.get(id)?.includes(t.ticket.status.name));
   const open = (t: TicketItem): boolean =>
-    t.ticket.status.category !== 'done' && !waits(t) && !started.has(ticketKey(t));
+    t.ticket.status.category !== 'done' && !waits(t, input.waiting) && !started.has(ticketKey(t));
   (input.nextUp ?? [])
     .filter(open)
     .forEach((t, i) =>
