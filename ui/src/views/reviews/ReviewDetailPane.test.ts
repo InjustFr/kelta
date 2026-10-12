@@ -91,6 +91,17 @@ describe('ReviewDetailPane', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it('keeps Tags and Refresh in More; Tags opens the tag menu', async () => {
+    mountDetail();
+    await screen.findByTestId('head-sha');
+    expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    const more = await screen.findByRole('menu', { name: 'More actions' });
+    expect(within(more).getByRole('menuitem', { name: /Refresh/ })).toBeTruthy();
+    await fireEvent.click(within(more).getByRole('menuitem', { name: /Tags/ }));
+    expect(await screen.findByRole('menu', { name: 'Tags' })).toBeTruthy();
+  });
+
   it('approves with the head_sha that is displayed', async () => {
     mountDetail();
     const sha = await screen.findByTestId('head-sha');

@@ -8,7 +8,7 @@
   import { isIpcError } from '$lib/ipc/transport';
   import { reviews, toasts } from '$lib/stores';
   import { reviewKey } from '$lib/stores/reducers';
-  import { Badge, Button, EmptyState, ErrorState, HtmlContent, Icon, Lamp } from '$lib/ui';
+  import { Badge, Button, EmptyState, ErrorState, HtmlContent, Icon, Lamp, Menu } from '$lib/ui';
 
   import { reviewCtx } from '../plugins/actions';
   import PluginActions from '../plugins/PluginActions.svelte';
@@ -45,11 +45,32 @@
   let dialog = $state<'comment' | 'changes' | null>(null);
   let root = $state<HTMLDivElement>();
   let tagMenu = $state<{ x: number; y: number } | null>(null);
-  let tagBtn = $state<HTMLElement>();
+  let moreMenu = $state<{ x: number; y: number } | null>(null);
+  /** More's wrapper: the Tags and More menus open under it. */
+  let moreBtn = $state<HTMLElement>();
+
+  function under(): { x: number; y: number } {
+    const r = moreBtn?.getBoundingClientRect();
+    return { x: r?.left ?? 40, y: (r?.bottom ?? 40) + 2 };
+  }
 
   function openTags(): void {
-    const r = tagBtn?.getBoundingClientRect();
-    tagMenu = { x: r?.left ?? 40, y: (r?.bottom ?? 40) + 2 };
+    tagMenu = under();
+  }
+
+  /** The quieter actions (#384), each also on its key. */
+  const moreItems = $derived([
+    { id: 'tags', label: t('Tags'), kbd: 't', key: 't' },
+    ...(configWorkflows('pr').length > 0
+      ? [{ id: 'workflow', label: t('Run workflow'), kbd: 'w', key: 'w' }]
+      : []),
+    { id: 'refresh', label: t('Refresh'), kbd: 'shift+r', key: 'R' },
+  ]);
+
+  function runMore(id: string): void {
+    if (id === 'tags') openTags();
+    else if (id === 'workflow') pickPrWorkflow(ref, projectId);
+    else refresh();
   }
 
   $effect(() => {
@@ -267,25 +288,21 @@
               {tn('{n} pending comment', '{n} pending comments', detail.pending_comments)}
             </span>
           {/if}
-          <Button variant="ghost" icon="external-link" onclick={browse}>{t('Open in browser')}</Button>
           <Button variant="ghost" icon="git-branch" onclick={() => void reviewLocally(ref, projectId)}>
             {t('Review locally')}
           </Button>
+          <Button variant="ghost" icon="external-link" onclick={browse}>{t('Open in browser')}</Button>
         {/if}
-        <span bind:this={tagBtn}
-          ><Button variant="ghost" icon="tag" aria-haspopup="menu" title={t('Tags (t)')} onclick={openTags}
-            >{t('Tags')}</Button
+        <span bind:this={moreBtn}
+          ><Button
+            variant="ghost"
+            icon="ellipsis"
+            aria-haspopup="menu"
+            aria-expanded={moreMenu !== null}
+            title={t('More actions')}
+            onclick={() => (moreMenu = under())}>{t('More')}</Button
           ></span
         >
-        {#if configWorkflows('pr').length > 0}
-          <Button
-            variant="ghost"
-            icon="play"
-            title={t('Run workflow (w)')}
-            onclick={() => pickPrWorkflow(ref, projectId)}>{t('Run workflow')}</Button
-          >
-        {/if}
-        <Button variant="ghost" icon="refresh-cw" onclick={refresh}>{t('Refresh')}</Button>
         <PluginActions kind="review" size="md" ctx={reviewCtx(rv.ref, projectId)} />
       </div>
     </header>
@@ -388,6 +405,19 @@
     onclose={() => {
       dialog = null;
       root?.focus();
+    }}
+  />
+{/if}
+{#if moreMenu}
+  <Menu
+    items={moreItems}
+    x={moreMenu.x}
+    y={moreMenu.y}
+    label={t('More actions')}
+    onselect={runMore}
+    onclose={() => {
+      moreMenu = null;
+      if (!tagMenu) moreBtn?.querySelector('button')?.focus();
     }}
   />
 {/if}

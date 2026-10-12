@@ -106,9 +106,10 @@
     background-image: linear-gradient(var(--k-bg-hover), var(--k-bg-hover));
   }
 
+  /* Transparent, but outlined so it reads as a control next to data and plain text (#384). */
   .k-button.ghost {
     background: transparent;
-    border-color: transparent;
+    border-color: var(--k-border-strong);
   }
 
   .k-button.ghost:hover:not(:disabled) {
