@@ -884,6 +884,7 @@
     {mode}
     onmode={setMode}
     onrefresh={refresh}
+    fetchedAt={list.fetchedAt}
     tagKeys={items.map(keyOf)}
     tag={tagFilter}
     ontag={(name) => (tagFilter = name)}

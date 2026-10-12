@@ -2401,5 +2401,9 @@
   "No drafts": "Ohne Entwürfe",
   "Filter title, repo, number, author, branch, ticket (/)": "Titel, Repo, Nummer, Autor, Branch, Ticket filtern (/)",
   "Person: {name}": "Person: {name}",
-  "Filter key, title, status, type, labels, assignee (/)": "Schlüssel, Titel, Status, Typ, Labels, Zuständige filtern (/)"
+  "Filter key, title, status, type, labels, assignee (/)": "Schlüssel, Titel, Status, Typ, Labels, Zuständige filtern (/)",
+  "{n} need you": {
+    "one": "{n} wartet auf Sie",
+    "other": "{n} warten auf Sie"
+  }
 }
