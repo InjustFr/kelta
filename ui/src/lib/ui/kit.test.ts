@@ -248,12 +248,50 @@ describe('components', () => {
     const { container } = render(VirtualListHarness, { props: { items, measure: true, follow: 0 } });
     const viewport = container.querySelector<HTMLElement>('.k-vlist')!;
     viewport.scrollTop = 500;
+    viewport.dispatchEvent(new Event('wheel'));
     const row = observed.find((el) => el.textContent === 'row 1')!;
     Object.defineProperty(row, 'offsetHeight', { value: 50 });
     report([{ target: row } as unknown as ResizeObserverEntry], {} as ResizeObserver);
     await Promise.resolve();
     await Promise.resolve();
     expect(viewport.scrollTop).toBe(500);
+    vi.unstubAllGlobals();
+  });
+
+  it('VirtualList keeps a far followed row in view while rows measure', async () => {
+    let report: ResizeObserverCallback = () => {};
+    const observed = new Set<HTMLElement>();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(cb: ResizeObserverCallback) {
+          report = cb;
+        }
+        observe(el: HTMLElement) {
+          observed.add(el);
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const items = Array.from({ length: 100 }, (_, i) => `row ${i}`);
+    const { container } = render(VirtualListHarness, { props: { items, measure: true, follow: 40 } });
+    const viewport = container.querySelector<HTMLElement>('.k-vlist')!;
+    Object.defineProperty(viewport, 'clientHeight', { value: 300 });
+    await Promise.resolve();
+    for (const el of observed) Object.defineProperty(el, 'offsetHeight', { value: 54 });
+    report(
+      [...observed].map((target) => ({ target }) as unknown as ResizeObserverEntry),
+      {} as ResizeObserver,
+    );
+    await Promise.resolve();
+    // Row 40 is measured by now (rendered around the new scroll position) or still estimated; either way it must be on screen.
+    const row = [...container.querySelectorAll<HTMLElement>('[role="listitem"]')].find(
+      (el) => el.textContent === 'row 40',
+    )!;
+    const y = parseFloat(row.style.top);
+    expect(y).toBeGreaterThanOrEqual(viewport.scrollTop);
+    expect(y).toBeLessThan(viewport.scrollTop + 300);
     vi.unstubAllGlobals();
   });
 });

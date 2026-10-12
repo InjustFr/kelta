@@ -79,6 +79,8 @@
         const h = (e.target as HTMLElement).offsetHeight;
         if (id !== undefined && h > 0 && sizes[id] !== h) sizes[id] = h;
       }
+      // Measuring shifts every later offset: land the followed row again until the user takes over.
+      if (pinned !== undefined) scrollTo(pinned);
     });
     observed.set(el, k);
     observer.observe(el);
@@ -101,8 +103,11 @@
     if (viewport) scrollTop = viewport.scrollTop;
   }
 
-  /** Scrolls the minimum amount so that row `index` is fully visible. */
-  export function scrollToIndex(index: number): void {
+  /** Row the last `scrollToIndex` targeted; re-applied after each measurement, cleared by user input. */
+  let pinned: number | undefined;
+  const unpin = () => (pinned = undefined);
+
+  function scrollTo(index: number): void {
     // Untracked: reading `tops` must not re-run the callers' effects on every row measurement.
     untrack(() => {
       if (!viewport) return;
@@ -114,6 +119,12 @@
       scrollTop = viewport.scrollTop;
     });
   }
+
+  /** Scrolls the minimum amount so that row `index` is fully visible, and keeps it so while rows measure. */
+  export function scrollToIndex(index: number): void {
+    pinned = index;
+    scrollTo(index);
+  }
 </script>
 
 <div
@@ -121,6 +132,9 @@
   bind:this={viewport}
   bind:clientHeight={height}
   {onscroll}
+  onwheel={unpin}
+  onpointerdown={unpin}
+  ontouchmove={unpin}
   role="list"
   aria-label={label}
 >
