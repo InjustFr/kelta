@@ -238,7 +238,26 @@ describe('TicketsPane states', () => {
     await waitFor(() => expect(card(container, 'SHOP-151')).toBeNull());
     expect(card(container, 'SHOP-155')).not.toBeNull();
     await fireEvent.input(filter, { target: { value: 'zzzz' } });
-    expect(await screen.findByText('No tickets match "zzzz".')).toBeTruthy();
+    expect(await screen.findByText('No match: 1 filter on ("zzzz").')).toBeTruthy();
+  });
+
+  it('shows every filter on as a removable chip, and Clear all turns them all off (#370)', async () => {
+    const { container } = mountBoard('list');
+    await waitFor(() => expect(row(container, 'SHOP-155')).not.toBeNull());
+    const chips = () =>
+      [...container.querySelectorAll('[data-filter]')].map((c) => c.getAttribute('data-filter'));
+    expect(chips()).toEqual([]);
+    await press('f');
+    await press('s');
+    await fireEvent.input(screen.getByLabelText('Filter tickets'), { target: { value: 'zzzz' } });
+    await waitFor(() => expect(chips()).toEqual(['text', 'sprint']));
+    expect(await screen.findByText('No match: 2 filters on ("zzzz", Current sprint).')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove filter "zzzz"' }));
+    await waitFor(() => expect(chips()).toEqual(['sprint']));
+    expect(row(container, 'SHOP-155')).toBeNull();
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Clear all' })[0]!);
+    await waitFor(() => expect(row(container, 'SHOP-155')).not.toBeNull());
+    expect(chips()).toEqual([]);
   });
 
   it('shows the error state with a retry when nothing could be loaded', async () => {
@@ -636,8 +655,8 @@ describe('TicketsPane list: group, sort, age, sprint, person', () => {
     expect(row(container, 'SHOP-142')).not.toBeNull();
     expect(screen.getByRole('button', { name: /^View, narrowed to current sprint/ })).toBeTruthy();
     await openView();
-    expect(screen.getByRole('button', { name: /Current sprint/ }).getAttribute('aria-pressed')).toBe('true');
-    await fireEvent.click(screen.getByRole('button', { name: /Current sprint/ }));
+    expect(screen.getByRole('button', { name: /^Current sprint/ }).getAttribute('aria-pressed')).toBe('true');
+    await fireEvent.click(screen.getByRole('button', { name: /^Current sprint/ }));
     await waitFor(() => expect(row(container, 'SHOP-155')).not.toBeNull());
     await press('f');
     await press('j'); // not a chord: j moves on

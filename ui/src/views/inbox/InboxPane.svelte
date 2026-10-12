@@ -63,6 +63,8 @@
   import { waitChip } from '../people/waiting';
   import TagChips from '../tags/TagChips.svelte';
   import { waitingChip } from '../reviews/nudge';
+  import FilterBar from '../filters/FilterBar.svelte';
+  import { clearAll, commonFilters, noMatch } from '../filters/filters';
 
   let { focused }: PaneProps<'inbox'> = $props();
 
@@ -342,9 +344,10 @@
 
   const visible = $derived(
     summary.sections
-      .map((s) => ({ ...s, rows: s.rows.filter((r) => matches(r, filter)) }))
+      .map((s) => ({ ...s, rows: s.rows.filter((r) => matches(r, filter.trim())) }))
       .filter((s) => s.rows.length > 0 || s.more > 0),
   );
+  const activeFilters = $derived(commonFilters(filter, () => (filter = '')));
   const selectable = $derived(visible.flatMap((s) => s.rows));
   const cur = $derived(selectable.find((r) => r.id === selId) ?? selectable[0] ?? null);
 
@@ -550,20 +553,20 @@
         >{t('Updated {ago}', { ago: relativeTime(stale.ms) })}</span
       >{/if}
     <span class="spacer"></span>
-    <input
-      bind:this={filterEl}
-      bind:value={filter}
-      class="k-filter"
-      placeholder={t('Filter')}
-      aria-label={t('Filter Now')}
-      onfocus={() => (filtering = true)}
-      onkeydown={onFilterKey}
-      onblur={() => (filtering = false)}
-    />
     <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}
       >{t('Refresh')}</Button
     >
   </header>
+  <FilterBar
+    bind:value={filter}
+    bind:input={filterEl}
+    active={activeFilters}
+    placeholder={t('Filter id, title, project, branch (/)')}
+    aria-label={t('Filter Now')}
+    onfocus={() => (filtering = true)}
+    onkeydown={onFilterKey}
+    onblur={() => (filtering = false)}
+  />
 
   {#if loading}
     <Loading label={t('Loading Now')} />
@@ -583,25 +586,25 @@
         <button type="button" class="k-link" onclick={pickBoard}>{t('Pick a board')}</button>
       </div>
     {/if}
-    {#if lines.length === 0 && noSource && !filter}
+    {#if lines.length === 0 && noSource && activeFilters.length === 0}
       <EmptyState icon="ticket" title={t('Add a ticket source: pick a board')}>
         {#snippet actions()}<Button variant="primary" onclick={pickBoard}>{t('Pick a board')}</Button
           >{/snippet}
       </EmptyState>
     {:else if lines.length === 0}
       <EmptyState
-        icon="inbox"
-        title={filter ? t('Nothing matches "{filter}".', { filter }) : t('Nothing needs you right now')}
-        body={filter
+        icon={activeFilters.length > 0 ? 'search' : 'inbox'}
+        title={activeFilters.length > 0 ? noMatch(activeFilters) : t('Nothing needs you right now')}
+        body={activeFilters.length > 0
           ? ''
           : t(
               'Claude sessions that ask a question, pull requests waiting for your review and tickets assigned to you show up here.',
             )}
       >
         {#snippet actions()}
-          {#if filter}<Button onclick={() => (filter = '')}>{t('Clear filter')}</Button>{:else}<Button
-              onclick={refresh}>{t('Refresh')}</Button
-            >{/if}
+          {#if activeFilters.length > 0}<Button onclick={() => clearAll(activeFilters)}
+              >{t('Clear all')}</Button
+            >{:else}<Button onclick={refresh}>{t('Refresh')}</Button>{/if}
         {/snippet}
       </EmptyState>
     {:else}

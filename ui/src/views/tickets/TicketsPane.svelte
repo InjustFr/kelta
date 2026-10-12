@@ -57,6 +57,8 @@
   import { pickWorkflow } from './workflow.svelte';
   import TagChips from '../tags/TagChips.svelte';
   import TagMenu from '../tags/TagMenu.svelte';
+  import FilterBar from '../filters/FilterBar.svelte';
+  import { clearAll, commonFilters, noMatch, type ActiveFilter } from '../filters/filters';
 
   let { projectId, paneId, content, focused }: PaneProps<'tickets'> = $props();
   /** The pane's project; `null` in the rail's Tickets view, where each ticket uses its own project. */
@@ -217,6 +219,26 @@
       ? personEntry.ids.some((i) => !i.code_host && i.account === t.ref.account && i.id === t.assignee?.id)
       : t.assignee?.id === person;
   const hasSprints = $derived(items.some((i) => i.ticket.sprint));
+  const activeFilters = $derived<ActiveFilter[]>([
+    ...commonFilters(
+      filter,
+      () => (filter = ''),
+      tagFilter,
+      () => (tagFilter = null),
+    ),
+    ...(person
+      ? [
+          {
+            id: 'person',
+            label: t('Person: {name}', { name: personEntry?.name ?? person }),
+            clear: () => setPerson(null),
+          },
+        ]
+      : []),
+    ...(currentSprint
+      ? [{ id: 'sprint', label: t('Current sprint'), clear: () => (currentSprint = false) }]
+      : []),
+  ]);
 
   $effect(() => {
     const [s, v, w, src] = [scope, viewPick, who, sourcePick];
@@ -825,9 +847,6 @@
 >
   <TicketsToolbar
     allProjects={scope.kind === 'all'}
-    bind:filter
-    bind:filterInput
-    onfilterkey={filterKeys}
     hasSource={!noSource}
     who={WHOS.map((w) => {
       const n = countOf(w);
@@ -868,6 +887,14 @@
     tagKeys={items.map(keyOf)}
     tag={tagFilter}
     ontag={(name) => (tagFilter = name)}
+  />
+  <FilterBar
+    bind:value={filter}
+    bind:input={filterInput}
+    active={activeFilters}
+    placeholder={t('Filter key, title, status, type, labels, assignee (/)')}
+    aria-label={t('Filter tickets')}
+    onkeydown={filterKeys}
   />
 
   {#if noSource}
@@ -913,12 +940,8 @@
         </EmptyState>
       {/if}
     {:else if shown.length === 0}
-      <EmptyState icon="search" title={t('No tickets match "{filter}".', { filter })}>
-        {#snippet actions()}<Button
-            onclick={() => {
-              filter = '';
-              tagFilter = null;
-            }}>{t('Clear filter')}</Button
+      <EmptyState icon="search" title={noMatch(activeFilters)}>
+        {#snippet actions()}<Button onclick={() => clearAll(activeFilters)}>{t('Clear all')}</Button
           >{/snippet}
       </EmptyState>
     {:else if mode === 'list' && groupBy === 'flow' && rows.length === 0}
