@@ -70,14 +70,14 @@
 
   let observer: ResizeObserver | undefined;
   const observed = new WeakMap<Element, string>();
-  /** Records a rendered row's height under its key (`measure` only). */
+  /** Observes every row, so toggling `measure` on later still sizes the rows already mounted. */
   function sized(el: HTMLElement, k: string) {
-    if (!measure || typeof ResizeObserver === 'undefined') return;
+    if (typeof ResizeObserver === 'undefined') return;
     observer ??= new ResizeObserver((entries) => {
       for (const e of entries) {
         const id = observed.get(e.target);
         const h = (e.target as HTMLElement).offsetHeight;
-        if (id !== undefined && h > 0 && sizes[id] !== h) sizes[id] = h;
+        if (measure && id !== undefined && h > 0 && sizes[id] !== h) sizes[id] = h;
       }
       // Measuring shifts every later offset: land the followed row again until the user takes over.
       if (pinned !== undefined) scrollTo(pinned);

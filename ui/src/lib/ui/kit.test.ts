@@ -228,6 +228,36 @@ describe('components', () => {
     vi.unstubAllGlobals();
   });
 
+  it('VirtualList measures rows already mounted when measure turns on', async () => {
+    let report: ResizeObserverCallback = () => {};
+    const observed: HTMLElement[] = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(cb: ResizeObserverCallback) {
+          report = cb;
+        }
+        observe(el: HTMLElement) {
+          observed.push(el);
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const items = Array.from({ length: 100 }, (_, i) => `row ${i}`);
+    const { container, rerender } = render(VirtualListHarness, { props: { items, measure: false } });
+    await rerender({ items, measure: true });
+    const second = observed.find((el) => el.textContent === 'row 1')!;
+    Object.defineProperty(second, 'offsetHeight', { value: 50 });
+    report([{ target: second } as unknown as ResizeObserverEntry], {} as ResizeObserver);
+    await Promise.resolve();
+    const third = [...container.querySelectorAll<HTMLElement>('[role="listitem"]')].find(
+      (el) => el.textContent === 'row 2',
+    );
+    expect(third?.style.top).toBe('78px');
+    vi.unstubAllGlobals();
+  });
+
   it('VirtualList scrollToIndex callers are not re-run by a measured size change', async () => {
     let report: ResizeObserverCallback = () => {};
     const observed: HTMLElement[] = [];
