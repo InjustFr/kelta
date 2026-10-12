@@ -1,5 +1,5 @@
 <script lang="ts" generics="T">
-  import type { Snippet } from 'svelte';
+  import { untrack, type Snippet } from 'svelte';
 
   interface Props {
     items: readonly T[];
@@ -103,13 +103,16 @@
 
   /** Scrolls the minimum amount so that row `index` is fully visible. */
   export function scrollToIndex(index: number): void {
-    if (!viewport) return;
-    const y = top(index);
-    const bottom = top(index + 1);
-    if (y < viewport.scrollTop) viewport.scrollTop = y;
-    else if (bottom > viewport.scrollTop + viewport.clientHeight)
-      viewport.scrollTop = bottom - viewport.clientHeight;
-    scrollTop = viewport.scrollTop;
+    // Untracked: reading `tops` must not re-run the callers' effects on every row measurement.
+    untrack(() => {
+      if (!viewport) return;
+      const y = top(index);
+      const bottom = top(index + 1);
+      if (y < viewport.scrollTop) viewport.scrollTop = y;
+      else if (bottom > viewport.scrollTop + viewport.clientHeight)
+        viewport.scrollTop = bottom - viewport.clientHeight;
+      scrollTop = viewport.scrollTop;
+    });
   }
 </script>
 

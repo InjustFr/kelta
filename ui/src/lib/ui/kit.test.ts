@@ -227,6 +227,35 @@ describe('components', () => {
     expect(third?.style.top).toBe('78px');
     vi.unstubAllGlobals();
   });
+
+  it('VirtualList scrollToIndex callers are not re-run by a measured size change', async () => {
+    let report: ResizeObserverCallback = () => {};
+    const observed: HTMLElement[] = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(cb: ResizeObserverCallback) {
+          report = cb;
+        }
+        observe(el: HTMLElement) {
+          observed.push(el);
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const items = Array.from({ length: 100 }, (_, i) => `row ${i}`);
+    const { container } = render(VirtualListHarness, { props: { items, measure: true, follow: 0 } });
+    const viewport = container.querySelector<HTMLElement>('.k-vlist')!;
+    viewport.scrollTop = 500;
+    const row = observed.find((el) => el.textContent === 'row 1')!;
+    Object.defineProperty(row, 'offsetHeight', { value: 50 });
+    report([{ target: row } as unknown as ResizeObserverEntry], {} as ResizeObserver);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(viewport.scrollTop).toBe(500);
+    vi.unstubAllGlobals();
+  });
 });
 
 describe('labelled primitives', () => {
