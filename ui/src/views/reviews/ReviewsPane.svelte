@@ -440,6 +440,12 @@
       />
     {/if}
     <Toggle label={t('Drafts')} bind:checked={includeDrafts} />
+    {#if shown.fetchedAt}
+      <!-- shortcut: the age is computed on render (no timers), it ages with the next re-render. -->
+      <span class="asof" data-testid="reviews-asof"
+        >{t('Updated {ago}', { ago: relativeTime(shown.fetchedAt) })}</span
+      >
+    {/if}
     <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}
       >{t('Refresh')}</Button
     >
@@ -662,6 +668,11 @@
 {/if}
 
 <style>
+  .asof {
+    color: var(--k-fg-subtle);
+    font-size: var(--k-font-size-xs);
+  }
+
   .add {
     color: var(--k-ok);
   }
