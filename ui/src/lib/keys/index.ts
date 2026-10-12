@@ -12,6 +12,7 @@ export {
   chordFromEvent,
   chordToString,
   codeToKeyName,
+  eventCode,
   findConflicts,
   isReservedChord,
   keyNameToCode,
