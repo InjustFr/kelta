@@ -12,7 +12,7 @@ export const draftLabel = (r: Review): string =>
 
 /** Why `r`'s draft state cannot change from Kelta, or null. */
 export function draftBlocked(r: Review): string | null {
-  if (r.kind !== 'authored') return t('Only on your own pull requests');
+  if (r.kind !== 'authored' || r.assigned) return t('Only on your own pull requests');
   // Plugin code hosts have no draft call (`CodeHost::set_draft`); the built-in ones all do.
   return settings.value()?.accounts[r.ref.account]?.kind === 'plugin_codehost'
     ? t('This code host cannot change the draft state')
