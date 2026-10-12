@@ -36,6 +36,8 @@ export interface NowInput {
   parked?: ReadonlySet<string>;
   /** Ticket keys assigned to me I have not looked at yet (`New for you`). */
   fresh?: ReadonlySet<string>;
+  /** Source id → its `waiting_statuses`: tickets there count as done for Now (#378). */
+  waiting?: ReadonlyMap<string, readonly string[]>;
 }
 
 export interface Section {
@@ -186,7 +188,10 @@ export function nowSections(input: NowInput): Section[] {
   const started = new Set(
     input.work.flatMap(({ item }) => (item.ticket ? [`${item.ticket.account}:${item.ticket.key}`] : [])),
   );
-  const open = (t: TicketItem): boolean => t.ticket.status.category !== 'done' && !started.has(ticketKey(t));
+  const waits = (t: TicketItem): boolean =>
+    t.source_ids.some((id) => input.waiting?.get(id)?.includes(t.ticket.status.name));
+  const open = (t: TicketItem): boolean =>
+    t.ticket.status.category !== 'done' && !waits(t) && !started.has(ticketKey(t));
   (input.nextUp ?? [])
     .filter(open)
     .forEach((t, i) =>

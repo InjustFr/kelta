@@ -4,7 +4,7 @@
 import { formatDate, t } from '$lib/i18n/index.svelte';
 import type { KeltaError, TicketRef } from '$lib/gen';
 import { outsideJump } from '$lib/ipc/commands';
-import { projects, reviews, sessions, tickets, toasts, ui, work } from '$lib/stores';
+import { projects, reviews, sessions, settings, tickets, toasts, ui, work } from '$lib/stores';
 import { ticketKey } from '$lib/stores/tickets.svelte';
 
 import { hud } from '../../shell/hud.svelte';
@@ -48,6 +48,7 @@ export function currentSections(): Section[] {
     nextUp: nextUp.ordered(now).flatMap((e) => pool.get(ticketKey(e.ticket)) ?? []),
     parked: keys((ref) => nextUp.parked(ref, now)),
     fresh: keys((ref) => nextUp.isNew(ref)),
+    waiting: new Map((settings.value()?.sources ?? []).map((s) => [s.id, s.waiting_statuses ?? []])),
   });
 }
 

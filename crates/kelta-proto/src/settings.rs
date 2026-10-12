@@ -1849,6 +1849,12 @@ pub struct Source {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[ts(as = "Option<Vec<SourceField>>", optional)]
     pub fields: Vec<SourceField>,
+    /// Status names (as the tracker spells them) that count as done for Now: my part is over, the
+    /// ticket waits on something else (a deployment). Left out of Up next, Next up and New for you;
+    /// Tickets still lists them.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<String>>", optional)]
+    pub waiting_statuses: Vec<String>,
 }
 
 /// A tracker field to show on the tickets.
