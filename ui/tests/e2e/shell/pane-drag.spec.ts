@@ -70,9 +70,15 @@ test.describe('pane drag and drop', () => {
     await boot(page);
     const [a, b] = await paneIds(page);
     await dragOnto(page, 0, 1, 0.5, 0.5);
+    // One poll for both boxes: reading b's x before the swap made the bound stale.
     await expect
-      .poll(async () => (await page.locator(`[data-pane-id="${a}"]`).boundingBox())!.x)
-      .toBeGreaterThan((await page.locator(`[data-pane-id="${b}"]`).boundingBox())!.x);
+      .poll(async () => {
+        const [boxA, boxB] = await Promise.all(
+          [a, b].map((id) => page.locator(`[data-pane-id="${id}"]`).boundingBox()),
+        );
+        return boxA!.x - boxB!.x;
+      })
+      .toBeGreaterThan(0);
     await expect.poll(async () => (await savedTabs(page))[0]).toEqual([b, a]);
   });
 

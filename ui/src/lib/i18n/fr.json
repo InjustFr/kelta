@@ -109,6 +109,7 @@
   "Tool: {tool}": "Outil : {tool}",
   "Project folder": "Dossier du projet",
   "Branch {branch} (separate folder): {path}": "Branche {branch} (dossier séparé) : {path}",
+  "Recent": "Récents",
   "Recent: {path}": "Récent : {path}",
   "Other folder…": "Autre dossier…",
   "Starting the session failed": "Échec du démarrage de la session",
