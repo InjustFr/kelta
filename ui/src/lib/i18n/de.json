@@ -2497,5 +2497,8 @@
   },
   "Ship pushes the branch and opens a draft PR.": "Ausliefern pusht den Branch und öffnet einen Entwurfs-PR.",
   "Open the Story panel": "Verlaufs-Panel öffnen",
-  "{whose}: {what}": "{whose}: {what}"
+  "{whose}: {what}": "{whose}: {what}",
+  "Tasks": "Aufgaben",
+  "{done} of {n}": "{done} von {n}",
+  "Changes so far": "Änderungen bisher"
 }

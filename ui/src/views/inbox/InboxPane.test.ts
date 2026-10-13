@@ -69,6 +69,8 @@ const rowZone = (c: HTMLElement, id: string) => {
 const FLAKY = '0199a6b2-0000-7000-8000-00000000a004';
 /** SHOP-142, whose Claude is working in the mock. */
 const RATE_LIMIT = '0199a6b2-0000-7000-8000-00000000a001';
+/** wip/retry-queue-spike, whose Claude has a task list but no changes yet. */
+const SPIKE = '0199a6b2-0000-7000-8000-00000000a005';
 
 describe('Now', () => {
   it('one list in three zones, a summary line, no chips, Compact, Refresh or key bar (#399, #413)', async () => {
@@ -133,6 +135,26 @@ describe('Now', () => {
     expect(brief.querySelectorAll('.btn').length).toBeGreaterThan(shown);
     await fireEvent.click(within(brief).getByRole('button', { name: /^Mark reviewed/ }));
     await waitFor(() => expect(work.get(FLAKY)?.review_due).toBe(false));
+  });
+
+  it("the brief of a work row shows Claude's tasks and the changes so far; without tasks, nothing (#434)", async () => {
+    const { container } = mountNow();
+    await screen.findByText('Flaky test in cart service');
+    // The retry-queue spike: tasks, nothing changed yet.
+    await nextWaitingTo(container, `w:${SPIKE}`);
+    const spike = await screen.findByTestId('now-brief-progress');
+    expect(spike.querySelector('h4')?.textContent).toMatch(/Tasks\s+2 of 4/);
+    expect(spike.querySelector('.files')).toBeNull();
+    // No task list: no section.
+    await nextWaitingTo(container, `w:${FLAKY}`);
+    expect(screen.queryByTestId('now-brief-progress')).toBeNull();
+    await nextWaitingTo(container, `w:${RATE_LIMIT}`);
+    const progress = await screen.findByTestId('now-brief-progress');
+    expect(progress.querySelector('h4')?.textContent).toMatch(/Tasks\s+3 of 5/);
+    expect(progress.querySelectorAll('.tasks li')).toHaveLength(5);
+    expect(progress.querySelector('li[aria-current="step"]')?.textContent).toContain('Cover the burst case');
+    await waitFor(() => expect(progress.textContent).toContain('+41 −7, 3 files'));
+    expect(progress.querySelector('.files li')?.textContent).toBe('src/rate_limit.rs');
   });
 
   it("the row's next step is a button that runs it", async () => {
