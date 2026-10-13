@@ -164,3 +164,57 @@ function gwt(body: HTMLElement): void {
   }
   flush();
 }
+
+export interface Criterion {
+  text: string;
+  checked: boolean;
+}
+
+export interface Criteria {
+  items: Criterion[];
+  /** The description's first paragraph, for a ticket without criteria. */
+  intro: string;
+}
+
+/** Heading names of the acceptance criteria. */
+const ACCEPTANCE = /^(acceptance|acceptance criteria|ac)\s*:?$/i;
+
+/**
+ * The acceptance criteria of a description: its task-list items, else the list under a heading named
+ * Acceptance, Acceptance criteria or AC. shortcut: English headings only, like the Open questions list.
+ */
+export function readCriteria(html: string): Criteria {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  const root = tpl.content;
+  const text = (li: Element): string => {
+    const c = li.cloneNode(true) as Element;
+    c.querySelectorAll('input, ul, ol').forEach((n) => n.remove());
+    return c.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+  };
+  const item = (li: Element): Criterion => ({
+    text: text(li),
+    checked: li.querySelector(':scope > input[checked], :scope > p > input[checked]') !== null,
+  });
+
+  let lis: Element[] = [...root.querySelectorAll('li')].filter((li) =>
+    li.querySelector(':scope > input[type=checkbox], :scope > p > input[type=checkbox]'),
+  );
+  if (lis.length === 0) {
+    const h = [...root.querySelectorAll('h1, h2, h3, h4, h5, h6')].find((e) =>
+      ACCEPTANCE.test(e.textContent?.trim() ?? ''),
+    );
+    for (let el = h?.nextElementSibling; el && !HEADING.test(el.tagName); el = el.nextElementSibling)
+      if (/^[UO]L$/.test(el.tagName)) lis.push(...el.querySelectorAll(':scope > li'));
+  }
+  lis = lis.filter((li) => text(li) !== '');
+
+  const first = root.querySelector('p, pre')?.textContent ?? '';
+  return {
+    items: lis.map(item),
+    intro: first
+      .trim()
+      .split(/\n\s*\n/)[0]!
+      .trim(),
+  };
+}

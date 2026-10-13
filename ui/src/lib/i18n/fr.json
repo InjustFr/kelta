@@ -2486,5 +2486,10 @@
   "Work: Story panel": "Travail : panneau Récit",
   "{done} of {n} steps": "{done} étapes sur {n}",
   "{phase} (story)": "{phase} (récit)",
-  "{step} failed": "Échec : {step}"
+  "{step} failed": "Échec : {step}",
+  "Acceptance criteria": "Critères d’acceptation",
+  "{checked} of {n} criteria checked": {
+    "one": "{checked} critère sur {n} coché",
+    "other": "{checked} critères sur {n} cochés"
+  }
 }
