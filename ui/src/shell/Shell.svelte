@@ -192,7 +192,7 @@
   });
 
   // The Queue lists the same work as the rail: the rail folds to its lamps while it is shown (#431).
-  $effect(() => sidebar.fold(ui.view === 'now'));
+  $effect(() => sidebar.fold(ui.view === 'now' && !ui.settings));
 
   // ---- keys ------------------------------------------------------------------------------------
 
@@ -218,7 +218,11 @@
   let overlayWasOpen = false;
   $effect(() => {
     const open =
-      ui.overlay !== null || ui.sheets.length > 0 || confirms.current !== null || prompts.current !== null;
+      ui.overlay !== null ||
+      ui.sheets.length > 0 ||
+      confirms.current !== null ||
+      prompts.current !== null ||
+      ui.settings !== null; // Esc out of Settings gives the keyboard back too
     if (overlayWasOpen && !open) {
       // Give the keyboard back to the focused terminal.
       queueMicrotask(() => {
@@ -327,10 +331,16 @@
   <div class="main">
     {#if detached}
       <!-- A detached window (#342): its tab alone, under the native title bar. -->
-      <Workspace projectId={detached.project_id} tabId={detached.tab_id} />
+      {#if ui.settings}
+        <GlobalHost view="settings" />
+      {:else}
+        <Workspace projectId={detached.project_id} tabId={detached.tab_id} />
+      {/if}
     {:else}
       <UpdateBanner />
-      {#if ui.view}
+      {#if ui.settings}
+        <GlobalHost view="settings" />
+      {:else if ui.view}
         <GlobalHost view={ui.view} />
       {:else if active}
         <Workspace projectId={active.id} />

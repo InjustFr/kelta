@@ -38,7 +38,8 @@ test('Now and the ticket row show the options; a button answers and clears the q
   await ask(page);
 
   await page.getByTestId('rail-inbox').click();
-  const bar = page.locator(`[data-testid="ask"][data-session-id="${SID}"]`);
+  // The row's bar (the selected row's brief has its own, #414).
+  const bar = page.locator(`.askline [data-testid="ask"][data-session-id="${SID}"]`);
   await expect(bar.getByRole('button')).toHaveText(['Alpha', 'Beta', 'Gamma']);
   await expect(page.locator('[data-row="w:0199a6b2-0000-7000-8000-00000000a001"]')).toContainText(
     'Which candidate?',
@@ -86,4 +87,42 @@ test('Peek shows the body; typing in the terminal clears the question', async ({
   await expect
     .poll(() => page.evaluate((id) => window.__kelta!.stores.sessions.get(id)?.claude?.question ?? null, SID))
     .toBeNull();
+});
+
+test('the Queue brief answers the question with 1 and the row leaves Your move (#414)', async ({ page }) => {
+  // The retry-queue spike's Claude asks (live, hooks on, inside its `ask` call).
+  const spikeClaude = '0199a6b2-0000-7000-8000-000000000012';
+  const row = '[data-row="w:0199a6b2-0000-7000-8000-00000000a005"]';
+  await page.setViewportSize({ width: 1280, height: 1200 });
+  await boot(page);
+  await page.evaluate((id) => {
+    const mock = window.__keltaMock!;
+    const s = mock.state.sessions.find((x) => x.id === id)!;
+    Object.assign(s, { lifecycle: 'live', status: 'working' });
+    s.claude!.question = {
+      question: 'Keep 3 tries?',
+      options: ['Keep 3', 'Make it configurable'],
+      body_html: '<p>The <strong>backoff</strong> constant</p>',
+    };
+    mock.emit({ type: 'session.updated', session: structuredClone(s) });
+  }, spikeClaude);
+  await page.keyboard.press('Control+0');
+  const now = page.getByTestId('inbox-pane');
+  await expect(now.locator(`.row.yours${row}`)).toBeVisible();
+  await now.locator(row).click();
+  const ask = page.getByTestId('now-brief').getByTestId('ask');
+  await expect(ask).toContainText('backoff constant');
+  await expect(ask.getByRole('button', { name: 'Keep 3' })).toContainText('1');
+
+  await page.keyboard.press('1');
+  await expect
+    .poll(() =>
+      callsOf(page, 'session_write').then((calls) =>
+        calls
+          .filter((c) => c.args?.id === spikeClaude)
+          .map((c) => String.fromCharCode(...Object.values(c.args?.data as Record<string, number>))),
+      ),
+    )
+    .toEqual(['\x1b[200~Keep 3\x1b[201~', '\r']);
+  await expect(now.locator(`.row.claude${row}`)).toBeVisible();
 });

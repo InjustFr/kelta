@@ -185,6 +185,20 @@ describe('LayoutStore', () => {
     expect(closed).toHaveBeenCalledOnce();
   });
 
+  it('drops a saved Settings tab on load and saves the layout (#410)', async () => {
+    const shop = mock.state.layouts.shop!;
+    mock.state.layouts.shop = {
+      ...shop,
+      tabs: [...shop.tabs, makeTab('Settings', pane({ kind: 'settings', section: null }))],
+    };
+    const store = new LayoutStore();
+    const closed = vi.fn();
+    store.onListTabsClosed = closed;
+    expect((await store.load('shop')).tabs.map((t) => t.id)).toEqual(shop.tabs.map((t) => t.id));
+    expect(store.isDirty('shop')).toBe(true);
+    expect(closed).not.toHaveBeenCalled();
+  });
+
   it('never migrates the global views own layout', async () => {
     const store = new LayoutStore();
     const closed = vi.fn();
@@ -259,14 +273,14 @@ describe('LayoutStore', () => {
       type: 'ui.open',
       project_id: 'home',
       request: {
-        content: { kind: 'settings', section: null },
+        content: { kind: 'welcome' },
         placement: 'focused',
         focus: true,
         tab_title: null,
         work_item_id: null,
       },
     });
-    // The Settings tab already exists: it is focused, and the change is saved.
+    // The Welcome tab already exists: it is focused, and the change is saved.
     expect(store.get('home')?.active_tab).toBe('home-t2');
     expect(store.isDirty('home')).toBe(true);
   });

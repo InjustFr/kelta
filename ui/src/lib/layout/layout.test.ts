@@ -266,9 +266,21 @@ describe('dropListTabs (#409)', () => {
       l,
       makeTab('Source', pane({ ...tickets('list'), scope: { kind: 'source', id: 'jira' } }, 's')),
     );
-    l = addTab(l, makeTab('Settings', pane({ kind: 'settings', section: null }, 'g')));
     const r = dropListTabs(l);
     expect(r.layout).toBe(l);
+    expect(r.scope).toBeNull();
+  });
+
+  it('closes Settings tabs and Settings panes inside splits, without a scope (#410)', () => {
+    const settings = pane({ kind: 'settings', section: null }, 'g');
+    let l = layoutOf(splitPane(p('a'), 'a', 'row', settings));
+    l = { ...l, tabs: [{ ...l.tabs[0]!, focused_pane: 'g' }] };
+    l = addTab(l, makeTab('Settings', pane({ kind: 'settings', section: 'keys' }, 'h')));
+    const r = dropListTabs(l);
+    expect(r.layout.tabs.map((t) => t.id)).toEqual(['t1']);
+    expect(r.layout.active_tab).toBe('t1');
+    expect(r.layout.tabs[0]?.root).toEqual(p('a'));
+    expect(r.layout.tabs[0]?.focused_pane).toBe('a');
     expect(r.scope).toBeNull();
   });
 });
