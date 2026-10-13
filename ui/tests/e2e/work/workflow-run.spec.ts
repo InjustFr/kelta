@@ -1,5 +1,6 @@
 // Run a saved workflow on a ticket (#233) on the IPC mock: `w` in the detail, the picker, the run in
-// a background tab, the toast's Open and Peek, the ticket row's run chip, and the run's live view (#272).
+// a background tab, the toast's Open and Peek, the ticket row's run chip, and the run's live view (#272),
+// split beside the session's terminal in its own tab (#392).
 import { expect, test } from '@playwright/test';
 
 import { boot, callsOf, dispatch } from '../shell/helpers';
@@ -46,11 +47,16 @@ test('detail w: the run opens a background tab, the toast opens and peeks its se
     page.locator(`[data-testid="pane"][data-focused="true"] [data-session-id="${sid}"]`),
   ).toHaveCount(1);
 
-  // #272: the run's hooks show in the context bar; its sheet lists phases and agents, live.
+  // #272: the run's hooks show in the context bar; its pane lists phases and agents, live.
+  // #392: the run claimed the ticket, so the rail shows it on the ticket, not on the session's row.
+  await expect(tab).toHaveCount(1);
+  await expect(page.getByTestId('rail-run')).toHaveCount(0);
   const chip = page.getByTestId('context-workflow');
   await expect(chip).toHaveText('⚙ kelta-ticket-pass · Pick');
   await chip.click();
-  const sheet = page.getByTestId('workflow-runs');
+  const sheet = page.locator('[data-testid="pane"][data-focused="true"]').getByTestId('workflow-runs');
+  await expect(page.getByTestId('pane')).toHaveCount(2); // the terminal and its runs, in one tab
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   const agents = sheet.getByTestId('workflow-agent');
   await expect(agents).toHaveText(['●pick']);
   await agents.first().click();
@@ -75,6 +81,10 @@ test('detail w: the run opens a background tab, the toast opens and peeks its se
   }, sid);
   await expect(agents).toHaveText(['✓pick', '✓implement-#151']);
   await expect(sheet.getByTestId('workflow-run')).toContainText('1m 30s · 5,000 tokens · 12 tool calls');
-  await page.keyboard.press('Escape');
+  // Back on the terminal, the chip shows the final status; opening again focuses the same pane.
+  await page.locator(`[data-testid="pane"] [data-session-id="${sid}"]`).click();
   await expect(chip).toHaveText('⚙ kelta-ticket-pass · completed');
+  await chip.click();
+  await expect(sheet).toHaveCount(1);
+  await expect(page.getByTestId('pane')).toHaveCount(2);
 });

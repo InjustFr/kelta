@@ -8,6 +8,7 @@ describe('registries', { timeout: 30_000 }, () => {
     const kinds = Object.keys(paneRegistry).sort();
     expect(kinds).toEqual(
       [
+        'claude_runs',
         'diagnostics',
         'inbox',
         'plugin_screen',
@@ -31,7 +32,6 @@ describe('registries', { timeout: 30_000 }, () => {
   it('sheets and tab headers load', async () => {
     expect(Object.keys(sheetRegistry).sort()).toEqual(
       [
-        'claude_runs',
         'create_ticket',
         'finish',
         'finish_merged',

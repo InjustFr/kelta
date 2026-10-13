@@ -18,7 +18,7 @@ import type { JsonValue } from "./serde_json/JsonValue";
 /**
  * Pane content; serde tag `kind`.
  */
-export type PaneContent = { "kind": "terminal", session_id: SessionId, } | { "kind": "web", tool_instance_id: ToolInstanceId, } | { "kind": "plugin_screen", plugin_id: PluginId, screen_id: string, instance_id: ScreenInstanceId, params: JsonValue, } | { "kind": "tickets", scope: Scope, view_id: string | null, 
+export type PaneContent = { "kind": "terminal", session_id: SessionId, } | { "kind": "claude_runs", session_id: SessionId, } | { "kind": "web", tool_instance_id: ToolInstanceId, } | { "kind": "plugin_screen", plugin_id: PluginId, screen_id: string, instance_id: ScreenInstanceId, params: JsonValue, } | { "kind": "tickets", scope: Scope, view_id: string | null, 
 /**
  * `[[sources]]` id the list narrows to (`view_id` then narrows inside it); `None` = every
  * source of the scope.

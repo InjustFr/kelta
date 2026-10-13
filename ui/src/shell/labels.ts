@@ -1,7 +1,16 @@
 // Display labels for sessions and panes (headers, palette, status bar).
 
 import { msg, t } from '$lib/i18n/index.svelte';
-import type { ClaudeRun, PaneContent, SessionInfo, SessionKind, SessionStatus, ToolInfo } from '$lib/gen';
+import type {
+  ClaudeRun,
+  PaneContent,
+  RunClaim,
+  SessionId,
+  SessionInfo,
+  SessionKind,
+  SessionStatus,
+  ToolInfo,
+} from '$lib/gen';
 import { effectiveChords } from '$lib/keys/manager';
 import { defaultTitle } from '$lib/layout';
 import { settings } from '$lib/stores';
@@ -54,6 +63,8 @@ export function paneIcon(content: PaneContent, session: SessionInfo | null): str
   switch (content.kind) {
     case 'terminal':
       return session ? sessionIcon(session.kind) : 'square-terminal';
+    case 'claude_runs':
+      return 'list-tree';
     case 'web':
       return 'globe';
     case 'plugin_screen':
@@ -123,13 +134,33 @@ export function runPhase(run: ClaudeRun): string {
   return phase?.title ?? t('starting');
 }
 
-/** A run's rail row (#377): its phase while it runs, "Needs input" while its session asks, else its final status. */
-export function runState(run: ClaudeRun, session: SessionInfo): { label: string; lamp: LampLevel } {
-  if (run.status !== 'running')
-    return { label: runPhase(run), lamp: run.status === 'failed' ? 'error' : 'none' };
-  if (session.status === 'needs_input' || session.attention === 'needs_input')
-    return { label: attentionLabel('needs_input'), lamp: 'needs_input' };
-  return { label: runPhase(run), lamp: 'working' };
+/**
+ * A rail tab row's run sub line (#392): its work item's claimed run, else the running runs of its
+ * sessions that no live claim names (those show on their ticket), `+N` past the first.
+ */
+export function runLine(
+  claim: RunClaim | null | undefined,
+  runs: readonly ClaudeRun[],
+  claims: readonly RunClaim[],
+): { text: string; sessionId: SessionId } | null {
+  if (claim?.session_id && claim.state !== 'done') {
+    const phase = claim.state === 'running' && claim.phase ? claim.phase : runStatusLabel(claim.state);
+    return { text: `${claim.name ?? t('workflow')} · ${phase}`, sessionId: claim.session_id };
+  }
+  // One live claim takes one running run of its session with the same workflow name.
+  const left = claims
+    .filter((c) => c.state === 'running' || c.state === 'blocked')
+    .map((c) => `${c.session_id} ${c.name}`);
+  const loose = runs.filter((r) => {
+    if (r.status !== 'running') return false;
+    const i = left.indexOf(`${r.session_id} ${r.name}`);
+    if (i >= 0) left.splice(i, 1);
+    return i < 0;
+  });
+  const first = loose[0];
+  if (!first) return null;
+  const more = loose.length > 1 ? ` +${loose.length - 1}` : '';
+  return { text: `${first.name ?? t('workflow')} · ${runPhase(first)}${more}`, sessionId: first.session_id };
 }
 
 // Well-known tools without an `icon`, by id or lower-cased label (#377).

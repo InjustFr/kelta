@@ -26,6 +26,7 @@
     focusedPane,
     focusedSession,
     isToolTab,
+    openRuns,
     rowLabel,
     selectRow,
     toolSubLines,
@@ -298,8 +299,7 @@
       class="chip"
       title={t('Workflow runs of this session')}
       data-testid="context-workflow"
-      onclick={() => ui.openSheet('claude_runs', { sessionId: sid })}
-      ><span aria-hidden="true">⚙</span> {runChip}</Button
+      onclick={() => void openRuns(sid)}><span aria-hidden="true">⚙</span> {runChip}</Button
     >
   {/if}
 

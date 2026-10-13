@@ -28,6 +28,7 @@ export interface PaneProps<K extends PaneKind = PaneKind> {
 
 export const paneRegistry: Record<RegisteredPaneKind, LazyComponent> = {
   terminal: () => import('../views/terminal/TerminalPane.svelte'),
+  claude_runs: () => import('../views/terminal/WorkflowRunsPane.svelte'),
   welcome: () => import('../views/welcome/WelcomePane.svelte'),
   tickets: () => import('../views/tickets/TicketsPane.svelte'),
   ticket_detail: () => import('../views/tickets/TicketDetailPane.svelte'),
@@ -76,7 +77,6 @@ export type RegisteredSheetKey =
   | 'tracker.source_picker'
   | 'tickets.move'
   | 'workflow_run'
-  | 'claude_runs'
   | 'groom';
 export const sheetRegistry: Record<RegisteredSheetKey, LazyComponent> = {
   start_work: () => import('../views/work/StartWorkSheet.svelte'),
@@ -100,8 +100,6 @@ export const sheetRegistry: Record<RegisteredSheetKey, LazyComponent> = {
   'tickets.move': () => import('../views/tickets/MoveSheet.svelte'),
   /** props: { ticket, workflows } (#233) */
   workflow_run: () => import('../views/tickets/WorkflowSheet.svelte'),
-  /** props: { sessionId } (#272) */
-  claude_runs: () => import('../views/terminal/WorkflowRunsSheet.svelte'),
   /** Palette `Groom` (#145). */
   groom: () => import('../views/inbox/GroomSheet.svelte'),
 };

@@ -138,9 +138,9 @@ describe('ProjectRail', () => {
     );
   });
 
-  it('workflows: each session current run with its phase or Needs input; a click opens its runs', async () => {
+  it('runs (#392): a claimed run on its ticket, the others on their session row with a count; a click splits the runs in', async () => {
     const r = await setup();
-    expect(r.queryByTestId('rail-workflows')).toBeNull();
+    expect(r.queryAllByTestId('rail-run')).toHaveLength(0);
     const base = {
       name: 'kelta-ticket-pass',
       status: 'running',
@@ -151,21 +151,51 @@ describe('ProjectRail', () => {
       result: null,
       logs: [],
     };
-    sessions.apply({ type: 'workflow.updated', run: { ...base, run_id: 'wf_a', session_id: SHOP_CLAUDE } });
-    sessions.apply({
-      type: 'workflow.updated',
-      run: { ...base, run_id: 'wf_b', session_id: BILLING_CLAUDE },
-    });
-    await expect.poll(() => r.queryAllByTestId('rail-workflow').length).toBe(2);
-    const row = (id: string) => r.container.querySelector(`[data-run-id="${id}"]`) as HTMLElement;
-    expect(row('wf_a').textContent).toContain('kelta-ticket-pass · Implement');
-    expect(row('wf_a').dataset.attention).toBe('working');
-    expect(row('wf_b').textContent).toContain('Needs input');
-    expect(row('wf_b').dataset.attention).toBe('needs_input');
+    const emit = (run_id: string, session_id: string, name = base.name) =>
+      sessions.apply({ type: 'workflow.updated', run: { ...base, run_id, name, session_id } });
+    emit('wf_a', SHOP_CLAUDE);
+    emit('wf_b', SHOP_CLAUDE, 'triage');
+    emit('wf_c', BILLING_CLAUDE);
+    const claim = (id: string, session_id: string, phase: string) => {
+      const run = {
+        name: base.name,
+        run_id: 'r',
+        session_id,
+        phase,
+        state: 'running' as const,
+        note: null,
+        sha: null,
+      };
+      work.apply({ type: 'work.updated', work: { ...work.get(id)!, run } });
+    };
+    claim('0199a6b2-0000-7000-8000-00000000a004', BILLING_CLAUDE, 'Pick'); // a ticket with no tab
+    claim('0199a6b2-0000-7000-8000-00000000a003', '0199a6b2-0000-7000-8000-000000000008', 'Review');
 
-    await fireEvent.click(row('wf_a'));
-    expect(ui.sheet).toEqual({ key: 'claude_runs', props: { sessionId: SHOP_CLAUDE } });
-    ui.sheets = [];
+    await expect.poll(() => r.queryAllByTestId('rail-run').length).toBe(2);
+    expect(r.queryByTestId('rail-workflows')).toBeNull();
+    const sub = (sid: string) =>
+      r.container.querySelector(`[data-testid="rail-run"][data-session-id="${sid}"]`);
+    const shop = () => sub(SHOP_CLAUDE)!;
+    expect(shop().textContent).toContain('kelta-ticket-pass · Implement +1');
+    expect(sub('0199a6b2-0000-7000-8000-000000000008')?.textContent).toContain('kelta-ticket-pass · Review');
+    expect(sub(BILLING_CLAUDE)).toBeNull(); // its run is on its ticket
+
+    const runsPanes = () =>
+      allPanes(layout.get('shop')!.tabs.find((t) => t.id === 'shop-t1')!.root).filter(
+        (p) => p.content.kind === 'claude_runs',
+      );
+    await fireEvent.click(shop());
+    await expect.poll(() => runsPanes().length).toBe(1);
+    const tab = layout.get('shop')!.tabs.find((t) => t.id === 'shop-t1')!;
+    expect(runsPanes()[0]!.content).toEqual({ kind: 'claude_runs', session_id: SHOP_CLAUDE });
+    expect(tab.focused_pane).toBe(runsPanes()[0]!.id);
+    expect(layout.get('shop')!.active_tab).toBe('shop-t1');
+    expect(ui.sheet).toBeNull();
+    // Open again: focuses the same pane.
+    layout.update('shop', (l) => ({ ...l, active_tab: 'shop-t2' }));
+    await fireEvent.click(shop());
+    await expect.poll(() => layout.get('shop')!.active_tab).toBe('shop-t1');
+    expect(runsPanes()).toHaveLength(1);
   });
 
   it('tools: a tool without a Lucide icon shows a well-known icon, its 1-2 characters, else a monogram', async () => {

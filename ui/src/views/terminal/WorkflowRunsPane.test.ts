@@ -1,12 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { ClaudeRun } from '$lib/gen';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { applyUiEvent, sessions } from '$lib/stores';
 
-import WorkflowRunsSheet from './WorkflowRunsSheet.svelte';
+import WorkflowRunsPane from './WorkflowRunsPane.svelte';
 
 let mock: MockControls;
 let sid: string;
@@ -28,6 +28,15 @@ const run = (patch: Partial<ClaudeRun> = {}): ClaudeRun => ({
   ...patch,
 });
 
+const paneProps = () => ({
+  projectId: 'shop',
+  tabId: 't',
+  paneId: 'p',
+  content: { kind: 'claude_runs' as const, session_id: sid },
+  visible: true,
+  focused: true,
+});
+
 beforeEach(async () => {
   const created = createMockTransport();
   mock = created.controls;
@@ -37,10 +46,10 @@ beforeEach(async () => {
   sessions.runs = {};
 });
 
-describe('WorkflowRunsSheet', () => {
+describe('WorkflowRunsPane', () => {
   it('shows phases and agents live, the selected agent tail, then the final totals', async () => {
     applyUiEvent({ type: 'workflow.updated', run: run() });
-    render(WorkflowRunsSheet, { props: { sessionId: sid, onclose: vi.fn() } });
+    render(WorkflowRunsPane, { props: paneProps() });
     const agents = screen.getAllByTestId('workflow-agent');
     expect(agents.map((a) => [a.textContent, a.dataset.state])).toEqual([
       ['✓implement-#7', 'done'],
@@ -80,17 +89,19 @@ describe('WorkflowRunsSheet', () => {
 
   it('a run with nothing known yet still renders', () => {
     applyUiEvent({ type: 'workflow.updated', run: run({ name: null, phases: [] }) });
-    render(WorkflowRunsSheet, { props: { sessionId: sid, onclose: vi.fn() } });
+    render(WorkflowRunsPane, { props: paneProps() });
     expect(screen.getByTestId('workflow-run').textContent).toContain('wf_1');
   });
 
   it('loads the runs core saw once per session, and drops them with the session', async () => {
-    mock.state.claudeRuns.push(run());
-    await sessions.loadRuns(sid);
-    await sessions.loadRuns(sid);
+    // Not `sid`: the pane rendered above already loaded its runs.
+    const other = mock.state.sessions[1]!.id;
+    mock.state.claudeRuns.push(run({ session_id: other }));
+    await sessions.loadRuns(other);
+    await sessions.loadRuns(other);
     expect(mock.calls.filter((c) => c.cmd === 'claude_runs_list')).toHaveLength(1);
-    expect(sessions.runs[sid]).toHaveLength(1);
-    applyUiEvent({ type: 'session.removed', id: sid });
-    expect(sessions.runs[sid]).toBeUndefined();
+    expect(sessions.runs[other]).toHaveLength(1);
+    applyUiEvent({ type: 'session.removed', id: other });
+    expect(sessions.runs[other]).toBeUndefined();
   });
 });
