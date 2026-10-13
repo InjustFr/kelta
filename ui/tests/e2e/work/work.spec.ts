@@ -53,8 +53,9 @@ test.describe('tickets board', () => {
   test('moves a ticket by dragging its card', async ({ page }) => {
     await boot(page);
     await openBoard(page);
-    await card(page, 'SHOP-155').dragTo(lane(page, 'in_review'));
-    await expect(lane(page, 'in_review').locator('[data-key="jira-acme:SHOP-155"]')).toBeVisible();
+    // The Tickets view opens on Mine: SHOP-151 is one of my To Do tickets.
+    await card(page, 'SHOP-151').dragTo(lane(page, 'in_review'));
+    await expect(lane(page, 'in_review').locator('[data-key="jira-acme:SHOP-151"]')).toBeVisible();
   });
 
   test('rolls a failed move back and toasts the error', async ({ page }) => {

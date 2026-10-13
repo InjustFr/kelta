@@ -1,48 +1,15 @@
 <script lang="ts">
-  import { msg, t, tn } from '$lib/i18n/index.svelte';
-  import { dispatch } from '$lib/actions';
+  import { t } from '$lib/i18n/index.svelte';
   import type { SessionInfo } from '$lib/gen';
-  import { lampOf, projects, sessions, settings, work, type LampLevel } from '$lib/stores';
-  import { Lamp } from '$lib/ui';
+  import { projects, sessions, settings, work } from '$lib/stores';
 
   import { claudeSlots } from '../views/work/batch.svelte';
   import { sessionLabel } from '../views/work/live';
-  import { focusedSessionId, revealSession } from './nav';
   import { clock, itemCost, latestWindow, meter as bar, usd } from './usage';
 
   // Exceptions only: no key hints here (the views' `?` dialogs and the palette list the global chords).
   let { prefixArmed }: { prefixArmed: boolean } = $props();
 
-  // Lamp meter: one button per non-zero state; clicking walks the sessions in that state.
-  const METER: { lamp: LampLevel; label: string }[] = [
-    { lamp: 'needs_input', label: msg('need you') },
-    { lamp: 'error', label: msg('in error') },
-    { lamp: 'working', label: msg('working') },
-    { lamp: 'done', label: msg('done') },
-  ];
-  const meter = $derived(
-    METER.map((m) => ({
-      ...m,
-      list: sessions.all.filter((s) => lampOf(s.attention, s.status === 'working') === m.lamp),
-    })).filter((m) => m.list.length > 0),
-  );
-
-  function words(lamp: LampLevel, n: number): string {
-    if (lamp === 'needs_input') return tn('{n} needs you', '{n} need you', n);
-    if (lamp === 'done') return tn('{n} ready to review', '{n} ready to review', n);
-    if (lamp === 'error') return tn('{n} in error', '{n} in error', n);
-    return tn('{n} working', '{n} working', n);
-  }
-
-  function walk(lamp: LampLevel, list: SessionInfo[]): void {
-    if (lamp === 'needs_input') {
-      void dispatch('attention.next');
-      return;
-    }
-    const at = list.findIndex((s) => s.id === focusedSessionId());
-    const next = list[(at + 1) % list.length];
-    if (next) void revealSession(next.id);
-  }
   const restart = $derived(settings.pendingRestart.length > 0);
   const slots = $derived(claudeSlots());
 
@@ -98,19 +65,6 @@
       {#if seven}<span>{t('7d')} {Math.round(seven.used_percentage)}%</span>{/if}
     </span>
   {/if}
-  {#each meter as m (m.lamp)}
-    <button
-      type="button"
-      class="seg btn"
-      onclick={() => walk(m.lamp, m.list)}
-      title={t('{n} {state}: go to the next one', { n: m.list.length, state: t(m.label) })}
-      aria-label="{m.list.length} {t(m.label)}"
-      data-testid={m.lamp === 'needs_input' ? 'status-needs-input' : `status-${m.lamp}`}
-    >
-      <Lamp level={m.lamp} title={t(m.label)} />
-      {words(m.lamp, m.list.length)}
-    </button>
-  {/each}
 </footer>
 
 <style>
@@ -142,22 +96,5 @@
   .prefix {
     color: var(--k-accent);
     font-weight: var(--k-weight-strong);
-  }
-
-  /* Full bar height so the target stays 28px. */
-  .btn {
-    align-self: stretch;
-    padding: 0 var(--k-space-3);
-    border: none;
-    border-radius: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
-  }
-
-  .btn:hover {
-    background: var(--k-bg-hover);
-    color: var(--k-fg);
   }
 </style>

@@ -40,8 +40,13 @@ Kelta asks Keychain access the first time it reads a token. Choose "Always Allow
 
 ## Notifications
 
-Kelta sends desktop notifications when Claude needs input, a review is requested, CI fails on your PR, and so on,
-only when the related pane is not visible or the window is unfocused and outside quiet hours.
+Kelta sends desktop notifications when Claude is blocked (it needs input, asks a question or replied without
+changes), a review is requested, CI fails on your PR, and so on, only when the related pane is not visible or the
+window is unfocused and outside quiet hours.
+
+A Claude that is ready for review or finished does not notify by default: it can wait. Turn on
+`notifications.claude_done` (Settings > Notifications) to be told anyway; `notifications.claude_blocked` turns off
+the blocked ones.
 
 ### Linux: notification daemon
 
@@ -56,4 +61,4 @@ shows the daemon name; if it fails, no daemon owns the bus name.
 
 ### macOS
 
-Allow Kelta in System Settings > Notifications. The Dock badge shows how many sessions need input.
+Allow Kelta in System Settings > Notifications. The Dock badge counts the blocked sessions only (needing input or asking), never the finished ones.

@@ -123,8 +123,8 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | Key | Type | Default | Notes |
 |---|---|---|---|
 | `enabled` | bool | `true` | |
-| `claude_needs_input` | bool | `true` | |
-| `claude_done` | bool | `true` | |
+| `claude_blocked` | bool | `true` | Claude needs input, asks (MCP `ask`) or replied without changes; the old key `claude_needs_input` still reads as this one |
+| `claude_done` | bool | `false` | Claude is ready for review or finished; an explicit value in an existing config is kept |
 | `review_requested` | bool | `true` | keeps review subscriptions polling in background |
 | `ci_failed_mine` | bool | `true` | my PR's head rollup turns failed or errored (cancelled) |
 | `pr_approved` / `pr_changes_requested` | bool | `true` / `true` | |

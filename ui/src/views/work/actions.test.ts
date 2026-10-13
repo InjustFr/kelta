@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { dispatch } from '$lib/actions';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { findContent } from '$lib/layout';
 import { layout, projects, toasts, ui } from '$lib/stores';
 
 import '../reviews/actions';
@@ -11,7 +10,9 @@ import '../tickets/actions';
 import './actions';
 import { workItem } from '$lib/gen/fixtures';
 
+import { listScope } from '../../shell/scope.svelte';
 import { blockedReason } from './actions';
+import { globalContent } from './nav';
 import { batch } from './batch.svelte';
 import { REVIEW_READONLY } from './common';
 import { selectTicket } from './selection.svelte';
@@ -30,14 +31,12 @@ beforeEach(async () => {
 });
 
 describe('L9 actions', () => {
-  it('tickets.open {project_id} opens (or focuses) the tickets pane of that project', async () => {
+  it('tickets.open {project_id} shows the Tickets view scoped to that project, no tab (#409)', async () => {
+    const tabs = layout.get('shop')?.tabs.length;
     expect(await dispatch('tickets.open', { project_id: 'shop' })).toBe(true);
-    const l = layout.get('shop');
-    const hit = l && findContent(l, (c) => c.kind === 'tickets');
-    expect(hit).toBeTruthy();
-    const tabs = l?.tabs.length;
-    await dispatch('tickets.open', { project_id: 'shop' });
-    expect(layout.get('shop')?.tabs.length).toBe(tabs); // no second pane
+    expect([ui.view, listScope.project]).toEqual(['tickets', 'shop']);
+    expect(layout.get('shop')?.tabs.length).toBe(tabs);
+    ui.view = null;
   });
 
   it('tickets.open and reviews.open without a project show the cross-project views', async () => {
@@ -50,10 +49,14 @@ describe('L9 actions', () => {
     ui.view = null;
   });
 
-  it('tickets.board opens the active project board', async () => {
+  it('tickets.board shows the Tickets view as the board of the active project (#409)', async () => {
+    listScope.set(null);
+    const tabs = layout.get('shop')?.tabs.length;
     await dispatch('tickets.board');
-    const l = layout.get('shop');
-    expect(l && findContent(l, (c) => c.kind === 'tickets' && c.mode === 'board')).toBeTruthy();
+    expect([ui.view, listScope.project]).toEqual(['tickets', 'shop']);
+    expect(globalContent('tickets')).toMatchObject({ mode: 'board' });
+    expect(layout.get('shop')?.tabs.length).toBe(tabs);
+    ui.view = null;
   });
 
   it('tickets.overview opens my tickets beside Reviews, once per project', async () => {
@@ -78,10 +81,13 @@ describe('L9 actions', () => {
     expect(layout.get('shop')?.active_tab).toBe('overview');
   });
 
-  it('reviews.open {project_id} opens the reviews pane', async () => {
-    expect(await dispatch('reviews.open', { project_id: 'shop' })).toBe(true);
-    const l = layout.get('shop');
-    expect(l && findContent(l, (c) => c.kind === 'reviews')).toBeTruthy();
+  it('reviews.open {project_id} shows the Reviews view scoped to that project, no tab (#409)', async () => {
+    listScope.set(null);
+    const tabs = layout.get('shop')?.tabs.length;
+    await dispatch('reviews.open', { project_id: 'shop' });
+    expect([ui.view, listScope.project]).toEqual(['reviews', 'shop']);
+    expect(layout.get('shop')?.tabs.length).toBe(tabs);
+    ui.view = null;
   });
 
   it('work.start without a selection explains what to do', async () => {

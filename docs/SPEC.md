@@ -26,7 +26,7 @@ Glossary: **Project** = named set of local repos + tracker binding + code-host b
 - **Panes** contain: terminal, web tool, plugin screen, Tickets (list/board), Ticket detail, Reviews, Review detail, Now (Inbox), WorkItem, Settings, Diagnostics, Welcome. Drag the gutter to resize; zoom a pane; move a pane to its own window (`pane.detach`, #342) and back; close a pane (a live session asks first: kill the process, move it to the background, or cancel; **background sessions** stay listed in the palette and the project's session list).
 - **Command palette** (fuzzy): actions, projects, sessions across all projects (with status), tickets (cached), PRs, tools, plugin commands, settings sections.
 - **Project switcher**: fuzzy list of configured projects (open or not); Enter opens/activates.
-- **StatusBar**: app-wide state only: key hints, prefix, restart needed, Claude slots, rate limits, the lamp meter, optional perf HUD (Kelta memory, separately from child processes). Hooks health ("Live status off") is in the pane header only.
+- **StatusBar**: app-wide state only: key hints, prefix, restart needed, Claude slots, rate limits, optional perf HUD (Kelta memory, separately from child processes). Hooks health ("Live status off") is in the pane header only.
 
 ## 2. Projects (multi-project)
 

@@ -137,12 +137,11 @@ function seedContent(view: GlobalView, fresh: boolean): PaneContent {
   return ticketsContent(fresh ? legacy<TicketsState>('kelta.view.tickets') : null);
 }
 
-/** The pane a global view shows: its pane in the `GLOBAL` layout; the Tickets view is list only. */
+/** The pane a global view shows: its pane in the `GLOBAL` layout. */
 export function globalContent(view: GlobalView): PaneContent {
   const global = layout.get(GLOBAL);
   const root = global?.tabs.find((t) => t.id === view)?.root;
-  const content = root?.type === 'pane' ? root.content : seedContent(view, (global?.rev ?? 0) === 0);
-  return content.kind === 'tickets' ? { ...content, mode: 'list' } : content;
+  return root?.type === 'pane' ? root.content : seedContent(view, (global?.rev ?? 0) === 0);
 }
 
 /**

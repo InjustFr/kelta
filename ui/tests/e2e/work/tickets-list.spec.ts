@@ -11,7 +11,8 @@ const group = (page: Page, status: string) => page.locator(`[data-group="${statu
 async function openTickets(page: Page, select = 'SHOP-142'): Promise<void> {
   await boot(page);
   await dispatch(page, 'tickets.open', { project_id: 'shop' });
-  await page.getByRole('tab', { name: 'List' }).click(); // the mock layout opens the board
+  await page.getByRole('tab', { name: 'List' }).click();
+  await page.getByRole('tab', { name: /^Team/ }).click(); // the Tickets view opens on Mine
   await row(page, select).locator('.k-row-key').click();
   await expect(row(page, select)).toHaveAttribute('aria-current', 'true');
 }
@@ -30,8 +31,9 @@ test('split view follows the selection; Space toggles, Enter focuses, Esc return
   await page.keyboard.press('Space');
   await expect(detail).toHaveCount(0);
   await page.keyboard.press('Shift+Enter');
-  await expect(page.getByTestId('ticket-detail')).toHaveCount(1); // the standalone pane
-  await expect(page.getByTestId('tickets-pane')).toBeVisible();
+  // The standalone pane, in the ticket's project: the Tickets view closes (FLOW §3.3).
+  await expect(page.getByTestId('workspace').getByTestId('ticket-detail')).toHaveCount(1);
+  await expect(page.getByTestId('tickets-pane')).toBeHidden();
 });
 
 test('the status picker in the reading pane: typing filters, Enter moves', async ({ page }) => {
