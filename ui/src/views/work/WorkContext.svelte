@@ -8,7 +8,6 @@
   import type { TabHeaderProps } from '$app/registry';
   import { effectiveChords } from '$lib/keys/manager';
   import { layout, projects, settings, tickets, work } from '$lib/stores';
-  import { ticketKey } from '$lib/stores/tickets.svelte';
   import { terminalPool } from '$lib/terminal';
   import { resolveProjectColor } from '$lib/theme';
   import { Button, currentPlatform, Menu, type MenuItem } from '$lib/ui';
@@ -38,7 +37,7 @@
 
   let workBtn = $state<HTMLElement>();
 
-  // The Story panel's Ticket section shows the status from this detail.
+  // The title (here and in the breadcrumb) comes from the ticket's detail.
   $effect(() => {
     const ref = ticketRef;
     if (ref) untrack(() => void tickets.loadDetail(ref));

@@ -73,20 +73,35 @@ describe('workHeader (#428): the mark per phase row of FLOW §2.2', () => {
   const claude = (status: string) => ({ ...samples.sessionInfo, status }) as typeof samples.sessionInfo;
   const withPr = { pr_url: 'https://github.com/acme/shop-api/pull/311', state: { kind: 'pr_open' as const } };
 
-  const rows: [string, PhaseItem, ReturnType<typeof claude> | null, PhasePr | null, PhaseGit | null, number, Mark][] =
+  const rows: [
+    string,
+    PhaseItem,
+    ReturnType<typeof claude> | null,
+    PhasePr | null,
+    PhaseGit | null,
+    number,
+    Mark,
+  ][] = [
     [
-      ['failed', w({ state: { kind: 'failed', step: 'worktree', message: 'x' } }), null, null, null, CLAUDE, 'broken'],
-      ['starting', w({ state: { kind: 'starting' } }), null, null, null, CLAUDE, 'wait'],
-      ['needs_you', w({ review_due: true }), claude('needs_input'), null, null, CLAUDE, 'you'],
-      ['working', w({ review_due: true }), claude('working'), null, null, CLAUDE, 'wait'],
-      ['to_review', w({ review_due: true }), claude('done'), null, git(), CLAUDE, 'you'],
-      ['ready', w(), null, null, git({ ahead: 2 }), PR, 'you'],
-      ['checks_failed', w(withPr), null, pr({ ci: 'failure' }), git(), PR, 'broken'],
-      ['in_review', w(withPr), null, pr(), git(), REVIEW, 'wait'],
-      ['changes_requested', w(withPr), null, pr({ decision: 'changes_requested' }), git(), REVIEW, 'broken'],
-      ['approved', w(withPr), null, pr({ decision: 'approved', ci: 'success' }), git(), MERGE, 'you'],
-      ['merged', w({ state: { kind: 'merged', detail: null } }), null, null, null, MERGE, 'you'],
-    ];
+      'failed',
+      w({ state: { kind: 'failed', step: 'worktree', message: 'x' } }),
+      null,
+      null,
+      null,
+      CLAUDE,
+      'broken',
+    ],
+    ['starting', w({ state: { kind: 'starting' } }), null, null, null, CLAUDE, 'wait'],
+    ['needs_you', w({ review_due: true }), claude('needs_input'), null, null, CLAUDE, 'you'],
+    ['working', w({ review_due: true }), claude('working'), null, null, CLAUDE, 'wait'],
+    ['to_review', w({ review_due: true }), claude('done'), null, git(), CLAUDE, 'you'],
+    ['ready', w(), null, null, git({ ahead: 2 }), PR, 'you'],
+    ['checks_failed', w(withPr), null, pr({ ci: 'failure' }), git(), PR, 'broken'],
+    ['in_review', w(withPr), null, pr(), git(), REVIEW, 'wait'],
+    ['changes_requested', w(withPr), null, pr({ decision: 'changes_requested' }), git(), REVIEW, 'broken'],
+    ['approved', w(withPr), null, pr({ decision: 'approved', ci: 'success' }), git(), MERGE, 'you'],
+    ['merged', w({ state: { kind: 'merged', detail: null } }), null, null, null, MERGE, 'you'],
+  ];
 
   it.each(rows)('%s', (id, item, session, p, g, at, mark) => {
     const phase = phaseOf(item, session, p, g);
@@ -95,9 +110,21 @@ describe('workHeader (#428): the mark per phase row of FLOW §2.2', () => {
   });
 
   it('says whose move, then the phase label and detail', () => {
-    const phase = { id: 'ready', lamp: 'none', label: 'Ready to ship', detail: '2 commits', section: 'ship' } as const;
+    const phase = {
+      id: 'ready',
+      lamp: 'none',
+      label: 'Ready to ship',
+      detail: '2 commits',
+      section: 'ship',
+    } as const;
     expect(workHeader(w(), phase, null).why).toBe('Your move: Ready to ship, 2 commits');
-    const waiting = { ...phase, id: 'working', label: 'Claude working', detail: '', section: 'in_flight' } as const;
+    const waiting = {
+      ...phase,
+      id: 'working',
+      label: 'Claude working',
+      detail: '',
+      section: 'in_flight',
+    } as const;
     expect(workHeader(w(), waiting, null).why).toBe('Waiting on others: Claude working');
   });
 });

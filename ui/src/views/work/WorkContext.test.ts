@@ -56,7 +56,7 @@ describe('work tab header', () => {
     const header = await screen.findByTestId('work-header');
     expect(screen.getByTestId('work-header-key').textContent).toBe('SHOP-142');
     expect(header.textContent).toContain('Shop');
-    expect(header.textContent).toContain(w.title);
+    await waitFor(() => expect(header.textContent).toContain('Rate-limit login attempts'));
     expect(header.dataset.phase).toBe('working');
     expect(header.querySelector('.track')?.getAttribute('data-mark')).toBe('wait');
     expect(screen.getByTestId('work-why').textContent).toBe('Waiting on others: Claude working');

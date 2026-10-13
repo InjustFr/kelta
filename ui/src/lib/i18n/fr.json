@@ -411,7 +411,6 @@
   "Nothing needs you right now": "Rien ne vous attend pour l’instant",
   "Claude sessions that ask a question, pull requests waiting for your review and tickets assigned to you show up here.": "Les sessions Claude qui posent une question, les pull requests qui attendent votre revue et les tickets qui vous sont assignés apparaissent ici.",
   "{n} more, show all": "{n} de plus, tout afficher",
-  "Claude spend on this item": "Dépense Claude pour cet élément",
   "Next action": "Action suivante",
   "Mark ticket": "Marquer le ticket",
   "Start marked": "Démarrer les marqués",
@@ -1455,16 +1454,9 @@
   "Type a ticket key or words from its title.": "Saisissez une clé de ticket ou des mots de son titre.",
   "Searching…": "Recherche…",
   "No ticket matches.": "Aucun ticket correspondant.",
-  "{branch} (vs {base})": "{branch} (par rapport à {base})",
-  "ports {from}–{to}": "ports {from}–{to}",
-  "armed: merges when ready, then finishes (M to disarm)": "armé : fusion quand prête, puis fin (M pour désarmer)",
-  "Uncommitted changes": "Modifications non commitées",
   "No next action": "Aucune action suivante",
   "Move to…": "Déplacer vers…",
-  "{title} ({ci}): open in the browser": "{title} ({ci}) : ouvrir dans le navigateur",
   "PR": "PR",
-  "{ahead} commits to push, {behind} behind {base}": "{ahead} commits à pousser, {behind} de retard sur {base}",
-  "status unavailable, retry": "statut indisponible, réessayer",
   "Work menu": "Menu du travail",
   "Work item not found": "Élément de travail introuvable",
   "sent": "envoyée",
@@ -2485,11 +2477,12 @@
   "Story": "Récit",
   "Work: Story panel": "Travail : panneau Récit",
   "{done} of {n} steps": "{done} étapes sur {n}",
-  "{phase} (story)": "{phase} (récit)",
   "{step} failed": "Échec : {step}",
   "Acceptance criteria": "Critères d’acceptation",
   "{checked} of {n} criteria checked": {
     "one": "{checked} critère sur {n} coché",
     "other": "{checked} critères sur {n} cochés"
-  }
+  },
+  "Open the Story panel": "Ouvrir le panneau Récit",
+  "{whose}: {what}": "{whose} : {what}"
 }

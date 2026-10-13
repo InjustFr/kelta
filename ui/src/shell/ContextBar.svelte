@@ -237,8 +237,9 @@
         title={t('Go to {name}', { name: project.name })}
         data-testid="context-owner"
         onclick={goOwner}
-        ><span class="project" style:--project-color={projectColor}>{project.name}</span
-        >{#if ownerItem}<span class="sep">›</span><span class="key">{workKey(ownerItem)}</span>{/if}</Button
+        ><span class="project" style:--project-color={projectColor}>{project.name}</span>{#if ownerItem}<span
+            class="sep">›</span
+          ><span class="key">{workKey(ownerItem)}</span>{/if}</Button
       >
       {#if cwd}<span class="meta" title={session?.cwd} data-tauri-drag-region>{cwd}</span>{/if}
     {/if}

@@ -6,7 +6,7 @@ import { appInfo as sampleAppInfo } from '$lib/gen/fixtures';
 import { createMockTransport } from '$lib/ipc/mock';
 import { getTransport, setTransport } from '$lib/ipc/transport';
 import { addTab, pane, updateTab } from '$lib/layout';
-import { GLOBAL, layout, projects, sessions, tools, ui, work } from '$lib/stores';
+import { GLOBAL, layout, projects, sessions, tickets, tools, ui, work } from '$lib/stores';
 
 import './actions';
 import ContextBar from './ContextBar.svelte';
@@ -54,6 +54,8 @@ function toolTab(projectId: string): void {
 
 describe('context bar', () => {
   it('work item: the key and title, no work segment (the header above the panes has it), no cwd', async () => {
+    // The work tab's header loads the ticket detail the title comes from.
+    await tickets.loadDetail(work.all.find((w) => w.ticket?.key === 'SHOP-142')!.ticket!);
     render(ContextBar);
     await waitFor(() => expect(crumb()).toBe('Shop › SHOP-142 Rate-limit login attempts'));
     for (const id of ['work-header', 'work-status', 'work-phase', 'work-primary', 'work-menu-button'])
