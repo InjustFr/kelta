@@ -120,7 +120,7 @@ on = "pr"            # "ticket" (default), "pr" or "global"
 | `on` | Offered | Placeholders in `prompt` |
 |---|---|---|
 | `ticket` | `w` on a ticket; the run claims the ticket | `{ticket.key}`, `{ticket.title}`, `{ticket.url}`, `{file}` (the ticket as Markdown) |
-| `pr` | `w` on a row of Reviews or in the review detail | `{pr.number}`, `{pr.url}`, `{pr.head}`, `{pr.base}`, `{pr.repo}`, `{pr.title}`, `{ticket.key}` (the linked ticket, else empty) |
+| `pr` | `w` on a row of Pull requests or in the review detail | `{pr.number}`, `{pr.url}`, `{pr.head}`, `{pr.base}`, `{pr.repo}`, `{pr.title}`, `{ticket.key}` (the linked ticket, else empty) |
 | `global` | the command palette, as "Run <label>", with no ticket | none |
 
 `{workflow}` (the workflow's id) works in all three. A second run on the same ticket or pull request opens the running one instead of starting another. `cwd` defaults

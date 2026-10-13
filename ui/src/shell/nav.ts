@@ -188,7 +188,7 @@ export const VIEW_NAMES: Record<GlobalView, string> = {
     return t('Queue');
   },
   get reviews() {
-    return t('Reviews');
+    return t('Pull requests');
   },
 };
 

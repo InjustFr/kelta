@@ -360,7 +360,7 @@ describe('Now', () => {
     await nextWaitingTo(container, 'r:');
     await fireEvent.keyDown(screen.getByTestId('inbox-pane'), { key: 'Enter' });
     await waitFor(() => expect(ui.view).toBeNull());
-    const tabs = () => layout.get('shop')!.tabs.filter((t) => t.title === 'Reviews');
+    const tabs = () => layout.get('shop')!.tabs.filter((t) => t.title === 'Pull requests');
     await waitFor(() => expect(tabs()).toHaveLength(1));
   });
 

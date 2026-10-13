@@ -2,7 +2,7 @@
 
 - [Getting started](getting-started.md)
 - [Working with tickets](tickets.md)
-- [Reviews](reviews.md)
+- [Pull requests](reviews.md)
 - [Claude: setup, questions, outside sessions, workflows](claude-code.md)
 - [Tools: lazygit, lazydocker, apps like Fork](tools.md)
 - [Colour themes and VS Code import](themes.md)

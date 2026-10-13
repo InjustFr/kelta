@@ -34,11 +34,11 @@ test('the search field opens the palette; the rail has no search row', async ({ 
 test('‹ › walk the jumplist; + New offers a work item and a session', async ({ page }) => {
   await boot(page);
   await page.getByTestId('rail-reviews').click();
-  await expect(page).toHaveTitle('Reviews');
+  await expect(page).toHaveTitle('Pull requests');
   await bar(page).getByTestId('context-back').click();
   await expect(page).toHaveTitle(/^Shop › SHOP-142/);
   await bar(page).getByTestId('context-forward').click();
-  await expect(page).toHaveTitle('Reviews');
+  await expect(page).toHaveTitle('Pull requests');
 
   await bar(page).getByTestId('tab-plus').click();
   await expect(page.getByRole('menuitem')).toHaveText([/New work item/, /New session/]);

@@ -138,7 +138,7 @@ describe('context bar', () => {
     jumplist.at = 0;
     render(ContextBar);
     await waitFor(() =>
-      expect(screen.getByTestId('context-back').getAttribute('aria-label')).toBe('Back to Reviews'),
+      expect(screen.getByTestId('context-back').getAttribute('aria-label')).toBe('Back to Pull requests'),
     );
     expect(screen.getByTestId('tab-plus')).toBeTruthy();
   });

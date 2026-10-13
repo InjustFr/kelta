@@ -70,7 +70,7 @@ Otherwise the person stays apart and is marked "(tracker only)". Choosing a pers
 with the pane; "Any person" clears it. Picking a tab clears it too.
 
 A row whose pull request waits on someone shows `waiting on Anna · 26h` (`+2` when several; hover for who and why)
-next to the PR chip. Reviews and the Queue show the same chip. A ticket that only waits on its assignee shows no chip:
+next to the PR chip. Pull requests and the Queue show the same chip. A ticket that only waits on its assignee shows no chip:
 the avatar already says it.
 
 ## Current iteration
@@ -224,7 +224,7 @@ tracker or the code host.
   you to Settings > Tags.
 - A tag shows as a chip on the row, in the detail and in the Queue. The toolbar has one chip per tag in the list, with its count; click it to
   keep only those tickets, click again to clear.
-- Reviews has the same `t` key and filter ([reviews](reviews.md#local-tags)). The MCP tool `list_tickets` takes
+- Pull requests has the same `t` key and filter ([pull requests](reviews.md#local-tags)). The MCP tool `list_tickets` takes
   a `tag` argument.
 
 ## Moving status
