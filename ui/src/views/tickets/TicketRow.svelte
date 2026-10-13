@@ -6,6 +6,7 @@
   import { Icon, relativeTime, Spinner } from '$lib/ui';
 
   import { waitChip } from '../people/waiting';
+  import { batch } from '../work/batch.svelte';
   import { initials } from '../work/common';
   import StageTrack from '../work/shared/StageTrack.svelte';
   import { fieldText } from './fields';
@@ -105,6 +106,11 @@
       >{#if tk.blocked}<span class="blocked" data-blocked>{t('Blocked')}</span>{/if}{tk.title}</span
     >
     <span class="sub">
+      {#if batch.has(tk.ref)}<span
+          class="marked"
+          data-marked
+          title={t('Marked: Mod+Enter starts the marked tickets')}>{t('marked')}</span
+        >{/if}
       {#if epic}<span class="epic" data-epic>{epic}</span>{/if}
       <span class="pr" class:bad={pr?.bad} data-pr>{pr?.text ?? t('No PR found')}</span>
       {#each tk.fields ?? [] as f, i (i)}<span class="field" data-field title={fieldText(f)}
@@ -265,6 +271,11 @@
   .pr {
     flex: none;
     font-variant-numeric: tabular-nums;
+  }
+
+  .marked {
+    flex: none;
+    color: var(--k-accent);
   }
 
   .pr.bad {
