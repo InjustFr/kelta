@@ -1,5 +1,5 @@
 <script lang="ts">
-  // `All projects ▾` in the toolbar of each global list (#409): sets the scope all three share.
+  // `All projects ▾` in the window's top bar (#409, #429): sets the scope Now, Tickets and Reviews share.
   import { t } from '$lib/i18n/index.svelte';
   import { projects } from '$lib/stores';
   import { Select } from '$lib/ui';
@@ -22,7 +22,7 @@
 </span>
 
 <style>
-  /* A toolbar control: the label stays for screen readers only, as in `.k-toolbar`. */
+  /* A bar control: the label stays for screen readers only, as in `.k-toolbar`. */
   .scope :global(label) {
     position: absolute;
     width: 1px;

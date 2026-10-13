@@ -6,7 +6,7 @@
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import type { AccountError, SessionInfo, TicketRef } from '$lib/gen';
+  import type { AccountError, ClaudeTask, SessionInfo, TicketRef } from '$lib/gen';
   import { openExternal } from '$lib/ipc/commands';
   import {
     GLOBAL,
@@ -43,7 +43,6 @@
   import { openView } from '../../shell/nav';
   import { peekHover } from '../../shell/peek.svelte';
   import { listScope } from '../../shell/scope.svelte';
-  import ScopeSelect from '../../shell/ScopeSelect.svelte';
   import { ctxHot, itemCost, overBudget, usd } from '../../shell/usage';
   import { blockedReason, runWorkAction, workAction, WORK_ACTIONS } from '../work/actions';
   import { batch, batchKey } from '../work/batch.svelte';
@@ -146,6 +145,8 @@
     facts: Fact[];
     /** Claude's last words, in the brief. */
     message: string;
+    /** Work rows with a task list: how far Claude got (tasks, changes so far, top files). */
+    progress?: { tasks: ClaudeTask[]; changes: string | null; files: string[] };
     /** Ticket and review rows: where their local tags live (#349). */
     tagged?: { kind: TagKind; key: string };
     /** Shown as a warning on the row (`tests: none` when source changed). */
@@ -274,6 +275,16 @@
             ),
           ],
           message: item.claude_message?.trim() || preview,
+          // shortcut: the top files are the first ones Claude touched, unranked; work_delta_files (#425) only covers reviewed..last, not the whole branch.
+          progress: claude?.tasks.length
+            ? {
+                tasks: claude.tasks,
+                changes: git?.files
+                  ? `+${git.insertions} −${git.deletions}, ${tn('{n} file', '{n} files', git.files)}`
+                  : null,
+                files: claude.files_touched.slice(0, 3).map((f) => f.replace(`${item.worktree}/`, '')),
+              }
+            : undefined,
           warn: delta && testsMissing(delta) ? t('tests: none') : row.blocked ? t('Blocked') : undefined,
           // Ready for review: how long it has waited since Claude stopped.
           age: age(delta ? (item.claude_at ?? item.created_at) : item.created_at),
@@ -703,7 +714,6 @@
 >
   <header class="bar">
     <span class="title">{t('Queue')}</span>
-    <ScopeSelect />
     <!-- One summary line (#399): the zones below carry the rest. -->
     <span class="split" data-testid="now-header">
       <span>{@render count(t('{n} your move', { n: yours }), yours)}</span>
@@ -904,7 +914,40 @@
               facts={v.facts}
               busy={inflight.has(row.id)}
               testid="now-brief"
-            />
+            >
+              {#if v.progress}
+                {@const { tasks, changes, files } = v.progress}
+                <section class="progress" data-testid="now-brief-progress">
+                  <h4>
+                    {t('Tasks')}
+                    <span
+                      >{t('{done} of {n}', {
+                        done: tasks.filter((k) => k.state === 'completed').length,
+                        n: tasks.length,
+                      })}</span
+                    >
+                  </h4>
+                  <ul class="tasks">
+                    {#each tasks as task, i (task.id ?? i)}
+                      <li
+                        data-state={task.state}
+                        aria-current={task.state === 'in_progress' ? 'step' : undefined}
+                      >
+                        <span aria-hidden="true"
+                          >{task.state === 'completed' ? '✓' : task.state === 'in_progress' ? '▸' : '○'}</span
+                        >{task.title}
+                      </li>
+                    {/each}
+                  </ul>
+                  {#if changes}
+                    <h4>{t('Changes so far')} <span>{changes}</span></h4>
+                    <ul class="files">
+                      {#each files as f (f)}<li>{f}</li>{/each}
+                    </ul>
+                  {/if}
+                </section>
+              {/if}
+            </Brief>
           </div>
         {/if}
       </div>
@@ -1358,5 +1401,57 @@
     .moreline {
       padding-left: calc(var(--k-space-3) + 64px + var(--k-space-4));
     }
+  }
+
+  /* Claude's progress in the brief (#434). */
+  .progress h4 {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--k-space-3);
+    margin: 0 0 var(--k-space-1);
+    font-size: var(--k-font-size-sm);
+    font-weight: var(--k-weight-strong);
+    color: var(--k-fg-muted);
+  }
+
+  .progress h4 span {
+    font-weight: normal;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .progress ul {
+    margin: 0 0 var(--k-space-3);
+    padding: 0;
+    list-style: none;
+    overflow-wrap: anywhere;
+  }
+
+  .tasks li {
+    display: flex;
+    gap: var(--k-space-2);
+  }
+
+  .tasks li > span {
+    flex: none;
+    width: 1ch;
+    color: var(--k-fg-muted);
+  }
+
+  .tasks li[data-state='completed'] {
+    color: var(--k-fg-muted);
+  }
+
+  .tasks li[data-state='in_progress'] {
+    color: var(--k-fg-strong);
+    font-weight: var(--k-weight-strong);
+  }
+
+  .tasks li[data-state='in_progress'] > span {
+    color: var(--k-accent);
+  }
+
+  .files li {
+    font-family: var(--k-font-mono);
+    font-size: var(--k-font-size-sm);
   }
 </style>
