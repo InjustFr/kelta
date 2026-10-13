@@ -43,7 +43,7 @@ async function openRailTickets(page: Page): Promise<void> {
   await boot(page);
   await seed(page);
   await page.getByTestId('rail-tickets').click();
-  await page.getByTestId('tickets-pane').press('Shift+R'); // past the lists loaded at boot
+  await page.getByTestId('tickets-pane').press('Control+Shift+R'); // past the lists loaded at boot
   await expect(page.locator('[data-key="jira-acme:SHOP-7"]')).toBeVisible();
 }
 

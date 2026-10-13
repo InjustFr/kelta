@@ -1,7 +1,7 @@
 <script lang="ts">
   // The Queue (FLOW §3): one screen across projects answering "review Claude's work, or grab a feature?".
   // It keeps the Inbox slot (rail top tile, ⌘0, `inbox.open`, pane kind `inbox`).
-  import { msg, t, tn } from '$lib/i18n/index.svelte';
+  import { t, tn } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
@@ -44,7 +44,14 @@
   import { answer, peekHover } from '../../shell/peek.svelte';
   import { listScope } from '../../shell/scope.svelte';
   import { ctxHot, itemCost, overBudget, usd } from '../../shell/usage';
-  import { blockedReason, runWorkAction, workAction, WORK_ACTIONS } from '../work/actions';
+  import {
+    blockedReason,
+    runWorkAction,
+    viewPrChanges,
+    workAction,
+    workMenu,
+    WORK_ACTIONS,
+  } from '../work/actions';
   import { batch, batchKey } from '../work/batch.svelte';
   import { isAuthError } from '../work/common';
   import { sendToClaude } from '../work/fixloop.svelte';
@@ -64,11 +71,12 @@
   import ActionMenu, { under, type RowAction } from '../work/shared/ActionMenu.svelte';
   import Brief, { type BriefAction, type Fact } from '../work/shared/Brief.svelte';
   import KeyHints from '../work/shared/KeyHints.svelte';
+  import { queueKeys } from '../work/shared/keymap';
   import Loading from '../work/shared/Loading.svelte';
   import StageTrack from '../work/shared/StageTrack.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
-  import { onActions } from '../work/ui.svelte';
+  import { onActions, onRefresh } from '../work/ui.svelte';
   import { CLAUDE, DEPLOY, PR, REVIEW, STAGES, TICKET, stage, workStage, type Stage } from '../work/stage';
   import RowButton from '../tickets/RowButton.svelte';
   import {
@@ -170,8 +178,8 @@
   const fact = (label: string, value: string | null | undefined, tone?: Fact['tone']): Fact[] =>
     value ? [{ label, value, ...(tone ? { tone } : {}) }] : [];
 
-  // Work row letters in Now (FLOW §3.3); `o` opens the PR, else the ticket. `R` marks reviewed on a
-  // row that has something to review, else refreshes.
+  // Work row letters in the Queue (FLOW §3.3): the work menu's, but for Continue / Abort rebase and
+  // Skip step, which only the work menu (`⌘.`) runs: `c` and `s` mean the same in every list (#417).
   const NOW_KEYS: Partial<Record<string, WorkActionId>> = {
     v: 'review_delta',
     V: 'review_diff',
@@ -180,10 +188,7 @@
     p: 'ship',
     f: 'fix',
     r: 'rebase',
-    c: 'rebase_continue',
-    a: 'rebase_abort',
     n: 'conflicts',
-    s: 'skip_step',
     P: 'park',
     C: 'start_claude',
   };
@@ -209,7 +214,8 @@
             run: () => runWorkAction(a.id, item),
           })),
           { key: 'o', label: t('Open in browser'), run: () => browse(row) },
-          { key: 'g', label: t('Go to work tab'), run: () => goToRow(row) },
+          { key: 's', label: t('Go to work tab'), run: () => goToRow(row) },
+          ...(item.ticket ? [{ key: 'm', label: t('Move the ticket'), run: () => moveTicket(row) }] : []),
         ];
         const claude = claudeOf(item)?.claude;
         const u = claude?.usage;
@@ -374,7 +380,13 @@
           age: age((!row.mine && r.requested_at) || r.updated_at),
           actions: [
             { key: 'enter', label: t('Open review'), run: () => enterRow(row) },
-            ...(row.mine ? [] : [{ key: 's', label: t('Review locally'), run: () => reviewRowLocally(row) }]),
+            ...(row.mine
+              ? []
+              : [
+                  { key: 's', label: t('Review locally'), run: () => reviewRowLocally(row) },
+                  { key: 'v', label: t('View changes'), run: () => viewPrChanges(r.ref) },
+                  { key: 'c', label: t('Comment'), run: () => comment(row) },
+                ]),
             { key: 'o', label: t('Open on host'), run: () => browse(row) },
           ],
         };
@@ -424,6 +436,8 @@
                   },
                 ]
               : []),
+            { key: 'm', label: t('Move the ticket'), run: () => moveTicket(row) },
+            { key: 'c', label: t('Comment'), run: () => comment(row) },
             { key: 'o', label: t('Open in tracker'), run: () => browse(row) },
           ],
         };
@@ -542,15 +556,51 @@
     else if (row.type === 'work') void runWorkAction('open_ticket', row.item);
   }
 
+  /** A letter on the selected row: one verb per letter, whatever the row (#417, FLOW §3.3). */
   function letter(row: NowRow, key: string): void {
     if (key === 'o') return browse(row);
+    if (key === 'e') return brief?.toggleMessage();
+    if (key === 'm') return void moveTicket(row);
+    if (key === 'c') return comment(row);
     if (row.type === 'work') {
+      if (key === 's') return void goToRow(row);
       const id = NOW_KEYS[key];
       if (id) void inflight.track(row.id, () => runWorkAction(id, row.item));
       return;
     }
     if (key === 's' && row.type === 'ticket') void inflight.track(row.id, () => enterRow(row));
     else if (key === 's' && row.type === 'review' && !row.mine) reviewRowLocally(row);
+    else if (key === 'v' && row.type === 'review' && !row.mine) void viewPrChanges(row.review.review.ref);
+  }
+
+  /** `m`: the ticket's status picker; a work row's is its ticket's. */
+  async function moveTicket(row: NowRow): Promise<void> {
+    if (row.type === 'ticket') {
+      const pid = row.ticket.project_ids[0] ?? null;
+      return ui.openSheet('tickets.move', { ticket: row.ticket.ticket, project_id: pid });
+    }
+    if (row.type !== 'work') return;
+    const ref = row.item.ticket;
+    if (!ref) return void toasts.info(`${t('Move the ticket')}: ${t('No ticket')}`);
+    const d = await tickets.loadDetail(ref);
+    if (d.data) ui.openSheet('tickets.move', { ticket: d.data.ticket, project_id: row.item.project_id });
+    else if (d.error) toasts.error(d.error, t('Move the ticket'));
+  }
+
+  /** `c`: a comment on the ticket, or on someone's PR. */
+  function comment(row: NowRow): void {
+    if (row.type === 'review' && !row.mine)
+      return ui.openSheet('reviews.comment', { review: row.review.review.ref });
+    if (row.type !== 'ticket') return;
+    const { ref } = row.ticket.ticket;
+    if (row.ticket.caps.comment) ui.openSheet('tickets.comment', { ticket: ref });
+    else
+      toasts.info(
+        t("{account} can't take comments from Kelta. Open {key} in the browser (o).", {
+          account: ref.account,
+          key: ref.key,
+        }),
+      );
   }
 
   /** Next up as shown (in scope, unfiltered): `S` starts its top ones, `J`/`K` reorder within it. */
@@ -587,17 +637,7 @@
 
   /** The full key list (`?`). */
   let keysOpen = $state(false);
-  const hints = $derived<[string, string][]>([
-    ['j k', msg('Move')],
-    ['enter', msg('Next action')],
-    ['.', msg('More actions')],
-    ['g', msg('Go to')],
-    ['/', msg('Filter')],
-    ['space', msg('Mark ticket')],
-    ['o', msg('Open in browser')],
-    ['shift+r', msg('Refresh')],
-    [chordFor('work.start') ?? 'mod+enter', msg('Start marked')],
-  ]);
+  const hints = $derived(queueKeys());
 
   function onkeydown(e: KeyboardEvent): void {
     // The filter and the brief's reply field keep their keys.
@@ -647,10 +687,6 @@
         filtering = true;
         queueMicrotask(() => filterEl?.focus());
         break;
-      case 'R':
-        if (cur?.type === 'work' && blockedReason('mark_reviewed', cur.item) === null) letter(cur, 'R');
-        else refresh();
-        break;
       case '.':
         allActions = !allActions;
         break;
@@ -673,7 +709,7 @@
           if (!inflight.has(cur.id)) void inflight.track(cur.id, () => answer(asker.id, option));
           break;
         }
-        if (!cur || !'vVbpfrcansoPC'.includes(e.key) || e.key.length !== 1) return;
+        if (!cur || !'vVRbpfrnPCsomce'.includes(e.key) || e.key.length !== 1) return;
         letter(cur, e.key);
       }
     }
@@ -723,15 +759,23 @@
     e.stopPropagation();
   }
 
-  // `⌘.` (#404): the brief's actions in a menu under the selected row's next step, that step first.
+  // `⌘.` (#404): the brief's actions in a menu under the selected row's next step, that step first; a
+  // work row's is the work menu, where Continue / Abort rebase and Skip step keep their letters (#417).
   let more = $state.raw<{ x: number; y: number; actions: RowAction[] } | null>(null);
+  let workMenuAt = $state.raw<{ x: number; y: number; row: NowRow & { type: 'work' } } | null>(null);
+  let brief = $state<ReturnType<typeof Brief>>();
 
   function menuKey(): boolean {
     const row = cur;
+    const at = under(root?.querySelector('.row.selected .next'));
+    if (row?.type === 'work') {
+      workMenuAt = { ...at, row };
+      return true;
+    }
     const actions = curView?.actions ?? [];
     if (!row || actions.length === 0) return false;
     more = {
-      ...under(root?.querySelector('.row.selected .next')),
+      ...at,
       actions: actions.map((a) => ({
         id: a.key,
         label: a.label,
@@ -778,6 +822,7 @@
   aria-label={t('Queue')}
   {onkeydown}
   use:onActions={menuKey}
+  use:onRefresh={refresh}
 >
   <header class="bar">
     <span class="title">{t('Queue')}</span>
@@ -973,6 +1018,7 @@
           {@const replied = row.type === 'work' && row.phase.id === 'replied'}
           <div class="side">
             <Brief
+              bind:this={brief}
               id={v.id}
               title={v.title}
               where={asker ? '' : v.reason}
@@ -1052,6 +1098,24 @@
     lit
     onclose={() => {
       more = null;
+      root?.focus();
+    }}
+  />
+{/if}
+{#if workMenuAt}
+  {@const w = workMenuAt.row}
+  <Menu
+    items={workMenu(w.item, w.phase)}
+    x={workMenuAt.x}
+    y={workMenuAt.y}
+    lit
+    label={t('Work')}
+    onselect={(id) =>
+      void inflight.track(w.id, () =>
+        id === 'primary' ? enterRow(w) : runWorkAction(id as WorkActionId, w.item),
+      )}
+    onclose={() => {
+      workMenuAt = null;
       root?.focus();
     }}
   />

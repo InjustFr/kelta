@@ -141,7 +141,7 @@ No status strip segment. The ticket status, the PR and its CI, the branch, `behi
 
 On a work tab, `work.menu` opens a menu anchored to the Actions button of the focused tab's header, from any pane including terminals (it is a Mod chord, like `⌘K`). Single letters run actions; `Enter` runs the primary.
 
-It lists only what can run now (#405): the next step first (`Enter`, its own letter runs it too and is not listed twice), then the available actions grouped by what they act on: the work item, its ticket, its branch or PR. With no next step it starts with its first available action; "No next action" is never an entry. Actions of this kind of item that cannot run now come last, under **Not available now (n)**, each with its reason on a second line: at most 5, those whose group sits nearest the phase's stage (§2.2, the stage track) first. Actions that belong to one situation are left out while it does not hold: Continue / Abort rebase and Open conflicts without a stopped rebase, Skip step without a failed step, Link and Create ticket on a ticketed item, Open ticket without one, and a review checkout's read-only keys. The letters never change: a key whose entry is not available, listed or not, does nothing and flashes its reason (as outside the menu).
+It lists only what can run now (#405): the next step first (`Enter`, its own letter runs it too and is not listed twice), then the available actions grouped by what they act on: the work item, its ticket, its branch or PR. With no next step it starts with its first available action; "No next action" is never an entry. Actions of this kind of item that cannot run now come last, under **Not available now (n)**, each with its reason on a second line: at most 5, those whose group sits nearest the phase's stage (§2.2, the stage track) first. In the Queue, `⌘.` on a work row opens this menu too (#417): its Continue / Abort rebase and Skip step letters are not Queue keys. Actions that belong to one situation are left out while it does not hold: Continue / Abort rebase and Open conflicts without a stopped rebase, Skip step without a failed step, Link and Create ticket on a ticketed item, Open ticket without one, and a review checkout's read-only keys. The letters never change: a key whose entry is not available, listed or not, does nothing and flashes its reason (as outside the menu).
 
 | Key | Action | Notes |
 |---|---|---|
@@ -231,30 +231,41 @@ The **selected row expands** to a second line: Claude's last message for Claude 
 
 ### 3.3 Keys in the Queue
 
+**One verb per letter** (#417): a letter means the same in the Queue, Tickets and Reviews, whatever the row; the menus, the hint lines and the `?` dialogs follow this table (`views/work/shared/keymap.ts`, held to it by its test). A blank cell: the key does nothing on that row.
+
+| Key | Verb | Ticket | My work | Someone's PR |
+|---|---|---|---|---|
+| `↵` | next step | Start work | the phase's action | Open review |
+| `s` | work on it | Start work | go to its tab | Review locally |
+| `v` | view changes | | since last look (`⇧V` the whole diff) | open the diff (of its local review) |
+| `o` | open on the host | tracker | PR | PR |
+| `m` | move the ticket | status picker | its ticket's status | |
+| `c` | comment | comment | | comment |
+| `e` | expand | | Claude's full message | |
+| `/` `?` | filter, every key | | | |
+
+`⇧R` is only Mark reviewed (only with `review_due`); refresh is `⇧⌘R` in every list and detail (§7). Continue rebase, Abort rebase and Skip step keep their letters (`c`, `a`, `s`) inside the work menu only: `⌘.` on a work row of the Queue opens that menu, they are not list keys.
+
+The Queue's other keys:
+
 | Key | Action |
 |---|---|
 | `j` / `k` | move |
-| `Enter` | the row's next action (table above) |
 | `g` | go to the row's place without acting: work tab, session pane, review detail |
 | `p` | Ship / Push on a work item row |
-| `v` / `V` | Review changes since last look / the whole diff (work item rows) |
-| `R` | Mark reviewed on a Ready for review row (elsewhere: Refresh) |
 | `b` | Edit the `next:` note |
-| `m` | Unfold Claude's full message (Ready for review rows) |
 | `f` | Fix with Claude (Fix rows; on a PR without a work item, it first adopts the PR, §2.1) |
 | `r` | Rebase |
-| `c` / `a` / `n` | Continue / Abort rebase, open conflicts in nvim (Rebase stopped rows) |
-| `s` | Start work (ticket rows, Next up included) / Review locally (Review requests rows) / Skip step (Failed rows) |
+| `n` | open conflicts in nvim (Rebase stopped rows) |
 | `S` / `J` / `K` | Next up rows: start the top ones / move the row down / up |
-| `o` | open on the host (PR) or tracker (ticket) |
 
-In the Tickets list (not the Queue; the rail's Tickets view, in the scope of §3; the board toggle shows once one source is in effect): `1` `2` `3` Mine / Unassigned / Team, `v` choose sources (all by default, "Add source…" at the end), `Shift+g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, Parent, None), `f` `s` current sprint only, `x` mark the ticket, `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `w` run a workflow (§4.8), `t` put a local tag on the ticket or take it off, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it, `Enter` moves the keys into it (`y` copies the branch there, `b` blocks or unblocks the ticket, `r` refines the ticket with Claude, `u` assigns to anyone the tracker offers, `!` changes the priority; with the column hidden, `Enter` on a ticket with work runs its phase's next action, as in the Queue, and `g` opens the detail), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
+In the Tickets list (not the Queue; the rail's Tickets view, in the scope of §3; the board toggle shows once one source is in effect): `Enter` the next step (§3.3: a ticket with work runs its phase's action, another starts work), `1` `2` `3` Mine / Unassigned / Team, `f` `v` choose sources (all by default, "Add source…" at the end), `Shift+g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, Parent, None), `f` `s` current sprint only, `x` mark the ticket, `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `w` run a workflow (§4.8), `t` put a local tag on the ticket or take it off, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it, `g` moves the keys into it (`y` copies the branch there, `b` blocks or unblocks the ticket, `r` refines the ticket with Claude, `u` assigns to anyone the tracker offers, `!` changes the priority; in a narrow pane `g` opens the detail pane), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
 
 A ticket the source marks **blocked** (`b`; a flag, a label, a relation or a status, SETTINGS §2) shows a Blocked chip, sorts last in its group and lands in the **Waiting** flow group of the Tickets list (so does a ticket whose status reads blocked, on hold, waiting or impediment). Blocked tickets still count as unfinished work in the start sheet's finish-first list (§4.1).
 | `N` | New work item |
 | `P` | Park the work row (same gate as the work menu's `P`) |
 | `/` | filter on id, title, project, branch |
-| `R` | refresh |
+| `⇧⌘R` | refresh |
 
 Gating is the work menu's (§2.5): disabled keys on review items do nothing and flash the reason. Every action that leaves the Queue (or the Tickets and Reviews views) **closes it and focuses the target in its project** (`ui.view = null` through `activateProject`, focus tab and pane: the target's rail row is selected); the project is the item's first, else the active one, never the `GLOBAL` sentinel. Panes opened from the Queue use `new_tab` placement with reuse (one tab per target), never a split inside whatever tab happened to be active. This fixes bug B1.
 
@@ -497,6 +508,7 @@ All follow DESIGN §6.13: one sentence saying what happened, one or two actions.
 | `work.menu` | `⌘.` | `Ctrl+.` | `.` | global: the menu of what has the keys, a selected row, a detail or a work tab (§2.5); else the palette |
 | `toast.run_last` (label "Run last toast action") | `⇧⌘O` | `Ctrl+Shift+O` | `o` | global, runs the primary action of the most recent toast still shown |
 | `work.start` | `⌘↵` | `Ctrl+Enter` | `s` | unchanged; also submits every work sheet and dialog |
+| `reviews.open` (label "Open reviews") | `⇧⌘R` | `Ctrl+Shift+R` | `r` | global; in a list or detail that has the keys (Queue, Tickets, Reviews, ticket and review details) it refreshes it instead (#417): the pane takes `kelta:refresh` (`use:onRefresh`), as `⌘.` takes `kelta:actions` |
 
 Now's single keys are in §3.3, the work menu's in §2.5. If `⌘.` turns out to be swallowed by macOS cancel handling in the webview, rebind it; the prefix key `.` always works. Check this first when implementing, and check `⇧⌘O` against existing defaults.
 
@@ -505,7 +517,7 @@ Now's single keys are in §3.3, the work menu's in §2.5. If `⌘.` turns out to
 - Every sheet and dialog: `Tab` / `⇧Tab` move, `Space` toggles the focused checkbox or switch, `⌘↵` submits, `Esc` cancels. Focus starts on the main input.
 - Fix sheet: `j` / `k` move through feedback items (when focus is not in the prompt), `Space` toggles one.
 - Toasts are not focusable; their primary action runs with `⇧⌘O` (or palette "Run last toast action"). The key is printed on the toast's button.
-- Review detail: `a` Approve, `c` Request changes, `m` Comment, `o` Open on host, `s` Review locally.
+- Review detail: `a` Approve, `c` Comment, `⇧C` Request changes, `v` View changes, `o` Open on host, `s` Review locally (#417: `c` comments, as in every list).
 
 ---
 

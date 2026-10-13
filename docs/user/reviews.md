@@ -48,17 +48,20 @@ In the list:
 | `Space` | focus the detail |
 | `/` | filter by title, repository, number, author, branch or ticket |
 | `s` | review locally |
+| `v` | view the changes: someone else's pull request, the whole diff of its local review (review it locally first); yours, the changes since your last look |
+| `c` | comment on someone else's pull request |
 | `o` | open on the code host |
 | `n` | on yours, nudge the reviewers (below) |
 | `M` | on yours, merge when ready (needs a work item for the pull request) |
 | `d` | on yours, mark ready for review, or convert back to a draft |
 | `t` | put a local tag on the pull request |
 | `w` | run a workflow on the pull request |
-| `R` | refresh |
+| `Cmd+Shift+R` (`Ctrl+Shift+R` on Linux) | refresh (outside a list or detail, it opens Reviews) |
 | `Cmd+.` (`Ctrl+.` on Linux) | the selected pull request's actions in a menu, Open review first (`Enter` runs it); in the detail, its own actions |
 
-In the detail of someone else's pull request: `a` approve, `c` request changes, `m` comment, `s` review
-locally, `o` open on the host, `t` tags, `w` workflow, `R` refresh, `.` every action. On your own pull request the detail offers
+In the detail of someone else's pull request: `a` approve, `c` comment, `Shift+C` request changes, `s` review
+locally, `v` view the changes, `o` open on the host, `t` tags, `w` workflow, `Cmd+Shift+R` refresh, `.` every
+action. A letter means the same here as in the Queue and Tickets (`c` comments everywhere). On your own pull request the detail offers
 no approval or comment: `f` fixes it with Claude, `g` goes to its work item and `d` toggles the draft state
 (below).
 

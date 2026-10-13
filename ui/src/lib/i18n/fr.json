@@ -408,7 +408,6 @@
   "Nothing needs you right now": "Rien ne vous attend pour l’instant",
   "Claude sessions that ask a question, pull requests waiting for your review and tickets assigned to you show up here.": "Les sessions Claude qui posent une question, les pull requests qui attendent votre revue et les tickets qui vous sont assignés apparaissent ici.",
   "{n} more, show all": "{n} de plus, tout afficher",
-  "Next action": "Action suivante",
   "Mark ticket": "Marquer le ticket",
   "Start marked": "Démarrer les marqués",
   "Queued work": "Travail en file",
@@ -1210,7 +1209,7 @@
   "Sort by age in status": "Trier par ancienneté dans le statut",
   "Sort by key": "Trier par clé",
   "current sprint": "sprint en cours",
-  "Source (v)": "Source (v)",
+  "Source (f then v)": "Source (f puis v)",
   "Whose tickets": "Tickets de qui",
   "View, narrowed to {what}": "Vue, restreinte à {what}",
   "and": "et",
@@ -2529,5 +2528,12 @@
   "Open theme": "Ouvrir le thème",
   "Showing cached tickets: the last refresh failed": "Tickets en cache affichés : la dernière actualisation a échoué",
   "Everything works.": "Tout fonctionne.",
-  "Fixing failed": "La correction a échoué"
+  "Fixing failed": "La correction a échoué",
+  "Move the ticket": "Déplacer le ticket",
+  "Expand Claude's message": "Déplier le message de Claude",
+  "Only on pull requests by others": "Seulement sur les pull requests des autres",
+  "View changes": "Voir les modifications",
+  "View changes, the whole diff": "Voir les modifications, le diff complet",
+  "View changes: review it locally first (s)": "Voir les modifications : relisez-la d’abord en local (s)",
+  "Work on it: start, go to its tab, review locally": "S’y mettre : commencer, aller à son onglet, relire en local"
 }

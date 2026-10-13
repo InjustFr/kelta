@@ -17,14 +17,14 @@ async function openTickets(page: Page, select = 'SHOP-142'): Promise<void> {
   await expect(row(page, select)).toHaveAttribute('aria-current', 'true');
 }
 
-test('split view follows the selection; Space toggles, Enter focuses, Esc returns', async ({ page }) => {
+test('split view follows the selection; Space toggles, g focuses, Esc returns', async ({ page }) => {
   await openTickets(page);
   const detail = page.getByTestId('ticket-detail');
   await expect(detail.getByRole('heading', { level: 1 })).toHaveText('Rate-limit login attempts');
   await page.keyboard.press('j'); // the In Review header
   await page.keyboard.press('j');
   await expect(detail.getByRole('heading', { level: 1 })).toHaveText('Upgrade payment SDK');
-  await page.keyboard.press('Enter');
+  await page.keyboard.press('g'); // Enter is the next step (#417)
   await expect(detail).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('tickets-pane')).toBeFocused();
@@ -118,7 +118,7 @@ test('a background run claim shows on the ticket row and follows report_progress
 
 test('b in the detail blocks the ticket: the row shows Blocked; b again unblocks', async ({ page }) => {
   await openTickets(page);
-  await page.keyboard.press('Enter');
+  await page.keyboard.press('g');
   await page.keyboard.press('b');
   await expect(row(page, 'SHOP-142').locator('[data-blocked]')).toHaveText('Blocked');
   await page.keyboard.press('b');

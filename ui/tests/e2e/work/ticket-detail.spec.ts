@@ -8,7 +8,7 @@ test('detail: m opens the status picker, typing filters, Enter moves', async ({ 
   await boot(page);
   await dispatch(page, 'tickets.open', { project_id: 'shop' });
   await page.locator('[data-key="jira-acme:SHOP-151"]').click();
-  await page.keyboard.press('Enter');
+  await page.keyboard.press('g');
   const detail = page.getByTestId('ticket-detail');
   await expect(detail.getByRole('heading', { level: 1 })).toHaveText('Checkout: show tax breakdown');
   await expect(detail.getByRole('toolbar', { name: 'Ticket actions' })).toContainText('Start work');
@@ -44,7 +44,7 @@ test('the spec folds by heading (#400): sections ruled off, content headings nev
   await boot(page);
   await dispatch(page, 'tickets.open', { project_id: 'shop' });
   await page.locator('[data-key="jira-acme:SHOP-151"]').click();
-  await page.keyboard.press('Enter');
+  await page.keyboard.press('g');
   const spec = page.getByTestId('ticket-detail').getByRole('region', { name: 'Description' });
   await expect(spec.locator('summary')).toHaveText([/^Description/, /^Acceptance/, /^Notes/]);
   const acceptance = spec.locator('details').nth(1);

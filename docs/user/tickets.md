@@ -26,16 +26,16 @@ accounts, so one board can show Jira and GitHub tickets together.
   project; a project's Tickets shows the sources that feed it (first page of each, duplicates removed). **Load
   more** pages every source that has more. Each row shows its source when several are listed, and Group by Source
   works everywhere.
-- `v` (or the source button) narrows the list to one source; a source with several views lists them indented
+- `f` `v` (or the source button) narrows the list to one source; a source with several views lists them indented
   under it, to narrow to one view. The pane remembers the choice. With a single source that has a single view
-  there is nothing to choose: no button, and `v` does nothing.
+  there is nothing to choose: no button, and `f` `v` does nothing.
 - Board mode needs one source (the list narrowed to one, or a scope with only one): it uses that source's
   columns. Otherwise the List/Board switch is hidden.
 - The palette and the ticket pickers search the trackers themselves (Jira `text ~`, Linear title and description,
   GitHub / GitLab / Gitea search, Redmine subject), so they find tickets past the first page. A tracker that cannot
   search matches the loaded first page instead; a typed key is also looked up directly.
 - With no source yet, Tickets and the Queue say "Add a ticket source: pick a board". **Pick a board** (also "Add
-  source..." in the `v` menu and Settings > Sources) opens a sheet: choose the account, type to search, press
+  source..." in the `f` `v` menu and Settings > Sources) opens a sheet: choose the account, type to search, press
   `Enter` on a result. It creates a source labelled after the board, feeding the project you opened it from; the
   toast's action opens Settings > Sources to choose its projects. **Add view...** on a source adds a view to it.
   Providers that cannot list sources tell you so; edit the TOML instead ([views schema](../SETTINGS.md)).
@@ -88,17 +88,20 @@ Each view can be limited to the current iteration (Settings > Sources, or `curre
 
 ## Keys
 
+A letter means the same in the Tickets list, the Queue and Reviews: `Enter` the next step, `s` work on it, `v` view
+changes, `o` open on the host, `m` move the ticket, `c` comment, `/` filter, `?` every key, `Cmd+Shift+R` refresh.
+
 | Key | Action |
 |---|---|
 | `j` `k` | move the selection |
-| `Enter` | with the detail column shown, focus it; hidden, a ticket with work runs its next step (as in the Queue), others open the detail (on a group header: expand or collapse) |
+| `Enter` | the next step, as in the Queue: a ticket with work runs its phase's next action, another starts work (the plan sheet); on a group header, expand or collapse |
 | `g` | open the detail: focus the detail column, or its own pane in a narrow pane |
 | `Shift+Enter` | open the detail as its own pane |
 | `Space` | show or hide the detail column |
 | `Esc` | from the detail column back to the list; in the list, clear the multi-selection |
 | `/` | filter |
 | `1` `2` `3` | Mine, Unassigned, Team |
-| `v` | choose sources |
+| `f` `v` | choose sources |
 | `Shift+g` | cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, Parent, None) |
 | `f` `s` | only the current sprint (press again to clear) |
 | `x` | add or remove the ticket from the selection |
@@ -117,7 +120,7 @@ Each view can be limited to the current iteration (Settings > Sources, or `curre
 | `w` | run a workflow on the ticket, in the background ([workflows](claude-code.md#workflows)) |
 | `y` | copy the branch name (in the detail) |
 | `o` | open in the tracker |
-| `R` | refresh |
+| `Cmd+Shift+R` (`Ctrl+Shift+R` on Linux) | refresh (outside a list or detail, it opens Reviews) |
 | `Cmd+.` (`Ctrl+.` on Linux) | the selected ticket's actions in a menu, its next step first (`Enter` runs it); in the detail, its More menu |
 
 ## Grouping and sorting
@@ -159,13 +162,13 @@ diamond: something broke, a small dot once done). It follows the ticket's work i
 request. A ticket in a status its source lists as waiting for a deploy, with no branch or pull request found, gets a
 dotted line labelled "per the tracker": Kelta did not see the stages before. Hover the row for where it stands.
 
-With the reading pane hidden (or a narrow pane), `Enter` on a ticket with work under way runs the phase's next
-action, as `Enter` does in the Queue (the key hints name it); `g` opens the pane instead.
+`Enter` on a ticket with work under way runs the phase's next action, as `Enter` does in the Queue (the key hints
+name it); `g` opens the reading pane instead.
 
 ## The reading pane
 
 Wider than about 720px (down to a 900px window), the pane splits: the list on the left, the selected ticket on the
-right. `Space` hides or shows it, `Enter` moves the keys into it and `Esc` gives them back. `Shift+Enter` opens it in
+right. `Space` hides or shows it, `g` moves the keys into it and `Esc` gives them back. `Shift+Enter` opens it in
 its own pane, which is also what `g` does in a narrow pane. When the filter hides the selected ticket, the first match
 is selected, so the pane never shows a hidden row.
 
