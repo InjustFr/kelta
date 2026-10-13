@@ -6,6 +6,7 @@ import { boot, callsOf, dispatch } from '../shell/helpers';
 
 const menu = (page: Page) => page.getByRole('menu', { name: 'More actions' });
 const first = (page: Page) => menu(page).getByRole('menuitem').first();
+const firstLabel = (page: Page) => first(page).locator('.label');
 
 /** `⌘.` on Linux. */
 const actionsKey = (page: Page) => page.keyboard.press('Control+.');
@@ -21,7 +22,7 @@ test('Queue: ⌘. opens the selected row’s actions, ↵ runs its next step', a
     await page.keyboard.press('j');
   }
   await actionsKey(page);
-  await expect(first(page)).toHaveText(/^Review changes/);
+  await expect(firstLabel(page)).toHaveText(/^Review changes/);
   await expect(first(page)).toHaveClass(/active/);
   await page.keyboard.press('Enter');
   await expect(menu(page)).toHaveCount(0);
@@ -41,7 +42,7 @@ test('Tickets list: ⌘. on the row starts work with ↵; in the detail, its Mor
   await row.locator('.k-row-key').click();
   await expect(row).toHaveAttribute('aria-current', 'true');
   await actionsKey(page);
-  await expect(first(page)).toHaveText(/^Start work/);
+  await expect(firstLabel(page)).toHaveText(/^Start work/);
   await expect(first(page)).toHaveClass(/active/);
   await page.keyboard.press('Enter');
   await expect(page.getByRole('dialog', { name: /Start work on SHOP-151/ })).toBeVisible();
@@ -59,7 +60,7 @@ test('Tickets board: ⌘. on the card opens its menu, Start work first', async (
   await card.click();
   await expect(card).toHaveAttribute('aria-current', 'true');
   await actionsKey(page);
-  await expect(first(page)).toHaveText(/^Start work/);
+  await expect(firstLabel(page)).toHaveText(/^Start work/);
   await expect(first(page)).toHaveClass(/active/);
 });
 
@@ -70,7 +71,7 @@ test('Reviews: ⌘. opens the selected PR’s menu, ↵ opens the review', async
   await expect(pane.locator('.row.selected')).toBeVisible();
   await pane.focus();
   await actionsKey(page);
-  await expect(first(page)).toHaveText(/^Open review/);
+  await expect(firstLabel(page)).toHaveText(/^Open review/);
   await expect(first(page)).toHaveClass(/active/);
   await page.keyboard.press('Enter');
   await expect(menu(page)).toHaveCount(0);

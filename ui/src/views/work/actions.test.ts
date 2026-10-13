@@ -246,7 +246,12 @@ describe('work menu: what can run now, then Not available now (#405)', () => {
 
 describe('⌘. opens the menu of what has the keys (#404)', () => {
   /** A focusable pane in the document whose `⌘.` handler logs and answers `opens`. */
-  function pane(name: string, opens: boolean, log: string[], parent: HTMLElement = document.body): HTMLElement {
+  function pane(
+    name: string,
+    opens: boolean,
+    log: string[],
+    parent: HTMLElement = document.body,
+  ): HTMLElement {
     const el = document.createElement('div');
     el.tabIndex = 0;
     parent.append(el);

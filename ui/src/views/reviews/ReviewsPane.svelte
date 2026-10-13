@@ -403,7 +403,11 @@
   /** `⌘.` (#404), from the list or the brief: the selected row's menu, under its `⋯`. */
   function menuKey(): boolean {
     if (!cur) return false;
-    more = { ...under(root?.querySelector('.row.selected .acts')), actions: rowActions(cur.s.item), lit: true };
+    more = {
+      ...under(root?.querySelector('.row.selected .acts')),
+      actions: rowActions(cur.s.item),
+      lit: true,
+    };
     return true;
   }
 
