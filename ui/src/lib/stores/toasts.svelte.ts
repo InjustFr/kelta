@@ -14,6 +14,8 @@ export interface ToastEntry {
   view: string | null;
 }
 
+type PushOpts = { timeoutMs?: number; view?: string | null };
+
 const DEFAULT_TIMEOUT_MS: Record<Toast['level'], number> = { info: 5000, warn: 8000, error: 12000 };
 const MAX_TOASTS = 5;
 
@@ -29,7 +31,7 @@ export class ToastsStore {
    * Shows a toast. `timeoutMs: 0` keeps it until dismissed. `view` overrides the view it is tied to
    * (`null`: none, for background work). Returns its id.
    */
-  push(toast: Toast, opts: { timeoutMs?: number; view?: string | null } = {}): number {
+  push(toast: Toast, opts: PushOpts = {}): number {
     const id = this.#nextId++;
     const view = opts.view === undefined ? this.where() : opts.view;
     this.list = [...this.list, { id, toast, createdAt: Date.now(), view }].slice(-MAX_TOASTS);
@@ -44,8 +46,8 @@ export class ToastsStore {
     return id;
   }
 
-  info(text: string): number {
-    return this.push({ level: 'info', text, action: null });
+  info(text: string, opts?: PushOpts): number {
+    return this.push({ level: 'info', text, action: null }, opts);
   }
 
   warn(text: string): number {

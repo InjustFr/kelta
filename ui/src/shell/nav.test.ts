@@ -27,6 +27,7 @@ import {
   splitFocused,
   tabAttention,
   toggleZoomFocused,
+  viewKey,
   workRows,
 } from './nav';
 
@@ -146,6 +147,18 @@ describe('projects', () => {
     openView('reviews');
     cycleProject(1);
     expect([ui.view, projects.activeId]).toEqual([null, 'shop']);
+  });
+});
+
+describe('viewKey', () => {
+  it('is the global view, else project/tab, else null before the layouts load', async () => {
+    await activateProject('shop');
+    expect(viewKey()).toBe(`shop/${currentTab()!.id}`);
+    openView('now');
+    expect(viewKey()).toBe('now');
+    layout.byProject = {};
+    ui.view = null;
+    expect(viewKey()).toBeNull();
   });
 });
 

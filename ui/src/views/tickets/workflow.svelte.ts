@@ -101,10 +101,7 @@ function announce(start: WorkflowStart, text: string): void {
   const args = { session_id: start.session.id };
   if (start.running) {
     // revealing moves to another view: the toast must outlive that
-    toasts.push(
-      { level: 'info', text: t('A workflow is already running here: opened it'), action: null },
-      { view: null },
-    );
+    toasts.info(t('A workflow is already running here: opened it'), { view: null });
     void dispatch('session.reveal', args);
     return;
   }

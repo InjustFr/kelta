@@ -515,6 +515,15 @@ describe('ToastsStore', () => {
     store.clear();
   });
 
+  it('info(text, { view: null }) is tied to no view: it survives the navigation it announces', () => {
+    const store = new ToastsStore();
+    store.where = () => 'a';
+    store.info('Started x', { view: null });
+    store.leave('b');
+    expect(store.list.map((e) => e.toast.text)).toEqual(['Started x']);
+    store.clear();
+  });
+
   it('formats IPC errors', () => {
     const store = new ToastsStore();
     store.error(

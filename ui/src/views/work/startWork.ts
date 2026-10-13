@@ -60,6 +60,7 @@ export async function beginStartWork(
         : item.state.kind === 'queued'
           ? t('Queued {branch}', { branch })
           : t('Started {branch}', { branch }),
+      { view: null }, // activating the project leaves this view: the toast must outlive that
     );
     void activateProject(item.project_id);
     return item;
