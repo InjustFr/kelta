@@ -1,7 +1,7 @@
 // Split, resize, zoom and close on the mock layout (ARCH §5.1).
 import { expect, test, type Page } from '@playwright/test';
 
-import { boot, callLog, callsOf, dispatch, waitForAttached } from './helpers';
+import { boot, callLog, callsOf, dispatch, unfold, waitForAttached } from './helpers';
 
 const panes = (page: Page) => page.locator('[data-testid="workspace"] [data-testid="pane"]');
 
@@ -117,6 +117,7 @@ test.describe('layout', () => {
     const last = dispatch(page, 'pane.close');
     await page.getByTestId('confirm-background').click();
     await last;
+    await unfold(page, 'shop');
     await expect(page.locator('[data-testid="rail-row"][data-project-id="shop"]')).toHaveCount(2);
   });
 
@@ -129,6 +130,7 @@ test.describe('layout', () => {
     await page.getByTestId('palette-input').fill('shop claude');
     await expect(page.getByTestId('palette-item').first()).toContainText('claude');
     await page.keyboard.press('Enter');
+    await unfold(page, 'shop');
     await expect(page.locator('[data-testid="rail-row"][data-project-id="shop"]')).toHaveCount(4);
     await waitForAttached(page, 1);
   });
@@ -163,6 +165,7 @@ test.describe('layout', () => {
     // Move to background from the ✕ button: the tab closes, the session keeps running.
     await page.getByTestId('pane-close').first().click();
     await page.getByTestId('confirm-background').click();
+    await unfold(page, 'shop');
     await expect(page.locator('[data-testid="rail-row"][data-project-id="shop"]')).toHaveCount(2);
     expect((await callsOf(page, 'session_kill')).length).toBe(1);
   });
@@ -178,6 +181,7 @@ test.describe('layout', () => {
 
   test('rail rows: next/prev, middle click closes, live sessions ask first', async ({ page }) => {
     await boot(page);
+    await unfold(page, 'shop');
     const tabs = page.locator('[data-testid="rail-row"][data-project-id="shop"]');
     await expect(tabs).toHaveCount(3);
     await dispatch(page, 'tab.next');

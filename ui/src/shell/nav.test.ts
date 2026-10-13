@@ -23,9 +23,11 @@ import {
   railRows,
   requestCloseTab,
   revealSession,
+  selectRow,
   splitFocused,
   tabAttention,
   toggleZoomFocused,
+  workRows,
 } from './nav';
 
 const SHOP_CLAUDE = '0199a6b2-0000-7000-8000-000000000001';
@@ -66,7 +68,7 @@ describe('projects', () => {
     expect(performance.getEntriesByName('kelta.project_switch').length).toBeGreaterThan(0);
   });
 
-  it('rail rows: goto N counts rows across bands, tab next/prev walk them and wrap around', async () => {
+  it('rail rows: goto N counts work rows across bands, tab next/prev walk every row and wrap around', async () => {
     await Promise.all(['billing', 'kelta-tools', 'home'].map((id) => layout.ensure(id)));
     expect(railRows().map((r) => r.tab.id)).toEqual([
       'shop-t1',
@@ -79,16 +81,19 @@ describe('projects', () => {
       'home-t1',
       'home-t2',
     ]);
+    expect(workRows().map((r) => r.tab.id)).toEqual(['shop-t1', 'billing-t1', 'kt-t1']);
     const at = () => [projects.activeId, currentTab()!.id];
-    gotoRailRow(5);
-    expect(at()).toEqual(['billing', 'billing-t2']);
-    gotoRailRow(10); // no such row: unchanged
+    gotoRailRow(2);
+    expect(at()).toEqual(['billing', 'billing-t1']);
+    gotoRailRow(4); // no such work row: unchanged
+    expect(at()).toEqual(['billing', 'billing-t1']);
+    cycleTab(1);
     expect(at()).toEqual(['billing', 'billing-t2']);
     cycleTab(1);
     expect(at()).toEqual(['kelta-tools', 'kt-t1']);
     cycleTab(-1);
     expect(at()).toEqual(['billing', 'billing-t2']);
-    gotoRailRow(9);
+    selectRow('home', 'home-t2');
     cycleTab(1);
     expect(at()).toEqual(['shop', 'shop-t1']);
     cycleTab(-1);
@@ -97,6 +102,21 @@ describe('projects', () => {
     openView('now');
     cycleTab(1);
     expect([ui.view, ...at()]).toEqual([null, 'shop', 'shop-t1']);
+  });
+
+  it('work rows (#430): a band lists its work by start time, and a phase change does not move a row', async () => {
+    const started = '0199a6b2-0000-7000-8000-00000000a004'; // SHOP-155, started before SHOP-142
+    layout.update('shop', (l) => ({
+      ...l,
+      tabs: [...l.tabs, { ...l.tabs[2]!, id: 'shop-t4', title: 'SHOP-155 Coupons', work_item_id: started }],
+    }));
+    const order = () => workRows().map((r) => r.tab.id);
+    expect(order()).toEqual(['shop-t4', 'shop-t1']);
+    expect(railRows().map((r) => r.tab.id)).toEqual(['shop-t4', 'shop-t1', 'shop-t2', 'shop-t3']);
+    work.apply({ type: 'work.updated', work: { ...work.get(started)!, state: { kind: 'pr_open' } } });
+    expect(order()).toEqual(['shop-t4', 'shop-t1']);
+    gotoRailRow(1);
+    expect(currentTab()!.id).toBe('shop-t4');
   });
 
   it('project cycling follows the rail order and wraps around', async () => {
