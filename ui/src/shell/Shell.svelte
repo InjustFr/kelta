@@ -7,7 +7,7 @@
   import { dispatch } from '$lib/actions';
   import { setLocale, t } from '$lib/i18n/index.svelte';
   import { onUiEvent } from '$lib/ipc/events';
-  import { sessionSpawnTemplate, terminalSetPalette } from '$lib/ipc/commands';
+  import { appInfo, sessionSpawnTemplate, terminalSetPalette } from '$lib/ipc/commands';
   import { keyManager } from '$lib/keys';
   import {
     GLOBAL,
@@ -25,7 +25,7 @@
   import { configFromSettings, terminalPool } from '$lib/terminal';
   import { terminalPalette } from '$lib/terminal/theme';
   import { resolveProjectColor, resolveTheme } from '$lib/theme';
-  import { Button, currentPlatform, EmptyState } from '$lib/ui';
+  import { Button, currentPlatform, EmptyState, resolveMotion, setMotion } from '$lib/ui';
   import { startWorkOnTicket } from '../views/work/startWork';
 
   import { confirms, prompts } from './confirm.svelte';
@@ -70,6 +70,13 @@
     if (themeSetting === 'system') delete root.dataset.theme;
     else root.dataset.theme = themeSetting;
   });
+
+  // app.animations (#398): auto turns to reduced in safe graphics mode, which only the desktop knows.
+  let safeGraphics = $state(false);
+  appInfo()
+    .then((i) => (safeGraphics = i.safe_graphics))
+    .catch(() => {});
+  $effect(() => setMotion(resolveMotion(settings.value()?.app.animations, safeGraphics)));
 
   let themeKeys: string[] = [];
   $effect(() => {

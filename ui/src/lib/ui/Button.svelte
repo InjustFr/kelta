@@ -61,7 +61,7 @@
     color: var(--k-fg);
     white-space: nowrap;
     cursor: pointer;
-    transition: background var(--k-duration) ease-out;
+    transition: background var(--k-duration-fast) var(--k-ease);
   }
 
   .k-button.sm {

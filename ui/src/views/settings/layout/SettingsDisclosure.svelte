@@ -45,11 +45,15 @@
   }
 
   summary :global(svg) {
-    transition: transform var(--k-duration) ease-out;
+    transition: transform var(--k-duration-fast) var(--k-ease);
   }
 
   .s-disclosure[open] > summary :global(svg) {
     transform: rotate(90deg);
+  }
+
+  .s-disclosure[open] > .body {
+    animation: k-float-in var(--k-duration) var(--k-ease);
   }
 
   .count {

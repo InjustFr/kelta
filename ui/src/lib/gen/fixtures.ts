@@ -1960,6 +1960,7 @@ export const accountTestResult: AccountTestResult = {
 export const settingsDefault: Settings = {
   "accounts": {},
   "app": {
+    "animations": "auto",
     "confirm_quit_with_running": true,
     "dark_theme": "bezel-dark",
     "language": "system",

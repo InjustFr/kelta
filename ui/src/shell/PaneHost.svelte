@@ -446,14 +446,7 @@
     align-items: center;
     justify-content: center;
     height: 100%;
-    /* Skeleton only after 150 ms (ARCHITECTURE §12.2). */
-    opacity: 0;
-    animation: appear 0s linear 150ms forwards;
-  }
-
-  @keyframes appear {
-    to {
-      opacity: 1;
-    }
+    /* Skeleton only after --k-delay-show, 150 ms (ARCHITECTURE §12.2). */
+    animation: k-show var(--k-duration) var(--k-ease) var(--k-delay-show) backwards;
   }
 </style>

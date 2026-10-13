@@ -14,6 +14,9 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   } as unknown as typeof ResizeObserver;
 }
 
+// jsdom has no Web Animations: Svelte's animate: directive asks a leaving row for its animations.
+Element.prototype.getAnimations ??= () => [];
+
 beforeEach(() => {
   setTransport(createMockTransport().transport);
 });

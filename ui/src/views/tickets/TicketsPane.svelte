@@ -16,6 +16,7 @@
   } from '$lib/gen';
   import { openExternal, trackerAssign } from '$lib/ipc/commands';
   import { GLOBAL, projects, sessions, settings, tags, tickets, toasts, ui, work } from '$lib/stores';
+  import { inflight } from '$lib/stores/inflight.svelte';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import {
     Badge,
@@ -24,6 +25,7 @@
     ErrorState,
     Icon,
     Lamp,
+    LoadBar,
     Menu,
     ROW_HEIGHT,
     VirtualList,
@@ -567,7 +569,9 @@
   }
 
   function start(item: TicketItem, preview?: boolean): void {
-    void startWorkOnTicket(item.ticket.ref, null, { preview, source: item.source_ids[0] ?? null });
+    void inflight.track(keyOf(item), () =>
+      startWorkOnTicket(item.ticket.ref, null, { preview, source: item.source_ids[0] ?? null }),
+    );
   }
 
   /** Opens the status picker under the first ticket's status chip (its card on the board). */
@@ -1043,6 +1047,7 @@
       />
     {/if}
   </FilterBar>
+  <LoadBar active={list.loading && !!list.data} label={t('Loading tickets')} />
 
   {#if noSource}
     <EmptyState icon="ticket" title={t('Add a ticket source: pick a board')}>
@@ -1166,7 +1171,7 @@
                   onnext={() => {
                     selKey = r.key;
                     const w = liveWork(r.item);
-                    if (w) void runPrimary(w);
+                    if (w) void inflight.track(r.key, () => runPrimary(w));
                   }}
                   onmove={() => {
                     selKey = r.key;

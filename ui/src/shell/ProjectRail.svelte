@@ -867,7 +867,7 @@
     color: var(--k-fg);
     cursor: pointer;
     text-align: left;
-    transition: background-color var(--k-duration) ease-out;
+    transition: background-color var(--k-duration-fast) var(--k-ease);
   }
 
   /* Hover layers on top of whatever the row wears (selected, lit) instead of replacing it. */
@@ -1193,7 +1193,7 @@
     inset: 0 auto 0 50%;
     width: 2px;
     transform: translateX(-50%);
-    transition: background var(--k-duration) ease-out;
+    transition: background var(--k-duration-fast) var(--k-ease);
   }
 
   .edge:hover::after,

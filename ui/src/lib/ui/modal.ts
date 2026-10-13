@@ -17,7 +17,10 @@ export function focusModal(el: HTMLElement): () => void {
   const main = MAIN.map((s) => el.querySelector<HTMLElement>(s)).find((x) => x !== null);
   (main ?? el).focus();
   return () => {
-    if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+    // Runs once the out transition ends (#398): focus that moved on meanwhile (another modal) stays.
+    const now = document.activeElement;
+    const lost = now === null || now === document.body || el.contains(now);
+    if (lost && previous instanceof HTMLElement && previous.isConnected) previous.focus();
   };
 }
 

@@ -3,6 +3,9 @@ import { expect, test } from '@playwright/test';
 
 import { boot } from './helpers';
 
+// With motion on (#398): loaders and pulses must still stop at idle.
+test.use({ reducedMotion: 'no-preference' });
+
 test('an idle shell arms no intervals, timeouts or animation frames', async ({ page }) => {
   await page.addInitScript(() => {
     const w = window as unknown as { __timers: Record<string, number> };

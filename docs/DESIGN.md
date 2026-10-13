@@ -398,7 +398,7 @@ One bar across the top of the window, above the rail and the panes: `--k-context
 
 - All float: `--k-bg-float`, `--k-shadow`, radius 8 (one radius for every floating surface).
 - Dialogs are top-anchored like the palette (not vertically centred), title 15/600, actions right-aligned, primary last.
-- Sheets slide from the right edge (one 90ms transform on open/close, removed under reduced motion), width `min(<width>px, 100vw - 32px)`: 560 by default, 480 for the narrow ones (Fix with Claude, the source picker).
+- Sheets slide from the right edge (`--k-duration` in, `--k-duration-fast` out, no movement under reduced motion), width `min(<width>px, 100vw - 32px)`: 560 by default, 480 for the narrow ones (Fix with Claude, the source picker).
 - Menus: 26px rows, kbd hints right in `--k-fg-subtle` mono.
 - Toasts: bottom-right, above the status strip, one line + optional action, a lamp shape for kind (error diamond, done dot). No auto-dismiss timer is added beyond what the toast store already does; verify against check-no-timers.sh.
 
@@ -504,9 +504,13 @@ Check a change in German and French before it lands: switch the language, then l
 
 ## 8. Motion
 
-- Only motion that answers an action: menus, sheets, dialogs, palette open/close, hover/press background changes. Duration `--k-duration` (90ms), `ease-out`.
-- No looping or infinite animations, no idle timers, no pulsing lamps, no entrance sequences. `scripts/check-no-timers.sh` must stay green; reviewers reject any `infinite` keyframes.
-- `prefers-reduced-motion: reduce` sets `--k-duration: 0ms` and removes the sheet transform.
+Motion explains, never decorates (#398): it says what is loading, where a thing came from or went, what just changed. Anything that only looks nice is out.
+
+- **Properties**: `transform` (and `translate`/`scale`/`rotate`) and `opacity` only, through CSS transitions and keyframes or Svelte `transition:`/`animate:` directives. No JS timers, no `requestAnimationFrame` loops (`scripts/check-no-timers.sh` stays green).
+- **Tokens** (`tokens.css`, mirrored in `lib/ui/motion.ts`): `--k-duration-fast` 90ms (hover/press, menus, every out transition), `--k-duration` 150ms (rows moving, sheets, toasts, disclosure), one easing `--k-ease` (ease-out cubic), `--k-delay-show` 150ms before a loader shows.
+- **Nothing loops at idle.** An `infinite` animation is allowed only on an element mounted while its operation is in flight (`Spinner`, `LoadBar`); a pulse runs `--k-pulses` (3) times. `idle.spec` runs with motion on and asserts no running animation.
+- **Where**: loaders (the load bar under Now, Tickets and Reviews while they fetch; a spinner in the lamp slot of a row whose action runs); rows that change place slide there and rows that leave fade while the rest close up (`VirtualList`, never on scroll or first measure); folding sections turn their chevron; menus and the peek popover grow from the point that opened them; sheets, dialogs and toasts animate in and out; a lamp that starts needing input pulses.
+- **Levels**: `app.animations` writes `<html data-motion>`. `reduced` (the `auto` default in safe graphics mode) keeps fades and loaders, sets `--k-shift` and `--k-pulses` to 0. `off` and `prefers-reduced-motion: reduce` end every animation and transition at once. e2e runs with reduced motion.
 
 ## 9. Decisions
 

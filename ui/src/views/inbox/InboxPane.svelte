@@ -20,6 +20,7 @@
     ui,
     work,
   } from '$lib/stores';
+  import { inflight } from '$lib/stores/inflight.svelte';
   import { reviewKey } from '$lib/stores/reducers';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import type { TagKind } from '$lib/stores/tags.svelte';
@@ -32,8 +33,10 @@
     IconButton,
     Kbd,
     Lamp,
+    LoadBar,
     Menu,
     ROW_HEIGHT,
+    Spinner,
     Toggle,
     VirtualList,
     relativeTime,
@@ -484,10 +487,10 @@
     if (key === 'o') return browse(row);
     if (row.type === 'work') {
       const id = NOW_KEYS[key];
-      if (id) void runWorkAction(id, row.item);
+      if (id) void inflight.track(row.id, () => runWorkAction(id, row.item));
       return;
     }
-    if (key === 's' && row.type === 'ticket') void enterRow(row);
+    if (key === 's' && row.type === 'ticket') void inflight.track(row.id, () => enterRow(row));
     else if (key === 's' && row.type === 'review' && !row.mine) reviewRowLocally(row);
   }
 
@@ -564,7 +567,10 @@
         if (selectable.at(-1)) selId = selectable.at(-1)!.id;
         break;
       case 'Enter':
-        if (cur) void enterRow(cur);
+        if (cur) {
+          const row = cur;
+          void inflight.track(row.id, () => enterRow(row));
+        }
         break;
       case 'g':
         if (cur) void goToRow(cur);
@@ -694,6 +700,7 @@
     onkeydown={onFilterKey}
     onblur={() => (filtering = false)}
   />
+  <LoadBar active={!loading && lists.some((l) => l.loading)} label={t('Loading Now')} />
 
   {#if loading}
     <Loading label={t('Loading Now')} />
@@ -751,9 +758,7 @@
                 {#if l.section.folded}
                   {@const s = l.section}
                   <button type="button" class="fold" aria-expanded={l.open} onclick={() => toggleSection(s)}>
-                    <span class="slot"
-                      ><Icon name={l.open ? 'chevron-down' : 'chevron-right'} size={12} /></span
-                    >
+                    <span class="slot chevron"><Icon name="chevron-right" size={12} /></span>
                     {t(s.label)}
                     <span class="count">{l.count}</span>
                     <span class="k-group-hint">{t(SECTION_HINTS[s.id])}</span>
@@ -810,7 +815,12 @@
                   oncontextmenu={(e) => rowMenu(e, l.row)}
                   use:peekHover={() => rowSession(l.row)}
                 >
-                  <span class="slot"><Lamp level={v.lamp} title={v.reason} /></span>
+                  <span class="slot"
+                    >{#if inflight.has(l.row.id)}<Spinner size={10} />{:else}<Lamp
+                        level={v.lamp}
+                        title={v.reason}
+                      />{/if}</span
+                  >
                   <span class="id">{v.id}</span>
                   <span class="ttl">{v.title}</span>
                   <span class="sub">
@@ -845,7 +855,8 @@
                       class="act"
                       class:primary={a.key === 'enter'}
                       data-key={a.key}
-                      onclick={() => void a.run()}><Kbd chord={a.key} />{a.label}</button
+                      onclick={() => void inflight.track(l.row.id, a.run)}
+                      ><Kbd chord={a.key} />{a.label}</button
                     >
                   {/each}
                   {#if v.more}<span class="msg" title={v.more}>{v.more}</span>{/if}
@@ -983,6 +994,15 @@
     color: var(--k-fg-muted);
     background: var(--k-bezel-raised);
     box-shadow: inset 0 -1px 0 var(--k-border);
+  }
+
+  /* The chevron turns as the section folds or opens; the rows fade in and out (VirtualList). */
+  .chevron :global(svg) {
+    transition: rotate var(--k-duration-fast) var(--k-ease);
+  }
+
+  .fold[aria-expanded='true'] .chevron :global(svg) {
+    rotate: 90deg;
   }
 
   .fold {

@@ -46,7 +46,7 @@
     background: transparent;
     color: var(--k-fg-chrome);
     cursor: pointer;
-    transition: background var(--k-duration) ease-out;
+    transition: background var(--k-duration-fast) var(--k-ease);
   }
 
   .k-icon-button.sm {

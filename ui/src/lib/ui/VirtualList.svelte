@@ -1,6 +1,8 @@
 <script lang="ts" generics="T">
   import { untrack, type Snippet } from 'svelte';
 
+  import { glide, fadeMove } from './motion';
+
   interface Props {
     items: readonly T[];
     /** Fixed row height in px; with `measure`, the height assumed for a row not rendered yet. */
@@ -107,6 +109,20 @@
     };
   }
 
+  /** When the list mounted: rows landing at their first measured height do not slide there. */
+  const born = performance.now();
+  /** FLIP, but not for the pinned header (it moves with the scroll) nor while the rows first measure. */
+  function move(node: Element, rects: { from: DOMRect; to: DOMRect }) {
+    if (node.classList.contains('pin') || performance.now() - born < 500) return { duration: 0 };
+    return glide(node, rects);
+  }
+
+  /** A row arriving with the data (a section unfolding, a row added) fades in; one scrolled into view does not. */
+  let scrolledAt = 0;
+  function enter(node: Element) {
+    return performance.now() - Math.max(born, scrolledAt) < 500 ? { duration: 0 } : fadeMove(node);
+  }
+
   let endNotifiedAt = -1;
   $effect(() => {
     if (!onend || items.length === 0) return;
@@ -117,6 +133,7 @@
   });
 
   function onscroll(): void {
+    scrolledAt = performance.now();
     if (viewport) scrollTop = viewport.scrollTop;
   }
 
@@ -158,32 +175,25 @@
 >
   <div class="spacer" style:height="{top(items.length)}px">
     {#each slice as { item, index } (key(item, index))}
-      {#if index === pinned?.index}
-        <!-- In flow at the top of the spacer (the rows are absolute), so sticky pins it. -->
-        <div
-          class="pin"
-          class:measured={measure}
-          role="listitem"
-          style:height={measure ? undefined : `${itemHeight}px`}
-          style:min-height={measure ? `${itemHeight}px` : undefined}
-          style:translate="0 {pinned.shift}px"
-          use:sized={String(key(item, index))}
-        >
-          {@render row(item, index)}
-        </div>
-      {:else}
-        <div
-          class="row"
-          class:measured={measure}
-          role="listitem"
-          style:top="{top(index)}px"
-          style:height={measure ? undefined : `${itemHeight}px`}
-          style:min-height={measure ? `${itemHeight}px` : undefined}
-          use:sized={String(key(item, index))}
-        >
-          {@render row(item, index)}
-        </div>
-      {/if}
+      {@const pin = index === pinned?.index}
+      <!-- One element for both cases: a row that changes place slides there (animate:), a row that
+           leaves fades while the rest close up (#398). The pinned header is in flow at the top of the
+           spacer (the rows are absolute), so sticky pins it. -->
+      <div
+        class={pin ? 'pin' : 'row'}
+        class:measured={measure}
+        role="listitem"
+        style:top={pin ? undefined : `${top(index)}px`}
+        style:translate={pin ? `0 ${pinned?.shift ?? 0}px` : undefined}
+        style:height={measure ? undefined : `${itemHeight}px`}
+        style:min-height={measure ? `${itemHeight}px` : undefined}
+        use:sized={String(key(item, index))}
+        animate:move
+        in:enter
+        out:fadeMove
+      >
+        {@render row(item, index)}
+      </div>
     {/each}
   </div>
 </div>

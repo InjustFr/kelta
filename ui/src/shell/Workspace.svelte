@@ -239,13 +239,6 @@
     align-items: center;
     justify-content: center;
     flex: 1;
-    opacity: 0;
-    animation: appear 0s linear 150ms forwards;
-  }
-
-  @keyframes appear {
-    to {
-      opacity: 1;
-    }
+    animation: k-show var(--k-duration) var(--k-ease) var(--k-delay-show) backwards;
   }
 </style>

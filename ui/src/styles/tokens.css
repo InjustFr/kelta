@@ -52,7 +52,16 @@
   --k-z-dialog: 50;
   --k-z-toast: 60;
 
-  --k-duration: 90ms; /* response to an action only; nothing loops */
+  /* Motion explains, never decorates (DESIGN §8, #398): what is loading, where a row went, what opened.
+     transform/opacity only; nothing loops at idle (a loader runs while its operation is in flight, a
+     pulse a bounded number of times). <html data-motion> and prefers-reduced-motion scale it (base.css);
+     lib/ui/motion.ts mirrors the durations for Svelte transitions. */
+  --k-duration-fast: 90ms; /* hover/press, menus, out transitions */
+  --k-duration: 150ms; /* rows moving, sheets, toasts, disclosure */
+  --k-ease: cubic-bezier(0.215, 0.61, 0.355, 1); /* ease-out cubic (svelte/easing cubicOut) */
+  --k-delay-show: 150ms; /* a loader appears only after this: quick loads never flash */
+  --k-shift: 1; /* movement factor of entrances; 0 under data-motion=reduced */
+  --k-pulses: 3; /* how many times an attention lamp pulses; 0 under data-motion=reduced */
 
   --k-project: #4f8fb3; /* overwritten per active project */
 

@@ -4,6 +4,7 @@
 
   import IconButton from './IconButton.svelte';
   import { focusModal, modalKeydown } from './modal';
+  import { fadeMove } from './motion';
 
   interface Props {
     title: string;
@@ -27,7 +28,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-<div class="k-backdrop" onclick={onclose}></div>
+<div class="k-backdrop" onclick={onclose} out:fadeMove|global></div>
 <div
   bind:this={el}
   class="k-sheet {side}"
@@ -37,6 +38,7 @@
   tabindex="-1"
   style:width="min({width}px, calc(100vw - 32px))"
   {onkeydown}
+  out:fadeMove|global={side === 'right' ? { x: 24 } : { y: -4 }}
 >
   {#if side === 'top'}
     <!-- Palette-like: the input is the top edge; Esc and the backdrop close it. -->
@@ -78,7 +80,7 @@
     right: 0;
     bottom: 0;
     border-radius: var(--k-radius-lg) 0 0 var(--k-radius-lg);
-    animation: k-sheet-in var(--k-duration) ease-out;
+    animation: k-sheet-in var(--k-duration) var(--k-ease);
   }
 
   .k-sheet.top {
@@ -87,7 +89,7 @@
     transform: translateX(-50%);
     max-height: 75vh;
     border-radius: var(--k-radius-lg);
-    animation: k-float-in var(--k-duration) ease-out;
+    animation: k-float-in var(--k-duration) var(--k-ease);
   }
 
   header {

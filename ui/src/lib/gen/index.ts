@@ -8,6 +8,7 @@ export type * from './AccountStatus';
 export type * from './AccountTestResult';
 export type * from './ActionButtonDef';
 export type * from './ActionDef';
+export type * from './Animations';
 export type * from './AppInfo';
 export type * from './AppSettings';
 export type * from './Assignee';

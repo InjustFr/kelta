@@ -2452,5 +2452,8 @@
   "In progress, or work under way in Kelta": "En cours, ou travail commencé dans Kelta",
   "Waiting on you, a review, failed checks or a blocker": "En attente de vous, d’une revue, de vérifications en échec ou d’un blocage",
   "To do, ready to start": "À faire, prêt à commencer",
-  "Not planned yet": "Pas encore planifié"
+  "Not planned yet": "Pas encore planifié",
+  "Animations": "Animations",
+  "Reduced": "Réduites",
+  "Motion that shows what changed: loaders, rows moving, menus and sheets opening. Auto is on, and reduced in safe graphics mode; reduced keeps fades and loaders only.": "Mouvements qui montrent ce qui a changé : chargements, lignes qui se déplacent, menus et panneaux qui s'ouvrent. Auto les active, réduites en mode graphique sûr ; réduites ne garde que les fondus et les chargements."
 }

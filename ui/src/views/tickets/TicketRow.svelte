@@ -1,7 +1,9 @@
 <script lang="ts">
   import { t } from '$lib/i18n/index.svelte';
   import type { TicketItem } from '$lib/gen';
-  import { Icon, Lamp, relativeTime } from '$lib/ui';
+  import { inflight } from '$lib/stores/inflight.svelte';
+  import { ticketKey } from '$lib/stores/tickets.svelte';
+  import { Icon, Lamp, relativeTime, Spinner } from '$lib/ui';
 
   import { ciGlyph, initials } from '../work/common';
   import { phaseWord, type Phase } from '../work/phase';
@@ -122,7 +124,10 @@
         ><span class="box" class:on={picked} data-pick
           ><Icon name={picked ? 'check' : 'square'} size={12} /></span
         ></RowButton
-      >{:else}<Lamp level={phase?.lamp ?? 'none'} title={signals.join('\n') || undefined} />{/if}</span
+      >{:else if inflight.has(ticketKey(tk.ref))}<Spinner size={10} />{:else}<Lamp
+        level={phase?.lamp ?? 'none'}
+        title={signals.join('\n') || undefined}
+      />{/if}</span
   >
   <span class="k-row-key c-key">{tk.ref.key}</span>
   <span class="c-title"
