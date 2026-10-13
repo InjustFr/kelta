@@ -88,16 +88,19 @@ test('the work menu opens from a terminal with its chord; letters never move', a
   await page.keyboard.press('Control+Period');
   const menu = page.getByRole('menu', { name: 'Work' });
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole('menuitem')).toHaveCount(22);
+  // 8 runnable entries and the 5 closest to the phase under "Not available now".
+  await expect(menu.getByRole('menuitem')).toHaveCount(13);
+  await expect(menu.getByText('Not available now (5)')).toBeVisible();
+  await expect(menu.locator('[aria-disabled="true"]')).toHaveCount(5);
   // SHOP-142's Claude runs: Start Claude waits for an item without one.
   await expect(menu.getByRole('menuitem', { name: /Start Claude/ })).toHaveAttribute(
     'title',
     'Claude is already running',
   );
-  await expect(menu.getByRole('menuitem', { name: /Continue rebase/ })).toHaveAttribute(
-    'title',
-    'Only while a rebase is stopped',
-  );
+  // Continue rebase never applies here: unlisted, its key still flashes why.
+  await expect(menu.getByRole('menuitem', { name: /Continue rebase/ })).toHaveCount(0);
+  await page.keyboard.press('c');
+  await expect(page.getByTestId('toasts')).toContainText('Continue rebase: Only while a rebase is stopped');
   await page.keyboard.press('Escape');
   await expect(menu).toBeHidden();
 });

@@ -11,7 +11,8 @@
 
   // Ticket detail action bar (TICKETS.md T3): the primary action, one row of quiet secondary actions,
   // and More for the rest. Keys show in tooltips and in the menu; every key works without the bar.
-  // An action the tracker (or the ticket) cannot do stays visible, off, with the reason as its tooltip.
+  // An action the tracker (or the ticket) cannot do stays visible in the row, off, with the reason as its
+  // tooltip; in More it goes under "Not available now", its key flashing the reason (#405).
   interface Props {
     item: TicketItem;
     branch: string | null;
@@ -119,8 +120,7 @@
       label: a.label,
       kbd: a.chord,
       key: a.key,
-      disabled: a.reason !== null,
-      title: a.reason ?? undefined,
+      reason: a.reason,
     }))}
     x={menu.x}
     y={menu.y}

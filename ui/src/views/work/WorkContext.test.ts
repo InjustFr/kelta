@@ -128,21 +128,38 @@ describe('work tab header', () => {
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'open_external')).toBe(true));
   });
 
-  it('work menu: every letter, letters never move, disabled entries say why', async () => {
-    mountHeader(item(0));
+  it('work menu: what can run now by object, then Not available now; hidden letters say why (#405)', async () => {
+    mountHeader(item(0)); // SHOP-142, Claude working: no next step
     const menu = await openMenu();
     const entries = within(menu).getAllByRole('menuitem');
     const label = (e: HTMLElement) => e.querySelector('.label')?.textContent ?? '';
-    const labels = entries.map(label);
-    expect(labels.length).toBe(22); // primary + v ⇧V p ⇧R f r c a n s b g ⇧C l ⇧T t o ⇧M d ⇧P ⇧F (⇧T create_ticket from main, d draft, ⇧P park)
-    const cont = entries.find((e) => label(e).startsWith('Continue rebase'))!;
-    expect(cont.getAttribute('aria-disabled')).toBe('true');
-    expect(cont.title).toBe('Only while a rebase is stopped');
-    const mark = entries.find((e) => label(e).startsWith('Mark reviewed'))!;
-    expect(mark.title).toBe('Nothing to review');
-    const draft = entries.find((e) => label(e).startsWith('Mark ready / Convert to draft'))!;
-    expect(draft.title).toBe('Needs an open PR');
-    await fireEvent.keyDown(menu, { key: 'c' }); // disabled: nothing runs, the menu stays
+    expect(entries.map(label)).toEqual([
+      'Review changes since last look',
+      'Review the whole diff in nvim',
+      'Add next: note…',
+      'Go to Claude',
+      'Finish…',
+      'Open ticket',
+      'Ship',
+      'Rebase onto main',
+      'Mark reviewed',
+      'Start Claude',
+      'Park',
+      'Fix with Claude',
+      'Open PR',
+    ]);
+    // Every entry that cannot run is in the last group, its reason on a second line.
+    const group = within(menu).getByText('Not available now (5)');
+    const off = entries.filter((e) => e.getAttribute('aria-disabled') === 'true');
+    expect(off).toHaveLength(5);
+    for (const e of off)
+      expect(group.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(off[0]!.querySelector('.reason')?.textContent).toBe('Nothing to review');
+    // A letter not listed still answers with its reason, and the menu stays.
+    await fireEvent.keyDown(menu, { key: 'c' });
+    expect(toasts.list.at(-1)?.toast.text).toBe('Continue rebase: Only while a rebase is stopped');
+    await fireEvent.keyDown(menu, { key: 'M' }); // past the 5 listed
+    expect(toasts.list.at(-1)?.toast.text).toBe('Merge when ready…: Needs an open PR');
     expect(screen.getByRole('menu', { name: 'Work' })).toBeTruthy();
   });
 
@@ -171,8 +188,8 @@ describe('work tab header', () => {
     mountHeader(w);
     const menu = await openMenu();
     const entries = within(menu).getAllByRole('menuitem');
-    expect(entries.length).toBe(23); // the 22 built-ins, then the enabled plugin's action
-    const last = entries.at(-1)!;
+    expect(entries.length).toBe(14); // the 8 that can run, the enabled plugin's action, then 5 not available
+    const last = entries[8]!;
     expect(last.textContent).toContain('Deploy to QA');
     expect(last.textContent).toContain('QA');
     await fireEvent.click(last);
@@ -184,7 +201,7 @@ describe('work tab header', () => {
     plugins.plugins = { ...idle(), data: [], fetchedAt: Date.now() };
   });
 
-  it('review checkouts are read-only: p r f l ⇧T ⇧M are gated', async () => {
+  it('review checkouts are read-only: p r f l ⇧T ⇧M are not listed and say why', async () => {
     const r: WorkItem = {
       ...item(0),
       id: 'review-item',
@@ -195,11 +212,13 @@ describe('work tab header', () => {
     work.upsert(r);
     mountHeader(r);
     const menu = await openMenu();
-    const reasons = within(menu)
+    const labels = within(menu)
       .getAllByRole('menuitem')
-      .filter((e) => e.title === 'Review checkout: read-only')
       .map((e) => e.querySelector('.label')?.textContent?.split(' ')[0]);
-    expect(reasons).toEqual(['Ship', 'Fix', 'Rebase', 'Link', 'Create', 'Merge']);
+    for (const l of ['Ship', 'Push', 'Fix', 'Rebase', 'Link', 'Create', 'Merge'])
+      expect(labels).not.toContain(l);
+    await fireEvent.keyDown(menu, { key: 'r' });
+    expect(toasts.list.at(-1)?.toast.text).toBe('Rebase onto main: Review checkout: read-only');
   });
 
   it('p ships through the Ship dialog', async () => {
