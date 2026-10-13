@@ -2491,5 +2491,6 @@
   "{checked} of {n} criteria checked": {
     "one": "{checked} von {n} Kriterium erfüllt",
     "other": "{checked} von {n} Kriterien erfüllt"
-  }
+  },
+  "Ship pushes the branch and opens a draft PR.": "Ausliefern pusht den Branch und öffnet einen Entwurfs-PR."
 }
