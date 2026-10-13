@@ -1,24 +1,25 @@
 <script lang="ts">
-  // The context bar's work item segment (#248): ticket status, phase, PR, git, cost, ⎇ details, the
-  // primary action and the ⌘. work menu. The breadcrumb (key, title) and the Story panel live elsewhere.
+  // The work tab header above its panes (#428, DESIGN §6.3): key, project and title, the stage track
+  // with whose move and why, the primary action and the ⌘. Actions menu. Status, PR, git and cost
+  // live in the Story panel's summaries.
   import { t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { TabHeaderProps } from '$app/registry';
   import { effectiveChords } from '$lib/keys/manager';
-  import { layout, sessions, settings, tickets, work } from '$lib/stores';
+  import { layout, projects, settings, tickets, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import { terminalPool } from '$lib/terminal';
-  import { Button, currentPlatform, Icon, Lamp, Menu, type MenuItem } from '$lib/ui';
+  import { resolveProjectColor } from '$lib/theme';
+  import { Button, currentPlatform, Menu, type MenuItem } from '$lib/ui';
 
   import { focusedSessionId } from '../../shell/nav';
   import { pluginActions, runPluginAction, workCtx } from '../plugins/actions';
-  import { itemCost, overBudget, usd } from '../../shell/usage';
-  import StatusChip from '../tickets/StatusChip.svelte';
-  import StatusPicker from '../tickets/StatusPicker.svelte';
   import { blockedReason, runPrimary, runWorkAction, WORK_ACTIONS } from './actions';
-  import { ciGlyph } from './common';
-  import { phaseNow, prOf } from './live';
+  import { phaseNow, prOf, workTitle } from './live';
+  import { workKey } from './phase';
+  import StageTrack from './shared/StageTrack.svelte';
+  import { workHeader } from './stage';
   import { story } from './story/panel.svelte';
   import { workUi } from './ui.svelte';
 
@@ -26,35 +27,18 @@
 
   const item = $derived(work.get(workItemId));
   const ticketRef = $derived(item?.ticket ?? null);
-  const detail = $derived(ticketRef ? tickets.details[ticketKey(ticketRef)]?.data : null);
   const phase = $derived(item ? phaseNow(item) : null);
-  const pr = $derived(item ? prOf(item) : null);
-  const ci = $derived(pr ? ciGlyph(pr.ci) : null);
-  const git = $derived(work.git[workItemId] ?? null);
+  const head = $derived(item && phase ? workHeader(item, phase, prOf(item)) : null);
+  const project = $derived(projects.byId(projectId));
   const tabId = $derived(layout.get(projectId)?.tabs.find((t) => t.work_item_id === workItemId)?.id);
-  const spent = $derived(item ? itemCost(item, sessions.all) : 0);
-  const over = $derived(overBudget(spent, settings.value(projectId)?.claude.budget_usd));
   const primaryBlocked = $derived(item && phase?.primary ? blockedReason(phase.primary, item, phase) : null);
   const menuChord = $derived(
     effectiveChords('work.menu', settings.value()?.keys ?? null, currentPlatform())[0],
   );
-  // ⎇: what the bar has no room for, in its tooltip.
-  const branchInfo = $derived.by(() => {
-    if (!item) return '';
-    const lines = [t('{branch} (vs {base})', { branch: item.branch, base: item.base }), item.worktree];
-    if (item.port_base != null)
-      lines.push(t('ports {from}–{to}', { from: item.port_base, to: item.port_base + 9 }));
-    if (item.auto_finish) lines.push(t('armed: merges when ready, then finishes (M to disarm)'));
-    if (git && !git.missing && (git.insertions || git.deletions))
-      lines.push(`+${git.insertions} −${git.deletions}`);
-    if (git?.dirty) lines.push(t('Uncommitted changes'));
-    return lines.join('\n');
-  });
 
-  /** The status button the picker opens under; null = closed. */
-  let picking = $state<HTMLElement | null>(null);
   let workBtn = $state<HTMLElement>();
 
+  // The Story panel's Ticket section shows the status from this detail.
   $effect(() => {
     const ref = ticketRef;
     if (ref) untrack(() => void tickets.loadDetail(ref));
@@ -126,86 +110,31 @@
   }
 </script>
 
-{#if item && phase}
-  <span
-    class="work"
-    role="group"
+{#if item && phase && head}
+  <section
+    class="work-header"
     aria-label={t('Work item')}
-    data-testid="context-work"
+    data-testid="work-header"
     data-phase={phase.id}
+    data-mark={head.stage.mark}
   >
-    {#if ticketRef}
-      <Button
-        size="sm"
-        variant="secondary"
-        class="ticket"
-        aria-haspopup="menu"
-        title={t('Move to…')}
-        data-testid="work-status"
-        disabled={!detail}
-        onclick={(e: MouseEvent) => (picking = e.currentTarget as HTMLElement)}
+    <div class="text">
+      <div class="names">
+        <span class="key" data-testid="work-header-key">{workKey(item)}</span>
+        {#if project}<span class="project" style:--project-color={resolveProjectColor(project.color)}
+            >{project.name}</span
+          >{/if}
+        <span class="ttl">{workTitle(item)}</span>
+      </div>
+      <button
+        type="button"
+        class="why"
+        title={t('Open the Story panel')}
+        data-testid="work-why"
+        onclick={() => tabId && story.setOpen(tabId, true)}>{head.why}</button
       >
-        {#if detail}<StatusChip status={detail.ticket.status} source={item?.ticket_source} />{:else}…{/if}
-        <Icon name="chevron-down" size={14} />
-      </Button>
-    {/if}
-    <Button
-      size="sm"
-      variant="secondary"
-      class="phase"
-      title={t('{phase} (story)', {
-        phase: `${phase.label}${phase.detail ? `: ${phase.detail}` : ''}`,
-      })}
-      data-testid="work-phase"
-      onclick={() => tabId && story.setOpen(tabId, true)}
-    >
-      <Lamp level={phase.lamp} title={phase.label} />
-      <span class="phase-label" class:lampless={phase.lamp === 'none'}
-        >{phase.label}{#if phase.detail}<span class="detail">{phase.detail}</span>{/if}</span
-      >
-    </Button>
-    {#if pr && ci}
-      <Button
-        size="sm"
-        variant="ghost"
-        class="pr"
-        title={t('{title} ({ci}): open in the browser', { title: pr.title, ci: ci.label })}
-        data-testid="work-pr"
-        onclick={() => void runWorkAction('open_pr', item)}
-      >
-        <span class="pr-word">{t('PR')}</span><span class="num">#{pr.ref.number}</span><Lamp
-          level={ci.lamp}
-          title={ci.label}
-        />
-      </Button>
-    {/if}
-    {#if git && !git.missing}
-      <span
-        class="git num"
-        title={t('{ahead} commits to push, {behind} behind {base}', {
-          ahead: git.ahead,
-          behind: git.behind,
-          base: item.base,
-        })}
-      >
-        <span data-testid="ahead">↑{git.ahead}</span>
-        <span data-testid="behind">↓{git.behind}</span>
-      </span>
-    {:else if work.gitError}
-      <button type="button" class="k-link" onclick={() => void work.refreshStatus()}
-        >{t('status unavailable, retry')}</button
-      >
-    {/if}
-    {#if spent > 0}
-      <span class="cost num" class:over title={over ? t('Over budget') : t('Claude spend on this item')}
-        >{usd(spent)}</span
-      >
-    {/if}
-    <span class="branch" role="img" aria-label={branchInfo} title={branchInfo} data-testid="work-branch"
-      ><Icon name="git-branch" size={14} />{#if item.auto_finish || git?.dirty}<span class="mark">•</span
-        >{/if}</span
-    >
-    <span class="spacer" data-tauri-drag-region></span>
+    </div>
+    <span class="stage"><StageTrack stage={head.stage} named /></span>
     {#if phase.primary}
       <!-- The wrapper carries the blocked reason: a disabled button shows no tooltip in WebKit. -->
       <span class="primary" title={primaryBlocked ?? (phase.id === 'failed' ? phase.detail : undefined)}>
@@ -226,22 +155,19 @@
         variant="ghost"
         icon="ellipsis"
         aria-haspopup="menu"
-        aria-label={t('Work')}
+        aria-label={t('Actions')}
         title={t('Work menu')}
         data-testid="work-menu-button"
         chord={menuChord}
         loading={pluginRunning}
-        onclick={() => (workUi.menu = item.id)}>{t('Work')}</Button
+        onclick={() => (workUi.menu = item.id)}>{t('Actions')}</Button
       >
     </span>
-  </span>
+  </section>
 {:else}
-  <span class="work muted" data-testid="context-work">{t('Work item not found')}</span>
+  <section class="work-header muted" data-testid="work-header">{t('Work item not found')}</section>
 {/if}
 
-{#if picking && detail}
-  <StatusPicker tickets={[detail.ticket]} {projectId} anchor={picking} onclose={() => (picking = null)} />
-{/if}
 {#if menuPos}
   <Menu
     items={menuItems}
@@ -254,77 +180,77 @@
 {/if}
 
 <style>
-  .work {
+  .work-header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--k-space-4);
+    margin: calc(var(--k-gap) / 2) calc(var(--k-gap) / 2) 0;
+    padding: var(--k-space-2) var(--k-space-3);
+    container: workheader / inline-size;
+    border-radius: var(--k-radius-screen);
+    background: var(--k-bg);
+    font-size: var(--k-font-size-sm);
+    white-space: nowrap;
+  }
+
+  .text {
     display: flex;
     flex: 1;
-    align-items: center;
+    flex-direction: column;
+    gap: var(--k-space-1);
+    min-width: 0;
+  }
+
+  .names {
+    display: flex;
+    align-items: baseline;
     gap: var(--k-space-3);
     min-width: 0;
-    height: 100%;
   }
 
-  .work :global(.k-button) {
+  .key {
     flex: none;
-    height: var(--k-control-height-sm);
+    color: var(--k-fg-muted);
+    font-family: var(--k-font-mono);
   }
 
-  /* The phase chip ellipsises its label before anything drops. */
-  .work :global(.k-button.phase) {
-    flex: 0 1 auto;
+  .project {
+    flex: none;
+    padding-left: var(--k-space-2);
+    box-shadow: inset 3px 0 0 var(--project-color, var(--k-border-strong));
+    color: var(--k-fg-muted);
+  }
+
+  .ttl,
+  .why {
     min-width: 0;
-    overflow: hidden;
-  }
-
-  .work :global(.k-button.phase .label) {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--k-space-2);
-    min-width: 0;
-  }
-
-  .phase-label {
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .detail {
-    margin-left: var(--k-space-2);
+  .ttl {
+    color: var(--k-fg);
+    font-weight: var(--k-weight-strong);
+  }
+
+  .why {
+    padding: 0;
+    border: 0;
+    background: none;
     color: var(--k-fg-muted);
-    font-weight: normal;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
   }
 
-  .work :global(.k-button.pr .label) {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--k-space-2);
+  .why:hover {
+    color: var(--k-fg);
   }
 
-  .num {
-    font-family: var(--k-font-mono);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .git,
-  .cost,
-  .branch {
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    gap: var(--k-space-2);
-    color: var(--k-fg-muted);
-  }
-
-  .cost.over {
-    color: var(--k-warn);
-  }
-
-  .mark {
-    color: var(--k-warn);
-  }
-
-  .spacer {
-    flex: 1;
-    align-self: stretch;
+  .stage {
+    flex: 0 1 240px;
+    min-width: 140px;
   }
 
   .primary,
@@ -333,7 +259,7 @@
     flex: none;
   }
 
-  /* A long primary label ("Retry …") ellipsises instead of pushing `+` out. */
+  /* A long primary label ("Retry …") ellipsises instead of pushing Actions out. */
   .primary :global(.k-button) {
     max-width: 28ch;
   }
@@ -348,46 +274,14 @@
     color: var(--k-fg-subtle);
   }
 
-  /* Narrow bars drop items in this order (#248); the key, primary and `+` never drop. Steps 1 and 6
-     live in ContextBar (cwd/model, the title). */
-  @container contextbar (max-width: 1280px) {
-    .branch {
+  /* A narrow pane area keeps the sentence, the primary and ⌘.: the track goes, then the Actions label. */
+  @container workheader (max-width: 640px) {
+    .stage {
       display: none;
     }
   }
 
-  @container contextbar (max-width: 1180px) {
-    .cost:not(.over) {
-      display: none;
-    }
-  }
-
-  @container contextbar (max-width: 1080px) {
-    .git {
-      display: none;
-    }
-  }
-
-  @container contextbar (max-width: 1000px) {
-    .pr-word {
-      display: none;
-    }
-  }
-
-  @container contextbar (max-width: 920px) {
-    .work :global(.k-button.ticket) {
-      display: none;
-    }
-  }
-
-  @container contextbar (max-width: 760px) {
-    /* A phase without a lamp (merged, closed...) has nothing else to show: keep its label. */
-    .phase-label:not(.lampless) {
-      display: none;
-    }
-  }
-
-  @container contextbar (max-width: 700px) {
+  @container workheader (max-width: 480px) {
     .menu :global(.label),
     .menu :global(.chord) {
       display: none;

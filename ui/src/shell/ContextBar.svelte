@@ -1,12 +1,12 @@
 <script lang="ts">
   // The context bar above the panes (#248, DESIGN §6.3): `‹` back, the breadcrumb of the selected rail
-  // row (a drag region), what that row is about, and the `+` menu. Custom decorations: it is also the
+  // row (a drag region), what that row is about, and the `+` menu. A work tab's header sits above its
+  // panes (views/work/WorkContext.svelte, #428). Custom decorations: it is also the
   // window's title bar (macOS traffic-light inset, or Kelta's own controls and resize handles).
   // Native decorations: the breadcrumb is the window title.
   import { t, tn } from '$lib/i18n/index.svelte';
   import { onMount } from 'svelte';
 
-  import { tabHeaderRegistry, type AnyComponent } from '$app/registry';
   import { dispatch } from '$lib/actions';
   import { appInfo } from '$lib/ipc';
   import { GLOBAL, layout, projects, sessions, toasts, tools, ui, work, type GlobalView } from '$lib/stores';
@@ -19,7 +19,6 @@
   import { workKey } from '../views/work/phase';
   import { backTarget, type JumpLoc } from './jumplist';
   import { chordFor, currentRun, runPhase } from './labels';
-  import { lazyComponents } from './lazy.svelte';
   import {
     activateProject,
     currentTab,
@@ -67,8 +66,6 @@
   const toolId = $derived(tab && pane && isToolTab(tab, lines) ? (lines.get(pane.id)?.tool ?? null) : null);
   const tool = $derived(toolId ? tools.find(toolId) : null);
   const item = $derived(tab?.work_item_id ? work.get(tab.work_item_id) : null);
-  /** A work tab is shown: the bar carries its work segment. */
-  const workTab = $derived(!view && !tool && !!item);
   const ownerItem = $derived(session?.work_item_id ? work.get(session.work_item_id) : null);
   const projectColor = $derived(resolveProjectColor(project?.color) ?? 'var(--k-border-strong)');
 
@@ -123,13 +120,6 @@
   const runChip = $derived(run ? `${run.name ?? t('workflow')} · ${runPhase(run)}` : null);
   $effect(() => {
     if (session?.kind.type === 'claude') void sessions.loadRuns(session.id);
-  });
-
-  // ---- the work item segment (lazy, like the rest of views/work) -------------------------------
-
-  const WorkComponent = $derived(lazyComponents.get('tabheader:work').component as AnyComponent | null);
-  $effect(() => {
-    if (workTab) lazyComponents.ensure('tabheader:work', tabHeaderRegistry.work);
   });
 
   // ---- actions ---------------------------------------------------------------------------------
@@ -236,59 +226,52 @@
     {/if}
   </span>
 
-  {#if workTab}
-    <!-- The work segment brings its own spacer and right-hand actions. -->
-    {#if WorkComponent && project && tab && item}
-      <WorkComponent projectId={project.id} workItemId={item.id} />
+  {#if tool && project}
+    {#if isHome}
+      <span class="muted" data-tauri-drag-region>{t('for you')}</span>
+    {:else}
+      <Button
+        size="sm"
+        variant="ghost"
+        class="chip owner"
+        title={t('Go to {name}', { name: project.name })}
+        data-testid="context-owner"
+        onclick={goOwner}
+        ><span class="project" style:--project-color={projectColor}>{project.name}</span
+        >{#if ownerItem}<span class="sep">›</span><span class="key">{workKey(ownerItem)}</span>{/if}</Button
+      >
+      {#if cwd}<span class="meta" title={session?.cwd} data-tauri-drag-region>{cwd}</span>{/if}
     {/if}
-  {:else}
-    {#if tool && project}
-      {#if isHome}
-        <span class="muted" data-tauri-drag-region>{t('for you')}</span>
-      {:else}
-        <Button
-          size="sm"
-          variant="ghost"
-          class="chip owner"
-          title={t('Go to {name}', { name: project.name })}
-          data-testid="context-owner"
-          onclick={goOwner}
-          ><span class="project" style:--project-color={projectColor}>{project.name}</span
-          >{#if ownerItem}<span class="sep">›</span><span class="key">{workKey(ownerItem)}</span>{/if}</Button
-        >
-        {#if cwd}<span class="meta" title={session?.cwd} data-tauri-drag-region>{cwd}</span>{/if}
-      {/if}
-    {/if}
-    <span class="spacer" data-tauri-drag-region></span>
-    {#if view && project}
+  {/if}
+  <span class="spacer" data-tauri-drag-region></span>
+  {#if view && project}
+    <Button
+      size="sm"
+      variant="ghost"
+      class="chip"
+      chord={chordFor('nav.back')}
+      title={t('Leave {view} for what is underneath', { view: VIEW_NAMES[view] })}
+      data-testid="context-underneath"
+      onclick={() => void activateProject(project.id)}
+      >‹ {project.name}{tab ? ` › ${rowLabel(tab)}` : ''}</Button
+    >
+  {:else if tool}
+    {#if back}
       <Button
         size="sm"
         variant="ghost"
         class="chip"
-        chord={chordFor('nav.back')}
-        title={t('Leave {view} for what is underneath', { view: VIEW_NAMES[view] })}
-        data-testid="context-underneath"
-        onclick={() => void activateProject(project.id)}
-        >‹ {project.name}{tab ? ` › ${rowLabel(tab)}` : ''}</Button
-      >
-    {:else if tool}
-      {#if back}
-        <Button
-          size="sm"
-          variant="ghost"
-          class="chip"
-          title={t('Back to {place}', { place: placeLabel(back) })}
-          data-testid="context-return"
-          onclick={() => void dispatch('nav.back')}
-          >↩ {placeLabel(back)}{#if tool.keybinding}
-            <Kbd chord={tool.keybinding} />{/if}</Button
-        >
-      {/if}
-    {:else if cwd}
-      <span class="meta" title={session?.cwd} data-testid="context-meta" data-tauri-drag-region
-        >{cwd}{#if model}<span class="sep">·</span>{model}{/if}</span
+        title={t('Back to {place}', { place: placeLabel(back) })}
+        data-testid="context-return"
+        onclick={() => void dispatch('nav.back')}
+        >↩ {placeLabel(back)}{#if tool.keybinding}
+          <Kbd chord={tool.keybinding} />{/if}</Button
       >
     {/if}
+  {:else if cwd && !item}
+    <span class="meta" title={session?.cwd} data-testid="context-meta" data-tauri-drag-region
+      >{cwd}{#if model}<span class="sep">·</span>{model}{/if}</span
+    >
   {/if}
 
   {#if runChip && session}
@@ -476,7 +459,7 @@
     gap: var(--k-space-1);
   }
 
-  /* Narrow bars (#248): the cwd and model go first, the work title is the 6th step (the rest in WorkContext). */
+  /* Narrow bars (#248): the cwd and model go first, then the work title (the key stays). */
   @container contextbar (max-width: 1280px) {
     .meta {
       display: none;

@@ -46,7 +46,7 @@ export function paneComponent(kind: PaneKind): LazyComponent | null {
   return kind === 'empty' ? null : paneRegistry[kind];
 }
 
-/** Work tab components (a tab linked to a work item): `work` = its segment of the context bar, `story` = the Story panel docked on its right. */
+/** Work tab components (a tab linked to a work item): `work` = its header above the panes, `story` = the Story panel docked on its right. */
 export type TabHeaderKey = 'work' | 'story';
 export interface TabHeaderProps {
   projectId: string;
