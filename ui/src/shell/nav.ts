@@ -301,6 +301,7 @@ export function focusPaneById(projectId: ProjectId, tabId: TabId, paneId: PaneId
 }
 
 export function focusDirection(direction: Direction): void {
+  if (ui.settings) return; // the workspace under the overlay is hidden
   const projectId = here();
   const tab = currentTab();
   const from = focusedPane();
@@ -438,6 +439,7 @@ export async function splitFocused(dir: SplitDir): Promise<void> {
 }
 
 export function toggleZoomFocused(): void {
+  if (ui.settings) return;
   const projectId = here();
   const tab = currentTab();
   if (!projectId || !tab) return;
@@ -477,6 +479,10 @@ export async function requestClosePane(projectId: ProjectId, tabId: TabId, paneI
 }
 
 export async function closeFocusedPane(): Promise<void> {
+  if (ui.settings) {
+    ui.settings = null;
+    return;
+  }
   const projectId = here();
   const tab = currentTab();
   const p = focusedPane();
@@ -536,6 +542,7 @@ export async function attachTab(projectId: ProjectId, tabId: TabId): Promise<voi
 /** `pane.detach`: the focused pane to a new window; in a detached window, its tab back to the main one. */
 export async function toggleFocusedPaneWindow(): Promise<void> {
   if (detached) return attachTab(detached.project_id, detached.tab_id);
+  if (ui.settings) return;
   const projectId = here();
   const tab = currentTab();
   const p = focusedPane();
