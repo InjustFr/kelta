@@ -145,13 +145,17 @@
     // Untracked: reading `tops` must not re-run the callers' effects on every row measurement.
     untrack(() => {
       if (!viewport) return;
-      scrolledAt = performance.now();
       // Keep a row clear of the pinned header above it.
       const y = top(index) - (heads.length > 0 && !heads.includes(index) ? itemHeight : 0);
       const bottom = top(index + 1);
-      if (y < viewport.scrollTop) viewport.scrollTop = y;
-      else if (bottom > viewport.scrollTop + viewport.clientHeight)
+      // Stamp only when the viewport really moves (before the write, so the slice re-render sees it).
+      if (y < viewport.scrollTop) {
+        scrolledAt = performance.now();
+        viewport.scrollTop = y;
+      } else if (bottom > viewport.scrollTop + viewport.clientHeight) {
+        scrolledAt = performance.now();
         viewport.scrollTop = bottom - viewport.clientHeight;
+      }
       scrollTop = viewport.scrollTop;
     });
   }
