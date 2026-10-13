@@ -21,15 +21,16 @@ export function rankBetween(a: number | null, b: number | null): number {
   return b === null ? a + 1 : (a + b) / 2;
 }
 
-/** The new rank of `ranks[i]` moved one place by `delta`; null at an end. */
-export function movedRank(ranks: readonly number[], i: number, delta: 1 | -1): number | null {
-  const j = i + delta;
-  if (i < 0 || j < 0 || j >= ranks.length) return null;
-  // Past the neighbour: between it and the one beyond it.
-  return delta > 0
-    ? rankBetween(ranks[j]!, ranks[j + 1] ?? null)
-    : rankBetween(ranks[j - 1] ?? null, ranks[j]!);
+/** The new rank of `ranks[from]` dropped at index `to` (its place once moved); null when it stays or is out of range. */
+export function droppedRank(ranks: readonly number[], from: number, to: number): number | null {
+  if (from < 0 || to < 0 || from >= ranks.length || to >= ranks.length || from === to) return null;
+  const rest = ranks.filter((_, i) => i !== from);
+  return rankBetween(rest[to - 1] ?? null, rest[to] ?? null);
 }
+
+/** The new rank of `ranks[i]` moved one place by `delta`; null at an end. */
+export const movedRank = (ranks: readonly number[], i: number, delta: 1 | -1): number | null =>
+  droppedRank(ranks, i, i + delta);
 
 export const isSnoozed = (it: NextUpItem | undefined, now: number): boolean =>
   !!it?.snoozed_until && Date.parse(it.snoozed_until) > now;
@@ -150,12 +151,15 @@ class NextUpStore {
 
   /** `J` / `K` on a Next up row: one place down or up in the list as shown. */
   move(ref: TicketRef, delta: 1 | -1, shown: readonly TicketRef[]): Promise<void> {
+    const from = shown.findIndex((r) => ticketKey(r) === ticketKey(ref));
+    return this.moveTo(ref, from + delta, shown);
+  }
+
+  /** Drag in Now (#397): `ref` takes place `to` of the list as shown. */
+  moveTo(ref: TicketRef, to: number, shown: readonly TicketRef[]): Promise<void> {
     const ranks = shown.map((r) => this.entries[ticketKey(r)]?.rank ?? 0);
-    const rank = movedRank(
-      ranks,
-      shown.findIndex((r) => ticketKey(r) === ticketKey(ref)),
-      delta,
-    );
+    const from = shown.findIndex((r) => ticketKey(r) === ticketKey(ref));
+    const rank = from < 0 ? null : droppedRank(ranks, from, to);
     const e = this.entries[ticketKey(ref)];
     return rank === null || !e ? Promise.resolve() : this.#put({ ...e, rank });
   }

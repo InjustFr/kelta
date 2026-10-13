@@ -10,7 +10,8 @@
     label: string;
     icon?: string;
     disabled?: boolean;
-    onclick: () => void;
+    /** Gets the event: a menu opens under `e.currentTarget`. */
+    onclick: (e: Event) => void;
     children?: Snippet;
   }
 
@@ -18,7 +19,7 @@
 
   function run(e: Event): void {
     e.stopPropagation();
-    if (!disabled) onclick();
+    if (!disabled) onclick(e);
   }
 </script>
 

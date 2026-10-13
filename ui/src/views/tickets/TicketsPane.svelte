@@ -33,6 +33,7 @@
 
   import { columnFor, initials, isAuthError } from '../work/common';
   import { openFrom, persistPaneContent } from '../work/nav';
+  import ActionMenu, { below, type RowAction } from '../work/shared/ActionMenu.svelte';
   import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
@@ -47,10 +48,20 @@
   import MoveDialogs from './MoveDialogs.svelte';
   import StatusPicker from './StatusPicker.svelte';
   import TicketDetail from './TicketDetail.svelte';
+  import { blockedReason, type TicketAction } from './caps';
   import { assigneeChips, statusChips } from './chips';
-  import { GROUP_BYS, flowOf, groupTickets, sortTickets, type GroupBy, type TicketGroup } from './group';
+  import {
+    FLOW_HINTS,
+    GROUP_BYS,
+    flowOf,
+    groupTickets,
+    sortTickets,
+    type GroupBy,
+    type TicketGroup,
+  } from './group';
   import { MoveController } from './move.svelte';
   import { ensureReviews, openPr, openPrs, prMenuItems } from './prs';
+  import RowButton from './RowButton.svelte';
   import TicketRow from './TicketRow.svelte';
   import TicketsToolbar from './TicketsToolbar.svelte';
   import { pickWorkflow } from './workflow.svelte';
@@ -59,6 +70,7 @@
   import CountChips from '../filters/CountChips.svelte';
   import FilterBar from '../filters/FilterBar.svelte';
   import { clearAll, commonFilters, noMatch, type ActiveFilter } from '../filters/filters';
+  import { chordFor } from '../../shell/labels';
 
   let { projectId, paneId, content, focused }: PaneProps<'tickets'> = $props();
   /** The pane's project; `null` in the rail's Tickets view, where each ticket uses its own project. */
@@ -69,6 +81,11 @@
     mine: t('Mine'),
     unassigned: t('Unassigned'),
     anyone: t('Team'),
+  });
+  const WHO_TITLES: Record<Who, string> = $derived({
+    mine: t('Tickets assigned to you'),
+    unassigned: t('Tickets nobody owns yet'),
+    anyone: t('Every open ticket, whoever owns it'),
   });
   const move = new MoveController();
 
@@ -496,7 +513,7 @@
     ['g', msg('Open detail')],
     ['shift+enter', msg('Own pane')],
     ['1 2 3', msg('Who')],
-    ['mod+enter', msg('Start marked')],
+    [chordFor('work.start') ?? 'mod+enter', msg('Start marked')],
     ['x', msg('Select')],
     ['p shift+p', msg('Pull request, in browser')],
     ['f then s', msg('Current sprint')],
@@ -652,6 +669,89 @@
     if (id === '') return setSource(null);
     const [kind, sid = '', ...rest] = id.split(':');
     setSource(sid, kind === 'v' ? rest.join(':') : null);
+  }
+
+  // ---- the row's `⋯` menu (#397): every key of a ticket, with the key on the right ------------
+  let more = $state.raw<{ x: number; y: number; actions: RowAction[] } | null>(null);
+
+  function rowActions(item: TicketItem): RowAction[] {
+    const key = keyOf(item);
+    const off = (a: TicketAction) => blockedReason(a, item, null);
+    const marked = batch.has(item.ticket.ref);
+    const acts: (RowAction | false)[] = [
+      {
+        id: 'start',
+        label: hasWork(item) ? t('Resume work') : t('Start work'),
+        key: 's',
+        run: () => start(item),
+      },
+      { id: 'start_now', label: t('Start now'), key: 'shift+s', run: () => start(item, false) },
+      { id: 'workflow', label: t('Run workflow…'), key: 'w', run: () => pickWorkflow(item.ticket.ref) },
+      { id: 'move', label: t('Move'), key: 'm', run: () => pickOrMove(item) },
+      { id: 'pr', label: t('Open PR'), key: 'p', reason: off('pr'), run: () => openPrOf(item, false) },
+      {
+        id: 'pr_browser',
+        label: t('Open PR in browser'),
+        key: 'shift+p',
+        reason: off('pr'),
+        run: () => openPrOf(item, true),
+      },
+      {
+        id: 'assign',
+        label: t('Assign to me'),
+        key: 'a',
+        reason: off('assign'),
+        run: () => assign(item, 'me'),
+      },
+      {
+        id: 'unassign',
+        label: t('Unassign'),
+        key: 'shift+a',
+        reason: off('unassign'),
+        run: () => assign(item, 'none'),
+      },
+      {
+        id: 'comment',
+        label: t('Comment'),
+        key: 'c',
+        reason: off('comment'),
+        run: () => (commenting = item),
+      },
+      { id: 'tag', label: t('Tags…'), key: 't', run: () => openTags(item) },
+      { id: 'browser', label: t('Open in browser'), key: 'o', run: () => browse(item) },
+      { id: 'detail', label: t('Open detail'), key: 'g', run: () => focusDetail(item) },
+      { id: 'pane', label: t('Open in own pane'), key: 'shift+enter', run: () => openDetail(item) },
+      mode === 'list' && {
+        id: 'pick',
+        label: picked.includes(key) ? t('Deselect') : t('Select'),
+        key: 'x',
+        run: () => togglePick(key),
+      },
+      picked.length > 0 && {
+        id: 'clear',
+        label: t('Clear selection'),
+        key: 'escape',
+        run: () => (picked = []),
+      },
+      mode === 'board' && {
+        id: 'mark',
+        label: marked ? t('Unmark') : t('Mark for batch start'),
+        key: 'space',
+        run: () => batch.toggle(item.ticket.ref, item.project_ids[0] ?? null),
+      },
+      batch.list.length > 0 && {
+        id: 'batch',
+        label: t('Start marked'),
+        key: chordFor('work.start'),
+        run: () => ui.openSheet('start_batch'),
+      },
+    ];
+    return acts.filter((a): a is RowAction => a !== false);
+  }
+
+  function openMore(e: Event, item: TicketItem): void {
+    selKey = keyOf(item);
+    more = { ...below(e), actions: rowActions(item) };
   }
 
   function shiftLane(delta: number): void {
@@ -871,7 +971,11 @@
     hasSource={!noSource}
     who={WHOS.map((w) => {
       const n = countOf(w);
-      return { id: w, label: n === undefined ? WHO_LABELS[w] : `${WHO_LABELS[w]} ${n}` };
+      return {
+        id: w,
+        label: n === undefined ? WHO_LABELS[w] : `${WHO_LABELS[w]} ${n}`,
+        title: WHO_TITLES[w],
+      };
     })}
     {whoTab}
     onwho={setWho}
@@ -901,6 +1005,8 @@
     ongroup={setGroup}
     {sort}
     onsort={setSort}
+    split={mode === 'list' && wide ? split : null}
+    onsplit={() => (split = !split)}
     canBoard={single !== null}
     {mode}
     onmode={setMode}
@@ -1027,6 +1133,8 @@
                   {r.group.label}
                   <span class="count k-num">{r.group.items.length}</span>
                   {#if overWip}<span class="wip-note">{t('Above your limit of {n}', { n: wipLimit })}</span
+                    >{:else if groupBy === 'flow' && FLOW_HINTS[r.group.id]}<span class="k-group-hint"
+                      >{t(FLOW_HINTS[r.group.id]!)}</span
                     >{/if}
                 </button>
               {:else if r.kind === 'ask'}
@@ -1066,6 +1174,8 @@
                   }}
                   onpr={() => openPrOf(r.item, false)}
                   onstart={() => start(r.item)}
+                  onmore={(e) => openMore(e, r.item)}
+                  onpick={() => togglePick(r.key)}
                 />
               {/if}
             {/snippet}
@@ -1128,6 +1238,13 @@
                         tone="accent"
                         title={t('Marked: Mod+Enter starts the marked tickets')}>{t('marked')}</Badge
                       >{/if}
+                    <span class="card-more"
+                      ><RowButton
+                        label={t('More actions')}
+                        icon="ellipsis"
+                        onclick={(e) => openMore(e, item)}
+                      /></span
+                    >
                   </span>
                   <span class="card-title">{item.ticket.title}</span>
                   <span class="card-row">
@@ -1167,7 +1284,7 @@
     {/if}
   {/if}
 
-  <KeyHints {hints} />
+  <KeyHints {hints} onopen={() => (keysOpen = true)} />
 </div>
 
 {#if picker}
@@ -1225,6 +1342,15 @@
   />
 {/if}
 <MoveDialogs {move} />
+{#if more}
+  <ActionMenu
+    {...more}
+    onclose={() => {
+      more = null;
+      root?.focus();
+    }}
+  />
+{/if}
 {#if keysOpen}
   <KeyHints
     {hints}
@@ -1276,6 +1402,11 @@
 
   .head.wip {
     color: var(--k-warn);
+  }
+
+  .card-more :global(.rb) {
+    width: 20px;
+    height: 20px;
   }
 
   .wip-note {
@@ -1363,6 +1494,10 @@
     font-family: var(--k-font-mono);
     font-size: var(--k-font-size-xs);
     color: var(--k-fg-muted);
+  }
+
+  .card-more {
+    margin-left: auto;
   }
 
   .card-title {

@@ -59,6 +59,22 @@ export interface Section {
   folded?: boolean;
 }
 
+/** What each section holds and why, in one line after its header (#397). */
+export const SECTION_HINTS: Record<NowSection, string> = {
+  needs_you: msg('Claude stopped and is waiting for your answer'),
+  to_review: msg('Claude finished: look at the changes, then ship or ask for more'),
+  next_up: msg('Tickets you lined up, in your order; drag to reorder'),
+  new: msg('Tickets assigned to you that you have not opened yet'),
+  fix: msg('Failed checks, requested changes, conflicts or failed steps'),
+  requests: msg('Pull requests waiting for your review'),
+  ship: msg('Approved or ready: push, merge or clean up'),
+  in_flight: msg('Your other work under way'),
+  elsewhere: msg('Claude sessions Kelta did not start'),
+  blocked: msg('Waiting on another ticket or team'),
+  up_next: msg('Tickets assigned to you that nobody started'),
+  waiting: msg('Done on your side, waiting for a deploy'),
+};
+
 export const SECTIONS: readonly { id: NowSection; label: string; lamp: Lamp; folded?: boolean }[] = [
   { id: 'needs_you', label: msg('Claude needs you'), lamp: 'needs_input' },
   { id: 'to_review', label: msg('Ready for review'), lamp: 'done' },

@@ -6,7 +6,7 @@
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import type { AccountError, RowDensity, SessionInfo } from '$lib/gen';
+  import type { AccountError, RowDensity, SessionInfo, TicketRef } from '$lib/gen';
   import { openExternal } from '$lib/ipc/commands';
   import {
     GLOBAL,
@@ -29,6 +29,7 @@
     EmptyState,
     ErrorState,
     Icon,
+    IconButton,
     Kbd,
     Lamp,
     Menu,
@@ -38,6 +39,7 @@
     relativeTime,
   } from '$lib/ui';
 
+  import { chordFor } from '../../shell/labels';
   import { openView } from '../../shell/nav';
   import { peekHover } from '../../shell/peek.svelte';
   import { ctxHot, itemCost, overBudget, usd } from '../../shell/usage';
@@ -62,7 +64,7 @@
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
-  import { isNextUp, type NowRow, type Section } from './groups';
+  import { isNextUp, SECTION_HINTS, type NowRow, type Section } from './groups';
   import { asOf, enterRow, goToRow, nowSummary, refreshNow, reviewRowLocally, startNextUp } from './now';
   import { nextUp } from './nextUp.svelte';
   import { waitChip } from '../people/waiting';
@@ -136,8 +138,8 @@
     age: string;
     /** Second line of the selected row. */
     more: string;
-    /** Ghost buttons: key + label. */
-    actions: { key: string; label: string }[];
+    /** The selected row's buttons (#397), the key on each; the `enter` one is the primary. */
+    actions: { key: string; label: string; run: () => unknown }[];
     /** A Claude session Kelta did not start: shown dimmed. */
     dim?: boolean;
   }
@@ -186,15 +188,26 @@
           meta.push(tn('nvim kept: {n} unsaved buffer', 'nvim kept: {n} unsaved buffers', item.nvim_kept));
         const p = projectOf([item.project_id]);
         const actions = [
-          ...(phase.primary ? [{ key: 'enter', label: phase.primaryLabel }] : []),
+          ...(phase.primary ? [{ key: 'enter', label: phase.primaryLabel, run: () => enterRow(row) }] : []),
           ...WORK_ACTIONS.filter(
             (a) =>
               a.key && Object.values(NOW_KEYS).includes(a.id) && blockedReason(a.id, item, phase) === null,
-          ).map((a) => ({ key: a.key!, label: a.label({ item, phase }) })),
+          ).map((a) => ({
+            key: a.key!,
+            label: a.label({ item, phase }),
+            run: () => runWorkAction(a.id, item),
+          })),
           ...(item.claude_message && phase.section === 'to_review'
-            ? [{ key: 'm', label: expanded === row.id ? t('Hide message') : t('Full message') }]
+            ? [
+                {
+                  key: 'm',
+                  label: expanded === row.id ? t('Hide message') : t('Full message'),
+                  run: () => (expanded = expanded === row.id ? null : row.id),
+                },
+              ]
             : []),
-          { key: 'g', label: t('Go to work tab') },
+          { key: 'o', label: t('Open in browser'), run: () => browse(row) },
+          { key: 'g', label: t('Go to work tab'), run: () => goToRow(row) },
         ];
         const claude = claudeOf(item)?.claude;
         const u = claude?.usage;
@@ -255,7 +268,7 @@
           meta: [],
           age: age(s.created_at),
           more: preview,
-          actions: [{ key: 'enter', label: t('Go to session') }],
+          actions: [{ key: 'enter', label: t('Go to session'), run: () => enterRow(row) }],
         };
       }
       case 'outside': {
@@ -305,9 +318,9 @@
                 : ''
           }`,
           actions: [
-            { key: 'enter', label: t('Open review') },
-            ...(row.mine ? [] : [{ key: 's', label: t('Review locally') }]),
-            { key: 'o', label: t('Open on host') },
+            { key: 'enter', label: t('Open review'), run: () => enterRow(row) },
+            ...(row.mine ? [] : [{ key: 's', label: t('Review locally'), run: () => reviewRowLocally(row) }]),
+            { key: 'o', label: t('Open on host'), run: () => browse(row) },
           ],
         };
       }
@@ -332,15 +345,29 @@
           age: age(tk.updated_at),
           more: waitChip(row.ticket.waiting, { withWhy: true })?.label ?? '',
           actions: [
-            { key: 'enter', label: t('Start work') },
+            { key: 'enter', label: t('Start work'), run: () => enterRow(row) },
             ...(isNextUp(row)
               ? [
-                  { key: 'shift+s', label: t('Start the top ones') },
-                  { key: 'shift+j', label: t('Down') },
-                  { key: 'shift+k', label: t('Up') },
+                  { key: 'shift+s', label: t('Start the top ones'), run: () => startNextUp(nextUpRows()) },
+                  { key: 'shift+j', label: t('Down'), run: () => reorder(row, 1) },
+                  { key: 'shift+k', label: t('Up'), run: () => reorder(row, -1) },
                 ]
               : []),
-            { key: 'o', label: t('Open in tracker') },
+            {
+              key: 'space',
+              label: batch.has(tk.ref) ? t('Unmark') : t('Mark ticket'),
+              run: () => batch.toggle(tk.ref, row.ticket.project_ids[0] ?? null),
+            },
+            ...(batch.list.length > 0
+              ? [
+                  {
+                    key: chordFor('work.start') ?? 'mod+enter',
+                    label: t('Start marked'),
+                    run: () => ui.openSheet('start_batch'),
+                  },
+                ]
+              : []),
+            { key: 'o', label: t('Open in tracker'), run: () => browse(row) },
           ],
         };
       }
@@ -467,6 +494,27 @@
   /** Next up as shown (unfiltered): `S` starts its top ones, `J`/`K` reorder within it. */
   const nextUpRows = (): NowRow[] => summary.sections.find((s) => s.id === 'next_up')?.rows ?? [];
 
+  const nextUpRefs = (): TicketRef[] =>
+    nextUpRows().flatMap((r) => (r.type === 'ticket' ? [r.ticket.ticket.ref] : []));
+
+  /** `J` / `K` and the Down / Up buttons: one place in Next up. */
+  function reorder(row: NowRow, delta: 1 | -1): void {
+    if (row.type === 'ticket') void nextUp.move(row.ticket.ticket.ref, delta, nextUpRefs());
+  }
+
+  // ---- drag to reorder Next up (#397) --------------------------------------------------------
+  let dragId = $state<string | null>(null);
+  let overId = $state<string | null>(null);
+
+  function drop(target: NowRow): void {
+    const from = summary.sections.find((s) => s.id === 'next_up')?.rows.find((r) => r.id === dragId);
+    dragId = overId = null;
+    if (from?.type !== 'ticket' || target.type !== 'ticket' || from === target) return;
+    const refs = nextUpRefs();
+    const to = refs.findIndex((r) => ticketKey(r) === ticketKey(target.ticket.ticket.ref));
+    void nextUp.moveTo(from.ticket.ticket.ref, to, refs);
+  }
+
   /** Up next's "Show all": the rail's Tickets view, on Mine. */
   async function showAll(): Promise<void> {
     // The layout may have failed to load at startup: without it the patch would be dropped.
@@ -477,7 +525,7 @@
 
   /** The full key list (`?`); the footer shows the first five. */
   let keysOpen = $state(false);
-  const hints: [string, string][] = [
+  const hints = $derived<[string, string][]>([
     ['j k', msg('Move')],
     ['enter', msg('Next action')],
     ['g', msg('Go to')],
@@ -485,8 +533,8 @@
     ['space', msg('Mark ticket')],
     ['o', msg('Open in browser')],
     ['shift+r', msg('Refresh')],
-    ['mod+enter', msg('Start marked')],
-  ];
+    [chordFor('work.start') ?? 'mod+enter', msg('Start marked')],
+  ]);
 
   function onkeydown(e: KeyboardEvent): void {
     // A section header keeps its own keys (Enter, Space); they must not act on the selected row.
@@ -543,12 +591,7 @@
         break;
       case 'J':
       case 'K':
-        if (cur && isNextUp(cur))
-          void nextUp.move(
-            cur.ticket.ticket.ref,
-            e.key === 'J' ? 1 : -1,
-            nextUpRows().flatMap((r) => (r.type === 'ticket' ? [r.ticket.ticket.ref] : [])),
-          );
+        if (cur && isNextUp(cur)) reorder(cur, e.key === 'J' ? 1 : -1);
         break;
       default:
         if (!cur || !'vVbpfrcansoP'.includes(e.key) || e.key.length !== 1) return;
@@ -630,6 +673,13 @@
       >{/if}
     <span class="spacer"></span>
     <Toggle label={t('Compact')} checked={compact} onchange={setCompact} />
+    <IconButton
+      icon="plus"
+      size="sm"
+      label={t('New work item')}
+      chord={chordFor('work.new')}
+      onclick={() => void dispatch('work.new')}
+    />
     <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}
       >{t('Refresh')}</Button
     >
@@ -706,11 +756,13 @@
                     >
                     {t(s.label)}
                     <span class="count">{l.count}</span>
+                    <span class="k-group-hint">{t(SECTION_HINTS[s.id])}</span>
                   </button>
                 {:else}
                   <span class="slot"><Lamp level={l.section.lamp} title="" /></span>
                   {t(l.section.label)}
                   <span class="count">{l.count}</span>
+                  <span class="k-group-hint">{t(SECTION_HINTS[l.section.id])}</span>
                 {/if}
               </div>
             {:else if l.type === 'ask'}
@@ -731,15 +783,34 @@
                   class:two={!compact}
                   class:dim={v.dim}
                   class:selected={cur === l.row}
+                  class:over={overId === l.row.id && dragId !== l.row.id}
                   aria-current={cur === l.row ? 'true' : undefined}
                   data-row={l.row.id}
+                  draggable={isNextUp(l.row) ? 'true' : undefined}
+                  ondragstart={(e) => {
+                    dragId = l.row.id;
+                    selId = l.row.id;
+                    e.dataTransfer?.setData('text/plain', l.row.id);
+                  }}
+                  ondragover={(e) => {
+                    if (dragId && isNextUp(l.row)) {
+                      e.preventDefault();
+                      overId = l.row.id;
+                    }
+                  }}
+                  ondragleave={() => (overId = null)}
+                  ondrop={(e) => {
+                    e.preventDefault();
+                    drop(l.row);
+                  }}
+                  ondragend={() => (dragId = overId = null)}
                   style:--hue={resolveProjectColor(v.color) ?? 'transparent'}
                   onclick={() => (selId = l.row.id)}
                   ondblclick={() => void enterRow(l.row)}
                   oncontextmenu={(e) => rowMenu(e, l.row)}
                   use:peekHover={() => rowSession(l.row)}
                 >
-                  <span class="slot"><Lamp level={v.lamp} /></span>
+                  <span class="slot"><Lamp level={v.lamp} title={v.reason} /></span>
                   <span class="id">{v.id}</span>
                   <span class="ttl">{v.title}</span>
                   <span class="sub">
@@ -768,7 +839,14 @@
                   data-testid="now-detail"
                 >
                   {#each v.actions as a (a.key)}
-                    <span class="ghost"><Kbd chord={a.key} />{a.label}</span>
+                    <button
+                      type="button"
+                      tabindex="-1"
+                      class="act"
+                      class:primary={a.key === 'enter'}
+                      data-key={a.key}
+                      onclick={() => void a.run()}><Kbd chord={a.key} />{a.label}</button
+                    >
                   {/each}
                   {#if v.more}<span class="msg" title={v.more}>{v.more}</span>{/if}
                 </div>
@@ -780,7 +858,7 @@
     {/if}
   {/if}
 
-  <KeyHints {hints} />
+  <KeyHints {hints} onopen={() => (keysOpen = true)} />
 </div>
 
 {#if keysOpen}
@@ -1106,13 +1184,34 @@
     font-size: var(--k-font-size-sm);
   }
 
-  .ghost {
+  /* The selected row's actions (#397): outlined like the Tickets row actions, the next step in accent. */
+  .act {
     display: inline-flex;
     align-items: center;
     gap: var(--k-space-1);
     flex: none;
+    padding: 0 var(--k-space-2) 0 var(--k-space-1);
+    border: 1px solid var(--k-border-strong);
+    border-radius: var(--k-radius-sm);
+    background: none;
+    font: inherit;
     font-size: var(--k-font-size-xs);
-    color: var(--k-fg-muted);
+    line-height: 20px;
+    color: var(--k-fg);
+    cursor: pointer;
+  }
+
+  .act:hover {
+    background: var(--k-bg-active);
+  }
+
+  .act.primary {
+    border-color: var(--k-accent);
+  }
+
+  /* Next up drag (#397): the row it lands on carries the accent line. */
+  .row.over {
+    box-shadow: inset 0 2px 0 var(--k-accent);
   }
 
   .moreline {

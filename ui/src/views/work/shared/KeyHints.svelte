@@ -16,9 +16,11 @@
     hints: readonly Hint[];
     /** Shows the full key list as a dialog, closed by this. */
     onclose?: () => void;
+    /** The line's `?` is a button opening the dialog (#397): the keys are taught, not required. */
+    onopen?: () => void;
   }
 
-  let { hints, onclose }: Props = $props();
+  let { hints, onclose, onopen }: Props = $props();
 
   const GLOBAL: readonly Hint[] = [
     ['palette.open', msg('Commands')],
@@ -33,7 +35,7 @@
       return chord ? [[chord, label]] : [];
     }),
   );
-  const line = $derived<Hint[]>([...hints.slice(0, 5), ['?', msg('All keys')]]);
+  const line = $derived<Hint[]>(hints.slice(0, 5));
 </script>
 
 {#snippet keys(k: string)}
@@ -55,20 +57,23 @@
     {/each}
   </Dialog>
 {:else if settings.value()?.keys.hints !== false}
-  <footer class="hints" aria-hidden="true">
-    {#each line as [k, label] (k)}<span class="hint">{@render keys(k)} {t(label)}</span>{/each}
+  <footer class="hints">
+    <span class="line" aria-hidden="true"
+      >{#each line as [k, label] (k)}<span class="hint">{@render keys(k)} {t(label)}</span>{/each}</span
+    >
+    <button type="button" class="hint all" tabindex="-1" onclick={onopen}
+      ><Kbd chord="?" /> {t('All keys')}</button
+    >
   </footer>
 {/if}
 
 <style>
   .hints {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 0 var(--k-space-5);
+    gap: var(--k-space-5);
     flex: none;
     margin-top: auto; /* bottom of the pane even above an empty, error or loading state */
-    /* One line tall: hints that wrap fall out of view instead of adding a second line. */
     height: var(--k-statusbar-height);
     overflow: hidden;
     padding: 0 var(--k-space-3);
@@ -76,6 +81,33 @@
     font-size: var(--k-font-size-xs);
     color: var(--k-fg-muted);
     white-space: nowrap;
+  }
+
+  /* One line tall: hints that wrap fall out of view whole; `All keys` after them always shows. */
+  .line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 var(--k-space-5);
+    min-width: 0;
+    height: var(--k-statusbar-height);
+    overflow: hidden;
+  }
+
+  .all {
+    flex: none;
+    padding: 0 var(--k-space-1);
+    border: 0;
+    border-radius: var(--k-radius-sm);
+    background: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .all:hover {
+    background: var(--k-bg-active);
+    color: var(--k-fg);
   }
 
   .hint {

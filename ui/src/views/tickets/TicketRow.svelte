@@ -37,6 +37,10 @@
     onmove: () => void;
     onpr: () => void;
     onstart: () => void;
+    /** The `⋯` menu: every other action, with its key (#397). */
+    onmore: (e: Event) => void;
+    /** The checkbox shown while a multi-selection exists. */
+    onpick: () => void;
   }
 
   let {
@@ -58,6 +62,8 @@
     onmove,
     onpr,
     onstart,
+    onmore,
+    onpick,
   }: Props = $props();
 
   const tk = $derived(item.ticket);
@@ -90,8 +96,6 @@
         : '',
       ...signals,
       t('Updated {ago}', { ago: relativeTime(Date.parse(tk.updated_at)) }),
-      // The row shows two actions (#384): the others by key.
-      t('Keys: s start work, m move, p open pull request, t tags'),
     ]
       .filter(Boolean)
       .join('\n'),
@@ -114,10 +118,11 @@
   ondblclick={onopen}
 >
   <span class="k-row-lamp c-lamp"
-    >{#if picked}<Icon name="check" size={12} />{:else}<Lamp
-        level={phase?.lamp ?? 'none'}
-        title={signals.join('\n') || undefined}
-      />{/if}</span
+    >{#if picking}<RowButton label={picked ? t('Deselect') : t('Select')} onclick={onpick}
+        ><span class="box" class:on={picked} data-pick
+          ><Icon name={picked ? 'check' : 'square'} size={12} /></span
+        ></RowButton
+      >{:else}<Lamp level={phase?.lamp ?? 'none'} title={signals.join('\n') || undefined} />{/if}</span
   >
   <span class="k-row-key c-key">{tk.ref.key}</span>
   <span class="c-title"
@@ -129,14 +134,14 @@
         >{fieldText(f)}</span
       >{/each}<TagChips kind="tickets" itemKey={rowKey} /><span class="acts" data-acts
       >{#if next}<RowButton label={next} onclick={onnext}
-          ><span class="act primary" data-next>{next}</span></RowButton
+          ><span class="k-row-act primary" data-next>{next}</span></RowButton
         >{:else}<RowButton label={hasWork ? t('Resume work (s)') : t('Start work (s)')} onclick={onstart}
-          ><span class="act primary"
+          ><span class="k-row-act primary"
             ><Icon name="play" size={14} />{hasWork ? t('Resume work') : t('Start work')}</span
           ></RowButton
         >{/if}<RowButton label={t('Move (m)')} onclick={onmove}
-        ><span class="act"><Icon name="arrow-right" size={14} />{t('Move')}</span></RowButton
-      ></span
+        ><span class="k-row-act"><Icon name="arrow-right" size={14} />{t('Move')}</span></RowButton
+      ><RowButton label={t('More actions')} icon="ellipsis" onclick={onmore} /></span
     ></span
   >
   <!-- Fixed slots: work, pull request, waiting, marked. Icons, and words where the list has room (#373). -->
@@ -416,28 +421,6 @@
     min-width: 0;
   }
 
-  .act {
-    display: block;
-    line-height: 18px;
-    overflow: hidden;
-    padding: 0 var(--k-space-2);
-    border: 1px solid var(--k-border-strong);
-    border-radius: var(--k-radius-sm);
-    color: var(--k-fg);
-    font-size: var(--k-font-size-sm);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .act :global(svg) {
-    margin-right: var(--k-space-1);
-    vertical-align: -2px;
-  }
-
-  .act.primary {
-    border-color: var(--k-accent);
-  }
-
   .c-status {
     grid-area: status;
     padding-left: var(--k-space-4);
@@ -593,6 +576,15 @@
   }
 
   .k-row.picked .k-row-lamp {
+    color: var(--k-accent);
+  }
+
+  .box {
+    display: inline-flex;
+    color: var(--k-fg-muted);
+  }
+
+  .box.on {
     color: var(--k-accent);
   }
 </style>

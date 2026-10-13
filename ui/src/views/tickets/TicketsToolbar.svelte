@@ -17,7 +17,7 @@
     allProjects: boolean;
     /** Who tabs, person and arrangement need a source. */
     hasSource: boolean;
-    who: { id: Who; label: string }[];
+    who: { id: Who; label: string; title?: string }[];
     whoTab: Who | null;
     onwho: (w: Who) => void;
     people: { value: string; label: string }[];
@@ -37,6 +37,9 @@
     ongroup: (g: GroupBy) => void;
     sort: TicketSort;
     onsort: (s: TicketSort) => void;
+    /** The detail column beside the list (Space); `null` when the pane has no room for it. */
+    split: boolean | null;
+    onsplit: () => void;
     /** List/board toggle: one source in effect. */
     canBoard: boolean;
     mode: TicketsMode;
@@ -71,6 +74,8 @@
     ongroup,
     sort,
     onsort,
+    split,
+    onsplit,
     canBoard,
     mode,
     onmode,
@@ -207,6 +212,16 @@
               aria-pressed={currentSprint}
               title={t('Only tickets in an active sprint (f, then s)')}
               onclick={onsprint}>{t('Current sprint')}</Button
+            >
+          {/if}
+          {#if split !== null}
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={split ? 'check' : 'square'}
+              aria-pressed={split}
+              title={t('The selected ticket on the right (Space)')}
+              onclick={onsplit}>{t('Detail')}</Button
             >
           {/if}
         </div>

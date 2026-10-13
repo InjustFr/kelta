@@ -6,6 +6,8 @@
     label: string;
     icon?: string;
     disabled?: boolean;
+    /** Tooltip: what the tab holds. */
+    title?: string;
   }
 
   interface Props {
@@ -47,6 +49,7 @@
       aria-selected={item.id === value}
       tabindex={item.id === focusId ? 0 : -1}
       disabled={item.disabled}
+      title={item.title}
       onclick={() => select(item.id)}
     >
       {#if item.icon}<Icon name={item.icon} size={14} />{/if}
