@@ -54,15 +54,18 @@
     header?: Snippet;
     /** A filter in the header narrows the items: the first enabled one stays lit as Enter's target. */
     filtered?: boolean;
+    /** Opened from the keyboard (`⌘.`, #404): the first entry, the next step, starts lit. */
+    lit?: boolean;
     onselect: (id: string) => void;
     onclose: () => void;
   }
 
-  let { items, x, y, label, header, filtered = false, onselect, onclose }: Props = $props();
+  let { items, x, y, label, header, filtered = false, lit = false, onselect, onclose }: Props = $props();
   const headerId = $props.id();
 
   let el = $state<HTMLDivElement>();
-  let active = $state(-1);
+  // svelte-ignore state_referenced_locally
+  let active = $state(lit ? 0 : -1);
 
   const view = $derived(menuView(items));
   /** The listed entries, in order; `active` indexes this. */
