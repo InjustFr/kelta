@@ -118,7 +118,7 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("tool.goto.7", "Open tool 7", ["cmd+alt+7"], None, Global),
     a!("tool.goto.8", "Open tool 8", ["cmd+alt+8"], None, Global),
     a!("tool.goto.9", "Open tool 9", ["cmd+alt+9"], None, Global),
-    a!("inbox.open", "Open Now", ["cmd+0"], Some("0"), Global),
+    a!("inbox.open", "Open Queue", ["cmd+0"], Some("0"), Global),
     // `cmd+ctrl` has no Linux twin: `ctrl+<arrow>` is word motion in shells and editors.
     a!("project.next", "Next project", ["cmd+ctrl+]"], linux["ctrl+shift+pagedown"], Some(")"), Global),
     a!("project.prev", "Previous project", ["cmd+ctrl+["], linux["ctrl+shift+pageup"], Some("("), Global),

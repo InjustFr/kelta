@@ -62,21 +62,30 @@ function mountNow() {
 
 const zoneIds = (c: HTMLElement) =>
   [...c.querySelectorAll('[data-zone]')].map((e) => e.getAttribute('data-zone'));
-const rowZone = (c: HTMLElement, id: string) =>
-  c.querySelector(`.row[data-row="${id}"]`)?.classList.contains('yours') ? 'yours' : 'waiting';
+const rowZone = (c: HTMLElement, id: string) => {
+  const cls = c.querySelector(`.row[data-row="${id}"]`)?.classList;
+  return (['yours', 'claude', 'waiting'] as const).find((z) => cls?.contains(z));
+};
 const FLAKY = '0199a6b2-0000-7000-8000-00000000a004';
+/** SHOP-142, whose Claude is working in the mock. */
+const RATE_LIMIT = '0199a6b2-0000-7000-8000-00000000a001';
 
 describe('Now', () => {
-  it('one list in two zones, a summary line, no chips, Compact, Refresh or key bar (#399)', async () => {
+  it('one list in three zones, a summary line, no chips, Compact, Refresh or key bar (#399, #413)', async () => {
     const { container } = mountNow();
-    await waitFor(() => expect(zoneIds(container)).toEqual(['yours', 'waiting']));
-    const { yours, others } = nowSummary();
+    await waitFor(() => expect(zoneIds(container)).toEqual(['yours', 'claude', 'waiting']));
+    const { yours, claude, others } = nowSummary();
     const header = screen.getByTestId('now-header').textContent;
     expect(header).toContain(`${yours} your move`);
+    expect(header).toContain(`${claude} Claude working`);
     expect(header).toContain(`${others} waiting on others`);
     expect(container.querySelector('[data-zone="yours"] .count')?.textContent).toBe(String(yours));
-    // A diff to review is my move; my PR waiting on its reviewers is not.
+    expect(container.querySelector('[data-zone="claude"] .k-group-hint')?.textContent).toBe(
+      'Your parallel capacity: back in minutes.',
+    );
+    // A diff to review is my move; a Claude at work is Claude working.
     expect(rowZone(container, `w:${FLAKY}`)).toBe('yours');
+    expect(rowZone(container, `w:${RATE_LIMIT}`)).toBe('claude');
     expect(screen.queryByRole('switch', { name: 'Compact' })).toBeNull();
     expect(screen.queryByRole('button', { name: /^Refresh/ })).toBeNull();
     expect(container.querySelector('.k-keyhints')).toBeNull();
@@ -228,7 +237,7 @@ describe('Now', () => {
     await screen.findByText('Flaky test in cart service');
     const pane = screen.getByTestId('inbox-pane');
     await fireEvent.keyDown(pane, { key: '/' });
-    const input = await screen.findByLabelText('Filter Now');
+    const input = await screen.findByLabelText('Filter Queue');
     await fireEvent.input(input, { target: { value: 'retry-queue' } });
     await waitFor(() => expect(container.querySelectorAll('.row[data-row]')).toHaveLength(1));
   });
@@ -355,7 +364,7 @@ describe('Now', () => {
     mock.failAlways('review_list', { code: 'needs_auth', message: '401' });
     work.byId = {};
     mountNow();
-    expect(await screen.findByText('Could not load Now')).toBeTruthy();
+    expect(await screen.findByText('Could not load the Queue')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Re-authenticate' })).toBeTruthy();
   });
 });

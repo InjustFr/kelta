@@ -6,7 +6,7 @@ import { appInfo as sampleAppInfo } from '$lib/gen/fixtures';
 import { createMockTransport } from '$lib/ipc/mock';
 import { getTransport, setTransport } from '$lib/ipc/transport';
 import { addTab, pane, updateTab } from '$lib/layout';
-import { GLOBAL, layout, projects, sessions, tools, ui, work } from '$lib/stores';
+import { GLOBAL, layout, projects, sessions, tickets, tools, ui, work } from '$lib/stores';
 
 import './actions';
 import ContextBar from './ContextBar.svelte';
@@ -53,11 +53,13 @@ function toolTab(projectId: string): void {
 }
 
 describe('context bar', () => {
-  it('work item: the key and title, then the work segment; no cwd, nothing from the pane header', async () => {
+  it('work item: the key and title, no work segment (the header above the panes has it), no cwd', async () => {
+    // The work tab's header loads the ticket detail the title comes from.
+    await tickets.loadDetail(work.all.find((w) => w.ticket?.key === 'SHOP-142')!.ticket!);
     render(ContextBar);
     await waitFor(() => expect(crumb()).toBe('Shop › SHOP-142 Rate-limit login attempts'));
-    expect(await screen.findByTestId('context-work')).toBeTruthy();
-    expect(screen.getByTestId('work-menu-button')).toBeTruthy();
+    for (const id of ['work-header', 'work-status', 'work-phase', 'work-primary', 'work-menu-button'])
+      expect(screen.queryByTestId(id)).toBeNull();
     expect(screen.queryByTestId('context-meta')).toBeNull();
     expect(bar().textContent).not.toMatch(/Live status off|ctx|Claude \d/);
     // Native decorations: the window title follows the breadcrumb.
@@ -72,7 +74,6 @@ describe('context bar', () => {
     render(ContextBar);
     await waitFor(() => expect(crumb()).toBe('Shop › ❯~/code/shop-api'));
     expect(screen.getByTestId('context-meta').textContent).toBe('~/code/shop-api');
-    expect(screen.queryByTestId('context-work')).toBeNull();
     expect(document.title).toBe('Shop › ~/code/shop-api');
   });
 
@@ -85,7 +86,6 @@ describe('context bar', () => {
     expect(screen.getByTestId('context-meta').textContent).toBe(
       '~/code/shop-api.worktrees/SHOP-142·claude-sonnet-5',
     );
-    expect(screen.queryByTestId('context-work')).toBeNull();
   });
 
   it('tool without a project argument: Tools › tool, "for you", and the return chip is nav.back', async () => {
@@ -102,7 +102,7 @@ describe('context bar', () => {
     expect(bar().textContent).toContain('for you');
     expect(screen.queryByTestId('context-owner')).toBeNull();
     const chip = screen.getByTestId('context-return');
-    expect(chip.textContent).toContain('↩ Now');
+    expect(chip.textContent).toContain('↩ Queue');
     await fireEvent.click(chip);
     await waitFor(() => expect(ui.view).toBe('now'));
   });
@@ -127,11 +127,10 @@ describe('context bar', () => {
   it('global view: its name, and the "underneath" chip leaves the view', async () => {
     ui.view = 'now';
     render(ContextBar);
-    await waitFor(() => expect(crumb()).toBe('Now'));
-    await waitFor(() => expect(setTitle).toHaveBeenLastCalledWith('Now'));
+    await waitFor(() => expect(crumb()).toBe('Queue'));
+    await waitFor(() => expect(setTitle).toHaveBeenLastCalledWith('Queue'));
     const under = screen.getByTestId('context-underneath');
     expect(under.textContent).toContain('‹ Shop › SHOP-142 Rate-limit login');
-    expect(screen.queryByTestId('context-work')).toBeNull();
     await fireEvent.click(under);
     expect(ui.view).toBeNull();
     expect(projects.activeId).toBe('shop');

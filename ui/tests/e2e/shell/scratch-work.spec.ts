@@ -70,7 +70,7 @@ test.describe('scratch work items', () => {
     const [link] = await callsOf(page, 'work_link');
     expect(link?.args).toMatchObject({ ticket: { key: 'SHOP-151' }, apply_side_effects: true });
     await expect(page.getByTestId('context-key')).toHaveText('SHOP-151');
-    await expect(page.getByTestId('work-branch')).toHaveAttribute('title', /wip\/fix-the-login-flake/);
+    await expect(page.getByTestId('story-changes')).toContainText(/wip\/fix-the-login-flake/);
   });
 
   test('Create ticket files a prefilled ticket and links it', async ({ page }) => {

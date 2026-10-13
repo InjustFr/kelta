@@ -23,6 +23,10 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
   await page.keyboard.press('Control+0');
   await expect(now(page)).toBeVisible();
   await expect(now(page).locator('[data-zone="yours"]')).toBeVisible();
+  // SHOP-142's Claude is working: the Claude working zone (#413).
+  await expect(
+    now(page).locator('.row.claude[data-row="w:0199a6b2-0000-7000-8000-00000000a001"]'),
+  ).toBeVisible();
 
   // Up next → s → start sheet → Ctrl+Enter: the work tab opens focused and Now closes.
   await select(page, 't:jira-acme:SHOP-151');
@@ -35,7 +39,7 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
   await expect(sheet).toBeHidden();
   await expect(now(page)).toBeHidden();
   await expect.poll(() => activeProject(page)).toBe('shop');
-  const header = page.getByTestId('context-work');
+  const header = page.getByTestId('work-header');
   await expect(page.getByTestId('context-key')).toHaveText('SHOP-151');
 
   // Claude stops with changes: review_due (the backend's Stop hook) and a fresh diffstat.
@@ -59,7 +63,6 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
     mock.emit({ type: 'work.updated', work: structuredClone(w) });
   });
   await expect(header).toHaveAttribute('data-phase', 'to_review');
-  await expect(page.getByTestId('work-branch')).toHaveAttribute('title', /\+30 −4/);
 
   // Now: the item's next step is Review changes, with Claude's last message; Enter opens the delta.
   await page.keyboard.press('Control+0');
@@ -80,7 +83,7 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
 test('the work menu opens from a terminal with its chord; letters never move', async ({ page }) => {
   await boot(page);
   // The shop tab hosts SHOP-142 (Claude + nvim); focus is in a terminal.
-  await expect(page.getByTestId('context-work')).toBeVisible();
+  await expect(page.getByTestId('work-header')).toBeVisible();
   await page.locator('[data-testid="terminal-pane"] .xterm').first().click();
   await page.keyboard.press('Control+Period');
   const menu = page.getByRole('menu', { name: 'Work' });
@@ -101,7 +104,7 @@ test('the work menu opens from a terminal with its chord; letters never move', a
 
 test('Start Claude gives a work item whose Claude is gone a new one in its tab', async ({ page }) => {
   await boot(page);
-  await expect(page.getByTestId('context-work')).toBeVisible();
+  await expect(page.getByTestId('work-header')).toBeVisible();
   const panes = page.locator('[data-testid="terminal-pane"]:visible');
   const before = await panes.count();
   await page.evaluate(() => {

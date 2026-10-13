@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Now (FLOW §3): one screen across projects answering "review Claude's work, or grab a feature?".
+  // The Queue (FLOW §3): one screen across projects answering "review Claude's work, or grab a feature?".
   // It keeps the Inbox slot (rail top tile, ⌘0, `inbox.open`, pane kind `inbox`).
   import { msg, t, tn } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
@@ -113,6 +113,7 @@
   /** The sections in the lists' scope (#409). */
   const sections = $derived(scopeSections(summary.sections, listScope.project));
   const yours = $derived(zoneCount(sections, 'yours'));
+  const claude = $derived(zoneCount(sections, 'claude'));
   const others = $derived(zoneCount(sections, 'waiting'));
   const stale = $derived(asOf());
   const lists = $derived([
@@ -425,7 +426,7 @@
   }
 
   type Line =
-    | { type: 'zone'; id: string; zone: Zone; label: string; count: number }
+    | { type: 'zone'; id: string; zone: Zone; label: string; hint: string; count: number }
     /** A folded section's header (Waiting to deploy). */
     | { type: 'fold'; id: string; section: Section; count: number; open: boolean }
     | { type: 'row'; id: string; row: NowRow; section: NowSection }
@@ -443,7 +444,7 @@
     unfolded = isOpen(s) ? unfolded.filter((id) => id !== s.id) : [...unfolded, s.id];
   };
 
-  // Sections in zone order (#399): Your move, then Waiting on others, each keeping its section order.
+  // Sections in zone order (#399, #413): Your move, Claude working, Waiting on others, each keeping its section order.
   const visible = $derived(
     ZONES.flatMap((z) => sections.filter((s) => zoneOf(s.id) === z.id))
       .map((s) => ({ ...s, rows: s.rows.filter((r) => matches(r, s.id, filter.trim())) }))
@@ -466,7 +467,7 @@
       const secs = visible.filter((s) => zoneOf(s.id) === z.id);
       if (secs.length === 0) continue;
       const count = secs.reduce((n, s) => n + s.rows.length + s.more, 0);
-      out.push({ type: 'zone', id: `z:${z.id}`, zone: z.id, label: z.label, count });
+      out.push({ type: 'zone', id: `z:${z.id}`, zone: z.id, label: z.label, hint: z.hint, count });
       for (const s of secs) {
         const open = isOpen(s);
         if (s.folded)
@@ -697,15 +698,16 @@
   bind:this={root}
   tabindex="0"
   role="group"
-  aria-label={t('Now')}
+  aria-label={t('Queue')}
   {onkeydown}
 >
   <header class="bar">
-    <span class="title">{t('Now')}</span>
+    <span class="title">{t('Queue')}</span>
     <ScopeSelect />
     <!-- One summary line (#399): the zones below carry the rest. -->
     <span class="split" data-testid="now-header">
       <span>{@render count(t('{n} your move', { n: yours }), yours)}</span>
+      <span>{@render count(t('{n} Claude working', { n: claude }), claude)}</span>
       <span>{@render count(t('{n} waiting on others', { n: others }), others)}</span>
     </span>
     {#if stale}<span class="asof" data-testid="now-asof"
@@ -725,17 +727,17 @@
     bind:input={filterEl}
     active={activeFilters}
     placeholder={t('Filter id, title, project, branch (/)')}
-    aria-label={t('Filter Now')}
+    aria-label={t('Filter Queue')}
     onfocus={() => (filtering = true)}
     onkeydown={onFilterKey}
     onblur={() => (filtering = false)}
   />
-  <LoadBar active={!loading && lists.some((l) => l.loading)} label={t('Loading Now')} />
+  <LoadBar active={!loading && lists.some((l) => l.loading)} label={t('Loading Queue')} />
 
   {#if loading}
-    <Loading label={t('Loading Now')} />
+    <Loading label={t('Loading Queue')} />
   {:else if noData && firstError}
-    <ErrorState error={firstError} title={t('Could not load Now')} onretry={refresh}>
+    <ErrorState error={firstError} title={t('Could not load the Queue')} onretry={refresh}>
       {#snippet actions()}
         <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
           {isAuthError(firstError) ? t('Re-authenticate') : t('Open account settings')}
@@ -786,13 +788,14 @@
               itemHeight={ROW_HEIGHT}
               measure
               key={(l) => l.id}
-              label={t('Now')}
+              label={t('Queue')}
               sticky={(l) => l.type === 'zone'}
             >
               {#snippet row(l)}
                 {#if l.type === 'zone'}
                   <div class="zone {l.zone}" role="heading" aria-level="2" data-zone={l.zone}>
                     {t(l.label)} <span class="count">{l.count}</span>
+                    <span class="k-group-hint">{t(l.hint)}</span>
                   </div>
                 {:else if l.type === 'fold'}
                   {@const s = l.section}

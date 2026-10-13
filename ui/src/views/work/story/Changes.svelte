@@ -5,7 +5,7 @@
 
   import type { NoteState, ReviewNote, ReviewNotes, WorkItem } from '$lib/gen';
   import { editorOpen, workNoteResolve, workNotes, workNotesSend } from '$lib/ipc/commands';
-  import { toasts } from '$lib/stores';
+  import { toasts, work } from '$lib/stores';
   import { Badge, Button } from '$lib/ui';
 
   import Section from './Section.svelte';
@@ -20,10 +20,17 @@
     resolved: msg('resolved'),
   };
 
+  const behind = $derived(work.git[item.id]?.behind ?? 0);
   const summary = $derived(
-    item.delta
-      ? `+${item.delta.insertions} −${item.delta.deletions}, ${tn('{n} file', '{n} files', item.delta.files)}`
-      : t('Nothing new'),
+    [
+      item.delta
+        ? `+${item.delta.insertions} −${item.delta.deletions}, ${tn('{n} file', '{n} files', item.delta.files)}`
+        : t('Nothing new'),
+      item.branch,
+      behind > 0 ? t('{n} behind', { n: behind }) : null,
+    ]
+      .filter(Boolean)
+      .join(' · '),
   );
 
   let busy = $state(false);
