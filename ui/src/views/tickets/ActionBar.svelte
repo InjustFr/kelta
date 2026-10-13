@@ -99,7 +99,7 @@
       icon="ellipsis"
       aria-haspopup="menu"
       aria-expanded={menu !== null}
-      aria-keyshortcuts={mac ? 'Meta+.' : 'Control+Shift+.'}
+      aria-keyshortcuts={mac ? 'Meta+.' : 'Control+.'}
       title={t('More actions ({keys})', { keys: chordText(MORE_CHORD) })}
       onclick={openMore}>{t('More')}</Button
     >

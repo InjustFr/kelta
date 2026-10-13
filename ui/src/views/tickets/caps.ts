@@ -36,7 +36,7 @@ export const TICKET_ACTIONS: readonly { id: TicketAction; key: string }[] = [
   { id: 'tag', key: 't' },
 ];
 
-/** Opens the detail's More menu (Cmd+. on macOS, Ctrl+Shift+. on Linux). */
+/** Opens the detail's More menu (Cmd+. on macOS, Ctrl+. on Linux). */
 export const MORE_CHORD = 'mod+.';
 
 /**

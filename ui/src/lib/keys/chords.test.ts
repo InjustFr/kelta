@@ -53,7 +53,7 @@ describe('parseChord', () => {
     expect(parseChord('mod+t', 'linux')).toMatchObject({
       meta: false,
       ctrl: true,
-      shift: true,
+      shift: false,
       code: 'KeyT',
     });
   });
@@ -198,17 +198,24 @@ describe('findConflicts', () => {
 });
 
 describe('default chords of the generated catalog', () => {
-  it('never take plain Ctrl+letter, Alt/Meta, Ctrl+Alt, Shift+Tab, Ctrl+Space or Ctrl+\\ on Linux', () => {
+  it('follow the Mac set on Linux, taking from the terminal only plain Ctrl+letter and Ctrl+Alt', () => {
     const defaults = effectiveBindings(null, 'linux');
-    expect(findConflicts(defaults, RESERVED, { platform: 'linux' })).toEqual([]);
-    // Every Linux default parses and none carries Alt or Meta.
+    for (const c of findConflicts(defaults, RESERVED, { platform: 'linux' })) {
+      expect(c.actions, c.chord).toHaveLength(1);
+      // Plain Ctrl+letter yields to a focused terminal; Ctrl+Alt are the Cmd+Opt twins.
+      expect(/^ctrl\+[a-z]$/.test(c.chord) || c.chord.startsWith('ctrl+alt+'), c.chord).toBe(true);
+    }
     for (const meta of ACTIONS) {
       for (const text of meta.linux) {
         const chord = parseChord(text, 'linux');
         expect(chord, `${meta.id}: ${text}`).not.toBeNull();
-        expect(chord!.alt || chord!.meta, `${meta.id}: ${text}`).toBe(false);
+        expect(chord!.meta, `${meta.id}: ${text}`).toBe(false);
       }
     }
+    // The Ctrl+Shift twin of a terminal-yielded key keeps the action reachable from a terminal.
+    expect(defaults['palette.open']).toEqual(['ctrl+k', 'ctrl+shift+k']);
+    expect(defaults['pane.close']).toEqual(['ctrl+w', 'ctrl+shift+w']);
+    expect(defaults['terminal.copy']).toEqual(['ctrl+shift+c']);
   });
 
   it('only use app chords on macOS (Cmd based, never bare Ctrl/Alt)', () => {

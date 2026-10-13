@@ -53,7 +53,7 @@ describe('icons', () => {
 describe('format', () => {
   it('formats chords per platform', () => {
     expect(formatChord('cmd+shift+k', 'macos')).toEqual(['⌘', '⇧', 'K']);
-    expect(formatChord('mod+t', 'linux')).toEqual(['Ctrl', 'Shift', 'T']);
+    expect(formatChord('mod+t', 'linux')).toEqual(['Ctrl', 'T']);
     expect(formatChord('ctrl+shift+pagedown', 'linux')).toEqual(['Ctrl', 'Shift', 'PgDn']);
     expect(formatChord('ctrl++', 'linux')).toEqual(['Ctrl', '+']);
   });
@@ -93,7 +93,7 @@ describe('components', () => {
         (k) => k.textContent,
       );
     expect(caps('macos')).toEqual(['⌘K']);
-    expect(caps('linux')).toEqual(['Ctrl+Shift+K']);
+    expect(caps('linux')).toEqual(['Ctrl+K']);
   });
 
   it('Tabs selects with click and arrows', async () => {

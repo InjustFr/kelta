@@ -27,6 +27,8 @@ test.describe('keys', () => {
       'Control+r',
       'Control+f',
       'Control+w',
+      'Control+k',
+      'Control+d',
       'Alt+b',
       'Shift+Tab',
       'Control+Space',
@@ -36,12 +38,14 @@ test.describe('keys', () => {
     }
     await expect
       .poll(async () => (await written(page, SESSIONS.shopClaude)).length)
-      .toBeGreaterThanOrEqual(8);
+      .toBeGreaterThanOrEqual(10);
     const data = (await written(page, SESSIONS.shopClaude)).join('|');
     expect(data).toContain('\x01'); // Ctrl+A
     expect(data).toContain('\x12'); // Ctrl+R (reverse search must not reload the webview)
     expect(data).toContain('\x06'); // Ctrl+F
-    expect(data).toContain('\x17'); // Ctrl+W
+    expect(data).toContain('\x17'); // Ctrl+W (pane.close outside a terminal)
+    expect(data).toContain('\x0b'); // Ctrl+K (palette.open outside a terminal)
+    expect(data).toContain('\x04'); // Ctrl+D (pane.split_right outside a terminal)
     expect(data).toContain('\x1bb'); // Alt+B = ESC b
     expect(data).toContain('\x1b[Z'); // Shift+Tab
     expect(data).toContain('\x00'); // Ctrl+Space
@@ -109,7 +113,7 @@ test.describe('keys', () => {
     await page.keyboard.press('Control+Shift+Space');
     await page.keyboard.type('%');
     await expect(page.getByTestId('pane')).toHaveCount(3);
-    await page.keyboard.press('Control+Shift+Z'); // pane.zoom
+    await page.keyboard.press('Control+Shift+Enter'); // pane.zoom
     await expect(page.locator('[data-testid="pane"]:visible')).toHaveCount(1);
   });
 

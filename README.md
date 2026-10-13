@@ -73,7 +73,7 @@ Svelte 5 and Rust. The [user guide](docs/user/README.md) covers everything below
 
 **Interface**
 
-- English, French and German (`app.language`); a sidebar you can resize and collapse (`Cmd+B`, `Ctrl+Shift+S`);
+- English, French and German (`app.language`); a sidebar you can resize and collapse (`Cmd+B`, `Ctrl+B`);
   panes you drag to rearrange, or out of the window to open them in their own window; closed projects you can
   reopen: [getting started](docs/user/getting-started.md#the-rail).
 - Dark and light theme slots, and import from VS Code, iTerm2, Ghostty, Kitty, Alacritty or base16:

@@ -166,7 +166,7 @@ assignee, priority, sprint, estimate, due date, labels and last update, the pull
 lists are shown, not editable) and the last 20 comments with a box to add one (`Cmd+Enter` posts).
 
 The action bar shows Start or Resume work `s`, then Move `m`, Open PR `p`, Assign `a` and Comment `c`; More
-(`Cmd+.`, `Ctrl+Shift+.` on Linux) holds Unassign `A`, Block ticket `b`, Refine with Claude `r`, Run workflow `w`,
+(`Cmd+.`, `Ctrl+.` on Linux) holds Unassign `A`, Block ticket `b`, Refine with Claude `r`, Run workflow `w`,
 Copy branch `y`, Open in browser `o` and Tags `t`. Hover a button for its key; every key works without the bar. An action the tracker cannot do (a tracker without assignment
 or comments), or that has nothing to act on (no pull request yet, no branch yet), stays visible but dimmed; hover
 it or press its key to read why. The selected or hovered row shows the same actions in small form (Move, pull

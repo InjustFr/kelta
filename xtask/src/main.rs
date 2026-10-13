@@ -320,7 +320,7 @@ fn gen_actions() -> Result<String> {
             js(&a.id)?,
             js(&a.label)?,
             js(&a.mac)?,
-            js(&a.linux)?,
+            js(&a.linux())?,
             js(&a.prefix)?,
             js(&a.context)?
         );

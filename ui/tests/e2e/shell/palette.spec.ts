@@ -77,7 +77,9 @@ test.describe('palette', () => {
   test('Next waiting walks the jump queue across projects', async ({ page }) => {
     await boot(page);
     // First waiting row: Claude replied on the billing scratch item.
-    await page.keyboard.press('Control+Shift+J');
+    // The terminal has focus and keeps Ctrl+J: the prefix reaches attention.next.
+    await page.keyboard.press('Control+Shift+Space');
+    await page.keyboard.type('u');
     await expect.poll(() => activeProject(page)).toBe('billing');
     await expect(page.getByTestId('jump-hud')).toContainText(/^1\/\d+ · needs input · /);
     // Then the failed start in billing (error band).
@@ -112,7 +114,9 @@ test.describe('palette', () => {
       await expect(focused).toHaveAttribute('data-session-id', SESSIONS.shopNvim);
     };
 
-    await page.keyboard.press('Control+Shift+J');
+    // The terminal has focus and keeps Ctrl+J: the prefix reaches attention.next.
+    await page.keyboard.press('Control+Shift+Space');
+    await page.keyboard.type('u');
     await expect.poll(() => activeProject(page)).toBe('billing');
     await dispatch(page, 'nav.back');
     await backToNvim();

@@ -95,8 +95,9 @@ test.describe('sidebar', () => {
     await page.waitForFunction(() => window.__kelta?.stores.projects.loaded === true);
     expect(await railWidth(page)).toBe(64);
 
-    // Mod+B is Ctrl+Shift+S on Linux.
-    await page.keyboard.press('Control+Shift+S');
+    // Outside a terminal: a focused terminal keeps Ctrl+B (tmux prefix).
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press('Control+B');
     await expect.poll(() => railWidth(page)).toBe(416);
     await edge.focus();
     await page.keyboard.press('Enter');

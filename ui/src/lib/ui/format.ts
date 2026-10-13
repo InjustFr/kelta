@@ -57,16 +57,14 @@ export function currentPlatform(): 'macos' | 'linux' {
   return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? 'macos' : 'linux';
 }
 
-/** Splits a chord (`cmd+shift+k`) into display parts for the platform. `mod` = Cmd / Ctrl+Shift. */
+/** Splits a chord (`cmd+shift+k`) into display parts for the platform. `mod` = Cmd / Ctrl. */
 export function formatChord(chord: string, platform: 'macos' | 'linux' = currentPlatform()): string[] {
   const table = platform === 'macos' ? MAC_SYMBOLS : LINUX_NAMES;
   const raw = chord
     .toLowerCase()
     .split('+')
     .flatMap((p, i, all) => (p === '' && i === all.length - 1 ? ['+'] : p === '' ? [] : [p]));
-  const expanded = raw.flatMap((p) =>
-    p === 'mod' ? (platform === 'macos' ? ['cmd'] : ['ctrl', 'shift']) : [p],
-  );
+  const expanded = raw.flatMap((p) => (p === 'mod' ? [platform === 'macos' ? 'cmd' : 'ctrl'] : [p]));
   return expanded.map((p) =>
     t(table[p] ?? (p.length === 1 ? p.toUpperCase() : p[0]!.toUpperCase() + p.slice(1))),
   );

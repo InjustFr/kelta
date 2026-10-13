@@ -140,46 +140,46 @@ Plugins contribute screens opened from palette/commands/keybindings/triggers int
 
 ## 4. Keyboard shortcuts
 
-Principles: **never** steal plain Ctrl+letter, Alt/Meta+anything, Ctrl+Alt chords, Shift+Tab, Ctrl+Space, Ctrl+\\ or Super chords from the terminal on Linux. On Linux, `Mod` = **Ctrl+Shift** (in legacy encoding Ctrl+Shift+letter = Ctrl+letter, so nothing is lost). On macOS `Mod` = **Cmd** (never reaches the PTY except Cmd+C/V handled by Kelta). A configurable **app-prefix key** (tmux-style, default `ctrl+shift+space`, `keys.prefix`; `"off"` disables) followed by one key within `keys.prefix_timeout_ms` (1000) reaches every action. All bindings are rebindable in `[keys.bindings]`; the keybinding editor flags conflicts with the reserved list and with other bindings. Letters and punctuation match the character the active layout types (AZERTY `ctrl+shift+z` is the key labelled Z; punctuation uses the key's unshifted character, learned from plain presses); digits and named keys match physical keys (`KeyboardEvent.code`) so layouts don't break digits, and non-Latin layouts fall back to the QWERTY position.
+Principles: Linux follows the macOS set with Cmd → Ctrl (`Mod` = **Cmd** on macOS, **Ctrl** on Linux; derived in the catalog, with explicit Linux chords only where Cmd+Ctrl has no twin and for terminal copy / paste). In a focused terminal on Linux a plain Ctrl+letter goes to the terminal (`keys.linux_terminal = "terminal_first"`, the default; `kelta_first` lets Kelta win), so each default plain Ctrl+letter also has a Ctrl+Shift+letter twin unless another action's Mod+Shift+letter takes it (`pane.split_right`, `attention.next`, `rail.toggle`: prefix or palette from a terminal). Kelta never takes Alt/Meta+anything, Shift+Tab, Ctrl+Space, Ctrl+\\ or Super chords from the terminal; Ctrl+Alt chords are the Cmd+Opt twins (the window manager may take Ctrl+Alt+arrows). Ctrl+C in a terminal is always SIGINT; copy / paste are Ctrl+Shift+C / V. On macOS Cmd never reaches the PTY except Cmd+C/V handled by Kelta. A configurable **app-prefix key** (tmux-style, default `ctrl+shift+space`, `keys.prefix`; `"off"` disables) followed by one key within `keys.prefix_timeout_ms` (1000) reaches every action. All bindings are rebindable in `[keys.bindings]`; the keybinding editor flags conflicts with the reserved list and with other bindings. Letters and punctuation match the character the active layout types (AZERTY `ctrl+w` is the key labelled W; punctuation uses the key's unshifted character, learned from plain presses); digits and named keys match physical keys (`KeyboardEvent.code`) so layouts don't break digits, and non-Latin layouts fall back to the QWERTY position.
 
 | Action id | macOS | Linux | Prefix then |
 |---|---|---|---|
-| `palette.open` | Cmd+K | Ctrl+Shift+K | `:` |
-| `project.switcher` | Cmd+P | Ctrl+Shift+P | `p` |
+| `palette.open` | Cmd+K | Ctrl+K, Ctrl+Shift+K | `:` |
+| `project.switcher` | Cmd+P | Ctrl+P, Ctrl+Shift+P | `p` |
 | `project.open` ("Open project": the switcher listing only closed projects; picking one opens and activates it; also the rail's "Open project…" entry while a project is closed) | unbound | unbound | |
-| `project.goto.1..9` (label "Go to rail row N": row N of the rail across projects, tool tabs and background rows excluded; the id is kept so overrides still apply) | Cmd+1..9 | Ctrl+Shift+1..9 | `1..9` |
-| `tool.goto.1..9` (tool N of the rail's Tools section: open or focus; pressed again while in front, a tool with no project argument goes back with `nav.back`, one that takes a project asks for another project) | Cmd+Alt+1..9 | (unbound) | |
-| `inbox.open` (label "Open Now") | Cmd+0 | Ctrl+Shift+0 | `0` |
+| `project.goto.1..9` (label "Go to rail row N": row N of the rail across projects, tool tabs and background rows excluded; the id is kept so overrides still apply) | Cmd+1..9 | Ctrl+1..9 | `1..9` |
+| `tool.goto.1..9` (tool N of the rail's Tools section: open or focus; pressed again while in front, a tool with no project argument goes back with `nav.back`, one that takes a project asks for another project) | Cmd+Alt+1..9 | Ctrl+Alt+1..9 | |
+| `inbox.open` (label "Open Now") | Cmd+0 | Ctrl+0 | `0` |
 | `project.next` / `project.prev` (the next band's last row; from a global view: first / last project) | Cmd+Ctrl+] / [ | Ctrl+Shift+PageDown / PageUp | `)` / `(` |
 | `tab.next` / `tab.prev` (every rail row, across projects) | Cmd+Shift+] / [ | Ctrl+Shift+] / [ | `n` / `N` |
-| `session.new` | Cmd+T | Ctrl+Shift+T | `c` |
-| `pane.split_right` / `pane.split_down` | Cmd+D / Cmd+Shift+D | Ctrl+Shift+E / Ctrl+Shift+O | `%` / `"` |
-| `pane.focus_left/down/up/right` | Cmd+Opt+←↓↑→ | (prefix only) | `h j k l` / arrows |
-| `pane.zoom` | Cmd+Shift+Enter | Ctrl+Shift+Z | `z` |
-| `pane.close` | Cmd+W | Ctrl+Shift+W | `x` |
+| `session.new` | Cmd+T | Ctrl+T, Ctrl+Shift+T | `c` |
+| `pane.split_right` / `pane.split_down` | Cmd+D / Cmd+Shift+D | Ctrl+D / Ctrl+Shift+D | `%` / `"` |
+| `pane.focus_left/down/up/right` | Cmd+Opt+←↓↑→ | Ctrl+Alt+←↓↑→ | `h j k l` / arrows |
+| `pane.zoom` | Cmd+Shift+Enter | Ctrl+Shift+Enter | `z` |
+| `pane.close` | Cmd+W | Ctrl+W, Ctrl+Shift+W | `x` |
 | `pane.detach` ("Move pane to new window": the focused pane alone in its own OS window, a lone pane with its tab; in a detached window, its tab back to the main one; closing a detached window does the same, and detached windows come back with their geometry after a restart) | unbound | unbound | |
 | `tickets.open` (the Tickets view; with `project_id`, that project's Tickets tab) | Cmd+Shift+B | Ctrl+Shift+B | `t` |
 | `tickets.board` ("Open project board": the active project's Tickets tab as a board; palette only) | — | — | — |
 | `tickets.groom` ("Groom tickets": one ticket at a time across every bound tracker, mine and unassigned, triaged into my Next up list; palette only) | — | — | — |
 | `reviews.open` (the Reviews view; with `project_id`, that project's Reviews tab) | Cmd+Shift+R | Ctrl+Shift+R | `r` |
 | `tickets.overview` ("Open tickets and reviews side by side": a tab of the active project, my Tickets beside Reviews For me stacked over Reviews Mine; focused when already open; palette only) | — | — | — |
-| `attention.next` / `attention.prev` ("Next waiting", Mod+J: any project, cycling, in priority bands: Claude needs input, error or rate-limited, ready for review, feedback or red CI on my PRs, review requests blocking first; oldest first within a band; HUD `2/7 · needs input · SHOP-142`, or `nothing waiting` with `Enter` opening Up next / Tickets) | Cmd+J / Cmd+Shift+J | Ctrl+Shift+J / (prefix only) | `u` / `U` |
+| `attention.next` / `attention.prev` ("Next waiting", Mod+J: any project, cycling, in priority bands: Claude needs input, error or rate-limited, ready for review, feedback or red CI on my PRs, review requests blocking first; oldest first within a band; HUD `2/7 · needs input · SHOP-142`, or `nothing waiting` with `Enter` opening Up next / Tickets) | Cmd+J / Cmd+Shift+J | Ctrl+J / Ctrl+Shift+J | `u` / `U` |
 | `attention.peek` ("Peek waiting session": popover with the last 15 lines, a detected permission menu as `1`/`2`/`3` buttons and a reply field; `Tab` next needs-input session, `Mod+Enter` go to it, `Esc` back; also on hovering a rail row, a tab lamp or a Now row) | Cmd+Shift+Y | Ctrl+Shift+Y | `y` |
-| `nav.back` / `nav.forward` (jumplist of every focus change, 100 places) | Cmd+Ctrl+← / → | (prefix only) | `-` / `=` |
-| `work.menu` (work menu of the focused tab's work item, from any pane) | Cmd+. | Ctrl+Shift+. | `.` |
+| `nav.back` / `nav.forward` (jumplist of every focus change, 100 places) | Cmd+Ctrl+← / → | Ctrl+Alt+Shift+← / → | `-` / `=` |
+| `work.menu` (work menu of the focused tab's work item, from any pane) | Cmd+. | Ctrl+. | `.` |
 | `work.next`, `work.review_delta`, `work.review_diff`, `work.ship`, `work.mark_reviewed`, `work.edit_note`, `work.fix`, `work.rebase`, `work.rebase_continue`, `work.rebase_abort`, `work.rebase_ask_claude`, `work.conflicts`, `work.skip_step`, `work.force_push`, `work.rerequest_review`, `work.resolve_threads`, `work.go_claude`, `work.open_ticket`, `work.open_pr`, `work.finish`, `work.park`, `work.finish_merged` (palette "Work: …" on the focused item; `work.finish_merged` = "Finish all merged") | unbound | unbound | |
 | `work.start` (ticket views only, not in terminals) | Cmd+Enter | Ctrl+Enter | `s` |
 | `work.new` (New work item: task, `wip/` branch, Claude; FLOW §4.3) | Cmd+Shift+N | Ctrl+Shift+N | `w` |
 | `work.link` (Link to ticket… for the focused scratch item; palette only) | — | — | — |
 | `work.create_ticket` (Create ticket… for the focused scratch item: file it in the project tracker, then link it; palette only) | — | — | — |
-| `toast.run_last` (Run last toast action: the primary action of the newest toast still shown, e.g. "Opened PR #13" → Open; the chord is printed on its button) | Cmd+Shift+O | Ctrl+Shift+A | `o` |
+| `toast.run_last` (Run last toast action: the primary action of the newest toast still shown, e.g. "Opened PR #13" → Open; the chord is printed on its button) | Cmd+Shift+O | Ctrl+Shift+O | `o` |
 | `claude.setup` ("Set up with Claude": installs Kelta's MCP in Claude Code when needed and opens a Claude session in Home that sets up projects, accounts and sources; also in the onboarding) | unbound | unbound | |
 | `editor.send_selection` (editor pane) | Cmd+Shift+L | Ctrl+Shift+L | `@` |
 | `editor.quickfix_claude` (palette "Quickfix: files Claude touched": the focused tab's Claude `files_touched` become its nvim's quickfix list, `]q` / `[q`) | unbound | unbound | |
-| `terminal.search` | Cmd+F | Ctrl+Shift+F | `/` |
+| `terminal.search` | Cmd+F | Ctrl+F, Ctrl+Shift+F | `/` |
 | `terminal.copy` / `terminal.paste` | Cmd+C / Cmd+V | Ctrl+Shift+C / Ctrl+Shift+V | `[` / `]` |
-| `settings.open` | Cmd+, | Ctrl+Shift+, | `,` |
-| `rail.toggle` ("Toggle sidebar": the rail between full width and the icon column) | Cmd+B | Ctrl+Shift+S | `b` |
+| `settings.open` | Cmd+, | Ctrl+, | `,` |
+| `rail.toggle` ("Toggle sidebar": the rail between full width and the icon column) | Cmd+B | Ctrl+B | `b` |
 | `app.restart` (update banner Restart; asks first when a working Claude session would stop) | unbound | unbound | |
 | `window.toggle` (global) | via `kelta-ctl toggle` bound in the compositor/system | | |
 

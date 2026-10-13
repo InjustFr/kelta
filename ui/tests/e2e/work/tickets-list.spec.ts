@@ -107,7 +107,7 @@ test('a background run claim shows on the ticket row and follows report_progress
   );
 
   // Now lists the blocked run under Needs you, with its note.
-  await page.keyboard.press('Control+Shift+0');
+  await page.keyboard.press('Control+0');
   const nowRow = page.getByTestId('inbox-pane').locator('[data-row="w:wi-run-160"]');
   await expect(nowRow).toContainText('2 unresolved review findings');
   await expect(nowRow.locator('[data-attention]').first()).toHaveAttribute('data-attention', 'error');
