@@ -168,6 +168,7 @@ Principles: Linux follows the macOS set with Cmd → Ctrl (`Mod` = **Cmd** on ma
 | `nav.back` / `nav.forward` (jumplist of every focus change, 100 places) | Cmd+Ctrl+← / → | Ctrl+Alt+Shift+← / → | `-` / `=` |
 | `work.menu` (work menu of the focused tab's work item, from any pane) | Cmd+. | Ctrl+. | `.` |
 | `work.next`, `work.review_delta`, `work.review_diff`, `work.ship`, `work.mark_reviewed`, `work.edit_note`, `work.fix`, `work.rebase`, `work.rebase_continue`, `work.rebase_abort`, `work.rebase_ask_claude`, `work.conflicts`, `work.skip_step`, `work.force_push`, `work.rerequest_review`, `work.resolve_threads`, `work.go_claude`, `work.open_ticket`, `work.open_pr`, `work.finish`, `work.park`, `work.finish_merged` (palette "Work: …" on the focused item; `work.finish_merged` = "Finish all merged") | unbound | unbound | |
+| `work.story` ("Work: Story panel": shows or hides the focused work tab's Story panel, DESIGN §6.4) | Cmd+I | Ctrl+I, Ctrl+Shift+I | |
 | `work.start` (ticket views only, not in terminals) | Cmd+Enter | Ctrl+Enter | `s` |
 | `work.new` (New work item: task, `wip/` branch, Claude; FLOW §4.3) | Cmd+Shift+N | Ctrl+Shift+N | `w` |
 | `work.link` (Link to ticket… for the focused scratch item; palette only) | — | — | — |

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::ids::{PluginId, ProjectId, SessionId, WorkItemId};
 
 /// Current schema version (`schema_version(v)`); bumped by L3 migrations.
-pub const SCHEMA_VERSION: u32 = 17;
+pub const SCHEMA_VERSION: u32 = 18;
 
 /// Table names.
 pub mod tables {
@@ -73,7 +73,7 @@ pub struct LayoutRow {
     pub updated_at: String,
 }
 
-/// `sessions(id PK, project_id, kind_json, spec_json, name, work_item_id, restore_json, cwd, lifecycle, text_tail, updated_at)`.
+/// `sessions(id PK, project_id, kind_json, spec_json, name, work_item_id, restore_json, cwd, lifecycle, text_tail, updated_at, tasks_json)`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionRow {
     pub id: SessionId,
@@ -91,6 +91,9 @@ pub struct SessionRow {
     pub lifecycle: String,
     /// ≤ 200 lines of plain text.
     pub text_tail: Option<String>,
+    /// Claude's task list (`Vec<ClaudeTask>` JSON, #406); `None` when empty.
+    #[serde(default)]
+    pub tasks_json: Option<String>,
     pub updated_at: String,
 }
 

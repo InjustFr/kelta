@@ -442,6 +442,7 @@ pub struct SessionInfo { id, project_id, kind, name: String, title: Option<Strin
   pid: Option<u32>, exit_code: Option<i32>, work_item_id: Option<WorkItemId>, claude: Option<ClaudeMeta>,
   editor: Option<EditorMeta>, cols: u16, rows: u16, created_at: String /*RFC3339*/ }
 pub struct ClaudeMeta { session_uuid: String, model: Option<String>, preview: Option<String>, files_touched: Vec<PathBuf>, hooks_active: bool,
+  tasks: Vec<ClaudeTask{id: Option<String>, title, state: Pending|InProgress|Completed}> /*Claude's task list from its hooks, #406*/,
   usage: Option<ClaudeUsage> /*last statusline snapshot, PLUGINS §8*/, question: Option<ClaudeQuestion{question, options, body_html}> /*open MCP `ask`, #356*/,
   host: Option<ClaudeHost> /*Terminal|Multiplexer: Claude runs outside the pane, #347; absent = builtin*/ }
 pub struct EditorMeta { adapter: String, socket: Option<PathBuf> }
@@ -788,6 +789,7 @@ exit: waitpid WNOHANG every 10 ms up to 2 s (HANGUP_GRACE), then SIGKILL the chi
 | SessionEnd / PTY exit | Exited | — |
 | PostToolUse (matcher `*`, every tool) | `StatusChange.status = Unknown`: NeedsInput → Working (the permission prompt was answered, #278), else unchanged; `Edit\|Write\|MultiEdit`: `file_edited = tool_input.file_path` → bus `claude.file_edited` | Activity if pane not visible, on NeedsInput → Working |
 | PostToolUse `Workflow`, SubagentStart, SubagentStop | unchanged; feed the workflow view (§7.7) | — |
+| PostToolUse `TodoWrite` / `TaskCreate` / `TaskUpdate`; SessionStart `clear` | unchanged; `ClaudeMeta.tasks` (#406, `status::apply_tasks` via `session_claude_runs_hook`): `TodoWrite` replaces the list (`tool_input.todos[].content/status`), `TaskCreate` appends `tool_input.subject` as pending (id from `tool_response.task.id`), `TaskUpdate` sets `tool_input.status` / `subject` of task `taskId` (`deleted` removes it), `clear` empties it; unknown shapes are ignored. Published by `session.updated`, persisted in `sessions.tasks_json`, kept by a restore or restart | — |
 
 **Hooks-inactive fallback:** no SessionStart within 10 s of spawn (one-shot) → `hooks_active=false`, status source `Heuristic`: output → Working; BEL / OSC 9 / OSC 777 → NeedsInput; 3 s quiet after output (one-shot armed only by output) → Done. Hooks or not, input written to a Claude pane in NeedsInput (the keystroke answering a permission prompt; no hook fires for it) → Working, attention cleared; WaitingUser (`idle_prompt`) waits for UserPromptSubmit. Pane header shows "status hooks inactive · Fix" → Diagnostics.
 
@@ -988,7 +990,8 @@ Output older than the in-memory scrollback stays searchable and restorable witho
 schema_version(v)
 projects_open(project_id PK, ord, active)              -- open set + order; config lives in TOML
 layouts(project_id PK, json, rev, updated_at)
-sessions(id PK, project_id, kind_json, spec_json, name, work_item_id, restore_json, cwd, lifecycle, text_tail, updated_at)
+sessions(id PK, project_id, kind_json, spec_json, name, work_item_id, restore_json, cwd, lifecycle, text_tail, updated_at,
+         tasks_json /*v18*/)
 work_items(id PK, project_id, kind, ticket_json, review_json, repo_id, worktree, branch, base, claude_uuid, nvim_socket,
            tab_id, pr_url, state_json, session_ids_json /*'[]'*/, created_at, updated_at,
            review_due, claude_replied /*v2*/, title, pr_title_needs_key /*v3*/, sent_threads_json, rebase_json /*v4*/,
@@ -1008,7 +1011,7 @@ nudges(repo, number, at, PK(repo, number))                -- my last nudge per P
 next_up(ticket_key PK, project, ticket_json, rank, snoozed_until)   -- my Next up list and snoozes, #145 (v13)
 seen_tickets(ticket_key PK, at)                           -- tickets I have seen (the `New` badge, v13)
 ```
-Migrations: `crates/kelta-core/src/store/migrations.rs`, one per schema version (17 today, `kelta_proto::store::SCHEMA_VERSION`), each in its own transaction, recorded in `schema_version`.
+Migrations: `crates/kelta-core/src/store/migrations.rs`, one per schema version (18 today, `kelta_proto::store::SCHEMA_VERSION`), each in its own transaction, recorded in `schema_version`.
 
 `ui_state` keys: `tags` (`LocalTags`, #349), `start_options` (the last picked start options, a JSON map `PlanOptions.key` → values, #357), `claude.permission_mode` (the last mode a Claude session switched to, #277). Window geometry is in JSON files (§2.1); the WebGL probe result and the onboarding flag (`kelta.onboarding.done`) are in the webview's `localStorage`.
 

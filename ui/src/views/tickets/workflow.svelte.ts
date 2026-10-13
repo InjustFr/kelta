@@ -100,7 +100,8 @@ export async function runWorkflowOn(
 function announce(start: WorkflowStart, text: string): void {
   const args = { session_id: start.session.id };
   if (start.running) {
-    toasts.info(t('A workflow is already running here: opened it'));
+    // revealing moves to another view: the toast must outlive that
+    toasts.info(t('A workflow is already running here: opened it'), { view: null });
     void dispatch('session.reveal', args);
     return;
   }

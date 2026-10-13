@@ -4,8 +4,9 @@
 //! derives changes from terminal output (heuristic). Both are folded into the session state by the
 //! functions below, which are table-tested.
 
-use kelta_proto::hooks::names;
-use kelta_proto::model::{Attention, SessionStatus, StatusChange};
+use kelta_proto::hooks::{HookPayload, names};
+use kelta_proto::model::{Attention, ClaudeTask, ClaudeTaskState, SessionStatus, StatusChange};
+use serde_json::Value;
 
 /// Notification candidates; whether they fire is decided by [`crate::notifier`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -225,9 +226,171 @@ pub fn truncate_preview(s: &str) -> String {
     if t.chars().count() <= PREVIEW_MAX { t.to_owned() } else { t.chars().take(PREVIEW_MAX).collect() }
 }
 
+/// Fold a hook into Claude's task list (#406); true when it changed. `TodoWrite` replaces the list,
+/// `TaskCreate` appends, `TaskUpdate` changes one task, `SessionStart` `clear` empties it. Unknown
+/// tools and shapes leave it as is.
+pub fn apply_tasks(tasks: &mut Vec<ClaudeTask>, p: &HookPayload) -> bool {
+    let before = tasks.clone();
+    let input = p.tool_input.as_ref();
+    let field =
+        |v: Option<&Value>, k: &str| v.and_then(|v| v.get(k)).and_then(Value::as_str).map(str::to_owned);
+    let event = p.hook_event_name.as_str();
+    if event == names::SESSION_START && p.source.as_deref() == Some("clear") {
+        tasks.clear();
+    }
+    if event != names::POST_TOOL_USE {
+        return *tasks != before;
+    }
+    match p.tool_name.as_deref() {
+        Some("TodoWrite") => {
+            let todos = input.and_then(|i| i.get("todos")).and_then(Value::as_array);
+            let parsed = todos.and_then(|todos| {
+                todos
+                    .iter()
+                    .map(|t| {
+                        let state = task_state(&field(Some(t), "status")?)?;
+                        Some(ClaudeTask { id: None, title: field(Some(t), "content")?, state })
+                    })
+                    .collect::<Option<Vec<_>>>()
+            });
+            if let Some(list) = parsed {
+                *tasks = list;
+            }
+        }
+        Some("TaskCreate") => {
+            if let Some(title) = field(input, "subject") {
+                // Claude numbers its tasks from 1; the response carries the id `TaskUpdate` names.
+                let id = field(p.extra.get("tool_response").and_then(|r| r.get("task")), "id")
+                    .unwrap_or_else(|| (tasks.len() + 1).to_string());
+                tasks.push(ClaudeTask { id: Some(id), title, state: ClaudeTaskState::Pending });
+            }
+        }
+        Some("TaskUpdate") => {
+            let id = field(input, "taskId");
+            if let Some(i) = tasks.iter().position(|t| id.is_some() && t.id == id) {
+                match field(input, "status").as_deref() {
+                    Some("deleted") => {
+                        tasks.remove(i);
+                    }
+                    status => {
+                        if let Some(st) = status.and_then(task_state) {
+                            tasks[i].state = st;
+                        }
+                        if let Some(title) = field(input, "subject") {
+                            tasks[i].title = title;
+                        }
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    *tasks != before
+}
+
+fn task_state(s: &str) -> Option<ClaudeTaskState> {
+    match s {
+        "pending" => Some(ClaudeTaskState::Pending),
+        "in_progress" => Some(ClaudeTaskState::InProgress),
+        "completed" => Some(ClaudeTaskState::Completed),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+
+    fn hook(v: Value) -> HookPayload {
+        serde_json::from_value(v).unwrap()
+    }
+
+    fn tool(name: &str, input: Value) -> HookPayload {
+        hook(json!({ "hook_event_name": "PostToolUse", "tool_name": name, "tool_input": input }))
+    }
+
+    fn task(id: Option<&str>, title: &str, state: ClaudeTaskState) -> ClaudeTask {
+        ClaudeTask { id: id.map(Into::into), title: title.into(), state }
+    }
+
+    #[test]
+    fn todo_write_replaces_the_list() {
+        let mut tasks = vec![task(Some("1"), "old", ClaudeTaskState::Pending)];
+        let p = tool(
+            "TodoWrite",
+            json!({ "todos": [
+                { "content": "Read", "status": "completed", "activeForm": "Reading" },
+                { "content": "Write", "status": "in_progress", "activeForm": "Writing" },
+            ] }),
+        );
+        assert!(apply_tasks(&mut tasks, &p));
+        assert_eq!(
+            tasks,
+            vec![
+                task(None, "Read", ClaudeTaskState::Completed),
+                task(None, "Write", ClaudeTaskState::InProgress)
+            ]
+        );
+        assert!(!apply_tasks(&mut tasks, &p), "same list: no change");
+    }
+
+    #[test]
+    fn task_create_appends_and_task_update_changes_a_state() {
+        let mut tasks = vec![];
+        let mut create =
+            tool("TaskCreate", json!({ "subject": "Parse", "description": "d", "activeForm": "Parsing" }));
+        create.extra.insert("tool_response".into(), json!({ "task": { "id": "7", "subject": "Parse" } }));
+        assert!(apply_tasks(&mut tasks, &create));
+        // No response: the next number.
+        assert!(apply_tasks(&mut tasks, &tool("TaskCreate", json!({ "subject": "Test" }))));
+        assert_eq!(
+            tasks,
+            vec![
+                task(Some("7"), "Parse", ClaudeTaskState::Pending),
+                task(Some("2"), "Test", ClaudeTaskState::Pending)
+            ]
+        );
+
+        assert!(apply_tasks(
+            &mut tasks,
+            &tool("TaskUpdate", json!({ "taskId": "7", "status": "in_progress" }))
+        ));
+        assert_eq!(tasks[0].state, ClaudeTaskState::InProgress);
+        assert!(!apply_tasks(
+            &mut tasks,
+            &tool("TaskUpdate", json!({ "taskId": "99", "status": "completed" }))
+        ));
+        assert!(apply_tasks(&mut tasks, &tool("TaskUpdate", json!({ "taskId": "2", "status": "deleted" }))));
+        assert_eq!(tasks.len(), 1);
+    }
+
+    #[test]
+    fn unknown_tools_and_shapes_are_ignored() {
+        let mut tasks = vec![task(Some("1"), "a", ClaudeTaskState::Pending)];
+        for p in [
+            tool("Bash", json!({ "command": "ls" })),
+            tool("TodoWrite", json!({ "todos": "nope" })),
+            tool("TodoWrite", json!({ "todos": [{ "content": "x", "status": "weird" }] })),
+            tool("TaskCreate", json!({ "title": "no subject" })),
+            tool("TaskUpdate", json!({ "taskId": "1", "status": "weird" })),
+            tool("TaskUpdate", json!(null)),
+            hook(json!({ "hook_event_name": "SessionStart", "source": "resume" })),
+            hook(json!({ "hook_event_name": "Stop" })),
+        ] {
+            assert!(!apply_tasks(&mut tasks, &p), "{p:?}");
+        }
+    }
+
+    #[test]
+    fn clear_empties_the_list() {
+        let mut tasks = vec![task(None, "a", ClaudeTaskState::Completed)];
+        assert!(apply_tasks(
+            &mut tasks,
+            &hook(json!({ "hook_event_name": "SessionStart", "source": "clear" }))
+        ));
+        assert!(tasks.is_empty());
+    }
 
     #[test]
     fn preview_truncates_on_chars() {

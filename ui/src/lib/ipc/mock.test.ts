@@ -52,10 +52,10 @@ const PANE_KINDS = [
 ];
 
 describe('mock fixtures', () => {
-  it('has 3 projects + Home, 11 sessions, tickets for every provider, reviews and work items', () => {
+  it('has 3 projects + Home, 12 sessions, tickets for every provider, reviews and work items', () => {
     expect(MOCK_FIXTURES.projects.filter((p) => !p.builtin)).toHaveLength(3);
     expect(MOCK_FIXTURES.projects.filter((p) => p.builtin)).toHaveLength(1);
-    expect(MOCK_FIXTURES.sessions).toHaveLength(11);
+    expect(MOCK_FIXTURES.sessions).toHaveLength(12);
     const accounts = new Set(MOCK_FIXTURES.tickets.map((t) => t.ticket.ref.account));
     expect([...accounts].sort()).toEqual(['github-oss', 'gitlab-corp', 'jira-acme', 'redmine-corp']);
     expect(MOCK_FIXTURES.reviews.length).toBeGreaterThanOrEqual(5);

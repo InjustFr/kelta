@@ -21,7 +21,14 @@
       "model": "claude-sonnet-5",
       "preview": null,
       "files_touched": ["/Users/ada/code/shop-api.worktrees/SHOP-142/src/rate_limit.rs"],
-      "hooks_active": true
+      "hooks_active": true,
+      "tasks": [
+        { "id": "1", "title": "Read the rate limiter and its tests", "state": "completed" },
+        { "id": "2", "title": "Add a per-key token bucket", "state": "completed" },
+        { "id": "3", "title": "Return 429 with Retry-After", "state": "completed" },
+        { "id": "4", "title": "Cover the burst case in rate_limit_test.rs", "state": "in_progress" },
+        { "id": "5", "title": "Update the API docs", "state": "pending" }
+      ]
     },
     "editor": null,
     "cols": 120,
@@ -124,7 +131,8 @@
       "model": "claude-sonnet-5",
       "preview": "Allow Bash(cargo test)?",
       "files_touched": [],
-      "hooks_active": true
+      "hooks_active": true,
+      "tasks": []
     },
     "editor": null,
     "cols": 120,
@@ -203,7 +211,8 @@
       "model": "claude-sonnet-5",
       "preview": "Done: added the --json flag and tests. All 42 tests pass.",
       "files_touched": [],
-      "hooks_active": true
+      "hooks_active": true,
+      "tasks": []
     },
     "editor": null,
     "cols": 120,
@@ -278,11 +287,47 @@
       "model": "claude-sonnet-5",
       "preview": "Fixed the race in CartServiceTest: the clock is now injected. 3 files changed.",
       "files_touched": [],
-      "hooks_active": true
+      "hooks_active": true,
+      "tasks": []
     },
     "editor": null,
     "cols": 120,
     "rows": 40,
     "created_at": "2026-10-09T07:30:00Z"
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-000000000012",
+    "project_id": "billing",
+    "kind": {
+      "type": "claude"
+    },
+    "name": "retry spike",
+    "title": null,
+    "cwd": "/Users/ada/work/billing.worktrees/wip-retry-queue",
+    "status": "done",
+    "status_source": "hook",
+    "attention": "none",
+    "seen": true,
+    "lifecycle": "dormant",
+    "pid": null,
+    "exit_code": null,
+    "work_item_id": "0199a6b2-0000-7000-8000-00000000a005",
+    "claude": {
+      "session_uuid": "8d0f1c1e-5c43-4a43-9e57-0b7f3c1a0012",
+      "model": "claude-sonnet-5",
+      "preview": null,
+      "files_touched": [],
+      "hooks_active": true,
+      "tasks": [
+        { "id": "1", "title": "Sketch the retry queue table", "state": "completed" },
+        { "id": "2", "title": "Enqueue failed webhooks", "state": "completed" },
+        { "id": "3", "title": "Back off exponentially between attempts", "state": "in_progress" },
+        { "id": "4", "title": "Check the retry path against staging", "state": "pending" }
+      ]
+    },
+    "editor": null,
+    "cols": 120,
+    "rows": 40,
+    "created_at": "2026-10-09T08:00:00Z"
   }
 ]

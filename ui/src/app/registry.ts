@@ -35,7 +35,7 @@ export const paneRegistry: Record<RegisteredPaneKind, LazyComponent> = {
   reviews: () => import('../views/reviews/ReviewsPane.svelte'),
   review_detail: () => import('../views/reviews/ReviewDetailPane.svelte'),
   inbox: () => import('../views/inbox/InboxPane.svelte'),
-  work_item: () => import('../views/work/WorkItemPane.svelte'),
+  work_item: () => import('../views/work/StoryPanel.svelte'),
   settings: () => import('../views/settings/SettingsPane.svelte'),
   diagnostics: () => import('../views/diagnostics/DiagnosticsPane.svelte'),
   web: () => import('../views/web-tool/WebToolPane.svelte'),
@@ -46,15 +46,15 @@ export function paneComponent(kind: PaneKind): LazyComponent | null {
   return kind === 'empty' ? null : paneRegistry[kind];
 }
 
-/** Work tab components (a tab linked to a work item): `work` = its segment of the context bar, `brief` = the return strip under the bar. */
-export type TabHeaderKey = 'work' | 'brief';
+/** Work tab components (a tab linked to a work item): `work` = its segment of the context bar, `story` = the Story panel docked on its right. */
+export type TabHeaderKey = 'work' | 'story';
 export interface TabHeaderProps {
   projectId: string;
   workItemId: string;
 }
 export const tabHeaderRegistry: Record<TabHeaderKey, LazyComponent> = {
   work: () => import('../views/work/WorkContext.svelte'),
-  brief: () => import('../views/work/ReturnBrief.svelte'),
+  story: () => import('../views/work/StoryPanel.svelte'),
 };
 
 /** Sheets (modal side panels) opened through `ui.openSheet(key, props)`. */

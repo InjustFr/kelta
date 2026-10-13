@@ -38,6 +38,8 @@ export type * from './ClaudeRun';
 export type * from './ClaudeRunAgent';
 export type * from './ClaudeRunPhase';
 export type * from './ClaudeSettings';
+export type * from './ClaudeTask';
+export type * from './ClaudeTaskState';
 export type * from './ClaudeUsage';
 export type * from './Cleanup';
 export type * from './ClipboardKind';

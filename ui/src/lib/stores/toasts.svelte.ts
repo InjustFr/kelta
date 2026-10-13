@@ -10,7 +10,11 @@ export interface ToastEntry {
   id: number;
   toast: Toast;
   createdAt: number;
+  /** The view it was raised in (`viewKey()`); `null` = background work, tied to no view. */
+  view: string | null;
 }
+
+type PushOpts = { timeoutMs?: number; view?: string | null };
 
 const DEFAULT_TIMEOUT_MS: Record<Toast['level'], number> = { info: 5000, warn: 8000, error: 12000 };
 const MAX_TOASTS = 5;
@@ -18,13 +22,19 @@ const MAX_TOASTS = 5;
 export class ToastsStore {
   list = $state<ToastEntry[]>([]);
   #nextId = 1;
+  /** The view on screen, stamped on each toast (wired by ToastHost: the stores know no layout). */
+  where: () => string | null = () => null;
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- non-reactive bookkeeping
   #timers = new Map<number, ReturnType<typeof setTimeout>>();
 
-  /** Shows a toast. `timeoutMs: 0` keeps it until dismissed. Returns its id. */
-  push(toast: Toast, opts: { timeoutMs?: number } = {}): number {
+  /**
+   * Shows a toast. `timeoutMs: 0` keeps it until dismissed. `view` overrides the view it is tied to
+   * (`null`: none, for background work). Returns its id.
+   */
+  push(toast: Toast, opts: PushOpts = {}): number {
     const id = this.#nextId++;
-    this.list = [...this.list, { id, toast, createdAt: Date.now() }].slice(-MAX_TOASTS);
+    const view = opts.view === undefined ? this.where() : opts.view;
+    this.list = [...this.list, { id, toast, createdAt: Date.now(), view }].slice(-MAX_TOASTS);
     const timeout = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS[toast.level];
     if (timeout > 0) {
       // one-shot: auto-dismiss this toast
@@ -36,8 +46,8 @@ export class ToastsStore {
     return id;
   }
 
-  info(text: string): number {
-    return this.push({ level: 'info', text, action: null });
+  info(text: string, opts?: PushOpts): number {
+    return this.push({ level: 'info', text, action: null }, opts);
   }
 
   warn(text: string): number {
@@ -80,6 +90,13 @@ export class ToastsStore {
     this.list = this.list.filter((t) => t.id !== id);
   }
 
+  /** `view` is now on screen: closes the info toasts raised elsewhere. Errors, warnings and toasts with an action stay. */
+  leave(view: string): void {
+    for (const e of this.list)
+      if (e.view !== null && e.view !== view && e.toast.level === 'info' && !e.toast.action)
+        this.dismiss(e.id);
+  }
+
   clear(): void {
     for (const timer of this.#timers.values()) clearTimeout(timer);
     this.#timers.clear();
@@ -88,6 +105,6 @@ export class ToastsStore {
 
   apply(ev: UiEvent): void {
     // A toast asking a choice stays until answered.
-    if (ev.type === 'toast') this.push(ev.toast, ev.toast.secondary ? { timeoutMs: 0 } : {});
+    if (ev.type === 'toast') this.push(ev.toast, { view: null, ...(ev.toast.secondary && { timeoutMs: 0 }) });
   }
 }

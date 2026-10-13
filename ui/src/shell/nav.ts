@@ -266,6 +266,13 @@ export function currentTab(projectId: ProjectId | null = here()): Tab | null {
   return detached?.project_id === projectId ? findTab(l, detached.tab_id) : activeTab(l);
 }
 
+/** Where the user is, for `toasts.where`: the global view, else the project's tab; `null` before layouts load. */
+export function viewKey(): string | null {
+  if (ui.view) return ui.view;
+  const tab = currentTab();
+  return tab ? `${here()}/${tab.id}` : null;
+}
+
 export function focusedPane(projectId: ProjectId | null = here()): PaneNode | null {
   const tab = currentTab(projectId);
   if (!tab) return null;

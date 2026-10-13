@@ -3,7 +3,7 @@
   import { tabHeaderRegistry, type AnyComponent } from '$app/registry';
   import { dispatch } from '$lib/actions';
   import type { ProjectId, TabId } from '$lib/gen';
-  import { activeTab, findTab, nodeAt, resizeGutter, updateTab } from '$lib/layout';
+  import { activeTab, allPanes, findTab, nodeAt, resizeGutter, updateTab } from '$lib/layout';
   import { layout, projects } from '$lib/stores';
   import { Button, EmptyState, ErrorState, Spinner } from '$lib/ui';
 
@@ -36,14 +36,16 @@
   let width = $state(0);
   let height = $state(0);
 
-  const BriefComponent = $derived(lazyComponents.get('tabheader:brief').component as AnyComponent | null);
+  const StoryComponent = $derived(lazyComponents.get('tabheader:story').component as AnyComponent | null);
+  // The start saga's `work_item` pane is the Story panel already: no second one beside it.
+  const storyPane = $derived(!!tab && allPanes(tab.root).some((p) => p.content.kind === 'work_item'));
 
   $effect(() => {
     if (!current && !failure) void layout.ensure(projectId).catch(() => {});
   });
 
   $effect(() => {
-    if (tab?.work_item_id) lazyComponents.ensure('tabheader:brief', tabHeaderRegistry.brief);
+    if (tab?.work_item_id) lazyComponents.ensure('tabheader:story', tabHeaderRegistry.story);
   });
 
   const dragging = $derived(paneDrag.current?.projectId === projectId ? paneDrag.current : null);
@@ -149,54 +151,56 @@
       {/snippet}
     </EmptyState>
   {:else}
-    {#if tab.work_item_id && BriefComponent}
-      <BriefComponent {projectId} workItemId={tab.work_item_id} />
-    {/if}
-    <div class="panes" bind:clientWidth={width} bind:clientHeight={height} data-testid="panes">
-      {#each geometry.panes as placed (placed.pane.id)}
-        {@const zoomed = tab.zoomed_pane === placed.pane.id}
-        <PaneHost
-          {projectId}
-          tabId={tab.id}
-          node={placed.pane}
-          rect={placed.rect}
-          visible={!tab.zoomed_pane || zoomed}
-          focused={tab.focused_pane === placed.pane.id}
-          {zoomed}
-        />
-      {/each}
-      {#each geometry.gutters as g (`${g.path.join('.')}:${g.index}`)}
-        <GutterView
-          gutter={g}
-          areaWidth={width}
-          areaHeight={height}
-          value={ratioOf(g)}
-          onresize={(d) => resize(g, d)}
-        />
-      {/each}
-      {#if dragging}
-        <!-- Catches the drag over every pane (web views included) while a pane header is dragged. -->
-        <div
-          class="drop-layer"
-          role="presentation"
-          data-testid="pane-drop-layer"
-          ondragover={dragOver}
-          ondragleave={() => (paneDrag.over = null)}
-          ondrop={drop}
-        >
-          {#if paneDrag.over}
-            {@const a = paneDrag.over.area}
-            <div
-              class="drop-indicator"
-              data-testid="pane-drop-indicator"
-              data-zone={paneDrag.over.zone}
-              style:left="{a.x * 100}%"
-              style:top="{a.y * 100}%"
-              style:width="{a.w * 100}%"
-              style:height="{a.h * 100}%"
-            ></div>
-          {/if}
-        </div>
+    <div class="body">
+      <div class="panes" bind:clientWidth={width} bind:clientHeight={height} data-testid="panes">
+        {#each geometry.panes as placed (placed.pane.id)}
+          {@const zoomed = tab.zoomed_pane === placed.pane.id}
+          <PaneHost
+            {projectId}
+            tabId={tab.id}
+            node={placed.pane}
+            rect={placed.rect}
+            visible={!tab.zoomed_pane || zoomed}
+            focused={tab.focused_pane === placed.pane.id}
+            {zoomed}
+          />
+        {/each}
+        {#each geometry.gutters as g (`${g.path.join('.')}:${g.index}`)}
+          <GutterView
+            gutter={g}
+            areaWidth={width}
+            areaHeight={height}
+            value={ratioOf(g)}
+            onresize={(d) => resize(g, d)}
+          />
+        {/each}
+        {#if dragging}
+          <!-- Catches the drag over every pane (web views included) while a pane header is dragged. -->
+          <div
+            class="drop-layer"
+            role="presentation"
+            data-testid="pane-drop-layer"
+            ondragover={dragOver}
+            ondragleave={() => (paneDrag.over = null)}
+            ondrop={drop}
+          >
+            {#if paneDrag.over}
+              {@const a = paneDrag.over.area}
+              <div
+                class="drop-indicator"
+                data-testid="pane-drop-indicator"
+                data-zone={paneDrag.over.zone}
+                style:left="{a.x * 100}%"
+                style:top="{a.y * 100}%"
+                style:width="{a.w * 100}%"
+                style:height="{a.h * 100}%"
+              ></div>
+            {/if}
+          </div>
+        {/if}
+      </div>
+      {#if tab.work_item_id && StoryComponent && !storyPane}
+        <StoryComponent {projectId} tabId={tab.id} workItemId={tab.work_item_id} />
       {/if}
     </div>
   {/if}
@@ -211,9 +215,16 @@
     min-height: 0;
   }
 
+  .body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
   .panes {
     position: relative;
     flex: 1;
+    min-width: 0;
     min-height: 0;
     margin: calc(var(--k-gap) / 2);
     background: var(--k-bezel);

@@ -94,12 +94,16 @@ test.describe('layout', () => {
     await dispatch(page, 'pane.zoom');
     await expect(page.locator('[data-testid="pane"]:visible')).toHaveCount(1);
     await expect(page.getByTestId('gutter')).toHaveCount(0);
-    const full = await page.evaluate(() => {
-      const pane = document.querySelector('[data-testid="pane"]:not(.hidden)')!.getBoundingClientRect();
-      const area = document.querySelector('[data-testid="panes"]')!.getBoundingClientRect();
-      return { pane: pane.width, area: area.width };
-    });
-    expect(full.pane).toBeGreaterThan(full.area - 8);
+    // Polled: the Story panel's chunk may land and narrow the area meanwhile.
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const pane = document.querySelector('[data-testid="pane"]:not(.hidden)')!.getBoundingClientRect();
+          const area = document.querySelector('[data-testid="panes"]')!.getBoundingClientRect();
+          return pane.width - (area.width - 8);
+        }),
+      )
+      .toBeGreaterThan(0);
     await dispatch(page, 'pane.zoom');
     await expect(page.locator('[data-testid="pane"]:visible')).toHaveCount(2);
 

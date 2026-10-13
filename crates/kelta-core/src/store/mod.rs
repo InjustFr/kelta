@@ -247,7 +247,7 @@ pub mod q {
         let mut st = c
             .prepare(
                 "SELECT id, project_id, kind_json, spec_json, name, work_item_id, restore_json, cwd,
-                 lifecycle, text_tail, updated_at FROM sessions ORDER BY id",
+                 lifecycle, text_tail, updated_at, tasks_json FROM sessions ORDER BY id",
             )
             .map_err(db_err)?;
         let rows = st
@@ -264,6 +264,7 @@ pub mod q {
                     lifecycle: r.get(8)?,
                     text_tail: r.get(9)?,
                     updated_at: r.get(10)?,
+                    tasks_json: r.get(11)?,
                 })
             })
             .map_err(db_err)?;
@@ -273,11 +274,12 @@ pub mod q {
     pub fn session_put(c: &Connection, s: &SessionRow) -> R<()> {
         c.execute(
             "INSERT INTO sessions (id, project_id, kind_json, spec_json, name, work_item_id, restore_json,
-             cwd, lifecycle, text_tail, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+             cwd, lifecycle, text_tail, updated_at, tasks_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
              ON CONFLICT(id) DO UPDATE SET project_id = excluded.project_id, kind_json = excluded.kind_json,
              spec_json = excluded.spec_json, name = excluded.name, work_item_id = excluded.work_item_id,
              restore_json = excluded.restore_json, cwd = excluded.cwd, lifecycle = excluded.lifecycle,
-             text_tail = COALESCE(excluded.text_tail, sessions.text_tail), updated_at = excluded.updated_at",
+             text_tail = COALESCE(excluded.text_tail, sessions.text_tail), updated_at = excluded.updated_at,
+             tasks_json = excluded.tasks_json",
             params![
                 s.id.as_str(),
                 s.project_id.as_str(),
@@ -290,6 +292,7 @@ pub mod q {
                 s.lifecycle,
                 s.text_tail,
                 s.updated_at,
+                s.tasks_json,
             ],
         )
         .map(|_| ())
