@@ -41,10 +41,8 @@ export class LayoutStore {
       const { layout, scope } = projectId === GLOBAL ? { layout: saved, scope: null } : dropListTabs(saved);
       this.byProject = { ...this.byProject, [projectId]: layout };
       this.errors = { ...this.errors, [projectId]: null };
-      if (scope) {
-        this.#scheduleSave(projectId);
-        this.onListTabsClosed(scope);
-      }
+      if (layout !== saved) this.#scheduleSave(projectId);
+      if (scope) this.onListTabsClosed(scope);
       return layout;
     } catch (err) {
       this.errors = { ...this.errors, [projectId]: toKeltaError(err, 'layout_get') };

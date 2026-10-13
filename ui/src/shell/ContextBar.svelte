@@ -98,6 +98,7 @@
 
   /** The breadcrumb as text: the window title in native mode. */
   const title = $derived.by(() => {
+    if (ui.settings) return t('Settings');
     if (view) return VIEW_NAMES[view];
     if (!project) return 'Kelta';
     if (tool) return `${t('Tools')} › ${tool.label}`;

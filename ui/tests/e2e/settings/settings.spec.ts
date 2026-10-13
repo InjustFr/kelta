@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 
 import type * as Ipc from '$lib/ipc/commands';
 
+import { boot, dispatch } from '../shell/helpers';
+
 const HARNESS = '/tests/e2e/settings/harness.html';
 
 test.describe('settings pane', () => {
@@ -99,5 +101,49 @@ test.describe('settings pane', () => {
     await page.getByTestId('toml-only').getByRole('button', { name: 'Edit TOML' }).click();
     await expect(page.getByTestId('edit-toml-toggle')).toHaveText('Back to form');
     expect(errors).toEqual([]);
+  });
+});
+
+test.describe('settings over the window (#410)', () => {
+  test('⌘, opens Settings without a tab; Esc returns to the tab and pane', async ({ page }) => {
+    await boot(page, 'macos');
+    const where = () =>
+      page.evaluate(() => {
+        const l = window.__kelta!.stores.layout.get('shop')!;
+        const tab = l.tabs.find((t) => t.id === l.active_tab);
+        return { tabs: l.tabs.map((t) => t.id), active: l.active_tab, focused: tab?.focused_pane };
+      });
+    const before = await where();
+    await page.keyboard.press('Meta+Comma');
+    await expect(page.getByTestId('settings-pane')).toBeVisible();
+    await expect(page.getByTestId('workspace')).toHaveCount(0);
+    await expect(page.getByTestId('rail')).toBeVisible();
+    await expect(page.getByTestId('rail-settings')).toHaveAttribute('aria-current', 'page');
+    expect(await where()).toEqual(before);
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('settings-pane')).toHaveCount(0);
+    await expect(page.getByTestId('workspace')).toBeVisible();
+    expect(await where()).toEqual(before);
+
+    // ⌘, again closes it too.
+    await page.keyboard.press('Meta+Comma');
+    await expect(page.getByTestId('settings-pane')).toBeVisible();
+    await page.keyboard.press('Meta+Comma');
+    await expect(page.getByTestId('settings-pane')).toHaveCount(0);
+  });
+
+  test('deep links land on their section from the palette and from a banner action', async ({ page }) => {
+    await boot(page);
+    await page.keyboard.press('Control+Shift+K');
+    await page.getByTestId('palette-input').fill('settings keys');
+    await page.keyboard.press('Enter');
+    const current = page.locator('[data-testid="settings-pane"] nav [aria-current="page"]');
+    await expect(current).toHaveAttribute('data-section', 'keys');
+    // A banner's action dispatches the same deep link, with Settings already showing.
+    await dispatch(page, 'settings.open', { section: 'projects' });
+    await expect(current).toHaveAttribute('data-section', 'projects');
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('workspace')).toBeVisible();
   });
 });

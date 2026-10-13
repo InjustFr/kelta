@@ -212,7 +212,11 @@
   let overlayWasOpen = false;
   $effect(() => {
     const open =
-      ui.overlay !== null || ui.sheets.length > 0 || confirms.current !== null || prompts.current !== null;
+      ui.overlay !== null ||
+      ui.sheets.length > 0 ||
+      confirms.current !== null ||
+      prompts.current !== null ||
+      ui.settings !== null; // Esc out of Settings gives the keyboard back too
     if (overlayWasOpen && !open) {
       // Give the keyboard back to the focused terminal.
       queueMicrotask(() => {
@@ -321,7 +325,9 @@
       <Workspace projectId={detached.project_id} tabId={detached.tab_id} />
     {:else}
       <UpdateBanner />
-      {#if ui.view}
+      {#if ui.settings}
+        <GlobalHost view="settings" />
+      {:else if ui.view}
         <GlobalHost view={ui.view} />
       {:else if active}
         <Workspace projectId={active.id} />

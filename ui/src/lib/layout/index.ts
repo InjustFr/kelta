@@ -397,13 +397,16 @@ function listTabScope(tab: Tab): Scope | null {
 }
 
 /**
- * Closes a saved layout's list tabs (#409). `scope` is the last closed tab's, for the global lists
- * to show once; `null` when none was closed.
+ * Closes a saved layout's list tabs (#409) and Settings panes, which open over the window now
+ * (#410). `scope` is the last closed list tab's, for the global lists to show once; `null` when none
+ * was closed. The layout is returned as is when nothing was closed.
  */
 export function dropListTabs(layout: Layout): { layout: Layout; scope: Scope | null } {
   let scope: Scope | null = null;
   let next = layout;
   for (const tab of layout.tabs) {
+    for (const p of allPanes(tab.root))
+      if (p.content.kind === 'settings') next = closePaneInLayout(next, tab.id, p.id);
     const s = listTabScope(tab);
     if (!s) continue;
     scope = s;

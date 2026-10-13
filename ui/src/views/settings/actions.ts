@@ -1,4 +1,4 @@
-// settings.open (Mod+,): opens a Settings tab in the active project, or focuses the existing one.
+// settings.open (Mod+,): shows Settings over the window (#410), or closes it when it is showing.
 // Optional args: { section?: string } to land on a given section, { toml?: projectId } to land on
 // that project's raw TOML (the Edit TOML mode, for what the forms cannot edit), { source_id } to
 // bring that source's card into view in Settings → Sources.
@@ -6,8 +6,7 @@
 import { t } from '$lib/i18n/index.svelte';
 import { registerAction } from '$lib/actions';
 import * as ipc from '$lib/ipc/commands';
-import { findContent, focusPane, replacePaneContent, updateTab } from '$lib/layout';
-import { toasts, layout, projects, sessions } from '$lib/stores';
+import { toasts, sessions, ui } from '$lib/stores';
 
 import { activateProject } from '../../shell/nav';
 
@@ -37,44 +36,19 @@ export function takeTomlRequest(): string | null {
   return id;
 }
 
-registerAction('settings.open', async (args) => {
-  const projectId = projects.activeId ?? projects.home?.id ?? 'home';
+registerAction('settings.open', (args) => {
   const section = typeof args?.section === 'string' ? args.section : null;
-  // PaneContent::Settings only carries a section, so the TOML target travels beside it.
+  // The pane's content only carries a section, so the TOML and source targets travel beside it.
   tomlRequest = typeof args?.toml === 'string' ? args.toml : null;
   sourceRequest = typeof args?.source_id === 'string' ? args.source_id : null;
-  try {
-    await layout.ensure(projectId);
-    await activateProject(projectId); // from a global view the pane would open out of sight
-    const current = layout.get(projectId);
-    const open = current && findContent(current, (c) => c.kind === 'settings');
-    if (open) {
-      // A new content object re-runs the pane's section effect, which also takes the TOML request.
-      const retarget = section !== null || tomlRequest !== null || sourceRequest !== null;
-      layout.update(projectId, (l) => {
-        const next = retarget
-          ? updateTab(l, open.tabId, (t) => ({
-              ...t,
-              root: replacePaneContent(t.root, open.paneId, { kind: 'settings', section }),
-            }))
-          : l;
-        return focusPane(next, open.tabId, open.paneId);
-      });
-      if (sourceRequest !== null) sourceListeners.forEach((fn) => fn());
-      return;
-    }
-    layout.open(projectId, {
-      content: { kind: 'settings', section },
-      placement: 'new_tab',
-      focus: true,
-      tab_title: 'Settings',
-      work_item_id: null,
-    });
-  } catch (err) {
-    tomlRequest = null;
-    sourceRequest = null;
-    toasts.error(err, t('Could not open settings'));
+  const wasOpen = ui.settings !== null;
+  if (wasOpen && section === null && tomlRequest === null && sourceRequest === null) {
+    ui.settings = null; // ⌘, again closes it
+    return;
   }
+  // A new object re-runs an open pane's section effect, which also takes the TOML request.
+  ui.settings = { section };
+  if (wasOpen && sourceRequest !== null) sourceListeners.forEach((fn) => fn());
 });
 
 // The startup offer of Kelta's MCP in Claude Code (toast: Install / Never; dismissing = Not now).
