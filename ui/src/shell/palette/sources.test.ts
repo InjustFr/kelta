@@ -187,7 +187,7 @@ describe('plugin subject actions in the palette', () => {
 describe('palette sources', () => {
   it('lists the sessions of every project with their status, needing-input first', () => {
     const items = sessionItems();
-    expect(items).toHaveLength(11);
+    expect(items).toHaveLength(12);
     // Sessions of a work item are told apart by its key.
     expect(items.map((i) => i.label)).toContain('SHOP-142 claude');
     expect(items[0]!.detail).toContain('Needs input');

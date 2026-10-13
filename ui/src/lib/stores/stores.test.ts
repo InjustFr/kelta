@@ -112,7 +112,7 @@ describe('SessionsStore', () => {
   it('loads all sessions and filters by project', async () => {
     const store = new SessionsStore();
     await store.load();
-    expect(store.all).toHaveLength(11);
+    expect(store.all).toHaveLength(12);
     expect(store.forProject('shop')).toHaveLength(5);
     expect(store.needingInput.map((s) => s.project_id)).toEqual(['billing']);
     expect(store.next(['shop', 'billing'], null)?.project_id).toBe('billing');

@@ -73,6 +73,9 @@ async fn seed(root: &std::path::Path) -> Seeded {
         .await
         .unwrap();
     let setup = h.core.session_spawn(req(SessionKind::Setup, None, &[], RestorePolicy::None)).await.unwrap();
+    // Claude's task list (#406)
+    let task = serde_json::json!({ "hook_event_name": "PostToolUse", "tool_name": "TaskCreate", "tool_input": { "subject": "Ship it" } });
+    h.core.session_claude_runs_hook(&claude.id, &serde_json::from_value(task).unwrap());
     // OSC 7 moves the shell
     let cwd = root.join("home");
     h.term.emit(&shell.id, TerminalEvent::Cwd(cwd));
@@ -130,6 +133,12 @@ async fn dormant_sessions_spawn_on_first_attach() {
     h.core.session_attach(&seeded.claude, 80, 24, Box::new(RecordingSink::new())).await.unwrap();
     let args = term.with_session(&seeded.claude, |s| s.spec.args.clone()).unwrap();
     assert_eq!(args, vec!["-n", "x", "--resume", "U-1"]);
+    let tasks = h.core.session_get(&seeded.claude).unwrap().claude.unwrap().tasks;
+    assert_eq!(
+        tasks.iter().map(|t| t.title.as_str()).collect::<Vec<_>>(),
+        ["Ship it"],
+        "the task list survives"
+    );
 
     // nvim → -S <session file>
     h.core.session_attach(&seeded.editor, 80, 24, Box::new(RecordingSink::new())).await.unwrap();

@@ -308,7 +308,8 @@ pub trait CoreApi: Send + Sync {
         body_md: Option<String>,
     ) -> Result<(), KeltaError>;
     /// Every hook of a session, for its Claude `Workflow` runs (#272): core re-reads the runs the
-    /// hook concerns and emits `workflow.updated`. Never fails: the files are Claude internals.
+    /// hook concerns and emits `workflow.updated`; and for its task list (#406, `ClaudeMeta.tasks`).
+    /// Never fails: the files are Claude internals.
     fn session_claude_runs_hook(&self, _id: &SessionId, _payload: &crate::hooks::HookPayload) {}
     /// The last permission mode a Claude session switched to (#277): sessions whose profile sets
     /// none start in it; `None` = none seen, Claude's own default applies.
