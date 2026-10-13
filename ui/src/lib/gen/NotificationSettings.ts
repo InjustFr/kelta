@@ -20,4 +20,8 @@ only_when_unfocused: boolean,
 /**
  * `"HH:MM-HH:MM"` local time, or empty.
  */
-quiet_hours: string, };
+quiet_hours: string, 
+/**
+ * Focus mode still lets a blocked Claude notify.
+ */
+focus_allow_blocked: boolean, };

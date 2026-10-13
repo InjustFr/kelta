@@ -6,6 +6,7 @@ import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { findContent } from '$lib/layout';
 
+import { LOOP_SHIPPED } from '../onboarding/firstRun';
 import { globalContent, loadGlobalLayout, persistPaneContent } from '../work/nav';
 import type { SessionInfo, Settings } from '$lib/gen';
 import {
@@ -43,6 +44,7 @@ beforeEach(async () => {
   layout.byProject = {};
   work.git = {};
   toasts.clear();
+  localStorage.clear();
   // Now lists my tickets only: SHOP-155 (a work item's ticket) must be mine for its title to resolve.
   const flaky = mock.state.tickets.find((t) => t.ticket.ref.key === 'SHOP-155');
   if (flaky) flaky.ticket.assignee = { id: 'u-ada', name: 'Ada Lovelace', login: 'ada', avatar_url: null };
@@ -510,6 +512,22 @@ describe('Now', () => {
     expect(within(row).getByText('A MEPP')).toBeTruthy();
   });
 
+  it('with a project and a source, an empty Queue shows Your loop at "Start work"; after a ship, the plain empty state', async () => {
+    localStorage.clear();
+    mock.state.tickets = [];
+    mock.state.reviews = [];
+    sessions.byId = {};
+    work.byId = {};
+    const first = mountNow();
+    const loop = await screen.findByTestId('your-loop');
+    expect(loop.querySelector('[aria-current="step"]')?.textContent).toContain('Start work on a ticket');
+    first.unmount();
+    localStorage.setItem(LOOP_SHIPPED, '1');
+    mountNow();
+    expect(await screen.findByText('Nothing needs you right now')).toBeTruthy();
+    expect(screen.queryByTestId('your-loop')).toBeNull();
+  });
+
   it('with no ticket source: a notice above the list, the empty state when Now is empty', async () => {
     (mock.state.settings.value as unknown as Settings).sources = [];
     settings.effective = {};
@@ -518,15 +536,24 @@ describe('Now', () => {
     expect(ui.sheet).toMatchObject({ key: 'tracker.source_picker', props: {} });
     unmount();
     ui.sheets = [];
+    localStorage.clear(); // the fixtures' shipped item set the flag
     mock.state.tickets = [];
     mock.state.reviews = [];
     sessions.byId = {};
     work.byId = {};
+    const first = mountNow();
+    // First run (#422): Your loop, its current step (the source) with the board picker.
+    const loop = await screen.findByTestId('your-loop');
+    expect(loop.querySelector('[aria-current="step"]')?.textContent).toContain('Connect a ticket source');
+    expect(screen.queryByTestId('now-no-source')).toBeNull();
+    await fireEvent.click(within(loop).getByRole('button', { name: 'Pick a board' }));
+    expect(ui.sheet).toMatchObject({ key: 'tracker.source_picker', props: {} });
+    first.unmount();
+    // Once a first item has shipped the loop never shows again.
+    localStorage.setItem(LOOP_SHIPPED, '1');
     mountNow();
     expect(await screen.findByText('Add a ticket source: pick a board')).toBeTruthy();
-    expect(screen.queryByTestId('now-no-source')).toBeNull();
-    await fireEvent.click(screen.getByRole('button', { name: 'Pick a board' }));
-    expect(ui.sheet).toMatchObject({ key: 'tracker.source_picker', props: {} });
+    expect(screen.queryByTestId('your-loop')).toBeNull();
   });
 
   it('shows an error state when nothing loads', async () => {

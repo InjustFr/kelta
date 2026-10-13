@@ -6,11 +6,13 @@ import { sheetRegistry } from '$app/registry';
 import type { ActionButtonDef, PaneContent, PluginInfo, ScreenDef, TemplateCtx } from '$lib/gen';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { layout, plugins, projects, sessions, settings, tools, ui, work } from '$lib/stores';
+import { layout, plugins, projects, reviews, sessions, settings, tools, ui, work } from '$lib/stores';
 import { idle } from '$lib/stores/loadable';
 
 import '../actions';
 import '../../views/tools/actions';
+import { takeKeyRequest } from '../../views/settings/actions';
+import { flushJump, noteFocus, noteRecent, RECENT_CAP, recentPlaces } from '../jumplist';
 import { rank } from './fuzzy';
 import Switcher from './Switcher.svelte';
 import {
@@ -19,7 +21,9 @@ import {
   commandItems,
   GROUP_ORDER,
   itemText,
+  parseQuery,
   projectItems,
+  recentItems,
   sessionItems,
   workItems,
   settingsItems,
@@ -390,5 +394,74 @@ describe('palette sources', () => {
     for (const g of GROUP_ORDER) expect(GROUP_ORDER.includes(g)).toBe(true);
     const hits = rank(all, 'shop claude', itemText);
     expect(hits[0]!.group).toBe('Sessions');
+  });
+});
+
+describe('recent places, pull requests, settings keys and prefixes (#420)', () => {
+  const ticketPane = (key: string): PaneContent =>
+    ({ kind: 'ticket_detail', ticket: { account: 'jira-acme', key, id: key } }) as PaneContent;
+
+  it('lists the last places visited, most recent first, reopening a ticket no list holds', async () => {
+    const session = sessions.all[0]!;
+    noteRecent({ id: `session:${session.id}`, label: 'x' });
+    noteRecent({ id: 'setting:keys', label: 'keys' });
+    focus(ticketPane('SHOP-7'));
+    noteFocus({ project: projects.activeId!, tab: 'tab-1', pane: 'pane-1' });
+    flushJump();
+    noteRecent({ id: 'work:gone', label: 'finished' });
+
+    expect(
+      recentPlaces()
+        .map((r) => r.id)
+        .slice(0, 4),
+    ).toEqual(['work:gone', 'ticket:jira-acme:SHOP-7', 'setting:keys', `session:${session.id}`]);
+    const items = recentItems(buildItems());
+    // a work item no longer listed drops out; the others keep their item's label and run
+    expect(items.slice(0, 3).map((i) => [i.group, i.id, i.label])).toEqual([
+      ['Recent', 'recent:ticket:jira-acme:SHOP-7', 'T'],
+      ['Recent', 'recent:setting:keys', 'Settings: Keys'],
+      [
+        'Recent',
+        `recent:session:${session.id}`,
+        sessionItems().find((i) => i.id === `session:${session.id}`)!.label,
+      ],
+    ]);
+
+    focus({ kind: 'empty' });
+    await items[0]!.run();
+    const tabs = layout.get(projects.activeId!)!.tabs;
+    expect(tabs.at(-1)!.root).toMatchObject({ type: 'pane', content: ticketPane('SHOP-7') });
+  });
+
+  it('keeps the last 8 places', () => {
+    for (let i = 0; i < RECENT_CAP + 3; i += 1) noteRecent({ id: `setting:s${i}`, label: '' });
+    expect(recentPlaces()).toHaveLength(RECENT_CAP);
+    expect(recentPlaces()[0]!.id).toBe(`setting:s${RECENT_CAP + 2}`);
+  });
+
+  it('finds a pull request by its number', async () => {
+    await reviews.load({ kind: 'all' }, 'team');
+    const hit = rank(buildItems(), '311', itemText)[0]!;
+    expect(hit).toMatchObject({ group: 'Pull requests', id: 'review:github-acme:acme/shop-api#311' });
+  });
+
+  it('finds a settings key by its label and opens Settings at that key', async () => {
+    await settings.loadSchema();
+    const hit = rank(buildItems(), 'wip limit', itemText)[0]!;
+    expect(hit).toMatchObject({ group: 'Settings', id: 'setting-key:tickets.wip_limit', label: 'Wip limit' });
+    expect(hit.detail).toContain('Soft WIP limit');
+    await import('../../views/settings/actions');
+    await hit.run();
+    expect(ui.settings).toEqual({ section: 'worktree' });
+    expect(takeKeyRequest()).toBe('tickets.wip_limit');
+    ui.settings = null;
+  });
+
+  it('prefixes narrow the query to their group', () => {
+    expect(parseQuery('#311')).toEqual({ groups: ['Tickets'], text: '311' });
+    expect(parseQuery('! 311')).toEqual({ groups: ['Pull requests'], text: '311' });
+    expect(parseQuery('>split')).toEqual({ groups: ['Actions', 'Commands', 'Tools'], text: 'split' });
+    expect(parseQuery(', wip limit ')).toEqual({ groups: ['Settings'], text: 'wip limit' });
+    expect(parseQuery(' wip limit')).toEqual({ groups: null, text: 'wip limit' });
   });
 });

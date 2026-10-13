@@ -45,6 +45,30 @@ test.describe('palette', () => {
     await expect(page.getByTestId('palette')).toHaveCount(0);
   });
 
+  test('finds pull requests and settings keys, then lists them under Recent (#420)', async ({ page }) => {
+    await boot(page);
+    await page.keyboard.press('Control+Shift+K');
+    const input = page.getByTestId('palette-input');
+    const first = page.getByTestId('palette-item').first();
+    await input.fill('311');
+    await expect(first).toContainText('acme/shop-api#311');
+    await input.fill('!311');
+    await expect(first).toContainText('acme/shop-api#311');
+    await input.fill(',settings keys');
+    await expect(first).toContainText('Settings: Keys');
+    await input.fill('wip limit');
+    await expect(first).toContainText('Wip limit');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('[data-testid="field"][data-path="tickets.wip_limit"]')).toBeVisible();
+    await expect(page.getByRole('searchbox', { name: 'Search settings' })).toHaveValue('tickets.wip_limit');
+
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Control+Shift+K');
+    await expect(input).toHaveValue('');
+    await expect(page.getByTestId('palette').locator('.group').first()).toHaveText('Recent');
+    await expect(first).toContainText('Settings:');
+  });
+
   test('searches tickets through tracker_search', async ({ page }) => {
     await boot(page);
     await page.keyboard.press('Control+Shift+K');

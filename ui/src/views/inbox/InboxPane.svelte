@@ -96,6 +96,8 @@
   import { waitingChip } from '../reviews/nudge';
   import FilterBar from '../filters/FilterBar.svelte';
   import { clearAll, commonFilters, noMatch } from '../filters/filters';
+  import { loopDone, loopShipped } from '../onboarding/firstRun';
+  import YourLoop from '../onboarding/YourLoop.svelte';
 
   let { focused }: PaneProps<'inbox'> = $props();
 
@@ -110,6 +112,10 @@
   /** No ticket source at all: Now says so and offers the source picker. */
   const noSource = $derived(settings.hasSources() === false);
   const pickBoard = () => ui.openSheet('tracker.source_picker', {});
+  /** First run (#422): the loop's steps from real state, until a first item has shipped. */
+  const loop = $derived(loopDone(projects.list, settings.hasSources(), work.all));
+  // Steps 3-5 (start, review, ship) are part of the loop: it stays until a first item has shipped.
+  const showLoop = $derived(!loop.ship && !loopShipped());
 
   function refresh(): void {
     void refreshNow(true);
@@ -874,7 +880,9 @@
         <button type="button" class="k-link" onclick={pickBoard}>{t('Pick a board')}</button>
       </div>
     {/if}
-    {#if lines.length === 0 && noSource && activeFilters.length === 0}
+    {#if lines.length === 0 && showLoop && activeFilters.length === 0}
+      <YourLoop done={loop} />
+    {:else if lines.length === 0 && noSource && activeFilters.length === 0}
       <EmptyState icon="ticket" title={t('Add a ticket source: pick a board')}>
         {#snippet actions()}<Button variant="primary" onclick={pickBoard}>{t('Pick a board')}</Button
           >{/snippet}

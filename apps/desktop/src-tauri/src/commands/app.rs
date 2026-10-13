@@ -106,6 +106,12 @@ pub async fn notify_test(core: State<'_, Arc<Core>>) -> Res<()> {
     core.notify_test().await
 }
 
+/// Focus mode on or off (#421); off returns the titles of the notifications it held.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn notify_focus(core: State<'_, Arc<Core>>, on: bool) -> Res<Vec<String>> {
+    Ok(core.notify_focus(on))
+}
+
 /// Kelta's MCP in Claude Code (Settings → Claude): `None` = Claude Code not found.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn claude_mcp_status(core: State<'_, Arc<Core>>) -> Res<Option<bool>> {

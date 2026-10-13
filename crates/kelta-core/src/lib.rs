@@ -214,6 +214,8 @@ pub struct Core {
     pub(crate) outside: Mutex<std::collections::BTreeMap<String, kelta_proto::model::OutsideSession>>,
     /// Startup toasts held until `app_ready`: the bridge drops events while no window listens.
     boot_toast: Mutex<Vec<Toast>>,
+    /// Focus mode (#421, `notify_focus`): `Some` = on, with the titles of the notifications it held.
+    pub(crate) focus: Mutex<Option<Vec<String>>>,
     started: AtomicBool,
     start_services: bool,
     install_ctl: bool,
@@ -375,6 +377,7 @@ impl Core {
                 claude_mode: Mutex::new(None),
                 outside: Mutex::default(),
                 boot_toast: Mutex::default(),
+                focus: Mutex::default(),
                 started: AtomicBool::new(false),
                 start_services,
                 install_ctl,
@@ -629,6 +632,17 @@ impl Core {
             project_id: None,
             session_id: None,
         })
+    }
+
+    /// `notify_focus` (#421): focus mode holds desktop notifications but blocked Claude ones; leaving
+    /// it returns the titles held, for the UI's summary.
+    pub fn notify_focus(&self, on: bool) -> Vec<String> {
+        let mut focus = self.focus.lock();
+        let held = focus.take().unwrap_or_default();
+        if on {
+            *focus = Some(Vec::new());
+        }
+        held
     }
 
     pub(crate) fn emit(&self, ev: UiEvent) {
