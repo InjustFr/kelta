@@ -100,8 +100,10 @@ A workflow is a task for Claude that runs in the background in its own tab. Kelt
 `~/.claude/workflows/`. On a ticket, `w` runs one: Kelta claims the ticket for it, starts Claude in a new tab and
 tells it to run that workflow on the ticket. The run reports its phase, and the ticket's row shows it.
 
-The rail's **Workflows** section lists the current run of each Claude session: its phase while it runs, **Needs
-input** when Claude asks you something, then how it ended. Click a row for the session's runs.
+A run that claimed a ticket shows its phase on that ticket: its row in Now, and its tab's row in the rail. Any
+other running run shows under its session's row in the rail (`<workflow> · <phase>`, `+N` when the session runs
+several). Click that line, or the `⚙` chip of the context bar, for the session's runs: they open beside its
+terminal, in the same tab, so you can follow the run and talk to Claude at once.
 
 **Workflows from your config**: a prompt or a slash command, in `config.toml`:
 

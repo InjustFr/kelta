@@ -269,6 +269,7 @@ pub fn focus_pane(l: &mut Layout, tab_id: &TabId, pane_id: &PaneId) {
 pub fn default_title(c: &PaneContent) -> String {
     match c {
         PaneContent::Terminal { .. } => "Terminal".into(),
+        PaneContent::ClaudeRuns { .. } => "Workflow runs".into(),
         PaneContent::Web { .. } => "Web".into(),
         PaneContent::PluginScreen { screen_id, .. } => screen_id.clone(),
         PaneContent::Tickets { mode, .. } => {

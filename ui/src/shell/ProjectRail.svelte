@@ -14,6 +14,7 @@
     toasts,
     tools,
     ui,
+    work,
     type GlobalView,
   } from '$lib/stores';
   import { resolveProjectColor } from '$lib/theme';
@@ -24,7 +25,7 @@
   import { jumpOutside, nowSummary, refreshNow } from '../views/inbox/now';
   import { outsidePhase } from '../views/work/phase';
   import { confirms } from './confirm.svelte';
-  import { chordFor, currentRun, runState, toolIcon } from './labels';
+  import { chordFor, runLine, toolIcon } from './labels';
   import {
     activateProject,
     attachTab,
@@ -33,6 +34,7 @@
     detachTab,
     focusedPane,
     focusPaneById,
+    openRuns,
     isToolTab,
     liveSessionsOfTab,
     openView,
@@ -77,14 +79,8 @@
     if (tools.byProject[toolsOf] === undefined) void tools.load(toolsOf);
   });
 
-  // Each session's current Claude workflow run (#377); a closed session drops its runs.
-  const runs = $derived(
-    Object.entries(sessions.runs).flatMap(([id, list]) => {
-      const s = sessions.get(id);
-      const run = currentRun(list);
-      return s && run ? [{ s, run, ...runState(run, s) }] : [];
-    }),
-  );
+  // Background runs' claims on tickets (#392): a claimed run shows on its ticket, not on its session's row.
+  const claims = $derived(work.all.flatMap((w) => (w.run ? [w.run] : [])));
   // Runs a Claude session started before this window listened (once per session; events keep them current).
   $effect(() => {
     for (const s of sessions.all)
@@ -367,6 +363,22 @@
 {/snippet}
 
 <!-- The muted `⌘N` / `⌥⌘N` index of a row, when that chord is bound. -->
+<!-- A row's workflow run (#392): opens the session's runs beside its terminal. -->
+{#snippet runRow(run: { text: string; sessionId: string }, label: string)}
+  <li class="row">
+    <button
+      type="button"
+      class="item instance"
+      title={`${label} › ${t('Workflow runs of this session')}`}
+      data-testid="rail-run"
+      data-session-id={run.sessionId}
+      onclick={() => void openRuns(run.sessionId)}
+    >
+      <span class="text"><span class="name">└ {run.text}</span></span>
+    </button>
+  </li>
+{/snippet}
+
 {#snippet digit(id: string, text: string)}
   {@const c = chordFor(id)}
   {#if c}<span class="index k-num" title={formatChord(c).join('')} aria-hidden="true">{text}</span>{/if}
@@ -490,6 +502,11 @@
               {@const active = isFront(p.id, tab.id)}
               {@const label = rowLabel(tab)}
               {@const over = rowOver === tab.id}
+              {@const run = runLine(
+                workItemOfTab(tab)?.run,
+                liveSessionsOfTab(tab).flatMap((s) => sessions.runs[s.id] ?? []),
+                claims,
+              )}
               <li
                 class="row"
                 class:over={over && rowDrag && rowDrag.tab !== tab.id}
@@ -555,6 +572,7 @@
                   onclick={() => void requestCloseTab(p.id, tab.id)}
                 />
               </li>
+              {#if run}{@render runRow(run, label)}{/if}
             {/each}
             {#each backgroundSessions(p.id) as s (s.id)}
               <li class="row">
@@ -573,6 +591,8 @@
                   <span class="text"><span class="name">{s.name} · {t('background')}</span></span>
                 </button>
               </li>
+              {@const run = runLine(null, sessions.runs[s.id] ?? [], claims)}
+              {#if run}{@render runRow(run, s.name)}{/if}
             {/each}
           </ul>
         </section>
@@ -592,32 +612,6 @@
             data-testid="rail-reopen">{t('Open project…')}</Button
           >
         </div>
-      {/if}
-
-      {#if runs.length > 0}
-        <section class="band tools" aria-label={t('Workflows')} data-testid="rail-workflows">
-          <h2 class="tools-heading">{t('Workflows')}</h2>
-          <ul class="rows">
-            {#each runs as r (r.run.run_id)}
-              <li class="row">
-                <button
-                  type="button"
-                  class="item tab-row"
-                  title={`${r.s.name} › ${t('Workflow runs of this session')}`}
-                  data-testid="rail-workflow"
-                  data-run-id={r.run.run_id}
-                  data-attention={r.lamp}
-                  onclick={() => ui.openSheet('claude_runs', { sessionId: r.s.id })}
-                >
-                  <span class="socket" aria-hidden="true"><Lamp level={r.lamp} /></span>
-                  <span class="kind" aria-hidden="true"><Icon name="bot" size={14} /></span>
-                  <span class="text"><span class="name">{r.run.name ?? t('workflow')} · {r.label}</span></span
-                  >
-                </button>
-              </li>
-            {/each}
-          </ul>
-        </section>
       {/if}
 
       {#if sessions.elsewhere.length > 0}

@@ -469,6 +469,8 @@ export function defaultTitle(content: PaneContent): string {
   switch (content.kind) {
     case 'terminal':
       return msg('Terminal');
+    case 'claude_runs':
+      return msg('Workflow runs');
     case 'web':
       return msg('Web');
     case 'plugin_screen':

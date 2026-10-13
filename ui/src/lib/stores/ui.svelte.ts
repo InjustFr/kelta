@@ -22,7 +22,6 @@ export type SheetKey =
   | 'tracker.source_picker'
   | 'tickets.move'
   | 'workflow_run'
-  | 'claude_runs'
   | 'groom';
 /** `reopen`: the switcher listing closed projects only (#363). */
 export type OverlayKey = 'palette' | 'switcher' | 'reopen';

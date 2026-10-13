@@ -24,7 +24,9 @@ import {
   allPanes,
   closePaneInLayout,
   closeTab,
+  contentEquals,
   detachPane,
+  findContent,
   findPane,
   findSession,
   focusPane,
@@ -319,6 +321,27 @@ export async function revealSession(sessionId: SessionId): Promise<boolean> {
       work_item_id: s.work_item_id,
     });
   }
+  return true;
+}
+
+/** A session's workflow runs (#392): a pane split right of its terminal, in its tab; open again = focus it. */
+export async function openRuns(sessionId: SessionId): Promise<boolean> {
+  const projectId = sessions.get(sessionId)?.project_id;
+  if (!projectId || !(await revealSession(sessionId))) return false;
+  const l = layout.get(projectId);
+  const loc = l ? findSession(l, sessionId) : null;
+  if (!l || !loc) return false;
+  const content: PaneContent = { kind: 'claude_runs', session_id: sessionId };
+  const hit = findContent(l, (c) => contentEquals(c, content));
+  layout.update(projectId, (cur) => {
+    if (hit) return focusPane(cur, hit.tabId, hit.paneId);
+    const node = makePane(content);
+    const split = updateTab(cur, loc.tabId, (t) => ({
+      ...t,
+      root: splitPane(t.root, loc.paneId, 'row', node),
+    }));
+    return focusPane(split, loc.tabId, node.id);
+  });
   return true;
 }
 

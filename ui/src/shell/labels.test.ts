@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ClaudeRun, SessionInfo } from '$lib/gen';
+import type { ClaudeRun, RunClaim, RunState } from '$lib/gen';
 
-import { runState, toolIcon } from './labels';
+import { runLine, toolIcon } from './labels';
 
 const tool = (id: string, icon: string | null = null, label = id) => ({ id, label, icon });
 
@@ -19,11 +19,11 @@ describe('toolIcon (#377)', () => {
   });
 });
 
-describe('runState (#377)', () => {
-  const run = (status: string): ClaudeRun => ({
-    run_id: 'wf_1',
-    session_id: 's1',
-    name: 'pass',
+describe('runLine (#392)', () => {
+  const run = (id: string, session_id = 's1', name = 'pass', status = 'running'): ClaudeRun => ({
+    run_id: id,
+    session_id,
+    name,
     status,
     phases: [
       { title: 'Pick', agents: [{ id: 'a', label: 'pick', done: true }] },
@@ -35,15 +35,31 @@ describe('runState (#377)', () => {
     result: null,
     logs: [],
   });
-  const session = (status: string) => ({ status, attention: 'none' }) as unknown as SessionInfo;
+  const claim = (state: RunState, phase: string | null = 'Review'): RunClaim => ({
+    name: 'pass',
+    run_id: 'r',
+    session_id: 's1',
+    phase,
+    state,
+    note: null,
+    sha: null,
+  });
 
-  it('running: the live phase; asking: needs input; ended: its status', () => {
-    expect(runState(run('running'), session('working'))).toEqual({ label: 'Implement', lamp: 'working' });
-    expect(runState(run('running'), session('needs_input'))).toEqual({
-      label: 'Needs input',
-      lamp: 'needs_input',
-    });
-    expect(runState(run('completed'), session('done'))).toEqual({ label: 'completed', lamp: 'none' });
-    expect(runState(run('failed'), session('done')).lamp).toBe('error');
+  it("a work item's claim shows its phase, or its state once it is not running", () => {
+    expect(runLine(claim('running'), [], [])).toEqual({ text: 'pass · Review', sessionId: 's1' });
+    expect(runLine(claim('failed'), [], [])?.text).toBe('pass · failed');
+    expect(runLine(claim('done'), [], [])).toBeNull();
+  });
+
+  it('running runs no live claim names, counted past the first', () => {
+    expect(runLine(null, [run('a')], [])).toEqual({ text: 'pass · Implement', sessionId: 's1' });
+    expect(
+      runLine(null, [run('a'), run('b', 's1', 'triage'), run('c', 's1', 'pass', 'completed')], [])?.text,
+    ).toBe('pass · Implement +1');
+    // A live claim takes one run of its session and name; a finished claim takes none.
+    expect(runLine(null, [run('a'), run('b')], [claim('running')])?.text).toBe('pass · Implement');
+    expect(runLine(null, [run('a')], [claim('running')])).toBeNull();
+    expect(runLine(null, [run('a')], [claim('done')])?.text).toBe('pass · Implement');
+    expect(runLine(null, [run('a', 's2')], [claim('running')])?.text).toBe('pass · Implement');
   });
 });

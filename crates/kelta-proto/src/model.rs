@@ -501,6 +501,10 @@ pub enum PaneContent {
     Terminal {
         session_id: SessionId,
     },
+    /// A Claude session's workflow runs (#392), split beside its terminal.
+    ClaudeRuns {
+        session_id: SessionId,
+    },
     Web {
         tool_instance_id: ToolInstanceId,
     },
