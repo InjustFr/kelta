@@ -2,6 +2,27 @@
 
 All notable changes are listed here, generated from the commit messages at each release. Versions follow semver.
 
+## [1.3.0](https://github.com/InjustFr/kelta/compare/v1.2.0...v1.3.0) (2026-10-13)
+
+### Features
+
+* **keys:** Linux shortcuts follow the Mac set with Ctrl, terminal keeps plain Ctrl+letter ([#396](https://github.com/InjustFr/kelta/issues/396)) ([3593715](https://github.com/InjustFr/kelta/commit/35937152d5f02f752d042b8f7f80e9ff62a22662))
+* **now:** Blocked section for blocked tickets and their work ([#390](https://github.com/InjustFr/kelta/issues/390)) ([#393](https://github.com/InjustFr/kelta/issues/393)) ([a20a81a](https://github.com/InjustFr/kelta/commit/a20a81adf710d1ae7eeb253a170c977ea854fc02))
+* **now:** Waiting to deploy section for tickets in waiting statuses ([#391](https://github.com/InjustFr/kelta/issues/391)) ([#394](https://github.com/InjustFr/kelta/issues/394)) ([64de74b](https://github.com/InjustFr/kelta/commit/64de74b6db4944a09cbc4cec7f1b7d497670caa6))
+* **ui:** motion that explains: loaders, rows that move, menus and sheets in and out ([#398](https://github.com/InjustFr/kelta/issues/398)) ([524aac5](https://github.com/InjustFr/kelta/commit/524aac5604fdc4374fdddcba9d7f945990517c20))
+* **ui:** Now rows say what to do: the next action, one reason, the age ([2dd0ec5](https://github.com/InjustFr/kelta/commit/2dd0ec5b59a8ba21edf029e87a26ad8c14aa7be8))
+* **ui:** Tickets, Now and Reviews usable with the mouse; keys taught, not required ([#397](https://github.com/InjustFr/kelta/issues/397)) ([ea404c7](https://github.com/InjustFr/kelta/commit/ea404c79d326030a03f5763ed0040378dd9c99a8))
+* **ui:** workflow runs on their ticket or session, runs pane in the session's tab ([#392](https://github.com/InjustFr/kelta/issues/392)) ([#395](https://github.com/InjustFr/kelta/issues/395)) ([49cd16c](https://github.com/InjustFr/kelta/commit/49cd16c7cf4d29dbb8cddffe3b23bc06fe01cfeb))
+* **work:** Start Claude for a work item that has none (⌘. ⇧C) ([8a7ce37](https://github.com/InjustFr/kelta/commit/8a7ce372c45313fe5c100445af3e372ab25e27af))
+
+### Bug Fixes
+
+* **deps:** bump ammonia to 4.2.3 for RUSTSEC-2021-0157 ([d5f0642](https://github.com/InjustFr/kelta/commit/d5f0642f7be2edd383fc658a9485ca99c70e80fd))
+* **keys:** give user and tool Ctrl+letter chords a Ctrl+Shift twin on Linux ([#396](https://github.com/InjustFr/kelta/issues/396)) ([0e1d5cf](https://github.com/InjustFr/kelta/commit/0e1d5cfd9a3a63fc6529aeff4833073380cd026e))
+* **ui:** stamp VirtualList scroll time only when the viewport moves ([#398](https://github.com/InjustFr/kelta/issues/398)) ([781550c](https://github.com/InjustFr/kelta/commit/781550cccd8af7a54ca50cd179761197cf03d71a))
+* **ui:** VirtualList skips move and leave animations while scrolling, like enter ([#398](https://github.com/InjustFr/kelta/issues/398)) ([b0416e0](https://github.com/InjustFr/kelta/commit/b0416e0013e419b9b61b5011109669e8aa33ea7a))
+* **work:** Start Claude on a failed item says to retry the step, not that it is starting ([5980b6e](https://github.com/InjustFr/kelta/commit/5980b6ef03232681ae1936b9a3902396380a3d77))
+
 ## [1.2.0](https://github.com/InjustFr/kelta/compare/v1.1.0...v1.2.0) (2026-10-12)
 
 ### Features
