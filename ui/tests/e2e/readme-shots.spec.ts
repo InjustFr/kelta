@@ -116,7 +116,7 @@ async function shoot(page: Page, name: string): Promise<void> {
 
 test('work-item: SHOP-142 with Claude and nvim side by side, under the context bar', async ({ page }) => {
   await boot(page, 'macos');
-  await expect(page.getByTestId('context-work')).toBeVisible();
+  await expect(page.getByTestId('work-header')).toBeVisible();
   const acks = (await callsOf(page, 'session_ack')).length;
   await paintTerminals(page);
   // The macOS renderer draws on a canvas: wait for both panes to ack the painted frames.

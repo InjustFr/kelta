@@ -49,45 +49,40 @@ async function openMenu(): Promise<HTMLElement> {
   return screen.findByRole('menu', { name: 'Work' });
 }
 
-describe('context bar: work item segment', () => {
-  it("the ticket's status chip opens the status picker and a digit moves the ticket", async () => {
-    const w = item(0); // SHOP-142, In Progress
+describe('work tab header', () => {
+  it('key, project and title, the stage track with whose move, and why in one sentence', async () => {
+    const w = item(0); // SHOP-142, Claude working
     mountHeader(w);
-    const chip = await screen.findByTestId('work-status');
-    await waitFor(() => expect(chip.hasAttribute('disabled')).toBe(false));
-    await fireEvent.click(chip);
-    const menu = await screen.findByRole('menu', { name: `Move ${w.ticket!.key}` });
-    expect(menu.querySelector('[aria-current="step"]')?.textContent).toBe('In Progress');
-    await screen.findAllByRole('menuitem');
-    await fireEvent.keyDown(screen.getByRole('textbox', { name: 'Filter statuses' }), { key: '2' }); // In review
-    await waitFor(() =>
-      expect(mock.calls.filter((c) => c.cmd === 'tracker_transition').at(-1)?.args).toMatchObject({
-        ticket: { key: w.ticket!.key },
-        transition_id: 'to-in_review',
-      }),
-    );
-    await waitFor(() => expect(chip.textContent).toContain('In review'));
+    const header = await screen.findByTestId('work-header');
+    expect(screen.getByTestId('work-header-key').textContent).toBe('SHOP-142');
+    expect(header.textContent).toContain('Shop');
+    await waitFor(() => expect(header.textContent).toContain('Rate-limit login attempts'));
+    expect(header.dataset.phase).toBe('working');
+    expect(header.querySelector('.track')?.getAttribute('data-mark')).toBe('wait');
+    expect(screen.getByTestId('work-why').textContent).toBe('Waiting on others: Claude working');
+    // Status, PR, git and cost moved to the Story panel (#428).
+    for (const id of ['work-status', 'work-phase', 'work-pr', 'ahead', 'work-branch'])
+      expect(screen.queryByTestId(id)).toBeNull();
   });
 
-  it('shows the phase, ahead/behind, and the branch and diffstat under ⎇, from work_status_all', async () => {
-    const w = item(0);
-    mountHeader(w);
-    await waitFor(() => expect(screen.getByTestId('ahead').textContent).toBe('↑2'));
-    expect(screen.getByTestId('behind').textContent).toBe('↓1');
-    const branch = screen.getByTestId('work-branch').title;
-    expect(branch).toContain(w.branch);
-    expect(branch).toMatch(/\+41 −\d+/);
-    expect(branch).toContain('Uncommitted changes');
-    expect(screen.getByTestId('context-work').dataset.phase).toBe('working'); // Claude is working
-    expect(mock.calls.some((c) => c.cmd === 'work_status_all')).toBe(true);
-    expect(mock.calls.some((c) => c.cmd === 'work_status')).toBe(false);
-    await waitFor(() => expect(screen.getByRole('button', { name: /In progress/i })).toBeTruthy());
+  it('the mark follows the phase: to review is my move, a failed start is broken', async () => {
+    const marks: [string, string][] = [];
+    for (const i of [3, 1]) {
+      const { unmount } = mountHeader(item(i));
+      const header = await screen.findByTestId('work-header');
+      marks.push([header.dataset.phase!, header.dataset.mark!]);
+      unmount();
+    }
+    expect(marks).toEqual([
+      ['to_review', 'you'],
+      ['failed', 'broken'],
+    ]);
   });
 
   it('re-reads git status when Claude stops (from the store)', async () => {
     const w = item(0);
     mountHeader(w);
-    await waitFor(() => expect(screen.getByTestId('ahead')).toBeTruthy());
+    await screen.findByTestId('work-header');
     const before = mock.calls.filter((c) => c.cmd === 'work_status_all').length;
     work.upsert({ ...w, review_due: true });
     await waitFor(() =>
@@ -98,7 +93,7 @@ describe('context bar: work item segment', () => {
   it('To review: the primary opens the delta zoomed in the work tab, R marks reviewed', async () => {
     const w = item(3); // SHOP-155, review_due
     mountHeader(w);
-    await waitFor(() => expect(screen.getByTestId('context-work').dataset.phase).toBe('to_review'));
+    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).toBe('to_review'));
     await fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_diff')).toBe(true));
     // No work tab for SHOP-155 in the fixtures: work_resume recreates it, the diff opens beside it.
@@ -115,23 +110,21 @@ describe('context bar: work item segment', () => {
     await waitFor(() => expect(work.get(w.id)?.review_due).toBe(false));
   });
 
-  it('the phase chip opens the Story panel of its tab, and no pane', async () => {
+  it('the sentence opens the Story panel of its tab, and no pane', async () => {
     const w = item(0);
     await layout.ensure('shop');
     story.setOpen('shop-t1', false);
     mountHeader(w);
-    await fireEvent.click(await screen.findByTestId('work-phase'));
+    await fireEvent.click(await screen.findByTestId('work-why'));
     expect(story.isOpen('shop-t1')).toBe(true);
     expect(findContent(layout.get('shop')!, (c) => c.kind === 'work_item')).toBeNull();
   });
 
-  it('the PR chip shows the number and CI, and opens the PR (⌘. o)', async () => {
+  it('⌘. o opens the PR', async () => {
     const w = item(2); // gh-12, PR #13
     await reviews.load({ kind: 'all' }, 'authored', false);
     mountHeader(w);
-    const chip = await screen.findByTestId('work-pr');
-    expect(chip.textContent).toContain('#13');
-    await fireEvent.click(chip);
+    await fireEvent.keyDown(await openMenu(), { key: 'o' });
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'open_external')).toBe(true));
   });
 
@@ -229,7 +222,7 @@ describe('context bar: work item segment', () => {
       draft: { title: 'My PR', draft: false },
     });
     // PR open with unpushed commits: the next action is Push (another lane's).
-    await waitFor(() => expect(screen.getByTestId('context-work').dataset.phase).toBe('unpushed'));
+    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).toBe('unpushed'));
   });
 
   it('Shift+F finishes: lists the dirty files and only removes with Force', async () => {
@@ -262,10 +255,10 @@ describe('context bar: work item segment', () => {
     const w = item(2); // PR open, Claude idle
     mountHeader(w);
     await fireEvent.click(within(await openMenu()).getByRole('menuitem', { name: /Rebase onto main/ }));
-    await waitFor(() => expect(screen.getByTestId('context-work').dataset.phase).toBe('rebase_stopped'));
+    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).toBe('rebase_stopped'));
     expect(screen.getByRole('button', { name: 'Ask Claude to resolve' })).toBeTruthy();
     await fireEvent.click(within(await openMenu()).getByRole('menuitem', { name: /Continue rebase/ }));
-    await waitFor(() => expect(screen.getByTestId('context-work').dataset.phase).toBe('rebased'));
+    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).toBe('rebased'));
     await fireEvent.click(screen.getByRole('button', { name: 'Force push…' }));
     // The dialog is a sheet entry: it is mounted by the sheet host, here we assert what it asks.
     const { ui } = await import('$lib/stores');
@@ -285,7 +278,7 @@ describe('context bar: work item segment', () => {
     const claude = mock.state.sessions.find((x) => w.session_ids.includes(x.id) && x.kind.type === 'claude')!;
     claude.status = 'done'; // it was asking for permission: rebase would be refused
     mountHeader(w);
-    await waitFor(() => expect(screen.getByTestId('context-work').dataset.phase).toBe('remote_new'));
+    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).toBe('remote_new'));
     expect(screen.queryByRole('button', { name: 'Force push…' })).toBeNull();
     await fireEvent.click(screen.getByRole('button', { name: `Rebase onto origin/${w.branch}` }));
     // The rebase onto the remote branch is followed by the normal rebase onto base (FLOW §4.4).
@@ -296,19 +289,11 @@ describe('context bar: work item segment', () => {
           .map((c) => (c.args as { op: { onto: string } }).op.onto),
       ).toEqual(['remote_branch', 'base']),
     );
-    await waitFor(() => expect(screen.getByTestId('context-work').dataset.phase).not.toBe('remote_new'));
+    await waitFor(() => expect(screen.getByTestId('work-header').dataset.phase).not.toBe('remote_new'));
   });
 
   it('shows a placeholder for an unknown work item', async () => {
     render(WorkContext, { props: { projectId: 'shop', workItemId: 'nope' } });
     expect(await screen.findByText('Work item not found')).toBeTruthy();
-  });
-
-  it('a phase without a lamp keeps its label at narrow widths: the chip is never empty', async () => {
-    const w = mock.state.work.find((x) => x.state.kind === 'merged') as WorkItem;
-    mountHeader(w);
-    const phase = await screen.findByTestId('work-phase');
-    await waitFor(() => expect(phase.textContent).toContain('Merged'));
-    expect(phase.querySelector('.phase-label')?.classList.contains('lampless')).toBe(true);
   });
 });

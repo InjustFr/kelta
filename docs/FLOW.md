@@ -124,19 +124,20 @@ Writes are field-level (§8): the hook listener never overwrites `pr_url` or `st
 | Place | What it shows |
 |---|---|
 | Tab | `[phase lamp] KEY title` (scratch: `wip title`). Mono key, lamp slot per DESIGN §6.3. |
-| Context bar, the work segment (above the rail and all panes, survives pane zoom; DESIGN §6.3) | after the breadcrumb (`project › KEY title`): ticket status chip (opens the status picker), phase chip (lamp + label + detail), PR chip (`PR #482` + CI lamp, opens the PR), `↑a ↓b`, cost, `⎇` (branch, worktree, ports, armed, `+ins −del`, uncommitted changes in its tooltip; a dot when armed or dirty), primary button, **Work ⌘.** menu. Clicking the phase chip opens the Story panel. |
+| Context bar (above the rail and all panes; DESIGN §6.3) | the breadcrumb only (`project › KEY title`); no work segment (#428). |
+| Header (above the tab's panes, survives pane zoom; DESIGN §6.3) | key, project and title; one sentence of why from Now's zone and the phase label and detail (`Your move: To review, +212 −3`; opens the Story panel); the stage track (`workStage`) with its stage named and the mark of whose move; primary button; **Actions ⌘.** menu. |
 | Story panel (docked right of the work tab, `⌘I`; DESIGN §6.4) | the item's story in stage order: Since you left (the return brief), Ticket, Claude, Changes, Pull request, Log (start steps, open by itself on a failed step with Retry / Skip step). The current stage's section is open, the others fold to a one-line summary. |
 | Rail row | a work tab's lamp (DESIGN §6.2) folds in `review_due`, `claude_replied` and work-item errors, not just sessions. |
 | Now | one row (§3). |
 | Palette | Work items group (§3.5). |
 
-No status strip segment and no header row in the tab: the context bar is always visible above the focused tab's panes and says the same thing. `views/work/WorkContext.svelte` is its work segment, `views/work/StoryPanel.svelte` the Story panel (sections in `views/work/story/`, the return brief in `story/ReturnBrief.svelte`).
+No status strip segment. The ticket status, the PR and its CI, the branch, `behind` and the cost are in the Story panel's summaries (Ticket, Pull request, Changes, Claude). `⌘↵` does not run the primary: `work.start` holds that chord (start the marked or selected tickets), and one chord binds one action; `⌘.` `↵` runs the primary from any pane, terminals included. `views/work/WorkContext.svelte` is the header, `views/work/StoryPanel.svelte` the Story panel (sections in `views/work/story/`, the return brief in `story/ReturnBrief.svelte`).
 
 ![Work tab with the work bar and the work menu open (before the context bar, #248)](images/flow/f2-work-tab.png)
 
 ### 2.5 The work menu (`⌘.`)
 
-`work.menu` opens a menu anchored to the work bar of the focused tab's work item, from any pane including terminals (it is a Mod chord, like `⌘K`). Single letters run actions; `Enter` runs the primary. Unavailable actions are listed but disabled with their reason in the tooltip, so the letters never move.
+`work.menu` opens a menu anchored to the Actions button of the focused tab's header, from any pane including terminals (it is a Mod chord, like `⌘K`). Single letters run actions; `Enter` runs the primary. Unavailable actions are listed but disabled with their reason in the tooltip, so the letters never move.
 
 | Key | Action | Notes |
 |---|---|---|

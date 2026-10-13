@@ -35,10 +35,10 @@ test('SHOP-142: Claude open; Ctrl+I toggles; width and open state survive a relo
 
   await reload(page);
   await page.locator('[data-testid="rail-row"][data-tab-id="shop-t1"]').click();
-  await expect(page.getByTestId('context-work')).toBeVisible();
+  await expect(page.getByTestId('work-header')).toBeVisible();
   await expect(panel(page)).toBeHidden();
-  // The phase chip opens it.
-  await page.getByTestId('work-phase').click();
+  // The header's sentence opens it.
+  await page.getByTestId('work-why').click();
   await expect(panel(page)).toBeVisible();
   expect(await width(page)).toBe(404);
 });
@@ -56,6 +56,6 @@ test('4567: Log opens by itself on the failed step; Skip step clears it', async 
 test('a narrow window starts with the panel closed', async ({ page }) => {
   await page.setViewportSize({ width: 1100, height: 700 });
   await boot(page);
-  await expect(page.getByTestId('context-work')).toBeVisible();
+  await expect(page.getByTestId('work-header')).toBeVisible();
   await expect(panel(page)).toBeHidden();
 });

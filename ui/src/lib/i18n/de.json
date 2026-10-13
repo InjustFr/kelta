@@ -411,7 +411,6 @@
   "Nothing needs you right now": "Gerade wartet nichts auf Sie",
   "Claude sessions that ask a question, pull requests waiting for your review and tickets assigned to you show up here.": "Claude-Sitzungen mit einer Frage, Pull Requests, die auf Ihr Review warten, und Ihnen zugewiesene Tickets erscheinen hier.",
   "{n} more, show all": "{n} weitere, alle anzeigen",
-  "Claude spend on this item": "Claude-Kosten für dieses Element",
   "Next action": "Nächste Aktion",
   "Mark ticket": "Ticket markieren",
   "Start marked": "Markierte starten",
@@ -1455,16 +1454,9 @@
   "Type a ticket key or words from its title.": "Geben Sie einen Ticket-Schlüssel oder Wörter aus dem Titel ein.",
   "Searching…": "Wird gesucht…",
   "No ticket matches.": "Kein passendes Ticket.",
-  "{branch} (vs {base})": "{branch} (gegenüber {base})",
-  "ports {from}–{to}": "Ports {from}–{to}",
-  "armed: merges when ready, then finishes (M to disarm)": "scharf: wird gemergt, wenn bereit, dann abgeschlossen (M zum Entschärfen)",
-  "Uncommitted changes": "Nicht committete Änderungen",
   "No next action": "Keine nächste Aktion",
   "Move to…": "Verschieben nach…",
-  "{title} ({ci}): open in the browser": "{title} ({ci}): im Browser öffnen",
   "PR": "PR",
-  "{ahead} commits to push, {behind} behind {base}": "{ahead} Commits zu pushen, {behind} hinter {base}",
-  "status unavailable, retry": "Status nicht verfügbar, erneut versuchen",
   "Work menu": "Arbeitsmenü",
   "Work item not found": "Arbeitselement nicht gefunden",
   "sent": "gesendet",
@@ -2485,11 +2477,12 @@
   "Story": "Verlauf",
   "Work: Story panel": "Arbeit: Verlaufs-Panel",
   "{done} of {n} steps": "{done} von {n} Schritten",
-  "{phase} (story)": "{phase} (Verlauf)",
   "{step} failed": "{step} fehlgeschlagen",
   "Acceptance criteria": "Akzeptanzkriterien",
   "{checked} of {n} criteria checked": {
     "one": "{checked} von {n} Kriterium erfüllt",
     "other": "{checked} von {n} Kriterien erfüllt"
-  }
+  },
+  "Open the Story panel": "Verlaufs-Panel öffnen",
+  "{whose}: {what}": "{whose}: {what}"
 }

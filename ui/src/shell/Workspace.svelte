@@ -36,6 +36,7 @@
   let width = $state(0);
   let height = $state(0);
 
+  const HeaderComponent = $derived(lazyComponents.get('tabheader:work').component as AnyComponent | null);
   const StoryComponent = $derived(lazyComponents.get('tabheader:story').component as AnyComponent | null);
   // The start saga's `work_item` pane is the Story panel already: no second one beside it.
   const storyPane = $derived(!!tab && allPanes(tab.root).some((p) => p.content.kind === 'work_item'));
@@ -45,7 +46,9 @@
   });
 
   $effect(() => {
-    if (tab?.work_item_id) lazyComponents.ensure('tabheader:story', tabHeaderRegistry.story);
+    if (!tab?.work_item_id) return;
+    lazyComponents.ensure('tabheader:work', tabHeaderRegistry.work);
+    lazyComponents.ensure('tabheader:story', tabHeaderRegistry.story);
   });
 
   const dragging = $derived(paneDrag.current?.projectId === projectId ? paneDrag.current : null);
@@ -151,6 +154,10 @@
       {/snippet}
     </EmptyState>
   {:else}
+    <!-- Outside the panes: it stays over a zoomed pane (#428). -->
+    {#if tab.work_item_id && HeaderComponent}
+      <HeaderComponent {projectId} workItemId={tab.work_item_id} />
+    {/if}
     <div class="body">
       <div class="panes" bind:clientWidth={width} bind:clientHeight={height} data-testid="panes">
         {#each geometry.panes as placed (placed.pane.id)}
