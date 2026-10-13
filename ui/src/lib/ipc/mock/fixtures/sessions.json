@@ -301,7 +301,7 @@
     "kind": {
       "type": "claude"
     },
-    "name": "claude",
+    "name": "retry spike",
     "title": null,
     "cwd": "/Users/ada/work/billing.worktrees/wip-retry-queue",
     "status": "done",
