@@ -472,6 +472,17 @@ describe('Now', () => {
     expect(within(row).getByText('A MEPP')).toBeTruthy();
   });
 
+  it('with a project and a source, an empty Queue is the plain empty state, not Your loop', async () => {
+    localStorage.clear();
+    mock.state.tickets = [];
+    mock.state.reviews = [];
+    sessions.byId = {};
+    work.byId = {};
+    mountNow();
+    expect(await screen.findByText('Nothing needs you right now')).toBeTruthy();
+    expect(screen.queryByTestId('your-loop')).toBeNull();
+  });
+
   it('with no ticket source: a notice above the list, the empty state when Now is empty', async () => {
     (mock.state.settings.value as unknown as Settings).sources = [];
     settings.effective = {};
