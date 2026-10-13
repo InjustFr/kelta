@@ -252,7 +252,9 @@
   }
 
   function isFront(project: ProjectId, tabId: string): boolean {
-    return !ui.view && !ui.settings && projects.activeId === project && layout.get(project)?.active_tab === tabId;
+    return (
+      !ui.view && !ui.settings && projects.activeId === project && layout.get(project)?.active_tab === tabId
+    );
   }
 
   function instanceLabel(x: ToolInstance): string {

@@ -190,7 +190,7 @@
   });
 
   // The Queue lists the same work as the rail: the rail folds to its lamps while it is shown (#431).
-  $effect(() => sidebar.fold(ui.view === 'now'));
+  $effect(() => sidebar.fold(ui.view === 'now' && !ui.settings));
 
   // ---- keys ------------------------------------------------------------------------------------
 
