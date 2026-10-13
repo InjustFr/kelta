@@ -134,6 +134,16 @@ describe('Now', () => {
     await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_diff')).toBe(true));
   });
 
+  it('Enter on a clicked (button-focused) row still runs its next action', async () => {
+    const { container } = mountNow();
+    await screen.findByText('Flaky test in cart service');
+    const row = container.querySelector<HTMLElement>(`.row[data-row="w:${FLAKY}"]`)!;
+    await fireEvent.click(row);
+    row.focus();
+    await fireEvent.keyDown(row, { key: 'Enter' });
+    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_diff')).toBe(true));
+  });
+
   it('Enter on To review opens the diff in the work tab and leaves Now (B1)', async () => {
     mountNow();
     await screen.findByText('Flaky test in cart service');

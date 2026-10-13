@@ -1206,7 +1206,7 @@
     outline: none;
   }
 
-  /* Compact sidebar (collapsed, or a window below 1100px): a coloured rule per project, one tile per
+  /* Compact sidebar (collapsed, or a window below 1400px): a coloured rule per project, one tile per
      row. Labels stay in the accessibility tree and the tooltips. */
   .rail.compact {
     width: var(--k-rail-width-compact);

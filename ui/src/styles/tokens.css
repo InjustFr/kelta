@@ -33,7 +33,7 @@
   --k-radius-lg: 10px; /* floating: menus, palette, dialogs, sheets, toasts */
 
   --k-rail-width: 288px; /* labelled sidebar, default (resizable: shell/sidebar.svelte.ts) */
-  --k-rail-width-compact: 64px; /* collapsed sidebar, and below 1100px window width */
+  --k-rail-width-compact: 64px; /* collapsed sidebar, and below 1400px window width */
   --k-sidebar-row-height: 44px; /* two lines: name + status word (global views) */
   --k-rail-item: 32px; /* rail session and tool rows: one line */
   --k-contextbar-height: 30px; /* the bar above the panes; the window's title bar in custom chrome */
