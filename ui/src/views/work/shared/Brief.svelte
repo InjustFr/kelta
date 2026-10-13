@@ -19,7 +19,7 @@
   import type { Snippet } from 'svelte';
 
   import { t, tn } from '$lib/i18n/index.svelte';
-  import { Kbd, Spinner } from '$lib/ui';
+  import { Button, Kbd, Spinner } from '$lib/ui';
 
   interface Props {
     id?: string;
@@ -37,8 +37,10 @@
     /** A run under way: its button spins. */
     busy?: boolean;
     testid?: string;
-    /** Under `where`, before the actions (Reviews: the branch). */
+    /** Under `where`, before the actions (Reviews: the branch; the Queue: Claude's question). */
     sub?: Snippet;
+    /** Under Claude's message (the Queue: the reply field, #414). */
+    reply?: Snippet;
     /** After the facts (Reviews: review status, change map, description). */
     children?: Snippet;
   }
@@ -55,11 +57,22 @@
     busy = false,
     testid = 'brief',
     sub,
+    reply,
     children,
   }: Props = $props();
 
   const SHOWN = 2;
   const rest = $derived(actions.length - SHOWN);
+
+  // The message folds after 6 lines (#414); unfolded only for the message it was opened on.
+  let openFor = $state<string | null>(null);
+  const expanded = $derived(openFor === message);
+  let overflows = $state(false);
+  let msgEl = $state<HTMLElement>();
+  $effect(() => {
+    void message;
+    if (msgEl && !expanded) overflows = msgEl.scrollHeight > msgEl.clientHeight + 1;
+  });
 </script>
 
 <aside class="brief" aria-label={title} data-testid={testid}>
@@ -96,9 +109,15 @@
   {#if message}
     <blockquote>
       <cite>{t('Claude, last message')}</cite>
-      <span class="msg">{message}</span>
+      <span class="msg" class:clamped={!expanded} bind:this={msgEl}>{message}</span>
+      {#if overflows || expanded}
+        <Button size="sm" variant="ghost" onclick={() => (openFor = expanded ? null : message)}
+          >{expanded ? t('Show less') : t('Show more')}</Button
+        >
+      {/if}
     </blockquote>
   {/if}
+  {@render reply?.()}
   {#if facts.length}
     <dl class="facts">
       {#each facts as f (f.label)}
@@ -224,8 +243,17 @@
   }
 
   .msg {
+    display: block;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+
+  .msg.clamped {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 6;
+    line-clamp: 6;
+    overflow: hidden;
   }
 
   .facts {

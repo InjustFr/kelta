@@ -3,32 +3,24 @@
   // and Enter; while Claude shows its own prompt (needs_input) they wait, or Enter would answer it.
   import { t } from '$lib/i18n/index.svelte';
   import type { SessionInfo } from '$lib/gen';
-  import { toasts } from '$lib/stores';
   import { Button, HtmlContent } from '$lib/ui';
 
-  import { sendReply } from '../../shell/peek.svelte';
+  import { answer } from '../../shell/peek.svelte';
   import { questionOf } from './phase';
 
   interface Props {
     session: SessionInfo;
     /** Peek: the question and its Markdown body above the buttons. Rows: the buttons alone. */
     full?: boolean;
+    /** The Queue's brief: `1`–`9` on the first nine buttons (the pane handles the keys). */
+    numbered?: boolean;
     onanswer?: () => void;
   }
 
-  let { session, full = false, onanswer }: Props = $props();
+  let { session, full = false, numbered = false, onanswer }: Props = $props();
 
   const q = $derived(questionOf(session));
   const busy = $derived(session.status === 'needs_input');
-
-  async function answer(option: string): Promise<void> {
-    try {
-      await sendReply(session.id, option);
-      onanswer?.();
-    } catch (err) {
-      toasts.error(err, t('Sending to the session failed'));
-    }
-  }
 </script>
 
 {#if q}
@@ -42,10 +34,11 @@
         <Button
           size="sm"
           disabled={busy}
+          chord={numbered && i < 9 ? String(i + 1) : undefined}
           title={busy ? t('Answer the prompt open in this session first') : undefined}
           onclick={(e: MouseEvent) => {
             e.stopPropagation();
-            void answer(o);
+            void answer(session.id, o).then((ok) => ok && onanswer?.());
           }}>{o}</Button
         >
       {/each}
