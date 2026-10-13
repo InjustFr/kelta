@@ -1,7 +1,7 @@
 // Drag a pane by its header to reorganise the layout (ticket #341).
 import { expect, test, type Page } from '@playwright/test';
 
-import { boot, callsOf } from './helpers';
+import { boot, callsOf, unfold } from './helpers';
 
 const panes = (page: Page) => page.locator('[data-testid="workspace"] [data-testid="pane"]');
 const header = (page: Page, i: number) => panes(page).nth(i).getByTestId('pane-header');
@@ -79,6 +79,7 @@ test.describe('pane drag and drop', () => {
   test('dropping on a rail row moves the pane to that tab, on the band to a new tab', async ({ page }) => {
     await boot(page);
     const [a, b] = await paneIds(page);
+    await unfold(page, 'shop');
     await header(page, 0).dragTo(rows(page).nth(2));
     await expect(rows(page).nth(2)).toHaveAttribute('aria-current', 'page');
     await expect(page.locator(`[data-pane-id="${a}"]`)).toHaveAttribute('data-focused', 'true');

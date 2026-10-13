@@ -3,8 +3,8 @@
   import { onMount } from 'svelte';
 
   import { dispatch } from '$lib/actions';
-  import type { ProjectId, ProjectInfo, Tab, ToolInfo } from '$lib/gen';
-  import { allPanes, moveTab } from '$lib/layout';
+  import type { ProjectId, ProjectInfo, Tab, ToolInfo, WorkItem } from '$lib/gen';
+  import { allPanes } from '$lib/layout';
   import {
     layout,
     projects,
@@ -23,13 +23,16 @@
   import { frames } from '$lib/terminal/raf';
 
   import { jumpOutside, nowSummary, refreshNow } from '../views/inbox/now';
-  import { outsidePhase } from '../views/work/phase';
+  import { phaseNow, prOf } from '../views/work/live';
+  import { maxLamp, outsidePhase, workKey } from '../views/work/phase';
+  import { STAGES, workStage } from '../views/work/stage';
   import { confirms } from './confirm.svelte';
   import { chordFor, runLine, toolIcon } from './labels';
   import {
     activateProject,
     attachTab,
     backgroundSessions,
+    bandTabs,
     currentTab,
     detachTab,
     focusedPane,
@@ -39,7 +42,6 @@
     liveSessionsOfTab,
     openView,
     railProjects,
-    railRows,
     railTools,
     railToolsOf,
     requestCloseTab,
@@ -51,6 +53,7 @@
     toolSubLines,
     VIEW_NAMES,
     workItemOfTab,
+    workRows,
     type ToolInstance,
   } from './nav';
   import { droppedOutside, paneDrag } from './paneDrag.svelte';
@@ -60,9 +63,8 @@
   const rail = $derived(railProjects());
   const reorderable = $derived(rail.filter((p) => !p.builtin));
 
-  // Now's tile: badge = what waits on Louis (first four sections), sub line = the most urgent chip (#386).
+  // One count per view, on its sub line (#430); no red badge: the lit rows say what waits.
   const now = $derived(nowSummary());
-  // Tickets and Reviews counts are muted: the red badge stays on Now, so nothing is counted twice.
   const ALL = { kind: 'all' } as const;
   const mine = $derived(
     tickets.items(ALL, null, 'mine').filter((i) => i.ticket.status.category !== 'done').length,
@@ -73,8 +75,10 @@
   const toolList = $derived(railTools());
   // Tool membership, once per change: the Tools sub-lines and which tabs leave the bands.
   const lines = $derived(toolSubLines());
-  // `project.goto.N` index of each row.
-  const index = $derived(new Map(railRows(lines).map((r, i) => [r.tab.id, i + 1])));
+  // `project.goto.N` index of each work row.
+  const index = $derived(new Map(workRows(lines).map((r, i) => [r.tab.id, i + 1])));
+  // Bands whose "n more" row is open.
+  let unfolded = $state<Record<ProjectId, boolean>>({});
   $effect(() => {
     if (tools.byProject[toolsOf] === undefined) void tools.load(toolsOf);
   });
@@ -99,6 +103,7 @@
   let rowMenu = $state<{ project: ProjectId; tab: Tab; x: number; y: number } | null>(null);
   let dragId = $state<string | null>(null);
   let overId = $state<string | null>(null);
+  // A row dragged out of the window moves to its own window; rows keep their order (#430).
   let rowDrag = $state<{ project: ProjectId; tab: string } | null>(null);
   let rowOver = $state<string | null>(null);
   // A pane dragged over a band but not over one of its rows: dropping opens it in a new tab.
@@ -214,49 +219,29 @@
     menu = { project: p, x: e.clientX, y: e.clientY };
   }
 
-  /** The band's rows: the project's non-tool tabs, in tab order. */
-  function rowsOf(id: ProjectId): Tab[] {
-    return (layout.get(id)?.tabs ?? []).filter((x) => !isToolTab(x, lines));
-  }
-
-  /** Moves a row to `target`'s place; rows move only inside their band. */
-  function moveRow(project: ProjectId, tabId: string, target: Tab | undefined): void {
-    const to = target ? (layout.get(project)?.tabs.indexOf(target) ?? -1) : -1;
-    if (to >= 0) layout.update(project, (l) => moveTab(l, tabId, to));
-  }
-
-  function rowMenuItems(project: ProjectId, tab: Tab): MenuItem[] {
-    const rows = rowsOf(project);
-    const index = rows.findIndex((x) => x.id === tab.id);
+  function rowMenuItems(tab: Tab): MenuItem[] {
     return [
       { id: 'close', label: t('Close'), icon: 'x' },
       tab.detached
         ? { id: 'attach', label: t('Move back to main window'), icon: 'app-window' }
         : { id: 'detach', label: t('Move to new window'), icon: 'app-window' },
-      { id: 'up', label: t('Move up'), icon: 'arrow-up', disabled: index <= 0, separator: true },
-      { id: 'down', label: t('Move down'), icon: 'arrow-down', disabled: index >= rows.length - 1 },
     ];
   }
 
   function onRowMenu(project: ProjectId, tab: Tab, id: string): void {
-    const rows = rowsOf(project);
-    const index = rows.findIndex((t) => t.id === tab.id);
     if (id === 'close') void requestCloseTab(project, tab.id);
     else if (id === 'detach') void detachTab(project, tab.id);
     else if (id === 'attach') void attachTab(project, tab.id);
-    else moveRow(project, tab.id, rows[index + (id === 'up' ? -1 : 1)]);
   }
 
-  function onRowDrop(project: ProjectId, target: Tab): void {
-    if (paneDrag.current) {
-      rowOver = null;
-      paneDrag.drop(project, { tabId: target.id });
-      return;
-    }
-    const from = rowDrag;
-    rowDrag = null;
-    rowOver = null;
-    if (from && from.project === project && from.tab !== target.id) moveRow(project, from.tab, target);
+  /** A work row's title: the tab's, without the key the row already shows. */
+  function workTitle(tab: Tab, key: string): string {
+    return tab.title.startsWith(key) ? tab.title.slice(key.length).trim() : t(tab.title);
+  }
+
+  /** The stage word on the right of a work row: Claude, PR, Review, Merge or Deploy. */
+  function stageWord(item: WorkItem): string {
+    return t(STAGES[workStage(item, phaseNow(item), prOf(item), false).at]!);
   }
 
   function rowIcon(tab: Tab): string {
@@ -340,7 +325,7 @@
 {/snippet}
 
 <!-- A global view (SPEC §1): shown outside any project; the active project stays as it is. -->
-{#snippet place(view: GlobalView, icon: string, id: string, sub: string, n: number, muted: boolean)}
+{#snippet place(view: GlobalView, icon: string, id: string, sub: string, n: number)}
   {@const name = VIEW_NAMES[view]}
   <button
     type="button"
@@ -357,7 +342,7 @@
       <span class="sub">{sub}</span>
     </span>
     {#if n > 0}
-      <span class="badge k-num" class:muted data-testid={`${id}-badge`}>{n > 99 ? '99+' : n}</span>
+      <span class="badge k-num" data-testid={`${id}-badge`}>{n > 99 ? '99+' : n}</span>
     {/if}
   </button>
 {/snippet}
@@ -394,6 +379,94 @@
   />
 {/snippet}
 
+<!-- A band row: a work tab (lamp, key, title, stage word) or, unfolded, any other tab. -->
+{#snippet row(p: ProjectInfo, tab: Tab)}
+  {@const lvl = tabAttention(tab)}
+  {@const active = isFront(p.id, tab.id)}
+  {@const label = rowLabel(tab)}
+  {@const item = workItemOfTab(tab)}
+  {@const n = index.get(tab.id)}
+  {@const run = runLine(
+    item?.run,
+    liveSessionsOfTab(tab).flatMap((s) => sessions.runs[s.id] ?? []),
+    claims,
+  )}
+  <li
+    class="row"
+    class:pane-over={rowOver === tab.id && paneDrag.current && paneDrag.current.tabId !== tab.id}
+  >
+    <button
+      type="button"
+      class="item tab-row"
+      class:active
+      class:lit={lvl === 'needs_input'}
+      title={`${p.name} › ${label}`}
+      aria-current={active ? 'page' : undefined}
+      data-testid="rail-row"
+      data-project-id={p.id}
+      data-tab-id={tab.id}
+      data-attention={lvl}
+      use:peekHover={() => peekTarget(liveSessionsOfTab(tab))}
+      draggable="true"
+      onclick={() => selectRow(p.id, tab.id)}
+      onauxclick={(e) => {
+        if (e.button !== 1) return;
+        e.preventDefault();
+        void requestCloseTab(p.id, tab.id);
+      }}
+      onmousedown={(e) => {
+        if (e.button === 1) e.preventDefault(); // no autoscroll on middle click
+      }}
+      oncontextmenu={(e) => {
+        e.preventDefault();
+        rowMenu = { project: p.id, tab, x: e.clientX, y: e.clientY };
+      }}
+      ondragstart={(e) => {
+        rowDrag = { project: p.id, tab: tab.id };
+        e.dataTransfer?.setData('text/plain', tab.id);
+      }}
+      ondragover={(e) => {
+        if (paneDrag.current?.projectId !== p.id) return;
+        e.preventDefault();
+        rowOver = tab.id;
+      }}
+      ondragleave={() => (rowOver = null)}
+      ondrop={(e) => {
+        e.preventDefault();
+        rowOver = null;
+        if (paneDrag.current) paneDrag.drop(p.id, { tabId: tab.id });
+      }}
+      ondragend={(e) => {
+        if (rowDrag && droppedOutside(e)) void detachTab(p.id, tab.id);
+        rowDrag = null;
+        rowOver = null;
+      }}
+    >
+      <span class="socket" aria-hidden="true"><Lamp level={lvl} /></span>
+      {#if item}
+        {@const key = workKey(item)}
+        {#if tab.detached}<span class="kind" aria-hidden="true"><Icon name="app-window" size={14} /></span
+          >{/if}
+        <span class="key k-num">{key}</span>
+        <span class="text"><span class="name">{workTitle(tab, key)}</span></span>
+        <span class="stage" data-testid="rail-stage">{stageWord(item)}</span>
+      {:else}
+        <span class="kind" aria-hidden="true"><Icon name={rowIcon(tab)} size={14} /></span>
+        <span class="text"><span class="name">{label}</span></span>
+      {/if}
+      {#if n}{@render digit(`project.goto.${n}`, `${n}`)}{/if}
+    </button>
+    <IconButton
+      class="close"
+      size="sm"
+      icon="x"
+      label={t('Close {name}', { name: label })}
+      onclick={() => void requestCloseTab(p.id, tab.id)}
+    />
+  </li>
+  {#if run}{@render runRow(run, label)}{/if}
+{/snippet}
+
 <nav
   class="rail"
   class:compact={sidebar.compact}
@@ -415,15 +488,14 @@
     {@render chord('palette.open')}
   </button>
 
-  {@render place('tickets', 'ticket', 'tickets', t('{n} mine', { n: mine }), mine, true)}
-  {@render place('now', 'inbox', 'inbox', now.top, now.waiting, false)}
+  {@render place('now', 'inbox', 'inbox', t('{n} your move', { n: now.yours }), now.yours)}
+  {@render place('tickets', 'ticket', 'tickets', t('{n} assigned to you', { n: mine }), mine)}
   {@render place(
     'reviews',
     'git-pull-request',
     'reviews',
-    t('{n} to review', { n: toReview }),
+    tn('{n} asks for your review', '{n} ask for your review', toReview),
     toReview,
-    true,
   )}
 
   <div class="group">
@@ -441,6 +513,10 @@
 
     <div class="scroll">
       {#each rail as p (p.id)}
+        {@const band = bandTabs(p.id, lines)}
+        {@const background = backgroundSessions(p.id)}
+        {@const folded = band.more.length + background.length}
+        {@const open = !!unfolded[p.id]}
         <section
           class="band"
           class:pane-target={bandOver === p.id && paneDrag.current}
@@ -497,103 +573,53 @@
             {@render more(p)}
           </div>
           <ul class="rows">
-            {#each rowsOf(p.id) as tab (tab.id)}
-              {@const lvl = tabAttention(tab)}
-              {@const active = isFront(p.id, tab.id)}
-              {@const label = rowLabel(tab)}
-              {@const over = rowOver === tab.id}
-              {@const run = runLine(
-                workItemOfTab(tab)?.run,
-                liveSessionsOfTab(tab).flatMap((s) => sessions.runs[s.id] ?? []),
-                claims,
-              )}
-              <li
-                class="row"
-                class:over={over && rowDrag && rowDrag.tab !== tab.id}
-                class:pane-over={over && paneDrag.current && paneDrag.current.tabId !== tab.id}
-              >
-                <button
-                  type="button"
-                  class="item tab-row"
-                  class:active
-                  class:lit={lvl === 'needs_input'}
-                  title={`${p.name} › ${label}`}
-                  aria-current={active ? 'page' : undefined}
-                  data-testid="rail-row"
-                  data-project-id={p.id}
-                  data-tab-id={tab.id}
-                  data-attention={lvl}
-                  use:peekHover={() => peekTarget(liveSessionsOfTab(tab))}
-                  draggable="true"
-                  onclick={() => selectRow(p.id, tab.id)}
-                  onauxclick={(e) => {
-                    if (e.button !== 1) return;
-                    e.preventDefault();
-                    void requestCloseTab(p.id, tab.id);
-                  }}
-                  onmousedown={(e) => {
-                    if (e.button === 1) e.preventDefault(); // no autoscroll on middle click
-                  }}
-                  oncontextmenu={(e) => {
-                    e.preventDefault();
-                    rowMenu = { project: p.id, tab, x: e.clientX, y: e.clientY };
-                  }}
-                  ondragstart={(e) => {
-                    rowDrag = { project: p.id, tab: tab.id };
-                    e.dataTransfer?.setData('text/plain', tab.id);
-                  }}
-                  ondragover={(e) => {
-                    const pane = paneDrag.current;
-                    if (pane ? pane.projectId !== p.id : rowDrag?.project !== p.id) return;
-                    e.preventDefault();
-                    rowOver = tab.id;
-                  }}
-                  ondragleave={() => (rowOver = null)}
-                  ondrop={(e) => {
-                    e.preventDefault();
-                    onRowDrop(p.id, tab);
-                  }}
-                  ondragend={(e) => {
-                    if (rowDrag && droppedOutside(e)) void detachTab(p.id, tab.id);
-                    rowDrag = null;
-                    rowOver = null;
-                  }}
-                >
-                  <span class="socket" aria-hidden="true"><Lamp level={lvl} /></span>
-                  <span class="kind" aria-hidden="true"><Icon name={rowIcon(tab)} size={14} /></span>
-                  <span class="text"><span class="name">{label}</span></span>
-                  {@render digit(`project.goto.${index.get(tab.id)}`, `${index.get(tab.id)}`)}
-                </button>
-                <IconButton
-                  class="close"
-                  size="sm"
-                  icon="x"
-                  label={t('Close {name}', { name: label })}
-                  onclick={() => void requestCloseTab(p.id, tab.id)}
-                />
-              </li>
-              {#if run}{@render runRow(run, label)}{/if}
-            {/each}
-            {#each backgroundSessions(p.id) as s (s.id)}
+            {#each band.work as tab (tab.id)}{@render row(p, tab)}{/each}
+            {#if folded > 0}
+              <!-- Shells, boards, lists and background sessions: one row that opens in place. -->
+              {@const lvl = maxLamp(band.more.map((x) => tabAttention(x)))}
               <li class="row">
                 <button
                   type="button"
-                  class="item tab-row background"
-                  title={`${p.name} › ${t('{name}: running in the background, click to show it', { name: s.name })}`}
-                  data-testid="rail-background"
-                  data-session-id={s.id}
-                  onclick={() => void revealSession(s.id)}
+                  class="item tab-row fold"
+                  class:active={!open && band.more.some((x) => isFront(p.id, x.id))}
+                  title={`${p.name} › ${t('{n} more', { n: folded })}`}
+                  aria-expanded={open}
+                  data-testid="rail-more"
+                  data-project-id={p.id}
+                  data-attention={lvl}
+                  onclick={() => (unfolded[p.id] = !open)}
                 >
-                  <span class="socket" aria-hidden="true"></span>
+                  <span class="socket" aria-hidden="true"><Lamp level={lvl} /></span>
                   <span class="kind" aria-hidden="true"
-                    ><Icon name={s.kind.type === 'claude' ? 'bot' : 'terminal'} size={14} /></span
+                    ><Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} /></span
                   >
-                  <span class="text"><span class="name">{s.name} · {t('background')}</span></span>
+                  <span class="text"><span class="name">{t('{n} more', { n: folded })}</span></span>
                 </button>
               </li>
-              {@const run = runLine(null, sessions.runs[s.id] ?? [], claims)}
-              {#if run}{@render runRow(run, s.name)}{/if}
-            {/each}
+              {#if open}
+                {#each band.more as tab (tab.id)}{@render row(p, tab)}{/each}
+                {#each background as s (s.id)}
+                  <li class="row">
+                    <button
+                      type="button"
+                      class="item tab-row background"
+                      title={`${p.name} › ${t('{name}: running in the background, click to show it', { name: s.name })}`}
+                      data-testid="rail-background"
+                      data-session-id={s.id}
+                      onclick={() => void revealSession(s.id)}
+                    >
+                      <span class="socket" aria-hidden="true"></span>
+                      <span class="kind" aria-hidden="true"
+                        ><Icon name={s.kind.type === 'claude' ? 'bot' : 'terminal'} size={14} /></span
+                      >
+                      <span class="text"><span class="name">{s.name} · {t('background')}</span></span>
+                    </button>
+                  </li>
+                  {@const run = runLine(null, sessions.runs[s.id] ?? [], claims)}
+                  {#if run}{@render runRow(run, s.name)}{/if}
+                {/each}
+              {/if}
+            {/if}
           </ul>
         </section>
       {:else}
@@ -616,8 +642,8 @@
 
       {#if sessions.elsewhere.length > 0}
         <!-- Claude sessions Kelta did not start (#345): dimmed, Now lists them. -->
-        <section class="band tools" aria-label={t('Elsewhere')} data-testid="rail-elsewhere">
-          <h2 class="tools-heading">{t('Elsewhere')}</h2>
+        <section class="band tools" aria-label={t('Other Claude sessions')} data-testid="rail-elsewhere">
+          <h2 class="tools-heading">{t('Other Claude sessions')}</h2>
           <ul class="rows">
             {#each sessions.elsewhere as s (s.id)}
               {@const ph = outsidePhase(s)}
@@ -752,7 +778,7 @@
 {#if rowMenu}
   {@const target = rowMenu}
   <Menu
-    items={rowMenuItems(target.project, target.tab)}
+    items={rowMenuItems(target.tab)}
     x={rowMenu.x}
     y={rowMenu.y}
     label={t('Row actions')}
@@ -926,26 +952,20 @@
     font-size: var(--k-font-size-xs);
   }
 
+  /* Muted counts, no red (#430): the sub line says it; only the compact rail shows the number. */
   .badge {
+    display: none;
     flex: none;
     min-width: 20px;
     height: 20px;
     padding: 0 6px;
     border-radius: 10px;
-    background: var(--k-lamp-needs-input);
-    color: var(--k-well);
-    font-size: var(--k-font-size-xs);
-    font-weight: var(--k-weight-strong);
-    line-height: 20px;
-    text-align: center;
-  }
-
-  /* Muted counts (Tickets, Reviews): the sub line says it; the compact rail shows the number. */
-  .badge.muted {
-    display: none;
     background: var(--k-bg-selected);
     color: var(--k-fg-muted);
+    font-size: var(--k-font-size-xs);
     font-weight: var(--k-weight-medium);
+    line-height: 20px;
+    text-align: center;
   }
 
   .group {
@@ -1117,6 +1137,13 @@
     font-weight: var(--k-weight-strong);
   }
 
+  .key,
+  .stage {
+    flex: none;
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-xs);
+  }
+
   .index {
     flex: none;
     color: var(--k-fg-subtle);
@@ -1154,7 +1181,7 @@
     visibility: visible;
   }
 
-  .row:has(:global(.close)):is(:hover, :focus-within) .index {
+  .row:has(:global(.close)):is(:hover, :focus-within) :is(.index, .stage) {
     visibility: hidden;
   }
 
@@ -1266,6 +1293,8 @@
   .compact .caption .name,
   .compact .launch,
   .compact .index,
+  .compact .key,
+  .compact .stage,
   .compact .heading :global(.label),
   .compact .none {
     position: absolute;
@@ -1308,7 +1337,7 @@
     left: calc(50% + 4px);
   }
 
-  .compact .badge.muted {
+  .compact .badge {
     display: block;
   }
 </style>

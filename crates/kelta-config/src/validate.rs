@@ -183,6 +183,12 @@ pub fn lenient_issues(layer: Layer, value: &mut Value, stem: Option<&str>) -> (V
     {
         *c = Value::String(format!("#{}", h.chars().flat_map(|ch| [ch, ch]).collect::<String>()));
     }
+    // `notifications.claude_needs_input` reads as `claude_blocked` (#433); the new key wins
+    if let Some(n) = value.get_mut("notifications").and_then(Value::as_object_mut)
+        && let Some(v) = n.remove("claude_needs_input")
+    {
+        n.entry("claude_blocked").or_insert(v);
+    }
     let mut warnings = Vec::new();
     loop {
         let raw = layer_issues(layer, value, stem);
