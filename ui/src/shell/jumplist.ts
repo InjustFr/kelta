@@ -74,8 +74,8 @@ function save(): void {
 }
 
 function recordJump(loc: JumpLoc): void {
-  if (!jumplist.record(loc)) return;
-  save();
+  if (jumplist.record(loc)) save();
+  // Also when `nav.back` lands here: the place focus rests on is the most recent one.
   const place = placeOf(loc);
   if (place) noteRecent(place);
 }
