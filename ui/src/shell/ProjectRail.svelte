@@ -953,7 +953,10 @@
     flex-direction: column;
     flex: 1 1 auto;
     min-height: 0;
+    /* Section break: places above, projects below (#402). Items inside keep the smaller gaps. */
     margin-top: var(--k-space-2);
+    padding-top: var(--k-space-4);
+    border-top: 1px solid var(--k-border);
   }
 
   .heading {
@@ -1040,6 +1043,13 @@
 
   .caption:hover {
     color: var(--k-fg);
+  }
+
+  /* Elsewhere and Tools: their own sections after the projects (#402). */
+  .tools {
+    margin-top: var(--k-space-3);
+    padding-top: var(--k-space-3);
+    border-top: 1px solid var(--k-border);
   }
 
   .tools-heading {
@@ -1278,11 +1288,6 @@
     inset: 4px var(--k-space-2) auto;
     height: 1px;
     background: var(--project-color);
-  }
-
-  .compact .tools {
-    padding-top: var(--k-space-2);
-    border-top: 1px solid var(--k-border);
   }
 
   .compact .instance,
