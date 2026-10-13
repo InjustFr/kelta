@@ -140,7 +140,13 @@ function showZoomed(projectId: ProjectId, sid: SessionId, title: string, workIte
     if (at && at.tabId === tab?.id) l = focusPane(l, at.tabId, at.paneId);
     else {
       const content = { kind: 'terminal' as const, session_id: sid };
-      const req = { content, placement: 'split_right' as const, focus: true, tab_title: title, work_item_id: workItem };
+      const req = {
+        content,
+        placement: 'split_right' as const,
+        focus: true,
+        tab_title: title,
+        work_item_id: workItem,
+      };
       ({ layout: l, location: at } = openPane(l, req));
     }
     const { tabId, paneId } = at;
@@ -183,7 +189,12 @@ export function liveToolPane(
       // webTools is in-memory: after a restart a persisted web tab has no instance.
       const w = p.content.kind === 'web' ? webTools[p.content.tool_instance_id] : undefined;
       // A web instance carries no work item: its tab's stands in.
-      if (w && !w.exited && w.toolId === toolId && (scope !== 'work' || (tab.work_item_id ?? null) === workItemId))
+      if (
+        w &&
+        !w.exited &&
+        w.toolId === toolId &&
+        (scope !== 'work' || (tab.work_item_id ?? null) === workItemId)
+      )
         return { tabId: tab.id, paneId: p.id };
     }
   return null;

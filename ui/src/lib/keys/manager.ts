@@ -268,7 +268,8 @@ export class KeyManager {
 
   /** `Esc` `Esc` in a tool's terminal runs `tools.hide` (#412); the first `Esc` still reaches the program. */
   #escapeTwice(event: KeyboardEvent): boolean {
-    const plain = event.key === 'Escape' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
+    const plain =
+      event.key === 'Escape' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
     const ctx = plain ? this.#context(event) : null;
     const now = Date.now();
     const twice = ctx?.kind === 'tool' && now - this.#lastEscape <= ESCAPE_TWICE_MS;
