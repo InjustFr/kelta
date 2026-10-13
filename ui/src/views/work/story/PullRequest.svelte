@@ -39,8 +39,8 @@
   const wait = $derived(pr ? prWait(pr, settings.value()?.reviews.sla_hours ?? 24) : null);
   const phase = $derived(phaseNow(item));
 
-  // The full check list is in the PR detail; until it is there, the failed names of the polled list.
-  const prKey = $derived(pr ? `${reviewKey(pr.ref)}@${pr.head_sha}` : null);
+  // Keyed on the polled ci so a pending detail reloads when CI settles. The full check list is in the PR detail; until it is there, the failed names of the polled list.
+  const prKey = $derived(pr ? `${reviewKey(pr.ref)}@${pr.head_sha}@${pr.ci}` : null);
   $effect(() => {
     if (prKey) untrack(() => pr && void reviews.loadDetail(pr.ref));
   });

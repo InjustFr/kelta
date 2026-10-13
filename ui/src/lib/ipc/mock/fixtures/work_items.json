@@ -638,9 +638,9 @@
     "nvim_socket": null,
     "session_ids": [],
     "tab_id": null,
-    "pr_url": "https://github.com/acme/shop-api/pull/88",
+    "pr_url": "https://github.com/acme/shop-api/pull/305",
     "state": {
-      "kind": "merged",
+      "kind": "pr_open",
       "detail": null
     },
     "steps": [

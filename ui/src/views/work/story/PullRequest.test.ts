@@ -26,12 +26,7 @@ const buttons = () =>
 
 describe('Story > Pull request', () => {
   it('SHOP-120 (#305): 3 threads with the first one quoted, reviewers, who it waits on', async () => {
-    mount(
-      item(6, {
-        pr_url: 'https://github.com/acme/shop-api/pull/305',
-        state: { kind: 'pr_open', detail: null } as WorkItem['state'],
-      }),
-    );
+    mount(item(6));
     expect((await screen.findByTestId('story-pr-threads')).textContent).toContain('3 unresolved threads');
     await waitFor(() =>
       expect(screen.getByTestId('story-pr').querySelector('blockquote')?.textContent).toContain(

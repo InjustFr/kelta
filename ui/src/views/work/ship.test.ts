@@ -103,6 +103,10 @@ describe('Finish', () => {
   });
 
   it('Finish all merged lists clean items and skips dirty ones and Done choices', async () => {
+    // The shipped mock has SHOP-120 open on #305; here it is the clean merged one.
+    const merged = { state: { kind: 'merged' as const, detail: null } };
+    Object.assign(mock.state.work[6]!, merged);
+    work.upsert({ ...mock.state.work[6]! });
     render(FinishMergedDialog, { props: { onclose: () => {} } });
     const ready = await screen.findByRole('list', { name: 'To finish' });
     expect(ready.textContent).toContain('SHOP-120');
