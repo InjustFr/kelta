@@ -5,7 +5,7 @@
 import { t } from '$lib/i18n/index.svelte';
 import type { SessionId, SessionInfo } from '$lib/gen';
 import { sessionWrite } from '$lib/ipc/commands';
-import { sessions } from '$lib/stores';
+import { sessions, toasts } from '$lib/stores';
 import { attentionRank } from '$lib/stores/reducers';
 
 import { hud } from './hud.svelte';
@@ -153,4 +153,15 @@ export async function sendReply(id: SessionId, text: string): Promise<void> {
   const clean = [...text].filter((c) => c >= ' ' && c !== '\x7f').join('');
   await sessionWrite(id, `\x1b[200~${clean}\x1b[201~`);
   await sessionWrite(id, '\r');
+}
+
+/** An `ask` option or a typed answer (AskBar, the Queue's brief); a failure becomes a toast. */
+export async function answer(id: SessionId, text: string): Promise<boolean> {
+  try {
+    await sendReply(id, text);
+    return true;
+  } catch (err) {
+    toasts.error(err, t('Sending to the session failed'));
+    return false;
+  }
 }
