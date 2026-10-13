@@ -262,7 +262,7 @@
   {#if waitingNames.length > 0}
     <SettingsGroup heading={t('Waiting to deploy')} data-testid="waiting-statuses">
       <p class="empty">
-        {t('Tickets in these statuses leave Up next and wait in the Waiting to deploy section of Now.')}
+        {t('Tickets in these statuses leave Up next and wait in the Waiting to deploy section of the Queue.')}
       </p>
       <fieldset>
         <legend class="k-visually-hidden">{t('Waiting to deploy')}</legend>

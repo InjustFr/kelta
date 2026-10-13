@@ -1,5 +1,5 @@
-// Now, fed from the stores: sections, header, freshness, row actions and Next waiting (FLOW §3).
-// Used by the Now pane, the rail tile (badge + tooltip) and `attention.next`.
+// The Queue, fed from the stores: sections, header, freshness, row actions and Next waiting (FLOW §3).
+// Used by the Queue pane, the rail tile (badge + tooltip) and `attention.next`.
 
 import { formatDate, t } from '$lib/i18n/index.svelte';
 import type { KeltaError, TicketRef } from '$lib/gen';
@@ -46,10 +46,11 @@ export function currentSections(): Section[] {
 
 export interface NowSummary {
   sections: Section[];
-  /** Rows in Your move and in Waiting on others (#399). */
+  /** Rows in Your move, Claude working and Waiting on others (#399, #413). */
   yours: number;
+  claude: number;
   others: number;
-  /** The rail's Now line. */
+  /** The rail's Queue line. */
   top: string;
   /** The rail badge: what waits on Louis now (Claude asking, diffs, fixes, review requests). */
   waiting: number;
@@ -58,16 +59,20 @@ export interface NowSummary {
 export function nowSummary(): NowSummary {
   const sections = currentSections();
   const yours = zoneCount(sections, 'yours');
+  const claude = zoneCount(sections, 'claude');
   const others = zoneCount(sections, 'waiting');
   return {
     sections,
     yours,
+    claude,
     others,
     top: yours
       ? t('{n} your move', { n: yours })
-      : others
-        ? t('{n} waiting on others', { n: others })
-        : t('Nothing waiting'),
+      : claude
+        ? t('{n} Claude working', { n: claude })
+        : others
+          ? t('{n} waiting on others', { n: others })
+          : t('Nothing waiting'),
     waiting: waitingCount(sections),
   };
 }

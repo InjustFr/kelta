@@ -104,7 +104,7 @@ describe('context bar', () => {
     expect(bar().textContent).toContain('for you');
     expect(screen.queryByTestId('context-owner')).toBeNull();
     const chip = screen.getByTestId('context-return');
-    expect(chip.textContent).toContain('↩ Now');
+    expect(chip.textContent).toContain('↩ Queue');
     await fireEvent.click(chip);
     await waitFor(() => expect(ui.view).toBe('now'));
   });
@@ -129,8 +129,8 @@ describe('context bar', () => {
   it('global view: its name, and the "underneath" chip leaves the view', async () => {
     ui.view = 'now';
     render(ContextBar);
-    await waitFor(() => expect(crumb()).toBe('Now'));
-    await waitFor(() => expect(setTitle).toHaveBeenLastCalledWith('Now'));
+    await waitFor(() => expect(crumb()).toBe('Queue'));
+    await waitFor(() => expect(setTitle).toHaveBeenLastCalledWith('Queue'));
     const under = screen.getByTestId('context-underneath');
     expect(under.textContent).toContain('‹ Shop › SHOP-142 Rate-limit login');
     await fireEvent.click(under);

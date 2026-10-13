@@ -19,8 +19,8 @@ test('one 30px bar; the window title follows the breadcrumb, none on a work tab'
   await expect(page).toHaveTitle('Shop › ~/code/shop-api');
   await expect(bar(page).getByTestId('context-crumb')).toHaveText(/Shop\s*›\s*❯\s*~\/code\/shop-api/);
   await page.getByTestId('rail-inbox').click();
-  await expect(page).toHaveTitle('Now');
-  await expect(bar(page).getByTestId('context-crumb')).toContainText('Now');
+  await expect(page).toHaveTitle('Queue');
+  await expect(bar(page).getByTestId('context-crumb')).toContainText('Queue');
   await expect(bar(page).getByTestId('context-underneath')).toContainText('Shop › Shell');
 });
 

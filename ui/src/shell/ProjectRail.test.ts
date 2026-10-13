@@ -234,7 +234,7 @@ describe('ProjectRail', () => {
     await expect
       .poll(() => r.getByTestId('rail-reviews').title)
       .toMatch(/^Reviews: \d+ asks? for your review$/);
-    expect(r.getByTestId('rail-inbox').title).toMatch(/^Now: \d+ your move$/);
+    expect(r.getByTestId('rail-inbox').title).toMatch(/^Queue: \d+ your move$/);
     expect(r.getByTestId('rail-tickets').title).toMatch(/^Tickets: \d+ assigned to you$/);
   });
 

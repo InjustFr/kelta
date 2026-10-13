@@ -31,7 +31,7 @@ Svelte 5 and Rust. The [user guide](docs/user/README.md) covers everything below
 
 - Jira, Redmine, GitHub Issues and Projects v2, GitLab, Gitea/Forgejo and Linear, several sources per project:
   [working with tickets](docs/user/tickets.md#sources).
-- **Tickets**, **Now** and **Reviews** on the rail work across every open project; Now shows what waits on you:
+- **Tickets**, **Queue** and **Reviews** on the rail work across every open project; the Queue shows where all work waits:
   [first launch](docs/user/getting-started.md#first-launch).
 - A keyboard-first list grouped by flow (Doing, Waiting, Ready), with a detail column, status moves and bulk
   moves, or a board: [keys](docs/user/tickets.md#keys).
@@ -63,7 +63,7 @@ Svelte 5 and Rust. The [user guide](docs/user/README.md) covers everything below
 - Set Kelta up by asking Claude (**Set up with Claude**), answer a workflow's questions with buttons, and run
   prompt or slash-command workflows on a ticket, a pull request or on their own:
   [Claude](docs/user/claude-code.md).
-- Claude sessions you start in another terminal show in Now, and Kelta jumps to their tmux pane or window; a
+- Claude sessions you start in another terminal show in the Queue, and Kelta jumps to their tmux pane or window; a
   session template can run Claude in your own terminal or in tmux: [Claude](docs/user/claude-code.md).
 
 **Tools**

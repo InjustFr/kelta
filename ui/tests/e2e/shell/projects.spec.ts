@@ -129,7 +129,7 @@ test.describe('project switching', () => {
     const tools = row('kt-t1');
     await expect(tools).toHaveAttribute('data-attention', 'none');
     // One count on the sub line (#430): what is my move (#399).
-    await expect(page.getByTestId('rail-inbox')).toHaveAttribute('title', /^Now: \d+ your move$/);
+    await expect(page.getByTestId('rail-inbox')).toHaveAttribute('title', /^Queue: \d+ your move$/);
 
     // A Claude stop with changes lights the row.
     await page.evaluate(() => {

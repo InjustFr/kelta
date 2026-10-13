@@ -64,7 +64,7 @@ describe('standing (#400)', () => {
     const draft = { id: 'draft', lamp: 'none', label: 'Draft PR', section: 'ship' } as Phase;
     expect(standing(tk('in_progress'), { item, phase: draft, pr: null }, true, false)).toEqual({
       stage: { at: PR, reached: PR, mark: 'you' },
-      where: 'Draft PR. Your move in Now.',
+      where: 'Draft PR. Your move in the Queue.',
     });
     expect(standing(tk('in_progress'), { item, phase: draft, pr: null }, true, true).stage.at).toBe(DEPLOY);
     const fix = { id: 'checks_failed', lamp: 'error', label: 'Checks failed', section: 'fix' } as Phase;

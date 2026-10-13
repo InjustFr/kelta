@@ -96,10 +96,10 @@
         {/snippet}
         <p>
           {#if hooks}
-            {t('Claude sessions you start in another terminal show in Now, with their state.')}
+            {t('Claude sessions you start in another terminal show in the Queue, with their state.')}
           {:else}
             {t(
-              "Install Kelta's hooks in Claude Code's user settings to show the Claude sessions you start in another terminal in Now.",
+              "Install Kelta's hooks in Claude Code's user settings to show the Claude sessions you start in another terminal in the Queue.",
             )}
           {/if}
         </p>
