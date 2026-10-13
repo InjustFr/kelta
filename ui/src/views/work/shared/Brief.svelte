@@ -71,6 +71,10 @@
   let openFor = $state<string | null>(null);
   const expanded = $derived(openFor === message);
   let overflows = $state(false);
+  /** `e` in the Queue (#417): folds or unfolds Claude's message, as its Show more button. */
+  export function toggleMessage(): void {
+    openFor = expanded ? null : message;
+  }
   let msgEl = $state<HTMLElement>();
   $effect(() => {
     void message;
@@ -114,7 +118,7 @@
       <cite>{t('Claude, last message')}</cite>
       <span class="msg" class:clamped={!expanded} bind:this={msgEl}>{message}</span>
       {#if overflows || expanded}
-        <Button size="sm" variant="ghost" onclick={() => (openFor = expanded ? null : message)}
+        <Button size="sm" variant="ghost" onclick={toggleMessage}
           >{expanded ? t('Show less') : t('Show more')}</Button
         >
       {/if}

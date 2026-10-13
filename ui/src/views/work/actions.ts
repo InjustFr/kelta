@@ -5,7 +5,7 @@
 
 import { msg, t } from '$lib/i18n/index.svelte';
 import { registerAction } from '$lib/actions';
-import type { TicketRef, WorkItem } from '$lib/gen';
+import type { ReviewRef, TicketRef, WorkItem } from '$lib/gen';
 import type { MenuItem } from '$lib/ui';
 import {
   openExternal,
@@ -20,6 +20,7 @@ import {
   workStartNow,
 } from '$lib/ipc/commands';
 import { projects, sessions, tickets, toasts, ui, work } from '$lib/stores';
+import { reviewKey } from '$lib/stores/reducers';
 
 import { prompts } from '../../shell/confirm.svelte';
 import { currentTab, revealSession } from '../../shell/nav';
@@ -43,7 +44,7 @@ import type { Phase, WorkActionId } from './phase';
 import { selection } from './selection.svelte';
 import { startWorkOnTicket } from './startWork';
 import { story } from './story/panel.svelte';
-import { ACTIONS_EVENT, workUi } from './ui.svelte';
+import { ACTIONS_EVENT, askFocused, workUi } from './ui.svelte';
 
 export const NOT_YET = msg('not available yet');
 
@@ -493,6 +494,16 @@ export async function runWorkAction(id: WorkActionId, item: WorkItem): Promise<v
   }
 }
 
+/** `v` on someone's PR (#417): the whole diff of its review checkout; without one, how to get it. */
+export async function viewPrChanges(ref: ReviewRef): Promise<void> {
+  const key = reviewKey(ref);
+  const item = work.all.find(
+    (w) => w.kind === 'review' && w.review && reviewKey(w.review) === key && w.state.kind !== 'finished',
+  );
+  if (item) await runWorkAction('review_diff', item);
+  else toasts.info(t('View changes: review it locally first (s)'));
+}
+
 /** The phase's next action (`Enter` everywhere). */
 export async function runPrimary(item: WorkItem): Promise<void> {
   const phase = phaseNow(item);
@@ -520,17 +531,11 @@ function onFocused(
   };
 }
 
-/** `⌘.` (#404): whatever has the keys opens its menu (a list's selected row, a detail's More menu);
- *  else the focused tab's work menu; else the palette. */
-function paneMenu(): boolean {
-  const ask = new Event(ACTIONS_EVENT, { bubbles: true, cancelable: true });
-  document.activeElement?.dispatchEvent(ask);
-  return ask.defaultPrevented;
-}
-
 const openWorkMenu = onFocused((item) => void (workUi.menu = item.id));
+// `⌘.` (#404): whatever has the keys opens its menu (a list's selected row, a detail's More menu);
+// else the focused tab's work menu; else the palette.
 registerAction('work.menu', async (args) => {
-  if (args?.id || !paneMenu()) await openWorkMenu(args);
+  if (args?.id || !askFocused(ACTIONS_EVENT)) await openWorkMenu(args);
 });
 registerAction('work.next', onFocused(runPrimary));
 registerAction('work.story', () => {

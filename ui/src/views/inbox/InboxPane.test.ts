@@ -25,6 +25,7 @@ import {
 
 import { prompts } from '../../shell/confirm.svelte';
 import '../work/actions';
+import { ACTIONS_EVENT, askFocused, REFRESH_EVENT } from '../work/ui.svelte';
 import { batch, claudeSlots, startsNow } from '../work/batch.svelte';
 import InboxPane from './InboxPane.svelte';
 import { focusedSessionId } from '../../shell/nav';
@@ -307,8 +308,8 @@ describe('Now', () => {
     await screen.findByText('Flaky test in cart service');
     const pane = screen.getByTestId('inbox-pane');
     await fireEvent.keyDown(pane, { key: 'j' });
-    await fireEvent.keyDown(pane, { key: 'c' });
-    expect(toasts.list.at(-1)?.toast.text).toMatch(/Only while a rebase is stopped/);
+    await fireEvent.keyDown(pane, { key: 'n' });
+    expect(toasts.list.at(-1)?.toast.text).toMatch(/No conflicted files/);
     await fireEvent.keyDown(pane, { key: 'R' });
     await waitFor(() => expect(work.get('0199a6b2-0000-7000-8000-00000000a004')?.review_due).toBe(false));
     await waitFor(() =>
@@ -316,6 +317,53 @@ describe('Now', () => {
         'Review changes',
       ),
     );
+  });
+
+  it('one verb per letter (#417): c, e and s on a work row; ⇧⌘R refreshes', async () => {
+    mountNow();
+    await screen.findByText('Flaky test in cart service');
+    const pane = screen.getByTestId('inbox-pane');
+    await fireEvent.keyDown(pane, { key: 'j' });
+    // `c` comments (nothing to comment on my work): it no longer continues a rebase.
+    await fireEvent.keyDown(pane, { key: 'c' });
+    expect(toastTexts().join()).not.toMatch(/rebase/);
+    // `e` unfolds Claude's message in the brief.
+    await fireEvent.keyDown(pane, { key: 'e' });
+    expect(
+      await within(screen.getByTestId('now-brief')).findByRole('button', { name: 'Show less' }),
+    ).toBeTruthy();
+    // `⇧⌘R` reaches the pane as REFRESH_EVENT (the key manager runs `reviews.open`).
+    pane.focus();
+    const calls = mock.calls.length;
+    expect(askFocused(REFRESH_EVENT)).toBe(true);
+    await waitFor(() => expect(mock.calls.slice(calls).some((c) => c.cmd === 'review_list')).toBe(true));
+    // `⌘.` on a work row is the work menu, where Continue rebase keeps its `c` (it flashes why here).
+    expect(askFocused(ACTIONS_EVENT)).toBe(true);
+    const menu = await screen.findByRole('menu', { name: 'Work' });
+    await fireEvent.keyDown(menu, { key: 'c' });
+    await waitFor(() =>
+      expect(toastTexts().join()).toMatch(/Continue rebase: Only while a rebase is stopped/),
+    );
+    await fireEvent.keyDown(menu, { key: 'Escape' });
+    // `s` goes to the work item's tab: it leaves the Queue.
+    await fireEvent.keyDown(pane, { key: 's' });
+    await waitFor(() => expect(ui.view).toBeNull());
+  });
+
+  it('m moves the ticket and c comments, on a ticket row and on someone else’s PR (#417)', async () => {
+    ui.sheets = [];
+    const { container } = mountNow();
+    await waitFor(() => expect(container.querySelector('.row[data-row^="t:"]')).not.toBeNull());
+    await nextWaitingTo(container, 't:');
+    const pane = screen.getByTestId('inbox-pane');
+    await fireEvent.keyDown(pane, { key: 'm' });
+    await fireEvent.keyDown(pane, { key: 'c' });
+    expect(ui.sheets.map((s) => s.key)).toEqual(['tickets.move', 'tickets.comment']);
+    ui.sheets = [];
+    await fireEvent.keyDown(pane, { key: 'Home' });
+    await nextWaitingTo(container, 'r:');
+    await fireEvent.keyDown(pane, { key: 'c' });
+    expect(ui.sheets.map((s) => s.key)).toEqual(['reviews.comment']);
   });
 
   it('N opens New work item, P parks the selected work row', async () => {

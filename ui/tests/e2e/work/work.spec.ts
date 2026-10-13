@@ -45,7 +45,7 @@ test.describe('tickets board', () => {
     await page.keyboard.press('Enter'); // the first move (In progress) is lit
     await expect(lane(page, 'in_progress').locator('[data-key="jira-acme:SHOP-151"]')).toBeVisible();
 
-    await page.keyboard.press('Shift+R'); // refresh from the backend
+    await page.keyboard.press('Control+Shift+R'); // refresh from the backend (#417)
     await expect(lane(page, 'in_progress').locator('[data-key="jira-acme:SHOP-151"]')).toBeVisible();
     expect(errors).toEqual([]);
   });

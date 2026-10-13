@@ -34,7 +34,9 @@ test('Tickets and Reviews show from the rail, leave for the item project and com
   await expect(page.getByTestId('workspace').getByTestId('ticket-detail')).toBeVisible();
   await expect.poll(() => globalSave(page)).toMatchObject({ layout: { active_tab: null } });
 
-  // Mod+Shift+R: the Reviews view from a project; Kelta reopens on it.
+  // Mod+Shift+R: the Reviews view from a project; Kelta reopens on it. (A list or detail with the
+  // keys refreshes instead, #417: the ticket detail gives them up first.)
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press('Control+Shift+R');
   await expect(host).toHaveAttribute('data-view', 'reviews');
   await expect(host.getByTestId('reviews-pane')).toBeVisible();

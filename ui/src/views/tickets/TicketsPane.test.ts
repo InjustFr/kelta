@@ -15,6 +15,7 @@ import type * as workActions from '../work/actions';
 import { runPrimary } from '../work/actions';
 import { batch } from '../work/batch.svelte';
 import { selection } from '../work/selection.svelte';
+import { askFocused, REFRESH_EVENT } from '../work/ui.svelte';
 import TicketsPane from './TicketsPane.svelte';
 
 vi.mock('../work/actions', async (orig) => ({
@@ -341,10 +342,11 @@ describe('TicketsPane states', () => {
     );
   });
 
-  it('one source with one view: no source button, and v does nothing', async () => {
+  it('one source with one view: no source button, and f v does nothing', async () => {
     const { container } = mountBoard('list', 'billing');
     await waitFor(() => expect(row(container, '4567', 'redmine-corp')).not.toBeNull());
     expect(screen.queryByRole('button', { name: /All sources/ })).toBeNull();
+    await press('f');
     await press('v');
     expect(screen.queryByRole('menu')).toBeNull();
   });
@@ -356,7 +358,8 @@ describe('TicketsPane states', () => {
     expect(screen.getByRole('button', { name: 'Show unassigned' })).toBeTruthy();
     await fireEvent.click(screen.getByRole('button', { name: 'Show team' }));
     mock.state.tickets = [];
-    await press('R', { shiftKey: true });
+    pane().focus();
+    expect(askFocused(REFRESH_EVENT)).toBe(true); // ⇧⌘R (#417)
     expect(await screen.findByText('No open tickets on Shop board.')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Refresh' })).toHaveLength(2);
   });
@@ -869,7 +872,7 @@ describe('TicketsPane split view', () => {
   });
   const detail = () => screen.queryByTestId('ticket-detail');
 
-  it('follows the selection; Space toggles it, Enter focuses it, Esc returns to the list', async () => {
+  it('follows the selection; Space toggles it, g focuses it, Esc returns to the list', async () => {
     const { container } = mountBoard('list');
     await ready(container, 'SHOP-151');
     await waitFor(() => expect(detail()?.getAttribute('aria-label')).toBe('Ticket SHOP-151'));
@@ -879,7 +882,7 @@ describe('TicketsPane split view', () => {
     expect(detail()).toBeNull();
     await press(' ');
     expect(detail()).not.toBeNull();
-    await press('Enter');
+    await press('g');
     await waitFor(() => expect(document.activeElement).toBe(detail()));
     await fireEvent.keyDown(detail()!, { key: 'j' }); // the detail's keys stay in the detail
     expect(detail()?.getAttribute('aria-label')).toBe('Ticket SHOP-155');
@@ -915,7 +918,7 @@ describe('TicketsPane split view', () => {
     await waitFor(() => expect(JSON.stringify(layout.get('shop'))).toContain('"ticket_detail"'));
   });
 
-  it('a row with work sits on the stage track; Enter runs the next step with the detail closed, g opens it', async () => {
+  it('a row with work sits on the stage track; Enter runs the next step, g opens the detail (#417)', async () => {
     await work.load();
     const w = work.forTicket({ account: 'jira-acme', key: 'SHOP-142', id: '10142' })!;
     work.upsert({ ...w, review_due: true });
@@ -928,23 +931,23 @@ describe('TicketsPane split view', () => {
     expect(row(container, 'SHOP-151').querySelector('[role="img"]')?.getAttribute('aria-label')).toMatch(
       /^At Ticket/,
     );
-    vi.mocked(runPrimary).mockClear();
-    await press('Enter'); // detail shown: Enter focuses it
-    await waitFor(() => expect(document.activeElement).toBe(detail()));
-    await fireEvent.keyDown(detail()!, { key: 'Escape' });
-    await press(' ');
-    expect(detail()).toBeNull();
     expect(container.querySelector('.hints')?.textContent).toContain('Review changes'); // named before Enter
     vi.mocked(runPrimary).mockClear();
     await press('Enter', { metaKey: true }); // #141's batch start, not the phase action
     expect(vi.mocked(runPrimary)).not.toHaveBeenCalled();
-    await press('Enter');
+    await press('Enter'); // the detail shown or not: Enter is the next step, as in the Queue
     expect(vi.mocked(runPrimary)).toHaveBeenCalledWith(expect.objectContaining({ id: w.id }));
     await press('g');
     await waitFor(() => expect(document.activeElement).toBe(detail()));
+    await fireEvent.keyDown(detail()!, { key: 'Escape' });
+    // No work: Enter starts it, through the start sheet.
+    await ready(container, 'SHOP-151');
+    expect(container.querySelector('.hints')?.textContent).toContain('Start work');
+    await press('Enter');
+    await waitFor(() => expect(ui.sheet?.key).toBe('start_work'));
   });
 
-  it('board: Enter on a card with work opens the detail, never runs the next step', async () => {
+  it('board: Enter on a card with work runs its next step, as in the list (#417)', async () => {
     await work.load();
     const w = work.forTicket({ account: 'jira-acme', key: 'SHOP-142', id: '10142' })!;
     work.upsert({ ...w, review_due: true });
@@ -952,9 +955,9 @@ describe('TicketsPane split view', () => {
     const { container } = mountBoard();
     await ready(container, 'SHOP-142');
     await press('l'); // SHOP-142 sits in the next lane
+    expect(container.querySelector('.hints')?.textContent).toContain('Review changes');
     await press('Enter');
-    expect(vi.mocked(runPrimary)).not.toHaveBeenCalled();
-    expect(container.querySelector('.hints')?.textContent).not.toContain('Review changes');
+    expect(vi.mocked(runPrimary)).toHaveBeenCalledWith(expect.objectContaining({ id: w.id }));
   });
 });
 
@@ -1004,7 +1007,7 @@ describe('TicketsPane in the rail Tickets view', () => {
     expect(ui.sheet).toMatchObject({ key: 'tracker.source_picker', props: { projectId: undefined } });
   });
 
-  it('lists every source, groups by source and narrows with v to one source or one of its views', async () => {
+  it('lists every source, groups by source and narrows with f v to one source or one of its views', async () => {
     inLayout();
     const { container } = render(TicketsPane, {
       props: {
@@ -1025,6 +1028,7 @@ describe('TicketsPane in the rail Tickets view', () => {
     await waitFor(() => expect(groupNames(container).some((g) => g?.startsWith('Ops board'))).toBe(true));
     expect(groupNames(container)).toContain('Billing board 4');
 
+    await press('f');
     await press('v');
     const items = (await screen.findAllByRole('menuitem')).map((m) => m.textContent?.trim());
     expect(items).toEqual([
@@ -1050,6 +1054,7 @@ describe('TicketsPane in the rail Tickets view', () => {
     await waitFor(() => expect(row(container, 'SHOP-151')).toBeNull());
     // one source in effect (once the core's page says so): the board is offered, on its columns
     expect(await screen.findByRole('tab', { name: /Board/ })).toBeTruthy();
+    await press('f');
     await press('v');
     await fireEvent.click(await screen.findByRole('menuitem', { name: /Current sprint/ }));
     expect(savedContent()).toMatchObject({ source_id: 'shop', view_id: 'sprint' });
