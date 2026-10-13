@@ -137,7 +137,7 @@ the palette (`Cmd+K`), **All projects** narrows the Queue, Tickets and Pull requ
 you** chip counts the Claudes blocked on you (a click goes to one; `Cmd+J` does the same), and **+ New** starts a
 work item or a session.
 
-The needs you chip is the one thing in Kelta that calls you. A Claude that finished does not send a desktop
+The needs you chip is the one thing in the window that calls you. A Claude that finished does not send a desktop
 notification by default (it can wait in the Queue), and a toast closes when you leave the view it came from. To
 work without interruptions, **focus mode** (`Shift+Cmd+F`) hides the sidebar and the Story panel and holds the
 rest until you leave it ([focus mode](keyring-and-notifications.md#focus-mode)).
