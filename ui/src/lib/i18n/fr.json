@@ -2498,6 +2498,8 @@
   "Ship pushes the branch and opens a draft PR.": "Livrer pousse la branche et ouvre une PR en brouillon.",
   "Open the Story panel": "Ouvrir le panneau Récit",
   "{whose}: {what}": "{whose} : {what}",
+  "{done} of {n}": "{done} sur {n}",
+  "Changes so far": "Modifications jusqu’ici",
   "Asks you": "Vous demande",
   "{n} min": "{n} min",
   "Tasks": "Tâches",
