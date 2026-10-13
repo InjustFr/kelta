@@ -533,8 +533,8 @@
     else if (key === 's' && row.type === 'review' && !row.mine) reviewRowLocally(row);
   }
 
-  /** Next up as shown (unfiltered): `S` starts its top ones, `J`/`K` reorder within it. */
-  const nextUpRows = (): NowRow[] => summary.sections.find((s) => s.id === 'next_up')?.rows ?? [];
+  /** Next up as shown (in scope, unfiltered): `S` starts its top ones, `J`/`K` reorder within it. */
+  const nextUpRows = (): NowRow[] => sections.find((s) => s.id === 'next_up')?.rows ?? [];
 
   const nextUpRefs = (): TicketRef[] =>
     nextUpRows().flatMap((r) => (r.type === 'ticket' ? [r.ticket.ticket.ref] : []));
@@ -549,7 +549,7 @@
   let overId = $state<string | null>(null);
 
   function drop(target: NowRow): void {
-    const from = summary.sections.find((s) => s.id === 'next_up')?.rows.find((r) => r.id === dragId);
+    const from = nextUpRows().find((r) => r.id === dragId);
     dragId = overId = null;
     if (from?.type !== 'ticket' || target.type !== 'ticket' || from === target) return;
     const refs = nextUpRefs();
