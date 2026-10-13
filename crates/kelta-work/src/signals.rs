@@ -80,14 +80,17 @@ impl WorkService {
                     || before != (w.review_due, w.claude_replied, w.claude_uuid.clone())
             })
             .await?;
-        // Core leaves the "finished" notification of a work item's Claude to us.
-        if event == names::STOP && core.settings(Some(&item.project_id)).notifications.claude_done {
+        // Core leaves the "finished" notification of a work item's Claude to us. A reply without
+        // changes waits on Louis (`claude_blocked`); ready to review and finished can wait (`claude_done`).
+        let settings = core.settings(Some(&item.project_id));
+        let ns = &settings.notifications;
+        let (en, on) = match delta {
+            Some(Some(_)) => ("{} ready to review", ns.claude_done),
+            Some(None) => ("{}: Claude replied", ns.claude_blocked),
+            None => ("{}: Claude finished", ns.claude_done),
+        };
+        if event == names::STOP && on {
             let key = item_key(&item);
-            let en = match delta {
-                Some(Some(_)) => "{} ready to review",
-                Some(None) => "{}: Claude replied",
-                None => "{}: Claude finished",
-            };
             let title = kelta_proto::i18n::tr(core.settings(None).app.language, en).replace("{}", &key);
             let body = message.map(|m| m.chars().take(200).collect());
             // Core drops it when the session's pane is visible in the focused window.

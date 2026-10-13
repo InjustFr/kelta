@@ -2490,8 +2490,8 @@
       "default": {
         "bell_background": false,
         "ci_failed_mine": true,
-        "claude_done": true,
-        "claude_needs_input": true,
+        "claude_blocked": true,
+        "claude_done": false,
         "enabled": true,
         "only_when_unfocused": true,
         "pr_approved": true,
@@ -2508,12 +2508,14 @@
           "default": true,
           "type": "boolean"
         },
-        "claude_done": {
+        "claude_blocked": {
           "default": true,
+          "description": "Claude needs input, asks a question or replied without changes.",
           "type": "boolean"
         },
-        "claude_needs_input": {
-          "default": true,
+        "claude_done": {
+          "default": false,
+          "description": "Claude is ready for review or finished.",
           "type": "boolean"
         },
         "enabled": {

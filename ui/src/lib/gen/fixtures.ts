@@ -2225,8 +2225,8 @@ export const settingsDefault: Settings = {
   "notifications": {
     "bell_background": false,
     "ci_failed_mine": true,
-    "claude_done": true,
-    "claude_needs_input": true,
+    "claude_blocked": true,
+    "claude_done": false,
     "enabled": true,
     "only_when_unfocused": true,
     "pr_approved": true,
