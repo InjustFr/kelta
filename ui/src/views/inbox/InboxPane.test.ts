@@ -1,13 +1,15 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { eventsSubscribe } from '$lib/ipc/commands';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { findContent } from '$lib/layout';
 
 import { globalContent, loadGlobalLayout, persistPaneContent } from '../work/nav';
-import type { Settings } from '$lib/gen';
+import type { SessionInfo, Settings } from '$lib/gen';
 import {
+  applyUiEvent,
   GLOBAL,
   layout,
   projects,
@@ -71,6 +73,28 @@ const FLAKY = '0199a6b2-0000-7000-8000-00000000a004';
 const RATE_LIMIT = '0199a6b2-0000-7000-8000-00000000a001';
 /** wip/retry-queue-spike, whose Claude has a task list but no changes yet. */
 const SPIKE = '0199a6b2-0000-7000-8000-00000000a005';
+/** The spike's Claude: dormant, hooks on, Claude replied. */
+const SPIKE_CLAUDE = '0199a6b2-0000-7000-8000-000000000012';
+
+/** Patches the spike's Claude in the mock, which tells the stores. */
+function spikeClaude(patch: Partial<SessionInfo>): void {
+  const s = mock.state.sessions.find((x) => x.id === SPIKE_CLAUDE)!;
+  Object.assign(s, patch);
+  mock.emit({ type: 'session.updated', session: structuredClone(s) });
+}
+
+const QUESTION = {
+  question: 'Keep 3 tries?',
+  options: ['Keep 3', 'Make it configurable'],
+  body_html: '<p>The <strong>backoff</strong> constant</p>',
+};
+const writesTo = (id: string) =>
+  mock.calls
+    .filter((c) => c.cmd === 'session_write' && (c.args as { id: string }).id === id)
+    .map((c) =>
+      new TextDecoder().decode(new Uint8Array(Object.values((c.args as { data: Uint8Array }).data))),
+    );
+const toastTexts = () => toasts.list.map((e) => e.toast.text);
 
 describe('Now', () => {
   it('one list in three zones, a summary line, no chips, Compact, Refresh or key bar (#399, #413)', async () => {
@@ -155,6 +179,90 @@ describe('Now', () => {
     expect(progress.querySelector('li[aria-current="step"]')?.textContent).toContain('Cover the burst case');
     await waitFor(() => expect(progress.textContent).toContain('+41 −7, 3 files'));
     expect(progress.querySelector('.files li')?.textContent).toBe('src/rate_limit.rs');
+  });
+
+  it("answers Claude's question from the brief: numbered options, 1 sends the first; a permission prompt only offers Go to Claude (#414)", async () => {
+    await eventsSubscribe(applyUiEvent);
+    const { container } = mountNow();
+    await screen.findByText('Flaky test in cart service');
+    const pane = screen.getByTestId('inbox-pane');
+    spikeClaude({
+      lifecycle: 'live',
+      status: 'working',
+      claude: { ...mock.state.sessions.find((x) => x.id === SPIKE_CLAUDE)!.claude!, question: QUESTION },
+    });
+    await nextWaitingTo(container, `w:${SPIKE}`);
+    expect(rowZone(container, `w:${SPIKE}`)).toBe('yours');
+    const brief = screen.getByTestId('now-brief');
+    const ask = await within(brief).findByTestId('ask');
+    expect(ask.textContent).toContain('Keep 3 tries?');
+    expect(ask.textContent).toContain('backoff constant');
+    expect([...ask.querySelectorAll('button kbd')].map((k) => k.textContent)).toEqual(['1', '2']);
+    expect(within(brief).getByTestId('now-reply')).toBeTruthy();
+
+    // A permission prompt in the same session: no buttons, no field, the digits do nothing.
+    spikeClaude({ status: 'needs_input' });
+    await waitFor(() => expect(within(brief).queryByTestId('ask')).toBeNull());
+    expect(within(brief).queryByTestId('now-reply')).toBeNull();
+    expect(brief.querySelector('.btn.primary')?.textContent).toMatch(/^Go to Claude/);
+    await fireEvent.keyDown(pane, { key: '1' });
+    expect(writesTo(SPIKE_CLAUDE)).toEqual([]);
+
+    spikeClaude({ status: 'working' });
+    await within(brief).findByTestId('ask');
+    await fireEvent.keyDown(pane, { key: '1' });
+    await waitFor(() => expect(writesTo(SPIKE_CLAUDE)).toEqual(['\x1b[200~Keep 3\x1b[201~', '\r']));
+    // The question is answered and Claude works on: the row leaves Your move.
+    await waitFor(() => expect(rowZone(container, `w:${SPIKE}`)).toBe('claude'));
+  });
+
+  it('the reply field types into the question, and sends to a Claude that replied by work_send rules (#414)', async () => {
+    await eventsSubscribe(applyUiEvent);
+    const { container } = mountNow();
+    await screen.findByText('Flaky test in cart service');
+    await nextWaitingTo(container, `w:${SPIKE}`);
+    const brief = screen.getByTestId('now-brief');
+    const send = async (text: string) => {
+      const input = await within(brief).findByTestId<HTMLInputElement>('now-reply');
+      await fireEvent.input(input, { target: { value: text } });
+      // Typing keeps the list's keys out: `j` does not move the selection.
+      await fireEvent.keyDown(input, { key: 'j' });
+      await fireEvent.keyDown(input, { key: 'Enter' });
+      return input;
+    };
+    const sends = () => mock.calls.filter((c) => c.cmd === 'work_send').map((c) => c.args);
+
+    // Claude replied, dormant: resumed with the reply ("Sent to Claude."); working, it leaves Your move.
+    expect(brief.textContent).toContain('Claude replied');
+    await send('Make it configurable');
+    await waitFor(() =>
+      expect(sends()).toEqual([{ id: SPIKE, prompt: 'Make it configurable', files: [], threads: null }]),
+    );
+    await waitFor(() => expect(toastTexts()).toContain('Sent to Claude.'));
+    await waitFor(() => expect(rowZone(container, `w:${SPIKE}`)).toBe('claude'));
+
+    // Hooks inactive: copied, with its message.
+    toasts.clear();
+    spikeClaude({ lifecycle: 'live', status: 'done', status_source: 'heuristic' });
+    const input = await send('copied');
+    await waitFor(() => expect(toastTexts().join()).toContain("This Claude isn't connected to Kelta"));
+    await waitFor(() => expect(input.value).toBe(''));
+    // Hooks on but busy: held until its Stop, with its message.
+    toasts.clear();
+    spikeClaude({ status: 'running', status_source: 'hook' });
+    await send('held');
+    await waitFor(() => expect(toastTexts().join()).toContain('it gets your message when it stops'));
+    expect(toastTexts()).not.toContain('Sent to Claude.');
+
+    // A question: the field types the answer instead.
+    spikeClaude({
+      status: 'working',
+      claude: { ...mock.state.sessions.find((x) => x.id === SPIKE_CLAUDE)!.claude!, question: QUESTION },
+    });
+    await within(brief).findByTestId('ask');
+    await send('Five tries');
+    await waitFor(() => expect(writesTo(SPIKE_CLAUDE)).toEqual(['\x1b[200~Five tries\x1b[201~', '\r']));
+    expect(sends()).toHaveLength(3);
   });
 
   it("the row's next step is a button that runs it", async () => {

@@ -41,12 +41,13 @@
 
   import { chordFor } from '../../shell/labels';
   import { openView } from '../../shell/nav';
-  import { peekHover } from '../../shell/peek.svelte';
+  import { answer, peekHover } from '../../shell/peek.svelte';
   import { listScope } from '../../shell/scope.svelte';
   import { ctxHot, itemCost, overBudget, usd } from '../../shell/usage';
   import { blockedReason, runWorkAction, workAction, WORK_ACTIONS } from '../work/actions';
   import { batch, batchKey } from '../work/batch.svelte';
   import { isAuthError } from '../work/common';
+  import { sendToClaude } from '../work/fixloop.svelte';
   import AskBar from '../work/AskBar.svelte';
   import { askerOf, claudeOf, prOf, sessionLabel, workTitle } from '../work/live';
   import { loadGlobalLayout, persistPaneContent } from '../work/nav';
@@ -448,6 +449,8 @@
   let selId = $state<string | null>(null);
   /** The brief shows every action (`.`); closes when the selection moves. */
   let allActions = $state(false);
+  /** The brief's reply to Claude (#414); cleared when the selection moves. */
+  let draft = $state('');
   /** Folded sections (Waiting to deploy) opened by their header. */
   let unfolded = $state<string[]>([]);
   const isOpen = (s: Section): boolean => !s.folded || unfolded.includes(s.id);
@@ -467,9 +470,12 @@
   const cur = $derived(curAt?.row ?? null);
   const curView = $derived(curAt ? view(curAt.row, curAt.s) : null);
 
+  // A primitive: a store update that rebuilds the same row must not clear a draft being typed.
+  const curId = $derived(cur?.id);
   $effect(() => {
-    void cur?.id;
+    void curId;
     allActions = false;
+    draft = '';
   });
 
   const lines = $derived.by((): Line[] => {
@@ -592,6 +598,8 @@
   ]);
 
   function onkeydown(e: KeyboardEvent): void {
+    // The filter and the brief's reply field keep their keys.
+    if (e.target instanceof HTMLInputElement) return;
     // A section header keeps its own keys (Enter, Space); they must not act on the selected row.
     if (e.target instanceof HTMLButtonElement && e.target.classList.contains('fold')) return;
     // A brief button pressed with the keyboard runs itself, not the row's next action too. (The row itself is a button: don't match it.)
@@ -654,9 +662,18 @@
       case 'K':
         if (cur && isNextUp(cur)) reorder(cur, e.key === 'J' ? 1 : -1);
         break;
-      default:
+      default: {
+        // `1`–`9` answer the brief's question (#414).
+        const asker = cur && /^[1-9]$/.test(e.key) ? answerable(cur) : null;
+        const option = asker && questionOf(asker)?.options[Number(e.key) - 1];
+        if (asker && option) {
+          // One answer at a time: a held or repeated key must not type the option again.
+          if (!inflight.has(cur.id)) void inflight.track(cur.id, () => answer(asker.id, option));
+          break;
+        }
         if (!cur || !'vVbpfrcansoPC'.includes(e.key) || e.key.length !== 1) return;
         letter(cur, e.key);
+      }
     }
     e.preventDefault();
   }
@@ -674,6 +691,34 @@
   function rowAsker(row: NowRow): SessionInfo | null {
     if (row.type === 'session') return questionOf(row.session) ? row.session : null;
     return row.type === 'work' ? askerOf(row.item) : null;
+  }
+
+  /** The question the brief answers: not behind a permission prompt (Kelta never types into one). */
+  function answerable(row: NowRow): SessionInfo | null {
+    const s = rowAsker(row);
+    return s && s.status !== 'needs_input' ? s : null;
+  }
+
+  /** The reply field: types into Claude's question, or sends to a Claude that replied by `work_send`'s
+   *  rules (pasted when idle, held until its Stop, or copied; core toasts the last two). */
+  async function sendDraft(row: NowRow): Promise<void> {
+    const text = draft.trim();
+    const asker = answerable(row);
+    if (!text) return;
+    // Emptied first so a second Enter cannot send it twice; put back if it failed.
+    draft = '';
+    const sent = asker
+      ? await answer(asker.id, text)
+      : row.type === 'work' && (await sendToClaude(row.item, text));
+    if (!sent && !draft) draft = text;
+  }
+
+  function onReplyKey(e: KeyboardEvent, row: NowRow): void {
+    if (e.key === 'Escape') root?.focus();
+    else if (e.key === 'Enter' && !e.isComposing) void sendDraft(row);
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
   }
 
   function rowMenu(e: MouseEvent, row: NowRow): void {
@@ -902,11 +947,13 @@
             ...a,
             run: () => inflight.track(row.id, a.run),
           })}
+          {@const asker = answerable(row)}
+          {@const replied = row.type === 'work' && row.phase.id === 'replied'}
           <div class="side">
             <Brief
               id={v.id}
               title={v.title}
-              where={v.reason}
+              where={asker ? '' : v.reason}
               primary={v.actions.filter((a) => a.key === 'enter').map(track)[0] ?? null}
               actions={v.actions.filter((a) => a.key !== 'enter').map(track)}
               bind:more={allActions}
@@ -915,6 +962,19 @@
               busy={inflight.has(row.id)}
               testid="now-brief"
             >
+              {#snippet sub()}{#if asker}<AskBar session={asker} full numbered />{/if}{/snippet}
+              {#snippet reply()}
+                {#if asker || replied}
+                  <input
+                    bind:value={draft}
+                    class="k-filter reply"
+                    placeholder={t('Reply to Claude')}
+                    aria-label={t('Reply to Claude')}
+                    data-testid="now-reply"
+                    onkeydown={(e) => onReplyKey(e, row)}
+                  />
+                {/if}
+              {/snippet}
               {#if v.progress}
                 {@const { tasks, changes, files } = v.progress}
                 <section class="progress" data-testid="now-brief-progress">
@@ -1401,6 +1461,11 @@
     .moreline {
       padding-left: calc(var(--k-space-3) + 64px + var(--k-space-4));
     }
+  }
+
+  /* The brief's reply field (#414). */
+  .reply {
+    width: 100%;
   }
 
   /* Claude's progress in the brief (#434). */
