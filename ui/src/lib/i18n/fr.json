@@ -2490,5 +2490,10 @@
   "{n} Claude working": "{n} Claude au travail",
   "Answer, review, fix, ship or start: it waits on you.": "Répondre, relire, corriger, livrer ou démarrer : cela vous attend.",
   "Your parallel capacity: back in minutes.": "Votre capacité en parallèle : de retour dans quelques minutes.",
-  "Reviewers, checks, deploys and blockers: hours or days.": "Relecteurs, vérifications, déploiements et blocages : des heures ou des jours."
+  "Reviewers, checks, deploys and blockers: hours or days.": "Relecteurs, vérifications, déploiements et blocages : des heures ou des jours.",
+  "Acceptance criteria": "Critères d’acceptation",
+  "{checked} of {n} criteria checked": {
+    "one": "{checked} critère sur {n} coché",
+    "other": "{checked} critères sur {n} cochés"
+  }
 }

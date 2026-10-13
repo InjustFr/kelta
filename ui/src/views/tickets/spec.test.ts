@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { readSpec } from './spec';
+import { readCriteria, readSpec } from './spec';
 
 describe('readSpec (#400)', () => {
   it('one section per heading, the intro untitled, list sections counted', () => {
@@ -51,5 +51,38 @@ describe('readSpec (#400)', () => {
     expect(readSpec('<p>Given the load, we cache.</p>').sections[0]!.html).toBe(
       '<p>Given the load, we cache.</p>',
     );
+  });
+});
+
+describe('readCriteria (#424)', () => {
+  const box = (on: boolean) => `<input disabled="" type="checkbox"${on ? ' checked=""' : ''}>`;
+
+  it('task-list items, checked as in the tracker; the first paragraph is the intro', () => {
+    const c = readCriteria(
+      `<p>Cap the rate.</p><p>More.</p><ul><li>${box(true)}Shown</li><li>${box(false)}Tested <ul><li>sub</li></ul></li><li><p>${box(false)}Loose</p></li></ul>`,
+    );
+    expect(c.items).toEqual([
+      { text: 'Shown', checked: true },
+      { text: 'Tested', checked: false },
+      { text: 'Loose', checked: false },
+    ]);
+    expect(c.intro).toBe('Cap the rate.');
+  });
+
+  it('the list under an Acceptance heading, in any case, up to the next heading', () => {
+    const c = readCriteria(
+      '<div><h2>Notes</h2><ul><li>no</li></ul><h3>ACCEPTANCE criteria:</h3><ol><li>One</li><li>Two</li></ol><p>x</p><h3>Other</h3><ul><li>no</li></ul></div>',
+    );
+    expect(c.items).toEqual([
+      { text: 'One', checked: false },
+      { text: 'Two', checked: false },
+    ]);
+    expect(readCriteria('<h2>AC</h2><ul><li>Only</li></ul>').items).toHaveLength(1);
+  });
+
+  it('none: no items, the first paragraph of a plain-text body', () => {
+    expect(readCriteria('<h2>Notes</h2><ul><li>a</li></ul>').items).toEqual([]);
+    expect(readCriteria('<pre>First para\nstill\n\nSecond</pre>').intro).toBe('First para\nstill');
+    expect(readCriteria('').intro).toBe('');
   });
 });
