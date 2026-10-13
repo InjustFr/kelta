@@ -510,7 +510,7 @@ describe('SettingsStore', () => {
   it('tracks account statuses', () => {
     const store = new SettingsStore();
     store.apply({ type: 'account.status', account_id: 'jira-acme', status: 'needs_auth', detail: '401' });
-    expect(store.accounts['jira-acme']).toEqual({ status: 'needs_auth', detail: '401' });
+    expect(store.accounts['jira-acme']).toMatchObject({ status: 'needs_auth', detail: '401' });
   });
 
   it('loads the schema once', async () => {

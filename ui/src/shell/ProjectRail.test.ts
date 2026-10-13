@@ -20,7 +20,7 @@ const BILLING_CLAUDE = '0199a6b2-0000-7000-8000-000000000005';
 let m: MockControls;
 
 /** Every open layout loaded (as the shell preloads them); `toolTab` leaves shop's Shell tab with lazydocker only. */
-async function setup(toolTab = false, webInstance?: string) {
+async function setup(toolTab = false) {
   const created = createMockTransport();
   m = created.controls;
   setTransport(created.transport);
@@ -29,8 +29,6 @@ async function setup(toolTab = false, webInstance?: string) {
     tab.root = allPanes(tab.root).find(
       (p) => p.content.kind === 'terminal' && p.content.session_id === LAZYDOCKER,
     ) as LayoutNode;
-    if (webInstance && tab.root.type === 'pane')
-      tab.root = { ...tab.root, content: { kind: 'web', tool_instance_id: webInstance } };
   }
   layout.byProject = {};
   tools.byProject = {};
@@ -99,69 +97,17 @@ describe('ProjectRail', () => {
     expect(layout.get('billing')?.active_tab).toBe('billing-t2');
   });
 
-  it('a tool-only tab sits under Tools; a session in no pane is a dim row that reveals it', async () => {
+  it('no Tools band (#412): a tool-only tab is a band row; a session in no pane is a dim row that reveals it', async () => {
     const r = await setup(true);
     await unfold(r, 'shop');
-    expect(bandRows(r, 'shop')).toEqual(['shop-t1', 'shop-t3']);
-    const tools = within(r.getByTestId('rail-tools'));
-    expect(tools.getAllByTestId('rail-tool').map((e) => e.dataset.toolId)).toEqual(
-      m.state.tools.map((t) => t.id),
-    );
-    const sub = tools.getByTestId('rail-tool-instance');
-    expect(sub.dataset.toolId).toBe('lazydocker');
-    expect(sub.textContent).toContain('└ Shop');
+    expect(r.queryByTestId('rail-tools')).toBeNull();
+    expect(bandRows(r, 'shop')).toEqual(['shop-t1', 'shop-t2', 'shop-t3']);
 
     const bg = r.getByTestId('rail-background');
     expect(bg.dataset.sessionId).toBe(SHOP_SHELL);
     await fireEvent.click(bg);
-    await expect.poll(() => bandRows(r, 'shop').length).toBe(3);
+    await expect.poll(() => bandRows(r, 'shop').length).toBe(4);
     expect(r.queryByTestId('rail-background')).toBeNull();
-  });
-
-  it('an exited tool session is no tool instance: its tab is a closable row in its band', async () => {
-    const r = await setup(true);
-    await unfold(r, 'shop');
-    sessions.apply({
-      type: 'session.updated',
-      session: { ...sessions.get(LAZYDOCKER)!, lifecycle: 'exited' },
-    });
-    await expect.poll(() => bandRows(r, 'shop')).toEqual(['shop-t1', 'shop-t2', 'shop-t3']);
-    expect(within(r.getByTestId('rail-tools')).queryAllByTestId('rail-tool-instance')).toHaveLength(0);
-  });
-
-  it('a web tab whose instance is unknown (Kelta restarted) is a closable row, not a tool', async () => {
-    const r = await setup(true, 'gone');
-    await unfold(r, 'shop');
-    expect(bandRows(r, 'shop')).toEqual(['shop-t1', 'shop-t2', 'shop-t3']);
-    expect(within(r.getByTestId('rail-tools')).queryAllByTestId('rail-tool-instance')).toHaveLength(0);
-  });
-
-  it('tools: running PTY tools carry a lamp, web and external ones ↗, missing ones dimmed; a sub-line focuses its pane', async () => {
-    const r = await setup();
-    const row = (id: string) => r.container.querySelector(`[data-testid="rail-tool"][data-tool-id="${id}"]`)!;
-    expect(row('lazydocker').getAttribute('data-attention')).toBe('activity');
-    expect(row('lazygit').getAttribute('data-attention')).toBe('none');
-    expect(row('sl-web').classList).toContain('missing');
-    expect(row('sl-web').querySelector('.launch')).not.toBeNull();
-    expect(row('lazygit').querySelector('.launch')).toBeNull();
-
-    sessions.apply({
-      type: 'session.updated',
-      session: { ...sessions.get(LAZYDOCKER)!, lifecycle: 'exited' },
-    });
-    await expect.poll(() => row('lazydocker').getAttribute('data-attention')).toBe('none');
-    sessions.apply({ type: 'session.updated', session: { ...sessions.get(LAZYDOCKER)!, lifecycle: 'live' } });
-
-    ui.view = 'reviews';
-    await expect.poll(() => r.queryAllByTestId('rail-tool-instance').length).toBe(1);
-    await fireEvent.click(r.getByTestId('rail-tool-instance'));
-    expect(ui.view).toBeNull();
-    expect(projects.activeId).toBe('shop');
-    const l = layout.get('shop')!;
-    expect(l.active_tab).toBe('shop-t2');
-    expect(l.tabs.find((t) => t.id === 'shop-t2')!.focused_pane).toBe(
-      r.getByTestId('rail-tool-instance').dataset.paneId,
-    );
   });
 
   it('runs (#392): a claimed run on its ticket, the others on their session row with a count; a click splits the runs in', async () => {
@@ -254,24 +200,5 @@ describe('ProjectRail', () => {
     expect(within(band(r, 'shop')).getByTestId('rail-more').dataset.attention).toBe(
       maxLamp(shop.map((t) => tabAttention(t))),
     );
-  });
-
-  it('tools: a tool without a Lucide icon shows a well-known icon, its 1-2 characters, else a monogram', async () => {
-    const r = await setup();
-    for (const [k, slot] of Object.entries(tools.byProject))
-      tools.byProject = {
-        ...tools.byProject,
-        [k]: {
-          ...slot,
-          data:
-            slot.data?.map((x) =>
-              x.id === 'lazydocker' ? { ...x, icon: null } : x.id === 'lazygit' ? { ...x, icon: 'LG' } : x,
-            ) ?? null,
-        },
-      };
-    const row = (id: string) => r.container.querySelector(`[data-testid="rail-tool"][data-tool-id="${id}"]`)!;
-    await expect.poll(() => row('lazygit').querySelector('.abbr')?.textContent).toBe('LG');
-    expect(row('lazydocker').querySelector('.abbr')).toBeNull();
-    expect(row('lazydocker').querySelector('use')?.getAttribute('href')).toBe('#i-container');
   });
 });

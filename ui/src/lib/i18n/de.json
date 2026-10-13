@@ -87,8 +87,6 @@
   "Could not open the view": "Ansicht konnte nicht geöffnet werden",
   "Back to {place}": "Zurück zu {place}",
   "Back": "Zurück",
-  "for you": "für Sie",
-  "Go to {name}": "Zu {name} wechseln",
   "Leave {view} for what is underneath": "{view} verlassen und zum Darunterliegenden zurückkehren",
   "Workflow runs": "Workflow-Läufe",
   "Workflow runs of this session": "Workflow-Läufe dieser Sitzung",
@@ -184,7 +182,6 @@
   "Remove project": "Projekt entfernen",
   "Project action failed": "Projektaktion fehlgeschlagen",
   "Reordering projects failed": "Projekte konnten nicht neu angeordnet werden",
-  "{tool}: not installed": "{tool}: nicht installiert",
   "Menu for {name}": "Menü für {name}",
   "Search or run a command": "Suchen oder Befehl ausführen",
   "Search or run…": "Suchen oder ausführen…",
@@ -205,7 +202,6 @@
   "{name}: running in the background, click to show it": "{name}: läuft im Hintergrund, zum Anzeigen klicken",
   "background": "Hintergrund",
   "No projects yet": "Noch keine Projekte",
-  "{tool} in {place}": "{tool} in {place}",
   "Row actions": "Zeilenaktionen",
   "Project actions": "Projektaktionen",
   "{n} running sessions will be terminated.": {
@@ -2523,5 +2519,17 @@
   "{done} of {n} tasks": {
     "one": "{done} von {n} Aufgabe",
     "other": "{done} von {n} Aufgaben"
-  }
+  },
+  "Health": "Zustand",
+  "Kelta's hooks are not installed in Claude Code: sessions started in another terminal do not show in the Queue": "Keltas Hooks sind nicht in Claude Code installiert: in einem anderen Terminal gestartete Sitzungen erscheinen nicht in der Warteschlange",
+  "Kelta's ticket tools are not installed in Claude Code": "Keltas Ticket-Werkzeuge sind nicht in Claude Code installiert",
+  "Install hooks": "Hooks installieren",
+  "Install MCP": "MCP installieren",
+  "Reconnect account": "Konto neu verbinden",
+  "Open account": "Konto öffnen",
+  "Open source": "Quelle öffnen",
+  "Open theme": "Design öffnen",
+  "Showing cached tickets: the last refresh failed": "Zwischengespeicherte Tickets: die letzte Aktualisierung ist fehlgeschlagen",
+  "Everything works.": "Alles funktioniert.",
+  "Fixing failed": "Beheben fehlgeschlagen"
 }

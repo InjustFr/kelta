@@ -61,6 +61,9 @@ const LIFTS = [
   ['border_strong', 3, ['well', 'bezel'], msg('Strong border raised to 3:1')],
 ] as const;
 
+/** The note of a theme the floor could not fully fix (Settings › Health lists it). */
+export const BELOW_FLOOR = msg('Some text or borders stay below the contrast floor');
+
 /** The tokens `ui` must change to meet the floor, and the English notes saying why. */
 export function floor(ui: FloorUi): { fixed: Partial<FloorUi>; notes: string[] } {
   const fixed: Partial<FloorUi> = {};
@@ -94,6 +97,6 @@ export function floor(ui: FloorUi): { fixed: Partial<FloorUi>; notes: string[] }
     if (ok(lifted)) notes.push(note);
     else short = true;
   }
-  if (short) notes.push(msg('Some text or borders stay below the contrast floor'));
+  if (short) notes.push(BELOW_FLOOR);
   return { fixed, notes };
 }

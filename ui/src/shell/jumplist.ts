@@ -166,7 +166,7 @@ function alive(loc: JumpLoc): boolean {
   return !!projects.byId(loc.project)?.open && !!tab && !!findPane(tab.root, loc.pane);
 }
 
-/** Where `nav.back` lands from `here`, without moving (the context bar's `‹` tooltip and return chip). */
+/** Where `nav.back` lands from `here`, without moving (the context bar's `‹` tooltip). */
 export function backTarget(here: JumpLoc | null): JumpLoc | null {
   const past = jumplist.list.slice(0, jumplist.at + 1);
   if (pending && !same(past.at(-1), pending)) past.push(pending);

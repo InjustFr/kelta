@@ -42,9 +42,7 @@ import {
   type Direction,
   type PaneNode,
 } from '$lib/layout';
-import { webTools } from '$lib/plugin-host/web.svelte';
 import { layout, projects, sessions, toasts, tools, ui, work, type GlobalView } from '$lib/stores';
-import { lampOf, maxAttention } from '$lib/stores/reducers';
 import { terminalPool } from '$lib/terminal';
 
 import { phaseNow } from '../views/work/live';
@@ -69,10 +67,10 @@ export interface RailRow {
 
 /**
  * A band's tabs (#430): its work tabs by start time, so a phase change never moves a row, then every
- * other tab (shells, boards, lists), folded under "n more". Tool tabs are under Tools.
+ * other tab (shells, boards, lists), folded under "n more".
  */
-export function bandTabs(projectId: ProjectId, lines = toolSubLines()): { work: Tab[]; more: Tab[] } {
-  const tabs = (layout.get(projectId)?.tabs ?? []).filter((tab) => !isToolTab(tab, lines));
+export function bandTabs(projectId: ProjectId): { work: Tab[]; more: Tab[] } {
+  const tabs = layout.get(projectId)?.tabs ?? [];
   const started = (tab: Tab) => workItemOfTab(tab)?.created_at ?? '';
   return {
     work: tabs.filter((tab) => tab.work_item_id).sort((a, b) => started(a).localeCompare(started(b))),
@@ -81,16 +79,16 @@ export function bandTabs(projectId: ProjectId, lines = toolSubLines()): { work: 
 }
 
 /** The rail's rows in rail order: each band's work rows, then its folded ones. */
-export function railRows(lines = toolSubLines()): RailRow[] {
+export function railRows(): RailRow[] {
   return railProjects().flatMap((p) => {
-    const { work, more } = bandTabs(p.id, lines);
+    const { work, more } = bandTabs(p.id);
     return [...work, ...more].map((tab) => ({ project: p.id, tab }));
   });
 }
 
 /** The work rows `project.goto.N` jumps to, across bands. */
-export function workRows(lines = toolSubLines()): RailRow[] {
-  return railRows(lines).filter((r) => r.tab.work_item_id);
+export function workRows(): RailRow[] {
+  return railRows().filter((r) => r.tab.work_item_id);
 }
 
 // shortcut: the active project's tool list (Home's in a global view) until #237 slice 6 makes the
@@ -99,55 +97,9 @@ export function railToolsOf(): ProjectId {
   return projects.activeId ?? 'home';
 }
 
-/** The rail's Tools section, in config order; `tool.goto.N` opens tool N. */
+/** The tools in config order: `tool.goto.N` opens tool N, the palette lists them. */
 export function railTools(): ToolInfo[] {
   return tools.list(railToolsOf());
-}
-
-/** The tool a pane shows: a live tool session's or web instance's tool id. */
-function livePaneTool(p: PaneNode): string | null {
-  if (p.content.kind === 'web') {
-    // webTools is in-memory: after a restart a persisted web tab has no instance, so it is a closable row.
-    const w = webTools[p.content.tool_instance_id];
-    return w && !w.exited ? w.toolId : null;
-  }
-  const id = paneSession(p);
-  const s = id ? sessions.get(id) : null;
-  // A dead tool session is no tool instance: its tab falls back to a closable row in its band.
-  return s?.kind.type === 'tool' && s.lifecycle === 'live' ? s.kind.tool_id : null;
-}
-
-/** A tool pane of an open project, listed under Tools: a sub-line, or a `user` tool's own row. */
-export interface ToolInstance {
-  project: ProjectId;
-  tab: Tab;
-  pane: PaneNode;
-  tool: string;
-}
-
-/**
- * Every tool instance the rail's Tools section stands for, by pane id, in rail then tab order: the one
- * definition behind the rail, `isToolTab` and `liveToolPane`. Components keep it in a `$derived`.
- */
-export function toolSubLines(): Map<PaneId, ToolInstance> {
-  const home = projects.home?.id;
-  const lines = new Map<PaneId, ToolInstance>();
-  for (const p of railProjects())
-    for (const tab of layout.get(p.id)?.tabs ?? [])
-      for (const pane of allPanes(tab.root)) {
-        const id = livePaneTool(pane);
-        const tool = id ? tools.find(id) : undefined;
-        // A tool the config no longer knows is none; a `user` tool lives in Home, elsewhere its tab is a band row.
-        if (tool && (p.id === home || tool.scope !== 'user'))
-          lines.set(pane.id, { project: p.id, tab, pane, tool: tool.id });
-      }
-  return lines;
-}
-
-/** A tab made only of tool panes: the rail lists it under Tools, not in its project's band. */
-export function isToolTab(tab: Tab, lines = toolSubLines()): boolean {
-  const panes = allPanes(tab.root);
-  return panes.length > 0 && panes.every((p) => lines.get(p.id)?.tab.id === tab.id);
 }
 
 /** Live sessions of a project that no pane shows (tools aside): the dim rows at the end of its band. */
@@ -637,19 +589,6 @@ export function tabAttention(tab: Tab): Lamp {
   const item = tab.work_item_id ? work.get(tab.work_item_id) : null;
   if (item && item.state.kind !== 'finished') lamps.push(phaseNow(item).lamp);
   return maxLamp(lamps);
-}
-
-/** Lamp of a running PTY tool: its sessions' attention, else a plain activity dot; `none` when not running. */
-export function toolLamp(toolId: string): Lamp {
-  const live = sessions.all.filter(
-    (s) => s.kind.type === 'tool' && s.kind.tool_id === toolId && s.lifecycle === 'live',
-  );
-  if (live.length === 0) return 'none';
-  const lvl = lampOf(
-    maxAttention(live.map((s) => s.attention)),
-    live.some((s) => s.status === 'working'),
-  );
-  return lvl === 'none' ? 'activity' : lvl;
 }
 
 export type { PaneContent };

@@ -151,8 +151,9 @@ pub struct ToolDef {
     pub enabled: bool,
 }
 
-/// `work` (default): one per work item, else per project, at `placement`. `project`: one per
-/// project, as its own tab. `user`: one for the whole app, as its own tab in Home.
+/// `work` (default): one per work item, else per project. `project`: one per project. `user`: one
+/// per project for a terminal tool, one for the whole app (its own tab in Home) for a web tool. A
+/// terminal tool opens zoomed in the current tab; a web tool at `placement` (`work`) or as its own tab.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolScope {
