@@ -494,6 +494,27 @@ describe('ToastsStore', () => {
     vi.useRealTimers();
   });
 
+  it('closes info toasts when their view is left, and only those', () => {
+    const store = new ToastsStore();
+    let view: string | null = 'a';
+    store.where = () => view;
+    store.info('info');
+    store.warn('warn');
+    store.error('boom');
+    store.push({ level: 'info', text: 'act', action: { label: 'Go', command: 'x', args: null } });
+    store.apply({ type: 'toast', toast: { level: 'info', text: 'bg', action: null } });
+    store.leave('a');
+    expect(store.list).toHaveLength(5);
+    view = 'b';
+    store.leave('b');
+    expect(store.list.map((e) => e.toast.text)).toEqual(['warn', 'boom', 'act', 'bg']);
+    store.info('here');
+    store.leave('b');
+    expect(store.list.map((e) => e.toast.text)).toEqual(['warn', 'boom', 'act', 'bg', 'here']);
+    expect(store.list.map((e) => e.view)).toEqual(['a', 'a', 'a', null, 'b']);
+    store.clear();
+  });
+
   it('formats IPC errors', () => {
     const store = new ToastsStore();
     store.error(
