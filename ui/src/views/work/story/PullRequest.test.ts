@@ -50,6 +50,7 @@ describe('Story > Pull request', () => {
     const pr = screen.getByTestId('story-pr');
     expect(pr.textContent).toContain('#13');
     expect(pr.textContent).toContain('Ready for review');
+    expect(screen.getByTestId('story-pr-reviewers').textContent).toContain('approved');
     expect(screen.queryByTestId('story-pr-threads')).toBeNull();
     expect(buttons()).toEqual(['Merge when ready', 'Open PR']);
   });

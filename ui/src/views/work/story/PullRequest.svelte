@@ -14,7 +14,7 @@
 
   import { checksFirst, prWait, REVIEWER_STATE } from '../../reviews/pullRequest';
   import { blockedReason, runWorkAction } from '../actions';
-  import { ciGlyph } from '../common';
+  import { ciGlyph, decisionInfo } from '../common';
   import { phaseNow, prOf } from '../live';
   import type { WorkActionId } from '../phase';
   import Section from './Section.svelte';
@@ -33,6 +33,8 @@
           : t('open'),
   );
   const live = $derived(item.state.kind !== 'merged' && item.state.kind !== 'pr_closed');
+  // A host that lists no reviewers still says approved / changes requested.
+  const decision = $derived(pr && pr.reviewers.length === 0 ? decisionInfo(pr.decision) : null);
   const threads = $derived(pr?.unresolved_threads ?? 0);
   const wait = $derived(pr ? prWait(pr, settings.value()?.reviews.sla_hours ?? 24) : null);
   const phase = $derived(phaseNow(item));
@@ -99,7 +101,7 @@
         {/each}
       </ul>
     {/if}
-    {#if pr && (pr.reviewers.length > 0 || wait)}
+    {#if pr && (pr.reviewers.length > 0 || decision || wait)}
       <ul class="plain" data-testid="story-pr-reviewers">
         {#each pr.reviewers as r (r.user.id)}
           <li>
@@ -108,6 +110,7 @@
             >
           </li>
         {/each}
+        {#if decision}<li class="st {pr.decision}">{decision.label}</li>{/if}
         {#if wait}<li class="wait" class:late={wait.late} title={wait.title}>{wait.label}</li>{/if}
       </ul>
     {/if}
