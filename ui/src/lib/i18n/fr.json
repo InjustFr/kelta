@@ -2541,12 +2541,19 @@
   "No work yet, ready to start": "Pas encore de travail, prêt à démarrer",
   "Started: the next step is in the Queue": "Démarré : l'étape suivante est dans la file d'attente",
   "To start": "À démarrer",
-  "Start work resumes {branch} in {repo}.": "Démarrer le travail reprend {branch} dans {repo}.",
+  "Start work resumes {branch} in {repo}.": "Commencer le travail reprend {branch} dans {repo}.",
   "reuses branch {branch} in {repo}": "réutilise la branche {branch} dans {repo}",
   "creates branch {branch} in {repo}": "crée la branche {branch} dans {repo}",
   "moves the ticket to {status}": "passe le ticket en {status}",
   "assigns it to you": "vous l'assigne",
-  "Start work {steps}, then briefs Claude next to {editor}.": "Démarrer le travail {steps}, puis briefe Claude à côté de {editor}.",
-  "Start work {steps}, then briefs Claude.": "Démarrer le travail {steps}, puis briefe Claude.",
-  "{stage} stage. Next: {step}.": "Étape {stage}. Ensuite : {step}."
+  "Start work {steps}, then briefs Claude next to {editor}.": "Commencer le travail {steps}, puis briefe Claude à côté de {editor}.",
+  "Start work {steps}, then briefs Claude.": "Commencer le travail {steps}, puis briefe Claude.",
+  "{stage} stage. Next: {step}.": "Étape {stage}. Ensuite : {step}.",
+  "Your loop": "Votre boucle",
+  "Add a project": "Ajouter un projet",
+  "Connect a ticket source": "Connecter une source de tickets",
+  "Start work on a ticket": "Commencer le travail sur un ticket",
+  "Review what Claude changed": "Relire ce que Claude a modifié",
+  "No tickets?": "Pas de tickets ?",
+  "starts a branch and a Claude from one sentence.": "démarre une branche et un Claude à partir d’une phrase."
 }
