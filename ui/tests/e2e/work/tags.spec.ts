@@ -33,7 +33,8 @@ test('a tag made in Settings goes on a ticket and a PR and filters the list', as
   await expect(tickets.locator('.k-row.tk')).toHaveCount(1);
   await expect(tickets.locator('.k-row.tk')).toHaveAttribute('data-key', 'jira-acme:SHOP-142');
 
-  await dispatch(page, 'reviews.open');
+  // The rail, not `reviews.open`: with a list focused, ⇧⌘R refreshes it (#417).
+  await page.getByRole('button', { name: /^Reviews/ }).click();
   const reviews = page.getByTestId('reviews-pane');
   const pr = reviews.locator('.row.selected');
   await pr.click();

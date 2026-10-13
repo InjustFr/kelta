@@ -4,9 +4,9 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { boot, callsOf, dispatch } from '../shell/helpers';
 
-const menu = (page: Page) => page.getByRole('menu', { name: 'More actions' });
-const first = (page: Page) => menu(page).getByRole('menuitem').first();
-const firstLabel = (page: Page) => first(page).locator('.label');
+const menu = (page: Page, name = 'More actions') => page.getByRole('menu', { name });
+const first = (page: Page, name?: string) => menu(page, name).getByRole('menuitem').first();
+const firstLabel = (page: Page, name?: string) => first(page, name).locator('.label');
 
 /** `⌘.` on Linux. */
 const actionsKey = (page: Page) => page.keyboard.press('Control+.');
@@ -22,10 +22,10 @@ test('Queue: ⌘. opens the selected row’s actions, ↵ runs its next step', a
     await page.keyboard.press('j');
   }
   await actionsKey(page);
-  await expect(firstLabel(page)).toHaveText(/^Review changes/);
-  await expect(first(page)).toHaveClass(/active/);
+  await expect(firstLabel(page, 'Work')).toHaveText(/^Review changes/);
+  await expect(first(page, 'Work')).toHaveClass(/active/);
   await page.keyboard.press('Enter');
-  await expect(menu(page)).toHaveCount(0);
+  await expect(menu(page, 'Work')).toHaveCount(0);
   await expect.poll(async () => (await callsOf(page, 'work_diff')).length).toBe(1);
 });
 
