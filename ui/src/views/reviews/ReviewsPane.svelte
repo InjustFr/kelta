@@ -30,18 +30,20 @@
   import { groupByTicket } from './group';
   import LinkedTicket from './LinkedTicket.svelte';
   import ReviewDetailPane from './ReviewDetailPane.svelte';
+  import ActionMenu, { below, type RowAction } from '../work/shared/ActionMenu.svelte';
   import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { reviewLocally } from '../work/startWork';
   import { pickPrWorkflow } from '../tickets/workflow.svelte';
+  import RowButton from '../tickets/RowButton.svelte';
   import TagChips from '../tags/TagChips.svelte';
   import TagFilter from '../tags/TagFilter.svelte';
   import TagMenu from '../tags/TagMenu.svelte';
   import FilterBar from '../filters/FilterBar.svelte';
   import { clearAll, commonFilters, noMatch, type ActiveFilter } from '../filters/filters';
 
-  import { toggleDraft } from './draft';
+  import { draftBlocked, draftLabel, toggleDraft } from './draft';
   import { nudgedRecently, pingBody, waitingChip } from './nudge';
 
   let { projectId, tabId, paneId, content, focused }: PaneProps<'reviews'> = $props();
@@ -49,10 +51,10 @@
   const home = $derived(projectId === GLOBAL ? null : projectId);
 
   const scope = $derived(content.scope);
-  const TABS: { kind: ReviewKind; label: string }[] = $derived([
-    { kind: 'review_requested', label: t('For me') },
-    { kind: 'team', label: t('Team') },
-    { kind: 'authored', label: t('Mine') },
+  const TABS: { kind: ReviewKind; label: string; title: string }[] = $derived([
+    { kind: 'review_requested', label: t('For me'), title: t('Pull requests waiting for your review') },
+    { kind: 'team', label: t('Team'), title: t("Open pull requests on your ticket sources' repositories") },
+    { kind: 'authored', label: t('Mine'), title: t('Pull requests you opened') },
   ]);
   /** Team spans the repos of the projects a ticket source feeds: in a project's pane, only when one feeds it. */
   const sourceList = $derived(settings.value()?.sources ?? []);
@@ -420,6 +422,45 @@
     e.preventDefault();
   }
 
+  // ---- the row's actions (#397): Open review, then every key in the `⋯` menu ------------------
+  let more = $state.raw<{ x: number; y: number; actions: RowAction[] } | null>(null);
+
+  function rowActions(item: ReviewItem): RowAction[] {
+    const rv = item.review;
+    const pid = home ?? item.project_ids[0] ?? null;
+    return [
+      { id: 'open', label: t('Open review'), key: 'enter', run: () => focusDetail(item) },
+      { id: 'pane', label: t('Open in own pane'), key: 'shift+enter', run: () => openDetail(item) },
+      {
+        id: 'local',
+        label: t('Review locally'),
+        key: 's',
+        run: () => reviewLocally(rv.ref, pid ?? undefined),
+      },
+      { id: 'workflow', label: t('Run workflow…'), key: 'w', run: () => pickPrWorkflow(rv.ref, pid) },
+      { id: 'tags', label: t('Tags…'), key: 't', run: () => openTags(item) },
+      { id: 'browser', label: t('Open in browser'), key: 'o', run: () => browse(item) },
+      {
+        id: 'nudge',
+        label: t('Nudge reviewers'),
+        key: 'n',
+        reason: rv.kind === 'authored' && !rv.assigned ? null : t('Only on your own pull requests'),
+        run: () => openNudge(item),
+      },
+      { id: 'draft', label: draftLabel(rv), key: 'd', reason: draftBlocked(rv), run: () => toggleDraft(rv) },
+      {
+        id: 'merge',
+        label: t('Merge when ready'),
+        key: 'shift+m',
+        reason:
+          rv.kind === 'authored' && workOf(item)
+            ? null
+            : t('Merge when ready: only for my PRs with a work item'),
+        run: () => mergeWhenReady(item),
+      },
+    ];
+  }
+
   function filterKeys(e: KeyboardEvent): void {
     if (e.key === 'Escape') {
       filter = '';
@@ -456,7 +497,7 @@
       label={t('Reviews')}
       items={tabs.map((x) => {
         const n = lists[x.kind].data?.items.length;
-        return { id: x.kind, label: n === undefined ? x.label : `${x.label} ${n}` };
+        return { id: x.kind, label: n === undefined ? x.label : `${x.label} ${n}`, title: x.title };
       })}
       value={tab}
       onchange={setTab}
@@ -477,7 +518,9 @@
         options={[{ value: '', label: t('All repos') }, ...repos.map((r) => ({ value: r, label: r }))]}
       />
     {/if}
+    {#if tab === 'team'}<Toggle label={t('Group by ticket')} bind:checked={grouped} />{/if}
     <Toggle label={t('Drafts')} bind:checked={includeDrafts} />
+    {#if wide}<Toggle label={t('Detail')} bind:checked={split} />{/if}
     <Toggle label={t('Compact')} checked={compact} onchange={setCompact} />
     {#if shown.fetchedAt}
       <!-- shortcut: the age is computed on render (no timers), it ages with the next re-render. -->
@@ -583,6 +626,18 @@
                   <span class="k-row-lamp"><Lamp level={ci.lamp} title={ci.label} /></span>
                   <span class="k-row-key">#{rv.ref.number}</span>
                   <span class="k-row-title">{rv.title}</span>
+                  {#if cur === r}
+                    <span class="acts" data-acts>
+                      <RowButton label={t('Open review (Enter)')} onclick={() => void focusDetail(r.item)}
+                        ><span class="k-row-act primary">{t('Open review')}</span></RowButton
+                      >
+                      <RowButton
+                        label={t('More actions')}
+                        icon="ellipsis"
+                        onclick={(e) => (more = { ...below(e), actions: rowActions(r.item) })}
+                      />
+                    </span>
+                  {/if}
                   <span class="k-row-tail">
                     <TagChips kind="prs" itemKey={reviewKey(rv.ref)} />
                     {#if reviews.isNew(rv.ref)}<Badge tone="accent">{t('new')}</Badge>{/if}
@@ -664,7 +719,7 @@
     {/if}
   {/if}
 
-  <KeyHints {hints} />
+  <KeyHints {hints} onopen={() => (keysOpen = true)} />
 </div>
 
 {#if keysOpen}
@@ -689,6 +744,15 @@
     }}
   />
 {/if}
+{#if more}
+  <ActionMenu
+    {...more}
+    onclose={() => {
+      more = null;
+      root?.focus();
+    }}
+  />
+{/if}
 {#if nudgeMenu}
   <Menu
     items={nudgeItems}
@@ -708,7 +772,7 @@
      wrapping to a third line rather than cut. */
   .two {
     display: grid;
-    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
     align-items: center;
     row-gap: var(--k-space-1);
     height: auto;
@@ -719,8 +783,20 @@
     min-width: 0;
   }
 
+  .acts {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--k-space-1);
+  }
+
+  .two .acts {
+    grid-column: 4;
+    grid-row: 1;
+  }
+
   .two .k-row-tail {
-    grid-column: 3;
+    grid-column: 3 / span 2;
     flex-wrap: wrap;
     justify-content: flex-start;
     row-gap: var(--k-space-1);

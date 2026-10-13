@@ -32,6 +32,7 @@ import {
   rebaseStep,
 } from './fixloop.svelte';
 import { workActionDisabled } from './common';
+import { batch } from './batch.svelte';
 import { askerOf, claudeOf, phaseNow, prOf } from './live';
 import { draftBlocked, draftLabel, toggleDraft } from '../reviews/draft';
 import { goToWork, openReview, showZoomedInWorkTab } from './nav';
@@ -410,6 +411,8 @@ for (const a of WORK_ACTIONS)
 registerAction('work.finish_merged', () => ui.openSheet('finish_merged'));
 
 registerAction('work.start', async (args) => {
+  // Marked tickets (#141): the chord starts them, as the key hints say ("Start marked").
+  if (!args?.ticket && batch.list.length > 0) return void ui.openSheet('start_batch');
   const ticket = (args?.ticket as TicketRef | undefined) ?? selection.ticket;
   if (!ticket) {
     toasts.info(t('Select a ticket to start work'));

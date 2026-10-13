@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import * as ipc from '$lib/ipc/commands';
@@ -71,6 +71,31 @@ describe('ReviewsPane linked tickets', () => {
     await waitFor(() => expect(toasts.list.at(-1)?.toast.text).toMatch(/SHOP-150 is not in any/));
     const l = layout.get('shop');
     expect(l && findContent(l, (c) => c.kind === 'ticket_detail')).toBeFalsy();
+  });
+});
+
+describe('ReviewsPane row actions (#397)', () => {
+  it('the selected row has Open review and a menu of every key; an action that cannot run says why', async () => {
+    const { container } = mountReviews();
+    const acts = await waitFor(() => {
+      const el = container.querySelector<HTMLElement>('.k-row.selected [data-acts]');
+      if (!el) throw new Error('no row actions yet');
+      return el;
+    });
+    expect(container.querySelectorAll('[data-acts]')).toHaveLength(1);
+    await fireEvent.click(within(acts).getByRole('button', { name: 'More actions' }));
+    const menu = await screen.findByRole('menu', { name: 'More actions' });
+    const entry = (name: string) => within(menu).getByRole('menuitem', { name: new RegExp(`^${name}`) });
+    expect(entry('Review locally').querySelector('kbd')?.textContent).toBe('S');
+    // For me lists other people's PRs: Nudge is mine only.
+    expect(entry('Nudge reviewers').getAttribute('aria-disabled')).toBe('true');
+    expect(entry('Nudge reviewers').title).toBe('Only on your own pull requests');
+    await fireEvent.keyDown(menu, { key: 'Escape' });
+    // A narrow pane has no detail column: Open review opens the PR in its own pane.
+    await fireEvent.click(within(acts).getByRole('button', { name: 'Open review (Enter)' }));
+    await waitFor(() =>
+      expect(findContent(layout.get('shop')!, (c) => c.kind === 'review_detail')).toBeTruthy(),
+    );
   });
 });
 

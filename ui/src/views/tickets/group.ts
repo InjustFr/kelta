@@ -71,6 +71,13 @@ const FLOW_LABELS: Record<Flow, string> = {
   backlog: msg('Backlog'),
   done: msg('Done in the last 7 days'),
 };
+/** What each flow group holds, in one line under its header (#397). */
+export const FLOW_HINTS: Record<string, string> = {
+  doing: msg('In progress, or work under way in Kelta'),
+  waiting: msg('Waiting on you, a review, failed checks or a blocker'),
+  ready: msg('To do, ready to start'),
+  backlog: msg('Not planned yet'),
+};
 const BLOCKED = /block|on hold|waiting|impediment/i;
 const BACKLOG = /backlog|triage|icebox/i;
 const DAY = 86_400_000;

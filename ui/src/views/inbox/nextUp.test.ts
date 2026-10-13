@@ -8,7 +8,16 @@ import { projects, tickets } from '$lib/stores';
 import { ticketListKey } from '$lib/stores/tickets.svelte';
 
 import { currentSections } from './now';
-import { groomQueue, isSnoozed, loadPool, movedRank, nextUp, rankBetween, ticketPool } from './nextUp.svelte';
+import {
+  droppedRank,
+  groomQueue,
+  isSnoozed,
+  loadPool,
+  movedRank,
+  nextUp,
+  rankBetween,
+  ticketPool,
+} from './nextUp.svelte';
 
 const ticket = (key: string, category: TicketItem['ticket']['status']['category'] = 'todo'): TicketItem => ({
   ...samples.ticketPage.items[0]!,
@@ -41,6 +50,16 @@ describe('fractional ranks', () => {
     expect(movedRank(ranks, 1, -1)).toBe(-1); // before the first
     expect(movedRank(ranks, 3, 1)).toBeNull();
     expect(movedRank(ranks, 0, -1)).toBeNull();
+  });
+
+  it('a drag lands the ticket at the place it was dropped on', () => {
+    const ranks = [0, 1, 2, 3];
+    expect(droppedRank(ranks, 0, 3)).toBe(4); // first to last
+    expect(droppedRank(ranks, 3, 0)).toBe(-1); // last to first
+    expect(droppedRank(ranks, 0, 2)).toBe(2.5); // past the third: between 2 and 3
+    expect(droppedRank(ranks, 3, 1)).toBe(0.5); // between 0 and 1
+    expect(droppedRank(ranks, 2, 2)).toBeNull();
+    expect(droppedRank(ranks, 1, 4)).toBeNull();
   });
 });
 

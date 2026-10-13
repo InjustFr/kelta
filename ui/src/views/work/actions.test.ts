@@ -12,6 +12,7 @@ import './actions';
 import { workItem } from '$lib/gen/fixtures';
 
 import { blockedReason } from './actions';
+import { batch } from './batch.svelte';
 import { REVIEW_READONLY } from './common';
 import { selectTicket } from './selection.svelte';
 
@@ -105,6 +106,15 @@ describe('L9 actions', () => {
       project_id: null,
       source: { kind: 'ticket', ticket: { key: 'SHOP-151' } },
     });
+  });
+
+  it('work.start with marked tickets opens the batch start instead (#141, #397)', async () => {
+    selectTicket({ account: 'jira-acme', key: 'SHOP-151', id: '10151' }, 'shop');
+    batch.toggle({ account: 'jira-acme', key: 'SHOP-160', id: '10160' }, 'shop');
+    await dispatch('work.start');
+    expect(ui.sheet?.key).toBe('start_batch');
+    batch.clear();
+    ui.closeSheet();
   });
 
   it('work.start accepts an explicit ticket', async () => {

@@ -135,6 +135,21 @@ describe('Now', () => {
     expect(lines).toContain('I left the backoff constant at 3 tries; say if you want it configurable.');
   });
 
+  it('the selected row has buttons with their keys, the next step outlined; headers say what they hold (#397)', async () => {
+    const { container } = mountNow();
+    await screen.findByText('Flaky test in cart service');
+    await fireEvent.keyDown(screen.getByTestId('inbox-pane'), { key: 'j' });
+    const detail = screen.getByTestId('now-detail');
+    const primary = within(detail).getByRole('button', { name: /Review changes$/ });
+    expect(primary.classList.contains('primary')).toBe(true);
+    expect(primary.querySelector('kbd')).not.toBeNull();
+    expect(container.querySelector('[data-section="to_review"] .k-group-hint')?.textContent).toBe(
+      'Claude finished: look at the changes, then ship or ask for more',
+    );
+    await fireEvent.click(within(detail).getByRole('button', { name: /Mark reviewed$/ }));
+    await waitFor(() => expect(work.get('0199a6b2-0000-7000-8000-00000000a004')?.review_due).toBe(false));
+  });
+
   it('Enter on To review opens the diff in the work tab and leaves Now (B1)', async () => {
     mountNow();
     await screen.findByText('Flaky test in cart service');
@@ -365,6 +380,17 @@ describe('Next up (#145)', () => {
     await fireEvent.keyDown(pane, { key: 'J' });
     await waitFor(() => expect(order()).toEqual(['SHOP-160', 'SHOP-151', '4610']));
     await fireEvent.keyDown(pane, { key: 'K' });
+    await waitFor(() => expect(order()).toEqual(keys));
+    // #397: the mouse path, a drag of the first ticket onto the last.
+    const at = (key: string) =>
+      container.querySelector<HTMLElement>(`.row[data-row$=":${key}"][data-row^="n:"]`)!;
+    expect(at('SHOP-151').getAttribute('draggable')).toBe('true');
+    await fireEvent.dragStart(at('SHOP-151'));
+    await fireEvent.dragOver(at('4610'));
+    await fireEvent.drop(at('4610'));
+    await waitFor(() => expect(order()).toEqual(['SHOP-160', '4610', 'SHOP-151']));
+    await fireEvent.dragStart(at('SHOP-151'));
+    await fireEvent.drop(at('SHOP-160'));
     await waitFor(() => expect(order()).toEqual(keys));
 
     await fireEvent.keyDown(pane, { key: 'S' });

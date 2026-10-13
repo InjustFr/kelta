@@ -382,8 +382,13 @@ const openView = async () => {
     await fireEvent.click(screen.getByRole('button', { name: /^View/ }));
 };
 const press = (key: string, init: KeyboardEventInit = {}) => fireEvent.keyDown(pane(), { key, ...init });
+/** Group headers without their one-line hint. */
 const groupNames = (c: HTMLElement) =>
-  [...c.querySelectorAll<HTMLElement>('[data-group]')].map((g) => g.textContent?.replace(/\s+/g, ' ').trim());
+  [...c.querySelectorAll<HTMLElement>('[data-group]')].map((g) => {
+    const head = g.cloneNode(true) as HTMLElement;
+    head.querySelector('.k-group-hint')?.remove();
+    return head.textContent?.replace(/\s+/g, ' ').trim();
+  });
 
 describe('TicketsPane workbench', () => {
   it('switches who with 1/2/3, loads with that who and shows the counts', async () => {
@@ -409,6 +414,10 @@ describe('TicketsPane workbench', () => {
     const { container } = mountBoard('list');
     await waitFor(() => expect(card(container, 'SHOP-151')).not.toBeNull());
     expect(groupNames(container)).toEqual(['Doing 1', 'Waiting 2', 'Ready 2']);
+    // Each flow header says what it holds (#397).
+    expect(container.querySelector('[data-group="ready"] .k-group-hint')?.textContent).toBe(
+      'To do, ready to start',
+    );
     await press('G');
     // in the order of the source's board columns once they load
     await waitFor(() =>
@@ -833,17 +842,26 @@ describe('TicketsPane list: PRs, status chip, selection, row actions', () => {
     expect(container.querySelectorAll('.picked').length).toBe(0);
   });
 
-  it('row actions are two labelled buttons; the other actions are keys named in the tooltip', async () => {
+  it('row actions are two labelled buttons, then a menu of every other action with its key', async () => {
     const { container } = mountBoard('list');
     await ready(container, 'SHOP-151');
     const acts = row(container, 'SHOP-151').querySelector<HTMLElement>('[data-acts]')!;
-    expect([...acts.querySelectorAll('[role="button"]')].map((b) => b.textContent)).toEqual([
-      'Start work',
-      'Move',
+    expect([...acts.querySelectorAll('[role="button"]')].map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Start work (s)',
+      'Move (m)',
+      'More actions',
     ]);
-    expect(row(container, 'SHOP-151').title).toContain(
-      'Keys: s start work, m move, p open pull request, t tags',
-    );
+    // #397: the `⋯` menu holds what was keys only, each entry with its key; one without a PR is off.
+    await fireEvent.click(acts.querySelector('[aria-label="More actions"]')!);
+    const more = await screen.findByRole('menu', { name: 'More actions' });
+    const entry = (name: string) => within(more).getByRole('menuitem', { name: new RegExp(`^${name}`) });
+    expect(entry('Assign to me').querySelector('kbd')?.textContent).toBe('A');
+    expect(entry('Open PR in browser').getAttribute('aria-disabled')).toBe('true');
+    await fireEvent.click(entry('Select'));
+    await waitFor(() => expect(row(container, 'SHOP-151').getAttribute('aria-pressed')).toBe('true'));
+    // While a selection exists every row has a checkbox in its lamp slot.
+    await fireEvent.click(row(container, 'SHOP-151').querySelector('[aria-label="Deselect"]')!);
+    await waitFor(() => expect(row(container, 'SHOP-151').getAttribute('aria-pressed')).toBeNull());
     await fireEvent.click(acts.querySelector('[aria-label="Move (m)"]')!);
     expect(await screen.findByRole('menu', { name: 'Move SHOP-151' })).toBeTruthy();
     await fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
