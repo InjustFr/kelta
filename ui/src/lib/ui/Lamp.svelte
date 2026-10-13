@@ -65,7 +65,19 @@
 
   .needs_input {
     --c: var(--k-lamp-needs-input);
+    position: relative;
     box-shadow: 0 0 0 2px color-mix(in oklab, var(--c) 35%, transparent);
+  }
+
+  /* Claude starts waiting for you: a ring leaves the lamp --k-pulses times when it lights, then stops. */
+  .needs_input::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--c);
+    opacity: 0;
+    animation: k-pulse 0.7s var(--k-ease) var(--k-pulses);
   }
 
   .working {

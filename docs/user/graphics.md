@@ -22,7 +22,8 @@ kelta --safe-graphics
 ```
 
 or the **Safe graphics** action of the desktop entry (right-click the launcher icon). The safe profile sets all
-workarounds: DMABUF off, compositing mode off, explicit sync off and the X11 backend (`GDK_BACKEND=x11`).
+workarounds: DMABUF off, compositing mode off, explicit sync off and the X11 backend (`GDK_BACKEND=x11`). It also
+reduces animations to fades and loaders; `app.animations = "off"` (Settings > General) turns them off entirely.
 
 ## Settings
 

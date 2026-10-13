@@ -314,7 +314,7 @@
     border-radius: var(--k-radius-lg);
     background: var(--k-bg-float);
     box-shadow: var(--k-shadow);
-    animation: k-float-in var(--k-duration) ease-out;
+    animation: k-float-in var(--k-duration) var(--k-ease);
   }
 
   /* In the menu the selects are full width; their labels stay for screen readers only (.k-toolbar). */

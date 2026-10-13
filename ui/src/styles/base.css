@@ -416,23 +416,75 @@ pre,
   font-weight: var(--k-weight-strong);
 }
 
-/* Floating surfaces answer the action that opened them: one 90ms step, never looping. */
+/* Floating surfaces answer the action that opened them: one step, never looping (DESIGN §8). */
 @keyframes k-float-in {
   from {
     opacity: 0;
-    translate: 0 -4px;
+    translate: 0 calc(var(--k-shift) * -4px);
+  }
+}
+
+/* Menus and popovers grow from the point that opened them (set transform-origin there). */
+@keyframes k-pop-in {
+  from {
+    opacity: 0;
+    scale: calc(1 - var(--k-shift) * 0.06);
   }
 }
 
 @keyframes k-sheet-in {
   from {
-    translate: 24px 0;
+    translate: calc(var(--k-shift) * 24px) 0;
   }
 }
 
+/* Toasts arrive from the screen edge they stack on. */
+@keyframes k-toast-in {
+  from {
+    opacity: 0;
+    translate: calc(var(--k-shift) * 16px) 0;
+  }
+}
+
+/* Loaders: mounted only while their operation is in flight, so the loop stops with it. */
+@keyframes k-spin {
+  to {
+    rotate: 1turn;
+  }
+}
+
+@keyframes k-show {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Attention: a ring leaves the lamp, --k-pulses times, then the lamp stays still. */
+@keyframes k-pulse {
+  from {
+    opacity: 0.7;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 2.4;
+  }
+}
+
+/* app.animations = "reduced" (auto under safe graphics): fades and loaders stay, nothing moves or pulses. */
+:root[data-motion='reduced'] {
+  --k-shift: 0;
+  --k-pulses: 0;
+}
+
+/* app.animations = "off", and the OS preference: every transition and animation ends at once. */
 @media (prefers-reduced-motion: reduce) {
   :root {
+    --k-duration-fast: 0ms;
     --k-duration: 0ms;
+    --k-delay-show: 0ms;
+    --k-shift: 0;
+    --k-pulses: 0;
   }
 
   *,
@@ -443,4 +495,21 @@ pre,
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+:root[data-motion='off'] {
+  --k-duration-fast: 0ms;
+  --k-duration: 0ms;
+  --k-delay-show: 0ms;
+  --k-shift: 0;
+  --k-pulses: 0;
+}
+
+:root[data-motion='off'] *,
+:root[data-motion='off'] *::before,
+:root[data-motion='off'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }

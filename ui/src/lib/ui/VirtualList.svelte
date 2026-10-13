@@ -1,6 +1,8 @@
 <script lang="ts" generics="T">
   import { untrack, type Snippet } from 'svelte';
 
+  import { glide, fadeMove } from './motion';
+
   interface Props {
     items: readonly T[];
     /** Fixed row height in px; with `measure`, the height assumed for a row not rendered yet. */
@@ -107,6 +109,20 @@
     };
   }
 
+  /** When the list mounted, and when it last scrolled (user or `scrollTo`). */
+  const born = performance.now();
+  let scrolledAt = 0;
+  /** Rows landing at their first measured height, or entering/leaving the slice by scrolling, do not animate. */
+  const quiet = (): boolean => performance.now() - Math.max(born, scrolledAt) < 500;
+
+  /** FLIP, but not for the pinned header (it moves with the scroll). */
+  function move(node: Element, rects: { from: DOMRect; to: DOMRect }) {
+    return node.classList.contains('pin') || quiet() ? { duration: 0 } : glide(node, rects);
+  }
+
+  /** A row arriving with the data (a section unfolding, a row added) fades in/out; one scrolled in or out of view does not. */
+  const fade = (node: Element) => (quiet() ? { duration: 0 } : fadeMove(node));
+
   let endNotifiedAt = -1;
   $effect(() => {
     if (!onend || items.length === 0) return;
@@ -117,6 +133,7 @@
   });
 
   function onscroll(): void {
+    scrolledAt = performance.now();
     if (viewport) scrollTop = viewport.scrollTop;
   }
 
@@ -131,9 +148,14 @@
       // Keep a row clear of the pinned header above it.
       const y = top(index) - (heads.length > 0 && !heads.includes(index) ? itemHeight : 0);
       const bottom = top(index + 1);
-      if (y < viewport.scrollTop) viewport.scrollTop = y;
-      else if (bottom > viewport.scrollTop + viewport.clientHeight)
+      // Stamp only when the viewport really moves (before the write, so the slice re-render sees it).
+      if (y < viewport.scrollTop) {
+        scrolledAt = performance.now();
+        viewport.scrollTop = y;
+      } else if (bottom > viewport.scrollTop + viewport.clientHeight) {
+        scrolledAt = performance.now();
         viewport.scrollTop = bottom - viewport.clientHeight;
+      }
       scrollTop = viewport.scrollTop;
     });
   }
@@ -158,32 +180,25 @@
 >
   <div class="spacer" style:height="{top(items.length)}px">
     {#each slice as { item, index } (key(item, index))}
-      {#if index === pinned?.index}
-        <!-- In flow at the top of the spacer (the rows are absolute), so sticky pins it. -->
-        <div
-          class="pin"
-          class:measured={measure}
-          role="listitem"
-          style:height={measure ? undefined : `${itemHeight}px`}
-          style:min-height={measure ? `${itemHeight}px` : undefined}
-          style:translate="0 {pinned.shift}px"
-          use:sized={String(key(item, index))}
-        >
-          {@render row(item, index)}
-        </div>
-      {:else}
-        <div
-          class="row"
-          class:measured={measure}
-          role="listitem"
-          style:top="{top(index)}px"
-          style:height={measure ? undefined : `${itemHeight}px`}
-          style:min-height={measure ? `${itemHeight}px` : undefined}
-          use:sized={String(key(item, index))}
-        >
-          {@render row(item, index)}
-        </div>
-      {/if}
+      {@const pin = index === pinned?.index}
+      <!-- One element for both cases: a row that changes place slides there (animate:), a row that
+           leaves fades while the rest close up (#398). The pinned header is in flow at the top of the
+           spacer (the rows are absolute), so sticky pins it. -->
+      <div
+        class={pin ? 'pin' : 'row'}
+        class:measured={measure}
+        role="listitem"
+        style:top={pin ? undefined : `${top(index)}px`}
+        style:translate={pin ? `0 ${pinned?.shift ?? 0}px` : undefined}
+        style:height={measure ? undefined : `${itemHeight}px`}
+        style:min-height={measure ? `${itemHeight}px` : undefined}
+        use:sized={String(key(item, index))}
+        animate:move
+        in:fade
+        out:fade
+      >
+        {@render row(item, index)}
+      </div>
     {/each}
   </div>
 </div>

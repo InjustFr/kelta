@@ -6,6 +6,8 @@ import type { Column, JsonValue, Ticket, Transition } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 import { toIpcError } from '$lib/ipc/transport';
 import { tickets, toasts } from '$lib/stores';
+import { inflight } from '$lib/stores/inflight.svelte';
+import { ticketKey } from '$lib/stores/tickets.svelte';
 
 import { parseCandidates, parseFields, type FieldSpec } from '../work/common';
 
@@ -33,7 +35,7 @@ export class MoveController {
     if (this.busy) return false;
     this.busy = true;
     try {
-      await tickets.move(ticket, column, sourceId);
+      await inflight.track(ticketKey(ticket.ref), () => tickets.move(ticket, column, sourceId));
       return true;
     } catch (err) {
       await this.#handle(err, ticket, column.name, column.category, null);
@@ -53,11 +55,9 @@ export class MoveController {
     if (this.busy) return false;
     this.busy = true;
     try {
-      const updated = await ipc.trackerTransition({
-        ticket: ticket.ref,
-        transition_id: transition.id,
-        fields: fields ?? null,
-      });
+      const updated = await inflight.track(ticketKey(ticket.ref), () =>
+        ipc.trackerTransition({ ticket: ticket.ref, transition_id: transition.id, fields: fields ?? null }),
+      );
       tickets.patch(updated);
       void tickets.loadTransitions(ticket.ref); // the legal moves changed with the status
       this.dialog = null;
@@ -104,11 +104,9 @@ export class MoveController {
     if (this.busy) return;
     this.busy = true;
     try {
-      const updated = await ipc.trackerTransition({
-        ticket: d.ticket.ref,
-        transition_id: d.transitionId,
-        fields: values,
-      });
+      const updated = await inflight.track(ticketKey(d.ticket.ref), () =>
+        ipc.trackerTransition({ ticket: d.ticket.ref, transition_id: d.transitionId, fields: values }),
+      );
       tickets.patch(updated);
       void tickets.loadTransitions(d.ticket.ref);
       this.dialog = null;

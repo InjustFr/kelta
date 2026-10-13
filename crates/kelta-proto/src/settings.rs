@@ -241,6 +241,9 @@ pub struct AppSettings {
     /// Check for updates automatically (on start and on focus, at most every 6 h); "Check now" works either way.
     #[schemars(extend("x-kelta-scope" = ["global"]))]
     pub updates: bool,
+    /// Motion that shows what changed: loaders, rows moving, menus and sheets opening. Auto is on, and reduced in safe graphics mode; reduced keeps fades and loaders only.
+    #[schemars(extend("x-kelta-scope" = ["global"]))]
+    pub animations: Animations,
 }
 
 impl Default for AppSettings {
@@ -255,8 +258,21 @@ impl Default for AppSettings {
             dark_theme: "bezel-dark".into(),
             light_theme: "bezel-light".into(),
             updates: true,
+            animations: Animations::Auto,
         }
     }
+}
+
+/// How much the interface animates (`app.animations`, #398). The OS "reduce motion" preference always
+/// turns animations off.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Animations {
+    #[default]
+    Auto,
+    On,
+    Reduced,
+    Off,
 }
 
 /// Bezel palette a theme overrides; also the mode its slot must be.

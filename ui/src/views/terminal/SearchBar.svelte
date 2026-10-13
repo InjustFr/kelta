@@ -76,7 +76,7 @@
     border-radius: var(--k-radius-lg);
     background: var(--k-bg-float);
     box-shadow: var(--k-shadow);
-    animation: k-float-in var(--k-duration) ease-out;
+    animation: k-float-in var(--k-duration) var(--k-ease);
   }
 
   input {

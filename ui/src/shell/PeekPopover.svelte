@@ -199,9 +199,12 @@
 {/if}
 
 <style>
+  /* Grows from the row or lamp it was opened on (its top-left corner sits there). */
   .peek {
     position: fixed;
     z-index: var(--k-z-menu);
+    transform-origin: top left;
+    animation: k-pop-in var(--k-duration-fast) var(--k-ease);
     width: 480px;
     max-width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);

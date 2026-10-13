@@ -8,7 +8,7 @@
   let { size = 16, label }: Props = $props();
 </script>
 
-<!-- Only mounted while an operation is in flight. Static: the open `working` ring, nothing loops (DESIGN §8). -->
+<!-- Only mounted while an operation is in flight: the open `working` ring turns until it unmounts (DESIGN §8). -->
 <span
   class="k-spinner"
   role="status"
@@ -24,5 +24,6 @@
     border-top-color: transparent;
     border-radius: 50%;
     flex: none;
+    animation: k-spin 0.8s linear infinite;
   }
 </style>

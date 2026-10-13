@@ -26,6 +26,7 @@
 
   import Icon from './Icon.svelte';
   import Kbd from './Kbd.svelte';
+  import { fadeMove } from './motion';
 
   interface Props {
     items: readonly MenuItem[];
@@ -129,7 +130,9 @@
   tabindex="-1"
   style:left="{pos.left}px"
   style:top="{pos.top}px"
+  style:transform-origin="{x - pos.left}px {y - pos.top}px"
   {onkeydown}
+  out:fadeMove
 >
   {#if header}<div id={headerId}>{@render header()}</div>{/if}
   {#each items as item, i (item.id)}
@@ -171,7 +174,7 @@
     border-radius: var(--k-radius-lg);
     background: var(--k-bg-float);
     box-shadow: var(--k-shadow);
-    animation: k-float-in var(--k-duration) ease-out;
+    animation: k-pop-in var(--k-duration-fast) var(--k-ease);
   }
 
   button {

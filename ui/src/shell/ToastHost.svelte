@@ -1,7 +1,7 @@
 <script lang="ts">
   import { effectiveChords } from '$lib/keys/manager';
   import { settings, toasts } from '$lib/stores';
-  import { Toast } from '$lib/ui';
+  import { fadeMove, glide, Toast } from '$lib/ui';
 
   // The key that runs the last toast's action is printed on that toast's button (FLOW §7.1).
   const runLastKey = $derived(effectiveChords('toast.run_last', settings.value()?.keys ?? null)[0] ?? null);
@@ -10,13 +10,16 @@
 
 <div class="toasts" aria-live="polite" data-testid="toasts">
   {#each toasts.list as entry (entry.id)}
-    <Toast
-      toast={entry.toast}
-      ondismiss={() => toasts.dismiss(entry.id)}
-      onaction={() => void toasts.run(entry.id)}
-      onsecondary={() => void toasts.run(entry.id, true)}
-      kbd={entry.id === lastId ? runLastKey : null}
-    />
+    <!-- A toast slides in from the edge (Toast's CSS), fades out, and the stack closes up (#398). -->
+    <div animate:glide out:fadeMove={{ x: 16 }}>
+      <Toast
+        toast={entry.toast}
+        ondismiss={() => toasts.dismiss(entry.id)}
+        onaction={() => void toasts.run(entry.id)}
+        onsecondary={() => void toasts.run(entry.id, true)}
+        kbd={entry.id === lastId ? runLastKey : null}
+      />
+    </div>
   {/each}
 </div>
 

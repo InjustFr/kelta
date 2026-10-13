@@ -124,8 +124,10 @@ describe('TicketsPane board', () => {
     await tick();
     expect(laneOf(container, 'SHOP-151')).toBe('in_progress');
     await waitFor(() => expect(laneOf(container, 'SHOP-151')).toBe('todo'));
-    expect(toasts.list.some((t) => t.toast.level === 'error' && t.toast.text.includes('jira exploded'))).toBe(
-      true,
+    await waitFor(() =>
+      expect(
+        toasts.list.some((t) => t.toast.level === 'error' && t.toast.text.includes('jira exploded')),
+      ).toBe(true),
     );
   });
 

@@ -122,8 +122,8 @@
     opacity: 0.7;
     transform: translate(-50%, -50%);
     transition:
-      background var(--k-duration) ease-out,
-      opacity var(--k-duration) ease-out;
+      background var(--k-duration-fast) var(--k-ease),
+      opacity var(--k-duration-fast) var(--k-ease);
   }
 
   .gutter:not(.row)::after {

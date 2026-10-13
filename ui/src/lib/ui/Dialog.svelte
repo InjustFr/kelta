@@ -4,6 +4,7 @@
 
   import IconButton from './IconButton.svelte';
   import { focusModal, modalKeydown } from './modal';
+  import { fadeMove } from './motion';
 
   interface Props {
     title: string;
@@ -28,7 +29,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-<div class="k-backdrop" onclick={onclose}></div>
+<div class="k-backdrop" onclick={onclose} out:fadeMove|global></div>
 <div
   bind:this={el}
   class="k-dialog {tone}"
@@ -38,6 +39,7 @@
   tabindex="-1"
   style:width="min({width}px, calc(100vw - 32px))"
   {onkeydown}
+  out:fadeMove|global={{ y: -4 }}
 >
   <header>
     <h2 id={titleId}>{title}</h2>
@@ -67,7 +69,7 @@
     border-radius: var(--k-radius-lg);
     background: var(--k-bg-float);
     box-shadow: var(--k-shadow);
-    animation: k-float-in var(--k-duration) ease-out;
+    animation: k-float-in var(--k-duration) var(--k-ease);
   }
 
   .k-dialog:focus-visible {

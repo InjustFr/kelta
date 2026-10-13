@@ -44,7 +44,7 @@
     border-radius: 10px;
     background: var(--k-bezel);
     box-shadow: inset 0 0 0 1px var(--k-border-strong);
-    transition: background var(--k-duration) ease-out;
+    transition: background var(--k-duration-fast) var(--k-ease);
     flex: none;
   }
 
@@ -57,7 +57,7 @@
     border-radius: 50%;
     background: var(--k-well);
     box-shadow: 0 0 0 1px var(--k-border-strong);
-    transition: transform var(--k-duration) ease-out;
+    transition: transform var(--k-duration-fast) var(--k-ease);
   }
 
   input:checked + .track {

@@ -4,9 +4,10 @@
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import type { AccountError, ReviewItem, ReviewKind, RowDensity, WorkItem } from '$lib/gen';
+  import type { AccountError, Review, ReviewItem, ReviewKind, RowDensity, WorkItem } from '$lib/gen';
   import { openExternal, reviewNudge } from '$lib/ipc/commands';
   import { GLOBAL, projects, reviews, settings, tags, tickets, toasts, ui, work } from '$lib/stores';
+  import { inflight } from '$lib/stores/inflight.svelte';
   import { reviewKey } from '$lib/stores/reducers';
   import {
     Badge,
@@ -14,8 +15,10 @@
     EmptyState,
     ErrorState,
     Lamp,
+    LoadBar,
     Menu,
     Select,
+    Spinner,
     Tabs,
     Toggle,
     ROW_HEIGHT,
@@ -259,9 +262,11 @@
     return work.all.find((w) => w.pr_url === item.review.url && w.state.kind !== 'finished') ?? null;
   }
 
+  const draft = (rv: Review) => inflight.track(reviewKey(rv.ref), () => toggleDraft(rv));
+
   function mergeWhenReady(item: ReviewItem): void {
     const w = item.review.kind === 'authored' ? workOf(item) : null;
-    if (w) void runWorkAction('merge', w);
+    if (w) void inflight.track(reviewKey(item.review.ref), () => runWorkAction('merge', w));
     else toasts.info(t('Merge when ready: only for my PRs with a work item'));
   }
 
@@ -312,7 +317,9 @@
     const template = settings.value()?.reviews.nudge_template ?? '{reviewers}';
     const comment = id === 'ping' ? pingBody(template, item.review) : null;
     try {
-      await reviewNudge({ review: item.review.ref, who: item.review.waiting_on, comment });
+      await inflight.track(reviewKey(item.review.ref), () =>
+        reviewNudge({ review: item.review.ref, who: item.review.waiting_on, comment }),
+      );
       toasts.info(id === 'ping' ? t('Ping posted') : t('Review re-requested'));
     } catch (err) {
       toasts.error(err, t('Nudge'));
@@ -408,7 +415,7 @@
         if (item) openNudge(item);
         break;
       case 'd':
-        if (item) void toggleDraft(item.review);
+        if (item) void draft(item.review);
         break;
       case 't':
         if (item) openTags(item);
@@ -447,7 +454,7 @@
         reason: rv.kind === 'authored' && !rv.assigned ? null : t('Only on your own pull requests'),
         run: () => openNudge(item),
       },
-      { id: 'draft', label: draftLabel(rv), key: 'd', reason: draftBlocked(rv), run: () => toggleDraft(rv) },
+      { id: 'draft', label: draftLabel(rv), key: 'd', reason: draftBlocked(rv), run: () => draft(rv) },
       {
         id: 'merge',
         label: t('Merge when ready'),
@@ -540,6 +547,7 @@
     aria-label={t('Filter reviews')}
     onkeydown={filterKeys}
   />
+  <LoadBar active={shown.loading && !!shown.data} label={t('Loading reviews')} />
 
   {#if shown.loading && !shown.data}
     <Loading label={t('Loading reviews')} />
@@ -623,7 +631,12 @@
                   onclick={() => (selId = r.id)}
                   ondblclick={() => openDetail(r.item)}
                 >
-                  <span class="k-row-lamp"><Lamp level={ci.lamp} title={ci.label} /></span>
+                  <span class="k-row-lamp"
+                    >{#if inflight.has(reviewKey(rv.ref))}<Spinner size={10} />{:else}<Lamp
+                        level={ci.lamp}
+                        title={ci.label}
+                      />{/if}</span
+                  >
                   <span class="k-row-key">#{rv.ref.number}</span>
                   <span class="k-row-title">{rv.title}</span>
                   {#if cur === r}
