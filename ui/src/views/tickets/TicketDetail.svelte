@@ -2,7 +2,7 @@
   import { locale, t, tn } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
-  import type { Assignee, CiState, ProjectId, TicketItem, TicketRef } from '$lib/gen';
+  import type { Assignee, CiState, ProjectId, StartWorkPlan, TicketItem, TicketRef } from '$lib/gen';
   import {
     clipboardWrite,
     openExternal,
@@ -12,8 +12,9 @@
     trackerPriorities,
     trackerSetBlocked,
     trackerSetPriority,
+    workPlan,
   } from '$lib/ipc/commands';
-  import { projects, tickets, toasts, work } from '$lib/stores';
+  import { projects, settings, tickets, toasts, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import {
     Badge,
@@ -32,7 +33,8 @@
   import { openContent } from '../work/nav';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { onActions } from '../work/ui.svelte';
-  import { startWorkOnTicket } from '../work/startWork';
+  import { STAGES } from '../work/stage';
+  import { startPreview, startWorkOnTicket } from '../work/startWork';
   import ActionBar from './ActionBar.svelte';
   import { blockedReason, TICKET_ACTIONS, type TicketAction } from './caps';
   import PickMenu from './PickMenu.svelte';
@@ -72,7 +74,44 @@
   const branch = $derived(workItem?.branch || mainPr(item.prs)?.branch || null);
   const proposal = $derived(refines[key] ?? null);
   const mine = $derived(assignedToMe(item));
-  const where = $derived(standingNow(item, mine).where);
+  const standing = $derived(standingNow(item, mine));
+  const where = $derived(standing.where);
+  const liveItem = $derived(workItem && workItem.state.kind !== 'finished' ? workItem : null);
+  /** Start work's plan, for the sentence under the actions (#418). */
+  let plan = $state<StartWorkPlan | null>(null);
+  // Booleans, not the objects: list refreshes and work updates must not plan again.
+  const startable = $derived(!liveItem && ticket.status.category !== 'done');
+  $effect(() => {
+    void key;
+    plan = null;
+    if (!startable) return;
+    const k = key;
+    // Once the selection settles: walking the split view with j/k plans where it lands, not on the way.
+    const timer = setTimeout(() => {
+      workPlan({ project_id: null, source: { kind: 'ticket', ticket: ref }, source_id: item.source_ids[0] ?? null })
+        .then((p) => {
+          if (key === k) plan = p;
+        })
+        // No sentence: Start work names the error when pressed.
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(timer);
+  });
+  const editor = $derived.by(() => {
+    const e = settings.value(plan?.project_id)?.editor;
+    return e?.presets.find((p) => p.id === e.default)?.label ?? null;
+  });
+  /** What Start work will do, from its plan; with work, its stage and next step instead. */
+  const preview = $derived.by(() => {
+    if (liveItem) {
+      const ph = phaseNow(liveItem);
+      return t('{stage} stage. Next: {step}.', {
+        stage: t(STAGES[standing.stage.at]!),
+        step: ph.primary ? ph.primaryLabel : ph.label,
+      });
+    }
+    return plan ? startPreview(plan, editor) : null;
+  });
   /** Tickets in any loaded list by URL: a raw link to one reads as its key and title. */
   const known = $derived(
     new Map(
@@ -480,6 +519,7 @@
       open={workItem !== null && workItem.state.kind !== 'finished'}
       onrun={(a) => run(a)}
     />
+    {#if preview}<p class="preview" data-testid="start-preview">{preview}</p>{/if}
   </header>
 
   <div class="scroll">
@@ -786,9 +826,15 @@
     gap: var(--k-space-3);
   }
 
-  .where {
+  .where,
+  .preview {
     color: var(--k-fg-muted);
     font-size: var(--k-font-size-sm);
+  }
+
+  .preview {
+    margin: 0;
+    max-width: var(--k-measure);
   }
 
   .scroll > * + * {

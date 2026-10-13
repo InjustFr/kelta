@@ -2534,5 +2534,19 @@
   "Open theme": "Ouvrir le thème",
   "Showing cached tickets: the last refresh failed": "Tickets en cache affichés : la dernière actualisation a échoué",
   "Everything works.": "Tout fonctionne.",
-  "Fixing failed": "La correction a échoué"
+  "Fixing failed": "La correction a échoué",
+  "Ready to start": "Prêts à démarrer",
+  "In the queue": "Dans la file d'attente",
+  "Your order, as the Queue lists it": "Votre ordre, tel que la file d'attente le liste",
+  "No work yet, ready to start": "Pas encore de travail, prêt à démarrer",
+  "Started: the next step is in the Queue": "Démarré : l'étape suivante est dans la file d'attente",
+  "To start": "À démarrer",
+  "Start work resumes {branch} in {repo}.": "Démarrer le travail reprend {branch} dans {repo}.",
+  "reuses branch {branch} in {repo}": "réutilise la branche {branch} dans {repo}",
+  "creates branch {branch} in {repo}": "crée la branche {branch} dans {repo}",
+  "moves the ticket to {status}": "passe le ticket en {status}",
+  "assigns it to you": "vous l'assigne",
+  "Start work {steps}, then briefs Claude next to {editor}.": "Démarrer le travail {steps}, puis briefe Claude à côté de {editor}.",
+  "Start work {steps}, then briefs Claude.": "Démarrer le travail {steps}, puis briefe Claude.",
+  "{stage} stage. Next: {step}.": "Étape {stage}. Ensuite : {step}."
 }

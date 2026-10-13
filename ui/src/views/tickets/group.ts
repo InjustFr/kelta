@@ -1,4 +1,4 @@
-// Tickets list grouping (TICKETS.md T5/T6): Flow (default), native status, priority, sprint, assignee,
+// Tickets list grouping (TICKETS.md T5/T6): To start (Mine's default, #418), Flow, native status, priority, sprint, assignee,
 // source, parent or none; sort within groups; status age.
 
 import { msg, t } from '$lib/i18n/index.svelte';
@@ -17,8 +17,9 @@ import { mainPr } from './prs';
 
 export type GroupBy = TicketGroupBy;
 export const GROUP_BYS: readonly GroupBy[] = [
-  'flow',
+  'to_start',
   'status',
+  'flow',
   'priority',
   'sprint',
   'assignee',
@@ -113,6 +114,43 @@ export function flowOf(item: TicketItem, s: FlowSignals, now: number): Flow | nu
   return 'ready';
 }
 
+// ---- to start (#418) ------------------------------------------------------------------------
+
+export type ToStart = 'up_next' | 'ready' | 'queue' | 'blocked' | 'backlog' | 'done';
+const TO_STARTS: readonly ToStart[] = ['up_next', 'ready', 'queue', 'blocked', 'backlog', 'done'];
+const TO_START_LABELS: Record<ToStart, string> = {
+  up_next: msg('Up next'),
+  ready: msg('Ready to start'),
+  queue: msg('In the queue'),
+  blocked: msg('Blocked'),
+  backlog: msg('Backlog'),
+  done: msg('Done in the last 7 days'),
+};
+export const TO_START_HINTS: Record<string, string> = {
+  up_next: msg('Your order, as the Queue lists it'),
+  ready: msg('No work yet, ready to start'),
+  queue: msg('Started: the next step is in the Queue'),
+  backlog: msg('Not planned yet'),
+};
+
+/** What To start knows beyond the ticket: its unfinished work item and its rank in my Next up list. */
+export interface ToStartSignals {
+  work: WorkItem | null;
+  rank: number | null;
+}
+
+/** The To start group of a ticket; `null` = done more than 7 days ago (left out). */
+export function toStartOf(item: TicketItem, s: ToStartSignals, now: number): ToStart | null {
+  const t = item.ticket;
+  if (t.status.category === 'done') return now - since(t) <= 7 * DAY ? 'done' : null;
+  // As in the Queue: started tickets leave Next up, blocked ones too.
+  if (s.work && s.work.state.kind !== 'finished') return 'queue';
+  if (t.blocked || BLOCKED.test(t.status.name)) return 'blocked';
+  if (s.rank !== null) return 'up_next';
+  if (t.status.category === 'unknown' || BACKLOG.test(t.status.name)) return 'backlog';
+  return 'ready';
+}
+
 // ---- age and sort ----------------------------------------------------------------------------
 
 /** When the ticket entered its status (ms); providers without it fall back to `updated_at`. */
@@ -156,7 +194,8 @@ export function sortTickets(items: readonly TicketItem[], sort: TicketSort): Tic
 
 /**
  * Groups in display order, items kept in input order. `sources` maps a source id to its label and gives
- * the source order (a ticket sits under its first source); `flow` classifies for the Flow grouping.
+ * the source order (a ticket sits under its first source); `flow` classifies for the Flow grouping,
+ * `toStart` gives To start each ticket's work and Next up rank.
  * `columns` (in board order) order the Status groups; statuses matching no column by name follow them.
  */
 export function groupTickets(
@@ -165,13 +204,22 @@ export function groupTickets(
   sources: readonly { id: string; label: string }[] = [],
   flow: (item: TicketItem) => Flow | null = (i) => flowOf(i, { work: null, needsYou: false }, Date.now()),
   columns: readonly Column[] = [],
+  toStart: (item: TicketItem) => ToStartSignals = () => ({ work: null, rank: null }),
 ): TicketGroup[] {
   if (by === 'none') return [{ id: 'all', label: t('All'), category: null, items: [...items] }];
   const groups = new Map<string, TicketGroup & { order: number }>();
+  const now = Date.now();
+  const ranks = new Map<TicketItem, number>();
   for (const item of items) {
     const tk = item.ticket;
     let g: [string, string, StatusCategory | null, number];
-    if (by === 'flow') {
+    if (by === 'to_start') {
+      const s = toStart(item);
+      const f = toStartOf(item, s, now);
+      if (!f) continue;
+      if (f === 'up_next') ranks.set(item, s.rank!);
+      g = [f, t(TO_START_LABELS[f]), f === 'done' ? 'done' : null, TO_STARTS.indexOf(f)];
+    } else if (by === 'flow') {
       const f = flow(item);
       if (!f) continue;
       g = [f, t(FLOW_LABELS[f]), f === 'done' ? 'done' : null, FLOWS.indexOf(f)];
@@ -221,6 +269,8 @@ export function groupTickets(
     group.items.push(item);
     groups.set(id, group);
   }
+  // Up next keeps my order, whatever the sort.
+  if (by === 'to_start') groups.get('up_next')?.items.sort((a, b) => ranks.get(a)! - ranks.get(b)!);
   return [...groups.values()]
     .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label))
     .map(({ order: _, ...g }) => g);

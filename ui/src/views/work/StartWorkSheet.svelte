@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { msg, t } from '$lib/i18n/index.svelte';
+  import { t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { SheetProps } from '$app/registry';
@@ -10,7 +10,6 @@
     PermissionMode,
     StartOption,
     StartWorkPlan,
-    StatusCategory,
     TransitionTarget,
     WorkItem,
   } from '$lib/gen';
@@ -40,6 +39,7 @@
   } from './common';
   import FinishFirst from './FinishFirst.svelte';
   import { finishFirst } from './finishFirst';
+  import { describeTransition as describe } from './startWork';
 
   interface Props extends SheetProps {
     plan: StartWorkPlan;
@@ -140,17 +140,6 @@
   const errors = $derived(validatePlan(built));
   const valid = $derived(planValid(errors));
 
-  const CATEGORY: Record<StatusCategory, string> = {
-    todo: msg('to do'),
-    in_progress: msg('in progress'),
-    in_review: msg('in review'),
-    done: msg('done'),
-    unknown: msg('unknown'),
-  };
-  function describe(to: TransitionTarget | null): string {
-    if (!to) return t('next status');
-    return 'category' in to ? t(CATEGORY[to.category]) : to.name;
-  }
 
   // ---- progress (driven by work.updated) ----------------------------------------------------
   const live = $derived<WorkItem | null>(
