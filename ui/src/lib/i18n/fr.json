@@ -414,7 +414,6 @@
   "Down": "Descendre",
   "Up": "Monter",
   "Open in tracker": "Ouvrir dans le tracker",
-  "Everything waiting on you, across projects": "Tout ce qui vous attend, tous projets confondus",
   "Updated {ago}": "Mis à jour {ago}",
   "Filter": "Filtrer",
   "Filter Now": "Filtrer Maintenant",
@@ -448,6 +447,7 @@
   "Tickets in these statuses leave Up next and wait in the Waiting to deploy section of Now.": "Les tickets dans ces statuts quittent Ensuite et attendent dans la section En attente de déploiement de Maintenant.",
   "Blocking: you're the last reviewer": "Bloquant : vous êtes le dernier relecteur",
   "Updated since your review": "Mis à jour depuis votre revue",
+  "from {name}": "de {name}",
   "Review requested": "Revue demandée",
   "Changes requested": "Modifications demandées",
   "Checks failed": "Vérifications en échec",
@@ -462,14 +462,12 @@
   "ready for review": "prêt pour la revue",
   "feedback": "retours",
   "review request": "demande de revue",
-  "{n} LLM diffs": {
-    "one": "{n} diff LLM",
-    "other": "{n} diffs LLM"
+  "{n} review requests": {
+    "one": "{n} demande de revue",
+    "other": "{n} demandes de revue"
   },
-  "{n} PRs waiting": {
-    "one": "{n} PR en attente",
-    "other": "{n} PR en attente"
-  },
+  "{n} ready for review": "{n} prêt pour la revue",
+  "{n} Claude working": "{n} Claude au travail",
   "Loading Next up": "Chargement de À suivre",
   "Removing {key} from Next up": "Retrait de {key} de À suivre",
   "Marking {key} seen": "Marquage de {key} comme vu",
@@ -1569,6 +1567,10 @@
   "Only when a start step failed": "Uniquement quand une étape de démarrage a échoué",
   "Edit next: note…": "Modifier la note « ensuite »…",
   "Add next: note…": "Ajouter une note « ensuite »…",
+  "Claude is already running": "Claude tourne déjà",
+  "Retry the failed step first": "Relancez d’abord l’étape en échec",
+  "Still starting": "Démarrage en cours",
+  "Work: Start Claude": "Travail : démarrer Claude",
   "Go to Claude": "Aller à Claude",
   "Link to ticket…": "Lier à un ticket…",
   "Already linked to a ticket": "Déjà lié à un ticket",

@@ -56,6 +56,8 @@ describe('format', () => {
     expect(formatChord('mod+t', 'linux')).toEqual(['Ctrl', 'T']);
     expect(formatChord('ctrl+shift+pagedown', 'linux')).toEqual(['Ctrl', 'Shift', 'PgDn']);
     expect(formatChord('ctrl++', 'linux')).toEqual(['Ctrl', '+']);
+    expect(formatChord('V', 'macos')).toEqual(['⇧', 'V']);
+    expect(formatChord('v', 'macos')).toEqual(['V']);
   });
 
   it('relative times', () => {

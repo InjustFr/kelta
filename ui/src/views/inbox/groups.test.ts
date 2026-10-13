@@ -403,10 +403,10 @@ describe('header and badge', () => {
     const chips = headerChips(sections, 1);
     expect(chips.map((c) => [c.section, c.text, c.lamp])).toEqual([
       ['needs_you', '1 needs you', 'needs_input'],
-      ['to_review', '2 LLM diffs', null],
+      ['to_review', '2 ready for review', null],
       ['fix', '1 to fix', 'error'],
-      ['requests', '3 PRs waiting', null],
-      ['in_flight', '1 working', null],
+      ['requests', '3 review requests', null],
+      ['in_flight', '1 Claude working', null],
       ['up_next', '1 up next', null],
     ]);
     expect(waitingCount(sections)).toBe(7);

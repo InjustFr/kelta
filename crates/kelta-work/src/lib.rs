@@ -222,6 +222,12 @@ impl WorkService {
         self.resume_item(id, None).await
     }
 
+    /// `work_start_claude`: a Claude for an item that has none alive, split into its work tab.
+    pub async fn start_claude(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
+        self.ensure_listener();
+        self.start_claude_item(id).await
+    }
+
     /// `work_retry_step` (`step` = a saga step id; `skip:<step>` skips it instead).
     pub async fn retry_step(&self, id: &WorkItemId, step: &str) -> Result<WorkItem, KeltaError> {
         self.ensure_listener();

@@ -15,6 +15,7 @@ import {
   workQueueFront,
   workRetryStep,
   workSetNote,
+  workStartClaude,
   workStartNow,
 } from '$lib/ipc/commands';
 import { projects, sessions, tickets, toasts, ui, work } from '$lib/stores';
@@ -195,6 +196,23 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     run: editNote,
   },
   { id: 'go_claude', key: 'g', label: () => t('Go to Claude'), blocked: () => null, run: goClaude },
+  {
+    id: 'start_claude',
+    key: 'C',
+    label: () => t('Start Claude'),
+    blocked: ({ item }) =>
+      claudeOf(item)?.lifecycle === 'live' || claudeOf(item)?.lifecycle === 'dormant'
+        ? t('Claude is already running')
+        : item.state.kind === 'failed'
+          ? t('Retry the failed step first')
+          : ['planned', 'starting', 'queued'].includes(item.state.kind)
+            ? t('Still starting')
+            : null,
+    run: async ({ item }) => {
+      await goToWork(item);
+      work.upsert(await workStartClaude({ id: item.id }));
+    },
+  },
   {
     id: 'link',
     key: 'l',

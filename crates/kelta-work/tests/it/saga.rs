@@ -882,3 +882,42 @@ async fn link_scratch_item_to_a_ticket() {
     assert_eq!(calls.iter().filter(|c| c.starts_with("transition:")).count(), 2, "{calls:?}");
     assert_eq!(fx.tracker.ticket("SHOP-141").unwrap().ticket.status.name, "In Review");
 }
+
+#[tokio::test]
+async fn start_claude_gives_an_item_without_one_a_claude_in_its_tab() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    // Editor only: the item starts without a Claude.
+    let mut plan = w.plan(&project(), ticket("SHOP-141")).await.unwrap();
+    plan.template_id = "editor".into();
+    let item = w.start(plan).await.unwrap();
+    assert!(fx.spawned_of(|k| *k == SessionKind::Claude).is_empty());
+    let claude_args = |fx: &Fx| -> Vec<Vec<String>> {
+        fx.core
+            .calls()
+            .into_iter()
+            .filter(|c| c.method == "session_spawn" && c.args["kind"]["type"] == "claude")
+            .map(|c| serde_json::from_value(c.args["args"].clone()).unwrap())
+            .collect()
+    };
+
+    // None ever ran: a fresh conversation, split next to the editor.
+    let with = w.start_claude(&item.id).await.unwrap();
+    let uuid = with.claude_uuid.clone().unwrap();
+    assert_eq!(claude_args(&fx)[0][..2], ["--session-id".to_owned(), uuid.clone()]);
+    let first = fx.spawned_of(|k| *k == SessionKind::Claude)[0].id.clone();
+    assert!(with.session_ids.contains(&first));
+    assert_eq!(fx.core.opened().last().unwrap().1.placement, Placement::SplitRight);
+
+    // Alive: only focused.
+    w.start_claude(&item.id).await.unwrap();
+    assert_eq!(claude_args(&fx).len(), 1);
+    assert_eq!(fx.core.opened().last().unwrap().1.placement, Placement::Focused);
+
+    // Closed: the item's conversation resumes in a new Claude.
+    fx.core.exit_session(&first, 0);
+    let again = w.start_claude(&item.id).await.unwrap();
+    assert_eq!(claude_args(&fx)[1][..2], ["--resume".to_owned(), uuid]);
+    assert!(!again.session_ids.contains(&first) && again.session_ids.len() == item.session_ids.len() + 1);
+}

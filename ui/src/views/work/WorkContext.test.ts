@@ -138,7 +138,7 @@ describe('context bar: work item segment', () => {
     const entries = within(menu).getAllByRole('menuitem');
     const label = (e: HTMLElement) => e.querySelector('.label')?.textContent ?? '';
     const labels = entries.map(label);
-    expect(labels.length).toBe(21); // primary + v ⇧V p ⇧R f r c a n s b g l ⇧T t o ⇧M d ⇧P ⇧F (⇧T create_ticket from main, d draft, ⇧P park)
+    expect(labels.length).toBe(22); // primary + v ⇧V p ⇧R f r c a n s b g ⇧C l ⇧T t o ⇧M d ⇧P ⇧F (⇧T create_ticket from main, d draft, ⇧P park)
     const cont = entries.find((e) => label(e).startsWith('Continue rebase'))!;
     expect(cont.getAttribute('aria-disabled')).toBe('true');
     expect(cont.title).toBe('Only while a rebase is stopped');
@@ -175,7 +175,7 @@ describe('context bar: work item segment', () => {
     mountHeader(w);
     const menu = await openMenu();
     const entries = within(menu).getAllByRole('menuitem');
-    expect(entries.length).toBe(22); // the 21 built-ins, then the enabled plugin's action
+    expect(entries.length).toBe(23); // the 22 built-ins, then the enabled plugin's action
     const last = entries.at(-1)!;
     expect(last.textContent).toContain('Deploy to QA');
     expect(last.textContent).toContain('QA');

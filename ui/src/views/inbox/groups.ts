@@ -309,7 +309,8 @@ export interface Chip {
 
 /**
  * The Now header in section order, zero chips dropped:
- * `1 needs you`, `3 LLM diffs`, `2 to fix`, `2 PRs waiting`, `1 working`, `4 up next`.
+ * `1 needs you`, `3 ready for review`, `2 to fix`, `2 review requests`, `1 Claude working`, `4 up next`.
+ * Each chip reads like the section it jumps to.
  */
 export function headerChips(sections: readonly Section[], working: number): Chip[] {
   const chip = (section: NowSection, n: number, text: string, lamp: Lamp | null = null): Chip[] =>
@@ -321,10 +322,10 @@ export function headerChips(sections: readonly Section[], working: number): Chip
   const next = count(sections, 'up_next');
   return [
     ...chip('needs_you', asks, tn('{n} needs you', '{n} need you', asks), 'needs_input'),
-    ...chip('to_review', ready, tn('{n} LLM diff', '{n} LLM diffs', ready)),
+    ...chip('to_review', ready, t('{n} ready for review', { n: ready })),
     ...chip('fix', fix, tn('{n} to fix', '{n} to fix', fix), 'error'),
-    ...chip('requests', prs, tn('{n} PR waiting', '{n} PRs waiting', prs)),
-    ...chip('in_flight', working, tn('{n} working', '{n} working', working)),
+    ...chip('requests', prs, tn('{n} review request', '{n} review requests', prs)),
+    ...chip('in_flight', working, t('{n} Claude working', { n: working })),
     ...chip('up_next', next, t('{n} up next', { n: next })),
   ];
 }

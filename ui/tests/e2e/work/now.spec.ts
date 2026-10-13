@@ -69,7 +69,7 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
     () => window.__kelta!.stores.work.all.find((w) => w.ticket?.key === 'SHOP-151')!.id,
   );
   await select(page, `w:${id}`);
-  await expect(now(page).getByTestId('now-detail')).toContainText('Tax lines added.');
+  await expect(selected(page)).toContainText('Tax lines added.');
   await page.keyboard.press('Enter');
   await expect(now(page)).toBeHidden();
   await expect.poll(async () => (await callsOf(page, 'work_diff')).length).toBe(1);
@@ -86,13 +86,40 @@ test('the work menu opens from a terminal with its chord; letters never move', a
   await page.keyboard.press('Control+Period');
   const menu = page.getByRole('menu', { name: 'Work' });
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole('menuitem')).toHaveCount(21);
+  await expect(menu.getByRole('menuitem')).toHaveCount(22);
+  // SHOP-142's Claude runs: Start Claude waits for an item without one.
+  await expect(menu.getByRole('menuitem', { name: /Start Claude/ })).toHaveAttribute(
+    'title',
+    'Claude is already running',
+  );
   await expect(menu.getByRole('menuitem', { name: /Continue rebase/ })).toHaveAttribute(
     'title',
     'Only while a rebase is stopped',
   );
   await page.keyboard.press('Escape');
   await expect(menu).toBeHidden();
+});
+
+test('Start Claude gives a work item whose Claude is gone a new one in its tab', async ({ page }) => {
+  await boot(page);
+  await expect(page.getByTestId('context-work')).toBeVisible();
+  const panes = page.locator('[data-testid="terminal-pane"]:visible');
+  const before = await panes.count();
+  await page.evaluate(() => {
+    const mock = window.__keltaMock!;
+    const w = mock.state.work.find((x) => x.ticket?.key === 'SHOP-142')!;
+    const claude = mock.state.sessions.find((s) => w.session_ids.includes(s.id) && s.kind.type === 'claude')!;
+    Object.assign(claude, { lifecycle: 'exited', status: 'exited' });
+    mock.emit({ type: 'session.updated', session: structuredClone(claude) });
+  });
+  await page.locator('[data-testid="terminal-pane"] .xterm').first().click();
+  await page.keyboard.press('Control+Period');
+  await page
+    .getByRole('menu', { name: 'Work' })
+    .getByRole('menuitem', { name: /Start Claude/ })
+    .click();
+  await expect.poll(async () => (await callsOf(page, 'work_start_claude')).length).toBe(1);
+  await expect(panes).toHaveCount(before + 1);
 });
 
 test('Now open refreshes review items: a moved head reads Updated since your review', async ({ page }) => {

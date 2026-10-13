@@ -174,6 +174,7 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("work.conflicts", "Work: Open conflicts in nvim", [], None, Global),
     a!("work.skip_step", "Work: Skip step", [], None, Global),
     a!("work.go_claude", "Work: Go to Claude", [], None, Global),
+    a!("work.start_claude", "Work: Start Claude", [], None, Global),
     a!("work.link", "Work: Link to ticket", [], None, Global),
     a!("work.create_ticket", "Work: Create ticket", [], None, Global),
     a!("work.open_ticket", "Work: Open ticket", [], None, Global),
