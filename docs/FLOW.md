@@ -508,7 +508,7 @@ All follow DESIGN §6.13: one sentence saying what happened, one or two actions.
 | `work.menu` | `⌘.` | `Ctrl+.` | `.` | global: the menu of what has the keys, a selected row, a detail or a work tab (§2.5); else the palette |
 | `toast.run_last` (label "Run last toast action") | `⇧⌘O` | `Ctrl+Shift+O` | `o` | global, runs the primary action of the most recent toast still shown |
 | `work.start` | `⌘↵` | `Ctrl+Enter` | `s` | unchanged; also submits every work sheet and dialog |
-| `reviews.open` (label "Open reviews") | `⇧⌘R` | `Ctrl+Shift+R` | `r` | global; in a list or detail that has the keys (Queue, Tickets, Reviews, ticket and review details) it refreshes it instead (#417): the pane takes `kelta:refresh` (`use:onRefresh`), as `⌘.` takes `kelta:actions` |
+| `reviews.open` (label "Open reviews") | `⇧⌘R` | `Ctrl+Shift+R` | `r` | global; the chord (not the leader key or the palette, which always open Reviews) in a list or detail that has the keys (Queue, Tickets, Reviews, ticket and review details) refreshes it instead (#417): the key manager passes `chord`, the pane takes `kelta:refresh` (`use:onRefresh`), as `⌘.` takes `kelta:actions` |
 
 Now's single keys are in §3.3, the work menu's in §2.5. If `⌘.` turns out to be swallowed by macOS cancel handling in the webview, rebind it; the prefix key `.` always works. Check this first when implementing, and check `⇧⌘O` against existing defaults.
 
