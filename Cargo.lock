@@ -2912,7 +2912,7 @@ dependencies = [
 
 [[package]]
 name = "kelta-bench"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "kelta-proto",
@@ -2926,7 +2926,7 @@ dependencies = [
 
 [[package]]
 name = "kelta-codehosts"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "async-trait",
  "futures",
@@ -2943,7 +2943,7 @@ dependencies = [
 
 [[package]]
 name = "kelta-config"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "insta",
  "jsonschema",
@@ -2960,7 +2960,7 @@ dependencies = [
 
 [[package]]
 name = "kelta-core"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "arboard",
  "async-trait",
@@ -2998,7 +2998,7 @@ dependencies = [
 
 [[package]]
 name = "kelta-ctl"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "rustix",
  "serde",
@@ -3008,7 +3008,7 @@ dependencies = [
 
 [[package]]
 name = "kelta-desktop"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "kelta-config",
  "kelta-core",
@@ -3038,7 +3038,7 @@ dependencies = [
 
 [[package]]
 name = "kelta-http"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "ammonia",
  "base64 0.23.1",
@@ -3057,7 +3057,7 @@ dependencies = [
 
 [[package]]
 name = "kelta-plugins"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -3090,7 +3090,7 @@ dependencies = [
 
 [[package]]
 name = "kelta-proto"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "async-trait",
  "parking_lot",
@@ -3108,7 +3108,7 @@ dependencies = [
 
 [[package]]
 name = "kelta-secrets"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "apple-native-keyring-store",
  "argon2",
@@ -3129,7 +3129,7 @@ dependencies = [
 
 [[package]]
 name = "kelta-server"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "axum",
  "bytes",
@@ -3153,7 +3153,7 @@ dependencies = [
 
 [[package]]
 name = "kelta-term"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "alacritty_terminal",
  "base64 0.23.1",
@@ -3174,7 +3174,7 @@ dependencies = [
 
 [[package]]
 name = "kelta-trackers"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "async-trait",
  "insta",
@@ -3191,7 +3191,7 @@ dependencies = [
 
 [[package]]
 name = "kelta-work"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "async-trait",
  "futures",
@@ -6516,7 +6516,7 @@ dependencies = [
 
 [[package]]
 name = "tui-sim"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "rustix",
 ]
@@ -7633,7 +7633,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "kelta-plugins",

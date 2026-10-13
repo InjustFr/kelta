@@ -1,7 +1,7 @@
 # Maintainer: Kelta contributors
 # Template: the release workflow fills pkgver and sha256sums from the published checksums.
 pkgname=kelta-bin
-pkgver=1.3.0
+pkgver=1.4.0
 pkgrel=1
 pkgdesc='Claude Code and nvim side by side, with tickets and pull request reviews'
 arch=('x86_64')
