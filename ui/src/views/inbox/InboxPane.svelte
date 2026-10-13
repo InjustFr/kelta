@@ -489,6 +489,8 @@
   ];
 
   function onkeydown(e: KeyboardEvent): void {
+    // A section header keeps its own keys (Enter, Space); they must not act on the selected row.
+    if (e.target instanceof HTMLButtonElement && e.target.classList.contains('fold')) return;
     const ticket =
       cur?.type === 'ticket'
         ? { ref: cur.ticket.ticket.ref, projectId: cur.ticket.project_ids[0] ?? null }

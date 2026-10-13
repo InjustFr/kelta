@@ -301,6 +301,12 @@ describe('Now', () => {
       { name: /Waiting to deploy/ },
     );
     expect(header.getAttribute('aria-expanded')).toBe('false');
+    // Keys typed on the header must not bubble into row actions (Enter would start the selected ticket).
+    const calls = mock.calls.length;
+    await fireEvent.keyDown(header, { key: 'Enter' });
+    await fireEvent.keyDown(header, { key: 'R' });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mock.calls.length).toBe(calls);
     await fireEvent.click(header);
     // The list is virtual: End selects the last row and scrolls to it.
     await fireEvent.keyDown(screen.getByTestId('inbox-pane'), { key: 'End' });

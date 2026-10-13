@@ -255,6 +255,24 @@ describe('nowSections', () => {
     expect(ids('up_next')).toEqual(['t:jira:T-1']);
   });
 
+  it('a work item whose waiting ticket is done goes back to its phase section', () => {
+    const t = ticket('T-6', 'done');
+    const merged = entry('merged', 'ship', { ticket: { account: 'jira', key: 'T-6', id: '6' } });
+    const sections = nowSections({
+      ...empty,
+      work: [merged],
+      tickets: [
+        {
+          ...t,
+          ticket: { ...t.ticket, status: { ...t.ticket.status, name: 'A MEP' } },
+          source_ids: ['mine'],
+        },
+      ],
+      waiting: new Map([['mine', ['A MEP']]]),
+    });
+    expect(sections.map((s) => [s.id, s.rows.map((r) => r.id)])).toEqual([['ship', [`w:${merged.item.id}`]]]);
+  });
+
   it("a source's waiting statuses: Waiting to deploy, last and folded, nowhere else, not in the badge", () => {
     const shipping = (key: string, source: string, name = 'A MEPP'): TicketItem => {
       const t = ticket(key, 'in_progress');
