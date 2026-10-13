@@ -9,6 +9,7 @@ import * as samples from '$lib/gen/fixtures';
 import type {
   ClaudeRun,
   Column,
+  DeltaFile,
   EffectiveSettings,
   FinishMergedReport,
   FinishOpts,
@@ -315,6 +316,26 @@ const prKey = (r: { repo: string; number: number }): string => `${r.repo}#${r.nu
 const refKey = (r: TicketRef): string => `${r.account}:${r.key}`;
 const sameRef = (a: TicketRef, b: TicketRef): boolean => a.account === b.account && a.key === b.key;
 /** Fixture items whose worktree has uncommitted changes (the failed billing item, the merged wip). */
+// SHOP-155's `reviewed..last` (the fixture's delta: 212 lines in 9 files, a 1800-line lockfile).
+const DELTA_FILES: DeltaFile[] = [
+  ['src/payments/retry.ts', 24, 40],
+  ['src/payments/Checkout.svelte', 18, 30],
+  ['src/payments/client.ts', 12, 8],
+  ['src/payments/errors.ts', 10, 14],
+  ['src/api/orders.ts', 8, 10],
+  ['src/api/http.ts', 6, 6],
+  ['src/lib/backoff.ts', 5, 7],
+  ['src/i18n/fr.json', 4, 4],
+  ['README.md', 3, 3],
+  ['pnpm-lock.yaml', 1800, 0],
+].map(([path, insertions, deletions]) => ({
+  path: path as string,
+  insertions: insertions as number,
+  deletions: deletions as number,
+  test: false,
+  generated: path === 'pnpm-lock.yaml',
+}));
+
 const dirtyWork = (w: WorkItem): boolean => w.id === FIXTURES.work[1]?.id || w.id === FIXTURES.work[7]?.id;
 const FINISH_MERGED: FinishOpts = {
   remove_worktree: true,
@@ -1771,6 +1792,7 @@ export function createMockTransport(options: MockOptions = {}): {
       const s = spawn(w.project_id, { type: 'editor', adapter: 'nvim' }, 'diff', w.worktree);
       return updateSession(session(s.id), { work_item_id: w.id });
     },
+    work_delta_files: ({ id }) => (work(id).delta ? clone(DELTA_FILES) : []),
     work_send: ({ id, prompt, files, threads, feedback_at }) => {
       const w = work(id);
       if (!prompt.trim()) throw err('invalid_argument', 'the prompt is empty');

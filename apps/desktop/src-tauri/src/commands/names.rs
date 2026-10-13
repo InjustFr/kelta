@@ -137,6 +137,7 @@ pub const COMMANDS: &[&str] = &[
     "work_create_ticket",
     "work_status_all",
     "work_diff",
+    "work_delta_files",
     "work_mark_reviewed",
     "work_set_note",
     "work_left",

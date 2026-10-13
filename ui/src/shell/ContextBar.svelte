@@ -1,9 +1,10 @@
 <script lang="ts">
-  // The context bar above the panes (#248, DESIGN §6.3): `‹` back, the breadcrumb of the selected rail
-  // row (a drag region), what that row is about, and the `+` menu. A work tab's header sits above its
-  // panes (views/work/WorkContext.svelte, #428). Custom decorations: it is also the
-  // window's title bar (macOS traffic-light inset, or Kelta's own controls and resize handles).
-  // Native decorations: the breadcrumb is the window title.
+  // The window's top bar (#248, #429, DESIGN §6.3): `‹ ›` (the jumplist), the breadcrumb of the selected
+  // rail row (a drag region; none on a work tab, whose header above its panes names it,
+  // views/work/WorkContext.svelte, #428), the search field opening the palette, the project scope of the
+  // global lists, the "needs you" chip and `+ New`. Custom decorations: it is also the window's title
+  // bar (macOS traffic-light inset, or Kelta's own controls and resize handles). Native decorations: the
+  // breadcrumb is the window title.
   import { t, tn } from '$lib/i18n/index.svelte';
   import { onMount } from 'svelte';
 
@@ -31,6 +32,7 @@
     toolSubLines,
     VIEW_NAMES,
   } from './nav';
+  import ScopeSelect from './ScopeSelect.svelte';
 
   type Dir = 'North' | 'South' | 'East' | 'West' | 'NorthEast' | 'NorthWest' | 'SouthEast' | 'SouthWest';
   const HANDLES: Dir[] = [
@@ -155,24 +157,13 @@
     }
   }
 
+  const searchChord = $derived(chordFor('palette.open'));
+
   let plusMenu = $state<{ x: number; y: number } | null>(null);
   const PLUS: MenuItem[] = $derived([
-    { id: 'session', label: t('New session…'), icon: 'square-terminal', kbd: chordFor('session.new') },
-    { id: 'tickets', label: t('Tickets'), icon: 'ticket', kbd: chordFor('tickets.open') },
-    { id: 'reviews', label: t('Reviews'), icon: 'git-pull-request', kbd: chordFor('reviews.open') },
+    { id: 'work.new', label: t('New work item'), icon: 'git-branch', kbd: chordFor('work.new') },
+    { id: 'session.new', label: t('New session…'), icon: 'square-terminal', kbd: chordFor('session.new') },
   ]);
-
-  async function onPlus(id: string): Promise<void> {
-    // The cross-project views, scoped to the project shown (#409); with none, in their current scope.
-    const args = project && !view ? { project_id: project.id } : undefined;
-    try {
-      if (id === 'session') ui.openSheet('session_new');
-      else if (id === 'tickets') await dispatch('tickets.open', args);
-      else if (id === 'reviews') await dispatch('reviews.open', args);
-    } catch (err) {
-      toasts.error(err, t('Could not open the view'));
-    }
-  }
 
   async function win(op: 'minimize' | 'toggleMaximize' | 'close'): Promise<void> {
     const { getCurrentWindow } = await import('@tauri-apps/api/window');
@@ -201,30 +192,37 @@
     data-testid="context-back"
     onclick={() => void dispatch('nav.back')}
   />
+  <IconButton
+    icon="chevron-right"
+    size="sm"
+    label={t('Go forward')}
+    chord={chordFor('nav.forward')}
+    data-testid="context-forward"
+    onclick={() => void dispatch('nav.forward')}
+  />
 
-  <span class="crumb" data-tauri-drag-region data-testid="context-crumb">
-    {#if view}
-      <span class="here" data-tauri-drag-region
-        ><Icon name={VIEW_ICONS[view]} size={14} /> {VIEW_NAMES[view]}</span
-      >
-    {:else if tool}
-      <span class="parent" data-tauri-drag-region>{t('Tools')}</span>
-      <span class="sep" aria-hidden="true">›</span>
-      <span class="here" data-tauri-drag-region><span aria-hidden="true">⚒</span>{tool.label}</span>
-    {:else if project}
-      <span class="project" style:--project-color={projectColor} data-tauri-drag-region>{project.name}</span>
-      {#if item}
-        <span class="sep" aria-hidden="true">›</span>
-        <span class="key" data-testid="context-key" data-tauri-drag-region>{workKey(item)}</span>
-        <span class="ttl" data-tauri-drag-region>{workTitle(item)}</span>
-      {:else if row}
-        <span class="sep" aria-hidden="true">›</span>
+  {#if view || !item}
+    <span class="crumb" data-tauri-drag-region data-testid="context-crumb">
+      {#if view}
         <span class="here" data-tauri-drag-region
-          >{#if row.glyph}<span aria-hidden="true">{row.glyph}</span>{/if}{row.text}</span
+          ><Icon name={VIEW_ICONS[view]} size={14} /> {VIEW_NAMES[view]}</span
         >
+      {:else if tool}
+        <span class="parent" data-tauri-drag-region>{t('Tools')}</span>
+        <span class="sep" aria-hidden="true">›</span>
+        <span class="here" data-tauri-drag-region><span aria-hidden="true">⚒</span>{tool.label}</span>
+      {:else if project}
+        <span class="project" style:--project-color={projectColor} data-tauri-drag-region>{project.name}</span
+        >
+        {#if row}
+          <span class="sep" aria-hidden="true">›</span>
+          <span class="here" data-tauri-drag-region
+            >{#if row.glyph}<span aria-hidden="true">{row.glyph}</span>{/if}{row.text}</span
+          >
+        {/if}
       {/if}
-    {/if}
-  </span>
+    </span>
+  {/if}
 
   {#if tool && project}
     {#if isHome}
@@ -244,6 +242,17 @@
       {#if cwd}<span class="meta" title={session?.cwd} data-tauri-drag-region>{cwd}</span>{/if}
     {/if}
   {/if}
+  <span class="spacer" data-tauri-drag-region></span>
+  <button
+    type="button"
+    class="search"
+    title={t('Search or run a command')}
+    data-testid="context-search"
+    onclick={() => void dispatch('palette.open')}
+  >
+    <Icon name="search" size={14} /><span class="search-text">{t('Search or run…')}</span>
+    {#if searchChord}<span aria-hidden="true"><Kbd chord={searchChord} /></span>{/if}
+  </button>
   <span class="spacer" data-tauri-drag-region></span>
   {#if view && project}
     <Button
@@ -287,11 +296,14 @@
     >
   {/if}
 
+  <ScopeSelect />
+
   {#if asking.length > 0}
     <Button
       size="sm"
       variant="ghost"
       class="chip"
+      chord={chordFor('attention.next')}
       title={t('Claude needs you')}
       aria-haspopup={asking.length > 1 ? 'menu' : undefined}
       data-testid="context-asking"
@@ -305,14 +317,13 @@
     size="sm"
     icon="plus"
     class="plus"
-    aria-label={t('New tab')}
-    title={t('New tab')}
+    aria-haspopup="menu"
     data-testid="tab-plus"
     onclick={(e) => {
       const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
       plusMenu = { x: r.right - 220, y: r.bottom + 2 };
-    }}
-  />
+    }}>{t('New')}</Button
+  >
 
   {#if custom && !mac}
     <span class="controls">
@@ -348,8 +359,9 @@
     items={PLUS}
     x={plusMenu.x}
     y={plusMenu.y}
-    label={t('Open')}
-    onselect={(id) => void onPlus(id)}
+    label={t('New')}
+    onselect={(id) =>
+      void dispatch(id).catch((err: unknown) => toasts.error(err, t('Could not open the view')))}
     onclose={() => (plusMenu = null)}
   />
 {/if}
@@ -413,8 +425,7 @@
     font-family: var(--k-font-mono);
   }
 
-  .here,
-  .ttl {
+  .here {
     display: inline-flex;
     align-items: center;
     gap: var(--k-space-2);
@@ -423,10 +434,6 @@
     text-overflow: ellipsis;
     color: var(--k-fg);
     font-weight: var(--k-weight-strong);
-  }
-
-  .ttl {
-    display: block;
   }
 
   .meta,
@@ -454,13 +461,48 @@
     align-self: stretch;
   }
 
+  /* The search field (#429): it opens the palette, the rail has no search row. */
+  .search {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-2);
+    flex: 0 1 320px;
+    min-width: 0;
+    height: var(--k-control-height-sm);
+    padding: 0 var(--k-space-2) 0 var(--k-space-3);
+    border: 1px solid var(--k-border);
+    border-radius: var(--k-radius);
+    background: var(--k-well);
+    color: var(--k-fg-muted);
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .search:hover {
+    border-color: var(--k-border-strong);
+    color: var(--k-fg);
+  }
+
+  .search:focus-visible {
+    outline: 2px solid var(--k-focus);
+    outline-offset: -2px;
+  }
+
+  .search-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .controls {
     display: inline-flex;
     flex: none;
     gap: var(--k-space-1);
   }
 
-  /* Narrow bars (#248): the cwd and model go first, then the work title (the key stays). */
+  /* Narrow bars (#248): the cwd and model go first, then the search text (its icon stays). */
   @container contextbar (max-width: 1280px) {
     .meta {
       display: none;
@@ -468,8 +510,13 @@
   }
 
   @container contextbar (max-width: 840px) {
-    .ttl {
+    .search-text,
+    .search :global(.k-kbd) {
       display: none;
+    }
+
+    .search {
+      flex: none;
     }
   }
 

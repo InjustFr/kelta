@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { msg, t, tn } from '$lib/i18n/index.svelte';
+  import { t, tn } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
@@ -23,6 +23,7 @@
   import ChangeMap from './ChangeMap.svelte';
   import { AREA_LABEL, changeMap, filesByArea } from './changemap';
   import LinkedTicket from './LinkedTicket.svelte';
+  import { REVIEWER_STATE } from './pullRequest';
   import { openDays, reviewState } from './sections';
   import ReviewTextDialog from './ReviewTextDialog.svelte';
   import TagChips from '../tags/TagChips.svelte';
@@ -68,13 +69,6 @@
     return () => clearTimeout(t);
   });
 
-  const REVIEWER_STATE: Record<string, string> = {
-    approved: msg('approved'),
-    changes_requested: msg('changes requested'),
-    commented: msg('commented'),
-    pending: msg('pending'),
-    dismissed: msg('dismissed'),
-  };
   function refresh(): void {
     changed = false;
     void reviews.loadDetail(ref);

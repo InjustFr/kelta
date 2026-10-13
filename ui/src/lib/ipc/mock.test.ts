@@ -279,6 +279,7 @@ describe('mock transport', () => {
       work_resolve_sent_threads: { id: withPr.id },
       work_status_all: {},
       work_diff: { id: work.id },
+      work_delta_files: { id: work.id },
       work_mark_reviewed: { id: work.id },
       work_set_note: { id: work.id, note: 'next: tests' },
       work_left: { id: work.id },

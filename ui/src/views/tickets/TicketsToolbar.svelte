@@ -5,17 +5,14 @@
   import type { TicketSort, TicketsMode, Who } from '$lib/gen';
   import { Button, Icon, IconButton, relativeTime, Select, Tabs } from '$lib/ui';
 
-  import ScopeSelect from '../../shell/ScopeSelect.svelte';
   import TagFilter from '../tags/TagFilter.svelte';
   import { GROUP_BYS, SORTS, type GroupBy } from './group';
 
   // The Tickets toolbar (DESIGN §6.8), in two groups. Left, what you look at: project, source, then whose
-  // tickets. Right, how it is arranged: one View menu (person, sprint, grouping, sort), the list/board
+  // tickets (the project scope is in the top bar, #429). Right, how it is arranged: one View menu (person, sprint, grouping, sort), the list/board
   // toggle and Refresh. The text filter is in the shared filter bar below (#370). The pane owns the
   // state and the keys; this only shows them.
   interface Props {
-    /** The project scope menu (the rail's Tickets view, #409). */
-    scoped: boolean;
     /** Who tabs, person and arrangement need a source. */
     hasSource: boolean;
     who: { id: Who; label: string; title?: string }[];
@@ -55,7 +52,6 @@
   }
 
   let {
-    scoped,
     hasSource,
     who,
     whoTab,
@@ -131,7 +127,6 @@
 </script>
 
 <header class="k-toolbar bar">
-  {#if scoped}<ScopeSelect />{/if}
   {#if sourceText !== null}
     <button
       type="button"

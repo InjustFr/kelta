@@ -1,7 +1,7 @@
 # Kelta design spec: Bezel
 
 Status: built. The direction of the UI redesign (lane `ui-redesign`), since scaled up for readability (larger type, rounded panes, a labelled sidebar). It replaces the generic white / `#17181b` + `#2f6fdf` palette. Where this page and `ui/src/styles/tokens.css` differ, the file wins.
-Sources: three proposals (Bezel, Margin and Spine, Faceplate). Bezel is the base. Grafts are marked *(from Faceplate)* or *(from Spine)*.
+Sources: three proposals (Bezel, Margin and Spine, Faceplate). Bezel is the base. Grafts are marked _(from Faceplate)_ or _(from Spine)_.
 
 ## 1. Concept
 
@@ -252,13 +252,13 @@ Every earlier `--k-*` name is kept, so components that only read tokens need no 
 
 ### 2.2 Contrast floor
 
-| Pair | Light | Dark |
-|---|---|---|
-| `--k-fg` on `--k-well` | 16.7:1 | 14.6:1 |
-| `--k-fg-muted` on `--k-well` / `--k-bg-float` | 7.9 / 8.2:1 | 8.7 / 6.5:1 |
-| `--k-fg-subtle` on well / bezel-raised / bezel / float (lowest) | 5.29:1 (bezel) | 5.23:1 (float) |
-| `--k-fg-chrome` on `--k-bezel-raised` / `--k-bg-float` | 7.3 / 8.6:1 | 6.8 / 6.2:1 |
-| accent (any hue, fixed L) on well | at least 3:1 (focus marks, non-text) | at least 3:1 |
+| Pair                                                            | Light                                | Dark           |
+| --------------------------------------------------------------- | ------------------------------------ | -------------- |
+| `--k-fg` on `--k-well`                                          | 16.7:1                               | 14.6:1         |
+| `--k-fg-muted` on `--k-well` / `--k-bg-float`                   | 7.9 / 8.2:1                          | 8.7 / 6.5:1    |
+| `--k-fg-subtle` on well / bezel-raised / bezel / float (lowest) | 5.29:1 (bezel)                       | 5.23:1 (float) |
+| `--k-fg-chrome` on `--k-bezel-raised` / `--k-bg-float`          | 7.3 / 8.6:1                          | 6.8 / 6.2:1    |
+| accent (any hue, fixed L) on well                               | at least 3:1 (focus marks, non-text) | at least 3:1   |
 
 Every text token clears 4.5:1 on every surface it can sit on, so 12-13px labels and state words may use it. Exception: `--k-fg-subtle` is never used on the call light (`--k-lit`); the lit pane header switches it to `--k-fg-muted`.
 Lamp colours are non-text marks (3:1); as text, such as the phase word on a ticket row, they only appear through `color-mix(in oklab, var(--k-lamp-*) 75%, var(--k-fg))`.
@@ -273,17 +273,18 @@ No web fonts and no bundled woff2. Terminals already render in the user's chosen
 - **UI face**: `system-ui` stack (SF Pro, Cantarell or Adwaita Sans, the distro sans on Hyprland/Sway, Segoe). All chrome and all list/detail content.
 - **Mono**: `ui-monospace` first. Only for strings you could paste into a terminal: ticket keys (`PROJ-142`, `#381`, `!57`), branch names, SHAs, session ids, paths, diffstat numbers, kbd hints, the palette's typed query. Never for labels.
 
-| Step | Size / line | Weight | Use |
-|---|---|---|---|
-| xs | 12 / 1.43 | 400 | the floor: ages, priorities, counts, kbd, badges, chips, status strip, sidebar sub-lines |
-| sm | 13 / 1.43 | 400, 500, 600 | tabs, pane headers, toolbars, small buttons, group headers (600, `--k-fg-muted`) |
-| base | 14 / 1.43 | 400, 500 | list rows (titles 500 `--k-fg-strong`, 600 on the selected row), forms, settings, menus, sidebar names |
-| lg | 16 / 1.43 | 600 | view titles, dialog and sheet titles, palette input |
-| xl | 20 / 1.43 | 600 | ticket / review detail title only, `--k-fg-strong` |
-| display | 26 | 600 | welcome heading only |
-| read | 14 / 1.55 | 400 | HtmlContent bodies, max-width `--k-measure` (68ch); headings inside stay 1em/600 |
+| Step    | Size / line | Weight        | Use                                                                                                    |
+| ------- | ----------- | ------------- | ------------------------------------------------------------------------------------------------------ |
+| xs      | 12 / 1.43   | 400           | the floor: ages, priorities, counts, kbd, badges, chips, status strip, sidebar sub-lines               |
+| sm      | 13 / 1.43   | 400, 500, 600 | tabs, pane headers, toolbars, small buttons, group headers (600, `--k-fg-muted`)                       |
+| base    | 14 / 1.43   | 400, 500      | list rows (titles 500 `--k-fg-strong`, 600 on the selected row), forms, settings, menus, sidebar names |
+| lg      | 16 / 1.43   | 600           | view titles, dialog and sheet titles, palette input                                                    |
+| xl      | 20 / 1.43   | 600           | ticket / review detail title only, `--k-fg-strong`                                                     |
+| display | 26          | 600           | welcome heading only                                                                                   |
+| read    | 14 / 1.55   | 400           | HtmlContent bodies, max-width `--k-measure` (68ch); headings inside stay 1em/600                       |
 
 Rules:
+
 - Weights 400, 500 and 600. 600 is for the focused pane title, view titles, group headers and the selected list row's title; 500 (`--k-weight-medium`) for unfocused pane titles, palette group headers and list row titles (#382).
 - Titles in lists and detail panes take `--k-fg-strong`, a step past `--k-fg` (mixed 40% toward black in light, white in dark, from the theme's own `--k-fg`), so a row's title stands out from its other text.
 - Nothing is set below 12px, bar the initials in a 20px avatar (10px). A label that does not fit is shortened or dropped, never shrunk (§6.14).
@@ -307,9 +308,9 @@ Rules:
 
 `src/lib/terminal/theme.ts` holds the Bezel base palettes and is their source of truth (Rust needs `#rrggbb`). Tokens mirror bg / fg / cursor / selection; a unit test asserts that `--k-term-bg` and `--k-term-fg` in tokens.css equal theme.ts. A selected theme (`app.dark_theme` / `app.light_theme`, SETTINGS `[themes.<id>]`) is resolved by `src/lib/theme`: it overrides `--k-*` tokens inline on `<html>` and hands its terminal colours to xterm and `terminal_set_palette` in place of the base palette. `terminal_set_palette` re-push on theme change is unchanged.
 
-| | fg | bg | cursor | selection |
-|---|---|---|---|---|
-| Dark | `#d3d9df` | `#121519` | `#d3d9df` | `#2c3f52` |
+|       | fg        | bg        | cursor    | selection |
+| ----- | --------- | --------- | --------- | --------- |
+| Dark  | `#d3d9df` | `#121519` | `#d3d9df` | `#2c3f52` |
 | Light | `#1b2026` | `#fafbfb` | `#1b2026` | `#c9daea` |
 
 ANSI 0-15:
@@ -329,15 +330,15 @@ The cursor is neutral, not project-hued and not acid-green. ANSI red/green/yello
 
 One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs, Now, palette, board cards. Nothing pulses or blinks.
 
-| State | Shape | Size | Token |
-|---|---|---|---|
-| `needs_input` | filled dot with a 2px halo of the same colour at 35% (`box-shadow: 0 0 0 2px color-mix(...)`) | 10px | `--k-lamp-needs-input` |
-| `working` *(from Faceplate)* | hollow ring, 1.5px stroke | 10px | `--k-lamp-working` |
-| `error` | filled square rotated 45° (diamond) | 9px | `--k-lamp-error` |
-| `done` | filled dot, no halo | 8px | `--k-lamp-done` |
-| `activity` | small dot | 6px | `--k-lamp-activity` |
-| `parked` (#142) | hollow ring like `working`, quiet | 10px | `--k-fg-muted` |
-| `none` | renders nothing (the slot keeps its width in tabs) | | |
+| State                        | Shape                                                                                         | Size | Token                  |
+| ---------------------------- | --------------------------------------------------------------------------------------------- | ---- | ---------------------- |
+| `needs_input`                | filled dot with a 2px halo of the same colour at 35% (`box-shadow: 0 0 0 2px color-mix(...)`) | 10px | `--k-lamp-needs-input` |
+| `working` _(from Faceplate)_ | hollow ring, 1.5px stroke                                                                     | 10px | `--k-lamp-working`     |
+| `error`                      | filled square rotated 45° (diamond)                                                           | 9px  | `--k-lamp-error`       |
+| `done`                       | filled dot, no halo                                                                           | 8px  | `--k-lamp-done`        |
+| `activity`                   | small dot                                                                                     | 6px  | `--k-lamp-activity`    |
+| `parked` (#142)              | hollow ring like `working`, quiet                                                             | 10px | `--k-fg-muted`         |
+| `none`                       | renders nothing (the slot keeps its width in tabs)                                            |      |                        |
 
 - `working` and `parked` are not Attention levels: `working` is derived from `sessions[].status === 'working'` in the store, `parked` from a parked work item (FLOW §2.2). Precedence on an aggregate (project): needs_input > error > working > done > activity.
 - `aria-label` stays as today; lamps are never the only accessible name.
@@ -348,32 +349,37 @@ One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs,
 The rail lists work, not tabs (#430): the views, then each project's work items, everything else folded.
 
 - **Width**: 288px by default (`--k-rail-width`), set by dragging its right edge between 200 and 480px (`sidebar.svelte.ts`, #362). The edge is a 10px hit area with a 2px accent line on hover, drag and focus; `←` `→` move it by 16px (`⇧` 64px), `Enter` collapses. `rail.toggle` (`⌘B`, `Ctrl+B`) or the panel button at the bottom collapses it to the 64px icon column (`--k-rail-width-compact`); a window under 1100px starts collapsed and the button still opens it until the next start. Width and collapsed state survive a restart (webview storage). `--k-bezel`.
-- Top to bottom: **Search or run…** (the palette; its chord, like Settings', shows on hover and focus only), then the three views, 44px two-line rows (`--k-sidebar-row-height`), each with one count on its sub line: **Now** (`inbox` icon, `9 your move`), **Tickets** (`ticket` icon, `10 assigned to you`), **Reviews** (`git-pull-request` icon, `3 ask for your review`); then the **Open** group with an **Add project** ghost button; the bands; **Open project…** when closed projects exist (#363); **Other Claude sessions** and **Tools**; at the foot **Settings** and the collapse button. Only the current destination (a row, a folded row hiding it, or a view) wears the selected row style and the full-height index bar (a view's bar is the accent); rows drop theirs while a view is shown.
+- Top to bottom (no search row: the search field is in the top bar, §6.3, #429): the three views, 44px two-line rows (`--k-sidebar-row-height`), each with one count on its sub line: **Now** (`inbox` icon, `9 your move`), **Tickets** (`ticket` icon, `10 assigned to you`), **Reviews** (`git-pull-request` icon, `3 ask for your review`); then the **Open** group with an **Add project** ghost button; the bands; **Open project…** when closed projects exist (#363); **Other Claude sessions** and **Tools**; at the foot **Settings** and the collapse button. Only the current destination (a row, a folded row hiding it, or a view) wears the selected row style and the full-height index bar (a view's bar is the accent); rows drop theirs while a view is shown.
 - Counts: no red badge. The count is the sub line in the wide rail; the compact rail shows it as a `--k-bg-selected` pill with `--k-fg-muted` digits in the badge slot. Lit rows say what waits on you.
 - **Bands**: one per open project, Home last. A caption (project name, `--k-fg-muted` 13/500, `⋯` on hover) over the project's **work rows**, then one **n more** row. No project tile, status word, lamp or ready count on the caption: its rows carry them.
 - **Work rows** (`--k-rail-item`, 32px, one line): `[lamp socket 10px][key][title][stage word]`, the key and the stage word (Claude, PR, Review, Merge, Deploy) in `--k-fg-muted` 11px. Rows keep the order their work started in, so a phase change never moves one. `⌘1`–`⌘9` (`project.goto.N`) jump to the nth work row across bands; its digit sits at the right end. A 2px project-colour bar on the left (raw resolved colour, §2.1; 55% mix), full colour and 3px on the selected row, which also wears `--k-bg-selected` and a 600 title. `×` on hover and focus, over the stage word and digit. A tab in its own window (#342) adds the `app-window` glyph before its key.
 - **n more**: every other tab of the project (shells, boards, review lists, Settings) and its background sessions fold into one row, `[lamp][chevron][n more]`; its lamp is the highest of the folded tabs. A click opens it in place: the folded tabs as `[lamp][glyph][title]` rows in tab order, then the background sessions as `--k-fg-muted` rows. Tool tabs stay under Tools.
-- **Lit row** *(from Faceplate)*: a row whose session needs input takes `--k-lit` (`color-mix(in oklab, var(--k-lamp-needs-input) var(--k-lit-mix), var(--k-bezel))`, `--k-lit-mix` 14% light, 30% dark), the brightest thing in the window, readable in peripheral vision. The selected row keeps its face; its lamp speaks.
+- **Lit row** _(from Faceplate)_: a row whose session needs input takes `--k-lit` (`color-mix(in oklab, var(--k-lamp-needs-input) var(--k-lit-mix), var(--k-bezel))`, `--k-lit-mix` 14% light, 30% dark), the brightest thing in the window, readable in peripheral vision. The selected row keeps its face; its lamp speaks.
 - **Other Claude sessions**: Claude sessions Kelta did not start (#345), dimmed rows `[lamp][bot glyph][title]` under their own heading; a click jumps to their window or tmux pane (#346).
 - **Tools**: the same 32px rows, `[lamp][icon or 2 letters][label]`, `↗` (`external-link` 12px, `--k-fg-muted`) for web and external tools, 55% opacity when not installed. Live instances are `--k-fg-muted` sub-lines `└ KEY` indented under the lamp column.
-- **Compact** (collapsed, or < 1100px): the caption becomes a 1px rule in the project colour and each row a tile (bar, lamp, glyph; a work row's key and stage word hide); names are in the tooltips and the accessibility tree; sub lines, `×`, `⋯` and the search text are hidden.
+- **Compact** (collapsed, or < 1100px): the caption becomes a 1px rule in the project colour and each row a tile (bar, lamp, glyph; a work row's key and stage word hide); names are in the tooltips and the accessibility tree; sub lines, `×` and `⋯` are hidden.
 - **Drag and drop** (#341, #342): rows do not reorder (their order is the work's start). A pane dragged by its header (§6.4) over a row joins that tab (`pane-over`: accent drop line); over a band's empty area it becomes a tab of its own; never across projects. A row or pane dropped outside the window moves to its own window.
 - Focus: 2px `--k-focus` outline inset 2px.
 - Drag-over: 2px accent insertion line.
 
-### 6.3 Context bar (`shell/ContextBar.svelte`)
+### 6.3 Top bar (`shell/ContextBar.svelte`)
 
-One bar across the top of the window, above the rail and the panes: `--k-contextbar-height` (30px), `--k-bezel`, `--k-font-size-sm`. It describes the selected rail row; the status strip stays app-wide, the pane header per pane, the rail keeps the lamps. No tab list and no tool strip: the rail lists the work and the tools (§6.2).
+One bar across the top of the window, above the rail and the panes: `--k-contextbar-height` (30px), `--k-bezel`, `--k-font-size-sm`. It holds what is window-level (#429): going back, finding things, being called, starting something. The status strip stays app-wide, the pane header per pane, the rail keeps the lamps. No tab list and no tool strip: the rail lists the work and the tools (§6.2).
 
-- Always: `‹` (`nav.back`, its tooltip names the jumplist target), the breadcrumb, `+` on the right (New session, Tickets, Reviews; tools live in the rail). The breadcrumb is `▌project › row`: a 3px project-colour bar, the project name in `--k-fg-muted` 500, `›` in `--k-fg-subtle`, the row in `--k-fg` 600 (ellipsis). It is a pure drag region (double-click zooms the window), never clickable.
-- Work tab: the mono key and the title, nothing else: no work segment (#428). The tab's header sits above its panes (`views/work/WorkContext.svelte`, outside the pane area so it stays over a zoomed pane), on `--k-bg` with the screen radius: the mono key, `▌project` and the title; under them one sentence of why, `<Your move | Waiting on others>: <phase label>, <detail>` (Now's zones; it opens the Story panel); the stage track with its stage named under the mark (`workStage`, the mark by Now's zone); the primary button (its blocked reason in the tooltip) and `Actions ⌘.`. A narrow header drops the track, then the `Actions` label. Status, PR, branch, behind and cost live in the Story panel's summaries (Ticket, Pull request, Changes, Claude; §6.4).
+- Left to right: `‹ ›` (`nav.back` / `nav.forward` on the jumplist; `‹`'s tooltip names its target), the breadcrumb, the search field in the centre, the project scope, the "needs you" chip, `+ New`.
+- Breadcrumb: `▌project › row`: a 3px project-colour bar, the project name in `--k-fg-muted` 500, `›` in `--k-fg-subtle`, the row in `--k-fg` 600 (ellipsis). It is a pure drag region (double-click zooms the window), never clickable.
+- Search field: `search` icon, "Search or run…" and the `palette.open` chord, on `--k-well` with a 1px `--k-border` (`--k-border-strong` on hover), up to 320px; a click opens the palette (§6.6). The rail has no search row.
+- Scope: `All projects ▾` (`shell/ScopeSelect.svelte`), the one scope of the Queue, Tickets and Reviews (§6.8). The lists' toolbars no longer carry it.
+- "Needs you" chip: the Queue's "Claude needs you" section only (Claudes blocked on you, #372), `n needs you` with its lamp and `⌘J` (`attention.next`); hidden at 0. One waiting: a click goes to it; several: a menu of them.
+- `+ New`: a menu of **New work item** (`work.new`) and **New session** (`session.new`); the views live in the rail.
+- Work tab: no breadcrumb, no work segment (#428): the tab's header above its panes names the item (`views/work/WorkContext.svelte`, outside the pane area so it stays over a zoomed pane), on `--k-bg` with the screen radius: the mono key, `▌project` and the title; under them one sentence of why, `<Your move | Waiting on others>: <phase label>, <detail>` (Now's zones; it opens the Story panel); the stage track with its stage named under the mark (`workStage`, the mark by Now's zone); the primary button (its blocked reason in the tooltip) and `Actions ⌘.`. A narrow header drops the track, then the `Actions` label. Status, PR, branch, behind and cost live in the Story panel's summaries (Ticket, Pull request, Changes, Claude; §6.4). The native window title stays `project › KEY title`.
 - Claude session: `✻ name`, then the cwd and the model on the right. Terminal: `❯ title` (OSC 2) and the cwd. Home: `Home › ❯ zsh` and the cwd (`Home` alone on the welcome screen).
 - Tool tab: `Tools › ⚒ tool`; in Home a muted "for you", else a context chip `▌project › KEY` (goes to that tab) and the cwd; on the right the return chip `↩ <back target> <tool key>` (`nav.back`, what pressing the tool's key again does).
 - Global view: its name, and on the right the "underneath" chip `‹ project › row` that leaves the view. The view's own 40px `.k-toolbar` (filters) stays under the bar.
-- A detached window (§6.4) has no context bar; the native title bar sits above its tab.
+- A detached window (§6.4) has no top bar; the native title bar sits above its tab.
 - Never in the bar: session status, ctx % and session cost (pane header); rate limits, Claude slots, restart, prefix (status strip); row lamps and peek (rail).
-- Narrow bars (container queries) drop, in order: the cwd/model, the title (the key stays). `‹`, the key and `+` never drop.
-- Window chrome: native decorations keep the system title bar, whose title follows the breadcrumb. macOS custom chrome draws the traffic lights over a 72px leading inset of the bar (overlay title bar); Linux custom chrome adds minimize, maximize and close after `+` and the edge resize handles. Empty bar area is `data-tauri-drag-region`. Hyprland/Sway: no title bar, the context bar is the top edge.
+- Narrow bars (container queries) drop, in order: the cwd/model, the search text and chord (its icon stays). `‹ ›`, the search icon and `+ New` never drop.
+- Window chrome: native decorations keep the system title bar, whose title follows the breadcrumb. macOS custom chrome draws the traffic lights over a 72px leading inset of the bar (overlay title bar); Linux custom chrome adds minimize, maximize and close after `+ New` and the edge resize handles. Empty bar area is `data-tauri-drag-region`. Hyprland/Sway: no title bar, the top bar is the top edge.
 
 ### 6.4 Panes (`shell/PaneHost.svelte`)
 
@@ -411,7 +417,7 @@ One bar across the top of the window, above the rail and the panes: `--k-context
 One row grammar for all three, so they read as one instrument:
 `lamp | id (mono 13, --k-info, 76px) | title (14/500, --k-fg-strong, fills) | meta (12, right-aligned, tabular)`.
 
-- Scope (#409): the toolbar of each global list (Queue, Tickets as list or board, Reviews) holds `All projects ▾` (`shell/ScopeSelect.svelte`), a menu of the open projects setting the one scope the three share (`shell/scope.svelte.ts`, kept in the webview's storage), so switching view keeps it. Home, or a project closed since, reads as All projects. The Queue keeps the scoped project's rows (a Claude session Kelta did not start has none) and its header counts them; the Tickets source menu and the Reviews repo filter narrow inside the scope. A project has no Board, Reviews or Inbox tab of its own: `tickets.open` / `tickets.board` / `reviews.open` with a project open the global view scoped to it, and a saved layout's tabs holding only such a list close on load, the last one's project applied once as the scope.
+- Scope (#409, #429): the top bar (§6.3) holds `All projects ▾` (`shell/ScopeSelect.svelte`), a menu of the open projects setting the one scope the three share (`shell/scope.svelte.ts`, kept in the webview's storage), so switching view keeps it. Home, or a project closed since, reads as All projects. The Queue keeps the scoped project's rows (a Claude session Kelta did not start has none) and its header counts them; the Tickets source menu and the Reviews repo filter narrow inside the scope. A project has no Board, Reviews or Inbox tab of its own: `tickets.open` / `tickets.board` / `reviews.open` with a project open the global view scoped to it, and a saved layout's tabs holding only such a list close on load, the last one's project applied once as the scope.
 
 - Hierarchy (#382): the title is the brightest text in the row (500, 600 on the selected row), the key wears one hue in every list (`--k-info`, never a lamp colour) so the eye runs down the key column, the state word takes its lamp's colour, and everything else stays muted.
 
@@ -439,7 +445,7 @@ One row grammar for all three, so they read as one instrument:
 - Source picker sheet (§6.7, `min(480px, 100vw)`, from the right): account Select, search input, rows of kind (12 muted), label (13), detail (11 muted); added hits read "Added".
 - No key shadows or per-row effects: rows live inside VirtualList and must stay cheap to paint.
 
-### 6.9 Detail panes (ticket, review) *(meta grid and measure from Spine)*
+### 6.9 Detail panes (ticket, review) _(meta grid and measure from Spine)_
 
 - Key in mono 13 (copyable), title 20/600 `--k-fg-strong`, then a label/value meta grid: `display: grid; grid-template-columns: auto 1fr auto 1fr`, labels 12 `--k-fg-muted`, values 13. Stacks to `auto 1fr` under 480px pane width.
 - Section heads (Description, Discussion, Checks) are `.k-section-title`: content size, 600, a 1px `--k-border` rule above with 12px padding and 24px margin. They are the largest headings in the pane after the title.
@@ -454,7 +460,7 @@ One row grammar for all three, so they read as one instrument:
 ### 6.10 Board
 
 - Lanes 264px, `--k-bezel` trays (radius 3) on a `--k-well` board with 8px gutters, so each lane and an empty drop target has an edge. Header = name (13/600) + count (12, tabular, `--k-fg-subtle`).
-- Cards `--k-well`, radius 2, 1px `--k-border`, no shadow. Line 1 (fixed 18px, chips centred in it, so titles line up across lanes): key (mono 11) + lamp of the linked work item's sessions, if any *(from Faceplate)*. Lines 2-3: title 13, clamped. Bottom: avatar + age.
+- Cards `--k-well`, radius 2, 1px `--k-border`, no shadow. Line 1 (fixed 18px, chips centred in it, so titles line up across lanes): key (mono 11) + lamp of the linked work item's sessions, if any _(from Faceplate)_. Lines 2-3: title 13, clamped. Bottom: avatar + age.
 - Drag target: 2px accent insertion line. Focused card: focus ring.
 
 ### 6.11 Chips and badges
@@ -468,7 +474,7 @@ One row grammar for all three, so they read as one instrument:
 
 - Button: height 32 (28 for `sm`), radius 6. Default: `--k-bezel-raised` + 1px `--k-border`. Primary: `--k-accent` fill + `--k-accent-fg`. Danger: `--k-danger` fill. Ghost: transparent with a 1px `--k-border-strong` outline, so it reads as a control (#384). Labels name the action ("Start work", "Request changes").
 - TextInput / Select: `--k-well` face, 1px `--k-border`, radius 6; they read as small screens on raised toolbars. Focus = focus ring, border unchanged.
-- Toggle: track `--k-bezel`, thumb `--k-well`; on = accent track. The thumb carries a 1px notch on the on side so state is not colour-only *(from Faceplate)*.
+- Toggle: track `--k-bezel`, thumb `--k-well`; on = accent track. The thumb carries a 1px notch on the on side so state is not colour-only _(from Faceplate)_.
 - Tabs (in-view segmented): text only, active = `--k-fg` 600 + 2px accent underline, same grammar as the tab bar.
 - Kbd: one quiet mark per chord (#385): mono 12 `--k-fg-subtle`, one 18px box with a 1px `--k-border` around the whole chord, radius 3. macOS writes the chord as one word (`⌘⇧K`), Linux joins the keys with `+` (`Ctrl+Shift+K`). Alternative keys (`j k`) are separate marks.
 - Settings: one layout grammar for every section, generated or custom (`views/settings/layout/`). No section adds layout CSS of its own; only content (a table, a swatch grid) keeps its styles.
@@ -479,7 +485,7 @@ One row grammar for all three, so they read as one instrument:
   - **Card** (`SettingsCard`) for every list editor (sources, accounts, projects, tools, triggers, plugins, keyed lists, maps): `--k-well`, 1px `--k-border`, radius `--k-radius`, no shadow. Head line: name (600, mono for an id), then badges and muted meta, actions at the right. An optional body under a hairline holds rows or groups.
   - **Layers stay quiet**: the Global / Project / Repo tabs carry their meaning in a tooltip; a one-line note under the toolbar appears only on Project and Repo. A key at its default shows no chip (the "Default" text stays for screen readers), so the keys set in a file are the ones marked.
 - Path fields (#365): a text input with a secondary **Browse…** button beside it that opens the system picker (a folder, or a file with a filter for fields that take one), starting at the field's path when it exists, else the home folder. Cancel leaves the field alone; a failed picker is a toast. Used by New session, New project, plugin install and the path settings. Typing the path stays possible.
-- Project colour picker: the active theme's slot colours (the 12 ANSI hues, less the ones the theme paints alike, §2.1) as 18px chips (tooltip "Green", "Bright blue"; picking one stores `theme:<slot>`), then a custom hex field *(from Spine)*. A custom hex shows as its own chip with a "Custom" mark and stays selected across theme switches.
+- Project colour picker: the active theme's slot colours (the 12 ANSI hues, less the ones the theme paints alike, §2.1) as 18px chips (tooltip "Green", "Bright blue"; picking one stores `theme:<slot>`), then a custom hex field _(from Spine)_. A custom hex shows as its own chip with a "Custom" mark and stays selected across theme switches.
 
 ### 6.13 Empty and error states
 
@@ -492,6 +498,7 @@ One row grammar for all three, so they read as one instrument:
 English, French and German. English is the source: every visible string goes through `t()` or `tn()` (`lib/i18n`), keyed by its English text. `fr.json` and `de.json` hold the translations, and a test fails when a key the source uses is missing from either. `app.language` (`system`, `en`, `fr`, `de`; Settings → General) applies at once, and dates and relative times follow it. Not translated: ticket and PR content, terminal output, config keys and TOML.
 
 French and German run longer than English, German in long compound words. Every label is designed for the longest of the three:
+
 - No width that fits only the English word. Buttons, tabs, rail rows, chips and settings rows size to their text or sit in a flexible track; a placeholder has room for its translation (the settings search, #362).
 - Content may end in an ellipsis: a ticket title, a branch, a status name, a path. A label may not. If it will not fit in all three languages, shorten the English (a verb, not a sentence) and put the full text in the tooltip.
 - An optional mark hides whole when the room runs out: field chips, source and assignee columns, the age, signals, key hints under a list (a hint that does not fit wraps out of view), toolbar counts. It is never cut to a stub. Required marks (key, title, status, Blocked, tags) stay.

@@ -977,7 +977,6 @@
   {onkeydown}
 >
   <TicketsToolbar
-    scoped={projectId === GLOBAL}
     hasSource={!noSource}
     who={WHOS.map((w) => {
       const n = countOf(w);

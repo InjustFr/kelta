@@ -36,7 +36,6 @@
   import { reviewLocally } from '../work/startWork';
   import { pickPrWorkflow } from '../tickets/workflow.svelte';
   import RowButton from '../tickets/RowButton.svelte';
-  import ScopeSelect from '../../shell/ScopeSelect.svelte';
   import TagChips from '../tags/TagChips.svelte';
   import TagFilter from '../tags/TagFilter.svelte';
   import TagMenu from '../tags/TagMenu.svelte';
@@ -470,7 +469,6 @@
   <!-- k-toolbar: its selects keep their label for screen readers only. -->
   <header class="bar k-toolbar">
     <span class="title">{t('Reviews')}</span>
-    {#if home === null}<ScopeSelect />{/if}
     <TagFilter
       kind="prs"
       keys={allItems.map((i) => reviewKey(i.review.ref))}
