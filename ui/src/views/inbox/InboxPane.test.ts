@@ -91,7 +91,9 @@ const QUESTION = {
 const writesTo = (id: string) =>
   mock.calls
     .filter((c) => c.cmd === 'session_write' && (c.args as { id: string }).id === id)
-    .map((c) => new TextDecoder().decode(new Uint8Array(Object.values((c.args as { data: Uint8Array }).data))));
+    .map((c) =>
+      new TextDecoder().decode(new Uint8Array(Object.values((c.args as { data: Uint8Array }).data))),
+    );
 const toastTexts = () => toasts.list.map((e) => e.toast.text);
 
 describe('Now', () => {
@@ -184,7 +186,11 @@ describe('Now', () => {
     const { container } = mountNow();
     await screen.findByText('Flaky test in cart service');
     const pane = screen.getByTestId('inbox-pane');
-    spikeClaude({ lifecycle: 'live', status: 'working', claude: { ...mock.state.sessions.find((x) => x.id === SPIKE_CLAUDE)!.claude!, question: QUESTION } });
+    spikeClaude({
+      lifecycle: 'live',
+      status: 'working',
+      claude: { ...mock.state.sessions.find((x) => x.id === SPIKE_CLAUDE)!.claude!, question: QUESTION },
+    });
     await nextWaitingTo(container, `w:${SPIKE}`);
     expect(rowZone(container, `w:${SPIKE}`)).toBe('yours');
     const brief = screen.getByTestId('now-brief');
@@ -226,19 +232,21 @@ describe('Now', () => {
     };
     const sends = () => mock.calls.filter((c) => c.cmd === 'work_send').map((c) => c.args);
 
-    // Claude replied, dormant: resumed with the reply ("Sent to Claude."), the field empties.
+    // Claude replied, dormant: resumed with the reply ("Sent to Claude."); working, it leaves Your move.
     expect(brief.textContent).toContain('Claude replied');
-    const input = await send('Make it configurable');
-    await waitFor(() => expect(sends()).toEqual([{ id: SPIKE, prompt: 'Make it configurable', files: [], threads: null }]));
+    await send('Make it configurable');
+    await waitFor(() =>
+      expect(sends()).toEqual([{ id: SPIKE, prompt: 'Make it configurable', files: [], threads: null }]),
+    );
     await waitFor(() => expect(toastTexts()).toContain('Sent to Claude.'));
-    expect(input.value).toBe('');
-    expect(container.querySelector('.row[aria-current="true"]')?.getAttribute('data-row')).toBe(`w:${SPIKE}`);
+    await waitFor(() => expect(rowZone(container, `w:${SPIKE}`)).toBe('claude'));
 
     // Hooks inactive: copied, with its message.
     toasts.clear();
     spikeClaude({ lifecycle: 'live', status: 'done', status_source: 'heuristic' });
-    await send('copied');
+    const input = await send('copied');
     await waitFor(() => expect(toastTexts().join()).toContain("This Claude isn't connected to Kelta"));
+    await waitFor(() => expect(input.value).toBe(''));
     // Hooks on but busy: held until its Stop, with its message.
     toasts.clear();
     spikeClaude({ status: 'running', status_source: 'hook' });
@@ -247,7 +255,10 @@ describe('Now', () => {
     expect(toastTexts()).not.toContain('Sent to Claude.');
 
     // A question: the field types the answer instead.
-    spikeClaude({ status: 'working', claude: { ...mock.state.sessions.find((x) => x.id === SPIKE_CLAUDE)!.claude!, question: QUESTION } });
+    spikeClaude({
+      status: 'working',
+      claude: { ...mock.state.sessions.find((x) => x.id === SPIKE_CLAUDE)!.claude!, question: QUESTION },
+    });
     await within(brief).findByTestId('ask');
     await send('Five tries');
     await waitFor(() => expect(writesTo(SPIKE_CLAUDE)).toEqual(['\x1b[200~Five tries\x1b[201~', '\r']));

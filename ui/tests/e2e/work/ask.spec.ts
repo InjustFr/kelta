@@ -38,7 +38,8 @@ test('Now and the ticket row show the options; a button answers and clears the q
   await ask(page);
 
   await page.getByTestId('rail-inbox').click();
-  const bar = page.locator(`[data-testid="ask"][data-session-id="${SID}"]`);
+  // The row's bar (the selected row's brief has its own, #414).
+  const bar = page.locator(`.askline [data-testid="ask"][data-session-id="${SID}"]`);
   await expect(bar.getByRole('button')).toHaveText(['Alpha', 'Beta', 'Gamma']);
   await expect(page.locator('[data-row="w:0199a6b2-0000-7000-8000-00000000a001"]')).toContainText(
     'Which candidate?',

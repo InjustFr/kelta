@@ -470,8 +470,10 @@
   const cur = $derived(curAt?.row ?? null);
   const curView = $derived(curAt ? view(curAt.row, curAt.s) : null);
 
+  // A primitive: a store update that rebuilds the same row must not clear a draft being typed.
+  const curId = $derived(cur?.id);
   $effect(() => {
-    void cur?.id;
+    void curId;
     allActions = false;
     draft = '';
   });
