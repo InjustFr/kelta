@@ -12,7 +12,12 @@
 
   /** Where a menu opened from a control goes: under it. */
   export function below(e: Event): { x: number; y: number } {
-    const r = (e.currentTarget as HTMLElement | null)?.getBoundingClientRect();
+    return under(e.currentTarget as Element | null);
+  }
+
+  /** Under an element (`⌘.` on a selected row, #404). */
+  export function under(el: Element | null | undefined): { x: number; y: number } {
+    const r = el?.getBoundingClientRect();
     return { x: r?.left ?? 0, y: (r?.bottom ?? 0) + 2 };
   }
 </script>
@@ -27,10 +32,12 @@
     actions: readonly RowAction[];
     x: number;
     y: number;
+    /** Opened with `⌘.`: the first entry starts lit, so Enter runs it. */
+    lit?: boolean;
     onclose: () => void;
   }
 
-  let { actions, x, y, onclose }: Props = $props();
+  let { actions, x, y, lit = false, onclose }: Props = $props();
 </script>
 
 <Menu
@@ -42,6 +49,7 @@
   }))}
   {x}
   {y}
+  {lit}
   label={t('More actions')}
   onselect={(id) => void actions.find((a) => a.id === id)?.run()}
   {onclose}

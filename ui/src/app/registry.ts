@@ -105,6 +105,7 @@ export const sheetRegistry: Record<RegisteredSheetKey, LazyComponent> = {
 };
 
 export type SettingsSectionId =
+  | 'health'
   | 'general'
   | 'window'
   | 'keys'
@@ -144,6 +145,13 @@ export interface SettingsSectionProps {
 }
 
 export const settingsSections: readonly SettingsSection[] = [
+  {
+    id: 'health',
+    label: msg('Health'),
+    icon: 'activity',
+    owner: 'L4',
+    load: () => import('../views/settings/sections/Health.svelte'),
+  },
   {
     id: 'general',
     label: msg('General'),

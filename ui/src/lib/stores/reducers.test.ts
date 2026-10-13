@@ -187,7 +187,10 @@ describe('reduceAttention', () => {
 describe('reduceAccounts', () => {
   it('tracks account.status', () => {
     const ev = samples.uiEventAccountStatus as Extract<UiEvent, { type: 'account.status' }>;
-    const map = reduceAccounts({}, ev);
-    expect(map[ev.account_id]).toEqual({ status: ev.status, detail: ev.detail });
+    const map = reduceAccounts({}, ev, 1000);
+    expect(map[ev.account_id]).toEqual({ status: ev.status, detail: ev.detail, since: 1000 });
+    // same status keeps its start; a new one restarts it
+    expect(reduceAccounts(map, ev, 2000)[ev.account_id]!.since).toBe(1000);
+    expect(reduceAccounts(map, { ...ev, status: 'ok' }, 3000)[ev.account_id]!.since).toBe(3000);
   });
 });

@@ -31,10 +31,10 @@
   import { askerOf, phaseNow } from '../work/live';
   import { openContent } from '../work/nav';
   import StateBanner from '../work/shared/StateBanner.svelte';
+  import { onActions } from '../work/ui.svelte';
   import { startWorkOnTicket } from '../work/startWork';
   import ActionBar from './ActionBar.svelte';
-  import { matchChord, parseChord } from '$lib/keys/chords';
-  import { blockedReason, MORE_CHORD, TICKET_ACTIONS, type TicketAction } from './caps';
+  import { blockedReason, TICKET_ACTIONS, type TicketAction } from './caps';
   import PickMenu from './PickMenu.svelte';
   import { discard, refine, refines } from './refine.svelte';
   import { pickWorkflow, workflows } from './workflow.svelte';
@@ -105,7 +105,11 @@
 
   let root = $state<HTMLDivElement>();
   let bar = $state<{ openMore(): void }>();
-  const moreChord = parseChord(MORE_CHORD);
+  /** `⌘.` (#404): the More menu, once the action bar is up. */
+  function moreKey(): boolean {
+    bar?.openMore();
+    return !!bar;
+  }
   let statusBtn = $state<HTMLElement>();
   let commentBox = $state<HTMLDivElement>();
   let picker = $state<HTMLElement | null>(null);
@@ -339,11 +343,6 @@
   function onkeydown(e: KeyboardEvent): void {
     const own = 'input, textarea, select, [role="dialog"], [role="menu"], [data-child]';
     if ((e.target as HTMLElement).closest(own)) return;
-    if (moreChord && matchChord(moreChord, e)) {
-      bar?.openMore();
-      e.preventDefault();
-      return;
-    }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const action = TICKET_ACTIONS.find((a) => a.key === e.key);
     // Shift variants: `S` starts with no sheet, `P` opens the PR in the browser.
@@ -425,6 +424,7 @@
   role="group"
   aria-label={t('Ticket {key}', { key: ref.key })}
   {onkeydown}
+  use:onActions={moreKey}
 >
   <StateBanner
     stale={slot?.stale ?? false}
