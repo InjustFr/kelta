@@ -129,8 +129,8 @@ test.describe('project switching', () => {
     const tools = row('kt-t1');
     await expect(tools).toHaveAttribute('data-attention', 'none');
     await expect(page.getByTestId('inbox-badge')).toBeVisible();
-    // Only the most urgent item, never a truncated list (#386).
-    await expect(page.getByTestId('rail-inbox')).toHaveAttribute('title', 'Now: 1 needs you');
+    // One count, never a truncated list (#386): what is my move (#399).
+    await expect(page.getByTestId('rail-inbox')).toHaveAttribute('title', /^Now: \d+ your move$/);
 
     // A Claude stop with changes lights the row.
     await page.evaluate(() => {

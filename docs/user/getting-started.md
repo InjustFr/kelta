@@ -91,11 +91,15 @@ desktop may already take `Ctrl+Alt+arrows` for workspaces: rebind either side in
 
 ## Now
 
-**Now** lists what waits on you, across projects, in this order: Claude needs you, ready for review, next up, new
-for you, fix, review requests, ship and clean up, in flight, elsewhere, up next, then waiting to deploy (collapsed: tickets in a status their source lists as
-waiting for a deployment, set in Settings → Sources). Empty sections are hidden. `j` `k` move, `Enter` runs the row's next
-action (the key hints name it), `g` goes to its place without acting, `/` filters, `R` refreshes. A work item's
-row also takes single letters for its actions; the hints show them.
+**Now** lists your work across projects in one list split by whose move it is: **Your move** (Claude needs you,
+ready for review, next up, new for you, fix, review requests, ship and clean up, up next) and **Waiting on others**
+(in flight, elsewhere, blocked, then waiting to deploy, collapsed: tickets in a status their source lists as waiting
+for a deployment, set in Settings → Sources). Each row has a stage track, Ticket, Claude, PR, Review, Merge, Deploy:
+the line runs to the furthest stage reached and the mark sits where the item is now, filled when it is your move, a
+ring while it waits, a diamond when something broke. The row's next step is a button that runs it. The selected
+item's brief sits beside the list (under it in a narrow pane): its next action, the two likely after it, the rest
+behind "more actions" (`.`), Claude's last message and the facts. `j` `k` move, `Enter` runs the next step, `g` goes
+to its place without acting, `/` filters, `R` refreshes, `?` lists every key.
 
 ## Language
 

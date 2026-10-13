@@ -171,7 +171,7 @@ test.describe('now', () => {
     const errors = await boot(page);
     await openNow(page);
     const now = page.getByTestId('inbox-pane');
-    await expect(now.locator('[data-section="requests"]')).toBeVisible();
+    await expect(now.locator('.row[data-row^="r:"]').first()).toBeVisible();
     await expect(now.getByText('Terraform: add read replica')).toBeVisible();
     expect(errors).toEqual([]);
   });

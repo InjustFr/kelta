@@ -16,17 +16,7 @@ import { batch, claudeSlots, startsNow } from '../work/batch.svelte';
 import { phaseNow, unfinishedWork } from '../work/live';
 import { goToWork, openFromNow, openReview } from '../work/nav';
 import { reviewLocally, startWorkOnTicket } from '../work/startWork';
-import {
-  headerChips,
-  jumpQueue,
-  nowSections,
-  rowKey,
-  topChip,
-  waitingCount,
-  type Chip,
-  type NowRow,
-  type Section,
-} from './groups';
+import { jumpQueue, nowSections, rowKey, waitingCount, zoneCount, type NowRow, type Section } from './groups';
 import { loadPool, nextUp, ticketPool, waitingStatuses } from './nextUp.svelte';
 
 const ALL = { kind: 'all' } as const;
@@ -54,29 +44,30 @@ export function currentSections(): Section[] {
   });
 }
 
-/** Claude sessions in Working: the parallel capacity in use. */
-export function workingCount(): number {
-  return sessions.all.filter((s) => s.kind.type === 'claude' && s.status === 'working').length;
-}
-
 export interface NowSummary {
   sections: Section[];
-  chips: Chip[];
-  /** The header as one line (its tooltip). */
-  header: string;
-  /** The rail's Now line: the most urgent chip only. */
+  /** Rows in Your move and in Waiting on others (#399). */
+  yours: number;
+  others: number;
+  /** The rail's Now line. */
   top: string;
+  /** The rail badge: what waits on Louis now (Claude asking, diffs, fixes, review requests). */
   waiting: number;
 }
 
 export function nowSummary(): NowSummary {
   const sections = currentSections();
-  const chips = headerChips(sections, workingCount());
+  const yours = zoneCount(sections, 'yours');
+  const others = zoneCount(sections, 'waiting');
   return {
     sections,
-    chips,
-    header: chips.map((c) => c.text).join('\u2002\u2002') || t('Nothing waiting'),
-    top: topChip(chips)?.text ?? t('Nothing waiting'),
+    yours,
+    others,
+    top: yours
+      ? t('{n} your move', { n: yours })
+      : others
+        ? t('{n} waiting on others', { n: others })
+        : t('Nothing waiting'),
     waiting: waitingCount(sections),
   };
 }

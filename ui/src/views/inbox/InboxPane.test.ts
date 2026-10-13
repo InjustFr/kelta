@@ -60,96 +60,78 @@ function mountNow() {
   });
 }
 
-const sectionIds = (c: HTMLElement) =>
-  [...c.querySelectorAll('[data-section]')].map((e) => e.getAttribute('data-section'));
+const zoneIds = (c: HTMLElement) =>
+  [...c.querySelectorAll('[data-zone]')].map((e) => e.getAttribute('data-zone'));
+const rowZone = (c: HTMLElement, id: string) =>
+  c.querySelector(`.row[data-row="${id}"]`)?.classList.contains('yours') ? 'yours' : 'waiting';
+const FLAKY = '0199a6b2-0000-7000-8000-00000000a004';
 
 describe('Now', () => {
-  it('rows are two-line until the Compact switch is on (#383)', async () => {
+  it('one list in two zones, a summary line, no chips, Compact, Refresh or key bar (#399)', async () => {
     const { container } = mountNow();
-    await screen.findByText('Flaky test in cart service');
-    expect(container.querySelector('button.row.two')).not.toBeNull();
-    await fireEvent.click(screen.getByRole('switch', { name: 'Compact' }));
-    await waitFor(() => expect(container.querySelector('button.row')).not.toBeNull());
-    expect(container.querySelector('button.row.two')).toBeNull();
-  });
-
-  it('shows every section in order, with the split header', async () => {
-    const { container } = mountNow();
-    await waitFor(() => expect(sectionIds(container)).toContain('up_next'));
-    expect(sectionIds(container)).toEqual([
-      'needs_you',
-      'to_review',
-      // The mock's one unseen ticket (#145).
-      'new',
-      'fix',
-      'requests',
-      'ship',
-      'in_flight',
-      'up_next',
-    ]);
-    const header = screen.getByTestId('now-header');
-    expect(header.textContent).toContain('1 needs you');
-    expect(header.textContent).toContain('1 ready for review');
-    // #311, #98, #7 and #101 (updated since my review).
-    expect(header.textContent).toMatch(/4 review requests/);
-    expect(header.title).toBe(nowSummary().header);
+    await waitFor(() => expect(zoneIds(container)).toEqual(['yours', 'waiting']));
+    const { yours, others } = nowSummary();
+    const header = screen.getByTestId('now-header').textContent;
+    expect(header).toContain(`${yours} your move`);
+    expect(header).toContain(`${others} waiting on others`);
+    expect(container.querySelector('[data-zone="yours"] .count')?.textContent).toBe(String(yours));
+    // A diff to review is my move; my PR waiting on its reviewers is not.
+    expect(rowZone(container, `w:${FLAKY}`)).toBe('yours');
+    expect(screen.queryByRole('switch', { name: 'Compact' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Refresh/ })).toBeNull();
+    expect(container.querySelector('.k-keyhints')).toBeNull();
     // A work item shows once; its sessions are not listed as plain sessions.
-    expect(container.querySelectorAll('[data-row^="w:0199a6b2-0000-7000-8000-00000000a004"]')).toHaveLength(
-      1,
-    );
+    expect(container.querySelectorAll(`[data-row^="w:${FLAKY}"]`)).toHaveLength(1);
   });
 
-  it('a header chip selects the first row of its section; only urgent chips take a lamp colour', async () => {
-    const { container } = mountNow();
-    await waitFor(() => expect(sectionIds(container)).toContain('up_next'));
-    const fix = screen.getByTestId('now-chip-fix');
-    expect(fix.classList.contains('error')).toBe(true);
-    expect(screen.getByTestId('now-chip-needs_you').classList.contains('needs_input')).toBe(true);
-    expect(screen.getByTestId('now-chip-to_review').className).not.toMatch(/needs_input|error/);
-    const first = currentSections().find((s) => s.id === 'fix')!.rows[0]!;
-    await fireEvent.click(fix);
-    await waitFor(() =>
-      expect(container.querySelector('.row[aria-current="true"]')?.getAttribute('data-row')).toBe(first.id),
-    );
-  });
-
-  it('only the selected row expands, with its actions and keys', async () => {
+  it('every row has a stage track; the selected one names its stage', async () => {
     const { container } = mountNow();
     await screen.findByText('Flaky test in cart service');
+    await nextWaitingTo(container, `w:${FLAKY}`);
+    const row = container.querySelector<HTMLElement>(`.row[data-row="w:${FLAKY}"]`)!;
+    const track = within(row).getByRole('img');
+    expect(track.getAttribute('data-mark')).toBe('you');
+    expect(track.getAttribute('aria-label')).toMatch(/^At Claude, your move; furthest stage reached: /);
+    expect(track.textContent?.trim()).toBe('Claude');
+    expect(container.querySelectorAll('.row [data-mark]').length).toBe(
+      container.querySelectorAll('.row[data-row]').length,
+    );
+  });
+
+  it('the brief: primary filled, two next actions, the rest behind "more actions" (.), message, facts', async () => {
+    const { container } = mountNow();
+    await screen.findByText('Flaky test in cart service');
+    await nextWaitingTo(container, `w:${FLAKY}`);
     const pane = screen.getByTestId('inbox-pane');
-    // First row: Claude needs you (the scratch item that replied).
-    expect(container.querySelector('.row[aria-current="true"]')?.textContent).toContain('wip');
-    await fireEvent.keyDown(pane, { key: 'j' });
-    const details = screen.getAllByTestId('now-detail');
-    expect(details).toHaveLength(1);
-    // Ready for review: the row says what Enter does, the next: note and the first line of Claude's
-    // full message (#399); the delta chip waits on the selected row's detail.
+    // The row: its next step as a button, the next: note and the first line of Claude's message.
     const row = container.querySelector('.row[aria-current="true"]')!;
-    expect(row.querySelector('.verb')?.textContent).toBe('Review changes');
+    expect(within(row as HTMLElement).getByRole('button', { name: 'Review changes' })).toBeTruthy();
     expect(row.textContent).toContain('next: check the retry path against staging');
-    expect(row.textContent).toContain('Added the retry wrapper');
     expect(row.querySelector('.meta.warn')?.textContent).toBe('tests: none');
-    expect(details[0]!.textContent).toContain('212 lines');
-    expect(within(details[0]!).getByText('Review changes')).toBeTruthy();
-    // m unfolds the whole message.
-    await fireEvent.keyDown(pane, { key: 'm' });
-    const lines = screen.getAllByTestId('now-message').map((l) => l.textContent);
-    expect(lines).toContain('I left the backoff constant at 3 tries; say if you want it configurable.');
+    const brief = screen.getByTestId('now-brief');
+    const primary = brief.querySelector<HTMLElement>('.btn.primary')!;
+    expect(primary.textContent).toMatch(/^Review changes/);
+    expect(primary.querySelector('kbd')).not.toBeNull();
+    expect(within(brief).getByRole('button', { name: /^\d+ more actions/ })).toBeTruthy();
+    const shown = brief.querySelectorAll('.btn:not(.more)').length;
+    expect(shown).toBe(3);
+    expect(brief.textContent).toContain('212 lines');
+    expect(brief.textContent).toContain(
+      'I left the backoff constant at 3 tries; say if you want it configurable.',
+    );
+    await fireEvent.keyDown(pane, { key: '.' });
+    expect(within(brief).queryByRole('button', { name: /more actions/ })).toBeNull();
+    expect(brief.querySelectorAll('.btn').length).toBeGreaterThan(shown);
+    await fireEvent.click(within(brief).getByRole('button', { name: /^Mark reviewed/ }));
+    await waitFor(() => expect(work.get(FLAKY)?.review_due).toBe(false));
   });
 
-  it('the selected row has buttons with their keys, the next step outlined; headers say what they hold (#397)', async () => {
+  it("the row's next step is a button that runs it", async () => {
     const { container } = mountNow();
     await screen.findByText('Flaky test in cart service');
-    await fireEvent.keyDown(screen.getByTestId('inbox-pane'), { key: 'j' });
-    const detail = screen.getByTestId('now-detail');
-    const primary = within(detail).getByRole('button', { name: /Review changes$/ });
-    expect(primary.classList.contains('primary')).toBe(true);
-    expect(primary.querySelector('kbd')).not.toBeNull();
-    expect(container.querySelector('[data-section="to_review"]')?.getAttribute('title')).toBe(
-      'Claude finished: look at the changes, then ship or ask for more',
-    );
-    await fireEvent.click(within(detail).getByRole('button', { name: /Mark reviewed$/ }));
-    await waitFor(() => expect(work.get('0199a6b2-0000-7000-8000-00000000a004')?.review_due).toBe(false));
+    const row = container.querySelector<HTMLElement>(`.row[data-row="w:${FLAKY}"]`)!;
+    await fireEvent.click(within(row).getByRole('button', { name: 'Review changes' }));
+    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_diff')).toBe(true));
   });
 
   it('Enter on To review opens the diff in the work tab and leaves Now (B1)', async () => {
@@ -178,7 +160,11 @@ describe('Now', () => {
     expect(toasts.list.at(-1)?.toast.text).toMatch(/Only while a rebase is stopped/);
     await fireEvent.keyDown(pane, { key: 'R' });
     await waitFor(() => expect(work.get('0199a6b2-0000-7000-8000-00000000a004')?.review_due).toBe(false));
-    await waitFor(() => expect(sectionIds(container)).not.toContain('to_review'));
+    await waitFor(() =>
+      expect(container.querySelector(`.row[data-row="w:${FLAKY}"] [data-next]`)?.textContent).not.toBe(
+        'Review changes',
+      ),
+    );
   });
 
   it('N opens New work item, P parks the selected work row', async () => {
@@ -219,7 +205,7 @@ describe('Now', () => {
 
   it('Enter on a review request opens it in the project Reviews tab, reused (B1)', async () => {
     const { container } = mountNow();
-    await waitFor(() => expect(sectionIds(container)).toContain('requests'));
+    await waitFor(() => expect(container.querySelector('.row[data-row^="r:"]')).not.toBeNull());
     await nextWaitingTo(container, 'r:');
     await fireEvent.keyDown(screen.getByTestId('inbox-pane'), { key: 'Enter' });
     await waitFor(() => expect(ui.view).toBeNull());
@@ -311,7 +297,7 @@ describe('Now', () => {
     settings.effective = {};
     await settings.load();
     const { container } = mountNow();
-    await waitFor(() => expect(sectionIds(container).at(-1)).toBe('waiting'));
+    await waitFor(() => expect(container.querySelector('[data-section="waiting"]')).not.toBeNull());
     expect(screen.queryByText('DEPLOY-1')).toBeNull();
     const header = within(container.querySelector<HTMLElement>('[data-section="waiting"]')!).getByRole(
       'button',
@@ -327,7 +313,11 @@ describe('Now', () => {
     await fireEvent.click(header);
     // The list is virtual: End selects the last row and scrolls to it.
     await fireEvent.keyDown(screen.getByTestId('inbox-pane'), { key: 'End' });
-    const row = (await screen.findByText('DEPLOY-1')).closest<HTMLElement>('button.row')!;
+    const row = await waitFor(() => {
+      const el = container.querySelector<HTMLElement>('.row[data-row$=":DEPLOY-1"]');
+      expect(el).not.toBeNull();
+      return el!;
+    });
     expect(within(row).getByText('A MEPP')).toBeTruthy();
   });
 
@@ -373,7 +363,7 @@ describe('Next up (#145)', () => {
         (e) => e.getAttribute('data-row')!.split(':')[2],
       );
     await waitFor(() => expect(order()).toEqual(keys));
-    expect(sectionIds(container).slice(1, 3)).toEqual(['to_review', 'next_up']);
+    expect(rowZone(container, 'n:jira-acme:SHOP-151')).toBe('yours');
     // Listed tickets leave Up next.
     expect(container.querySelector('[data-row="t:jira-acme:SHOP-151"]')).toBeNull();
 

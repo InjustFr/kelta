@@ -22,7 +22,7 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
   await boot(page);
   await page.keyboard.press('Control+0');
   await expect(now(page)).toBeVisible();
-  await expect(now(page).locator('[data-section="up_next"]')).toBeVisible();
+  await expect(now(page).locator('[data-zone="yours"]')).toBeVisible();
 
   // Up next → s → start sheet → Ctrl+Enter: the work tab opens focused and Now closes.
   await select(page, 't:jira-acme:SHOP-151');
@@ -61,13 +61,12 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
   await expect(header).toHaveAttribute('data-phase', 'to_review');
   await expect(page.getByTestId('work-branch')).toHaveAttribute('title', /\+30 −4/);
 
-  // Now: the item sits in Ready for review with Claude's last message; Enter opens the delta.
+  // Now: the item's next step is Review changes, with Claude's last message; Enter opens the delta.
   await page.keyboard.press('Control+0');
-  const toReview = now(page).locator('[data-section="to_review"]');
-  await expect(toReview).toBeVisible();
   const id = await page.evaluate(
     () => window.__kelta!.stores.work.all.find((w) => w.ticket?.key === 'SHOP-151')!.id,
   );
+  await expect(now(page).locator(`[data-row="w:${id}"] [data-next]`)).toHaveText('Review changes');
   await select(page, `w:${id}`);
   await expect(selected(page)).toContainText('Tax lines added.');
   await page.keyboard.press('Enter');
@@ -204,7 +203,7 @@ test('a Claude session Kelta did not start: Elsewhere, Claude needs you, Mod+J, 
   await expect(rail).toHaveAttribute('data-attention', 'needs_input');
   await expect.poll(waiting).toBe(before + 1);
   await page.keyboard.press('Control+0');
-  await expect(now(page).locator('[data-section="needs_you"]')).toBeVisible();
+  await expect(now(page).locator('[data-zone="yours"]')).toBeVisible();
   await expect(now(page).locator('[data-row="o:u1"]')).toContainText('Claude needs you, outside Kelta');
   await dispatch(page, 'attention.next');
   await expect(page.getByTestId('jump-hud')).toContainText(/^1\/\d+ · needs input · Fix checkout/);

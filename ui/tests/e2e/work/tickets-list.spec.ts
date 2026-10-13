@@ -110,7 +110,7 @@ test('a background run claim shows on the ticket row and follows report_progress
   await page.keyboard.press('Control+0');
   const nowRow = page.getByTestId('inbox-pane').locator('[data-row="w:wi-run-160"]');
   await expect(nowRow).toContainText('2 unresolved review findings');
-  await expect(nowRow.locator('[data-attention]').first()).toHaveAttribute('data-attention', 'error');
+  await expect(nowRow.locator('[data-mark]')).toHaveAttribute('data-mark', 'broken');
 });
 
 test('b in the detail blocks the ticket: the row shows Blocked and moves to Waiting; b again unblocks', async ({
