@@ -9,9 +9,9 @@ you, all in one light desktop window.
 
 ![A work item: Claude Code and nvim side by side in the SHOP-142 worktree](docs/images/readme/work-item.webp)
 
-| Tickets, from every project | Reviews, list and detail |
+| Tickets, from every project | Pull requests, list and detail |
 |---|---|
-| ![The Tickets view grouped by flow, with the ticket detail on the right](docs/images/readme/tickets.webp) | ![The Reviews view with a pull request's detail on the right](docs/images/readme/reviews.webp) |
+| ![The Tickets view grouped by flow, with the ticket detail on the right](docs/images/readme/tickets.webp) | ![The Pull requests view with a pull request's detail on the right](docs/images/readme/reviews.webp) |
 
 ## Why Kelta
 
@@ -31,7 +31,7 @@ Svelte 5 and Rust. The [user guide](docs/user/README.md) covers everything below
 
 - Jira, Redmine, GitHub Issues and Projects v2, GitLab, Gitea/Forgejo and Linear, several sources per project:
   [working with tickets](docs/user/tickets.md#sources).
-- **Tickets**, **Queue** and **Reviews** on the rail work across every open project; the Queue shows where all work waits:
+- **Tickets**, **Queue** and **Pull requests** on the rail work across every open project; the Queue shows where all work waits:
   [first launch](docs/user/getting-started.md#first-launch).
 - A keyboard-first list grouped by flow (Doing, Waiting, Ready), with a detail column, status moves and bulk
   moves, or a board: [keys](docs/user/tickets.md#keys).
@@ -44,7 +44,7 @@ Svelte 5 and Rust. The [user guide](docs/user/README.md) covers everything below
 - Local tags, kept in Kelta, on tickets and pull requests, with a filter in the toolbar:
   [local tags](docs/user/tickets.md#local-tags).
 
-**Reviews**
+**Pull requests**
 
 - Review requests and your own PRs (GitHub, GitLab, Bitbucket Cloud, Gitea/Forgejo) with CI, review state and
   linked tickets: [pull requests](docs/user/tickets.md#pull-requests),
@@ -136,7 +136,7 @@ Closing the window keeps sessions running (background mode); `kelta-ctl toggle` 
    in Settings > Sources). Or let Claude do steps 1 and 2: the welcome sheet and the palette have **Set up with
    Claude**.
 3. **Start work on a ticket**: **Tickets** (`Cmd+Shift+B`), select one, press `s`.
-4. **Review a PR**: **Reviews** (`Cmd+Shift+R`), select one, **Approve** or **Review locally**.
+4. **Review a PR**: **Pull requests** (`Cmd+Shift+R`), select one, **Approve** or **Review locally**.
 
 The details are in [getting started](docs/user/getting-started.md).
 

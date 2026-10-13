@@ -75,7 +75,7 @@ to the tab as it was: the tool's pane closes but the program keeps running, and 
 you left it. There is no tool tab and nothing to return from.
 
 It opens where you are: in the project you are looking at, with the focused work item; from Home, Tickets,
-Queue or Reviews, in Home (in `~`). A tool that takes a project, because a field uses
+Queue or Pull requests, in Home (in `~`). A tool that takes a project, because a field uses
 `{project.*}` or `{repo.*}`, asks which project when there is none. [Sapling ISL](sapling-isl.md) is one:
 its `start` args hold `--cwd {repo.path}`, so it needs a project's repo.
 

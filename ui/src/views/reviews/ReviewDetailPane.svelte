@@ -267,6 +267,7 @@
       primary={own
         ? { key: 'g', label: t('Go to work item'), run: () => reviewLocally(ref, projectId) }
         : { key: 's', label: t('Review locally'), run: () => reviewLocally(ref, projectId) }}
+      quiet={own}
       actions={briefActions}
       bind:more
       testid="review-brief"
@@ -284,6 +285,14 @@
           <TagChips kind="prs" itemKey={reviewKey(ref)} />
         </p>
       {/snippet}
+      {#if !own}
+        <p class="hint" data-testid="review-locally-hint">
+          {t(
+            "Checks out #{n} in its own worktree and opens Claude in plan mode with the review prompt, next to the diff in nvim. Claude's line comments go into your pending review.",
+            { n: ref.number },
+          )}
+        </p>
+      {/if}
       <PluginActions kind="review" size="md" ctx={reviewCtx(rv.ref, projectId)} />
       <section class="callout" aria-label={t('Review status')} data-testid="review-status">
         <b>{t('Review status')}</b>
@@ -673,6 +682,13 @@
   }
 
   .muted {
+    color: var(--k-fg-subtle);
+  }
+
+  /* What Review locally does (#419), under the buttons. */
+  .hint {
+    margin: 0;
+    font-size: var(--k-font-size-sm);
     color: var(--k-fg-subtle);
   }
 
