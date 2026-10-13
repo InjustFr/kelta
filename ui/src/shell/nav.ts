@@ -333,11 +333,14 @@ export async function openRuns(sessionId: SessionId): Promise<boolean> {
   if (!l || !loc) return false;
   const content: PaneContent = { kind: 'claude_runs', session_id: sessionId };
   const hit = findContent(l, (c) => contentEquals(c, content));
+  // Un-zoom the tab: a zoomed terminal would hide the runs pane.
+  const unzoom = (cur: Layout, tabId: TabId) => updateTab(cur, tabId, (t) => ({ ...t, zoomed_pane: null }));
   layout.update(projectId, (cur) => {
-    if (hit) return focusPane(cur, hit.tabId, hit.paneId);
+    if (hit) return focusPane(unzoom(cur, hit.tabId), hit.tabId, hit.paneId);
     const node = makePane(content);
     const split = updateTab(cur, loc.tabId, (t) => ({
       ...t,
+      zoomed_pane: null,
       root: splitPane(t.root, loc.paneId, 'row', node),
     }));
     return focusPane(split, loc.tabId, node.id);

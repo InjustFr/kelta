@@ -17,6 +17,7 @@ import {
   focusedSessionId,
   gotoRailRow,
   openContent,
+  openRuns,
   openView,
   railProjects,
   railRows,
@@ -216,6 +217,17 @@ describe('panes and tabs', () => {
     toggleZoomFocused();
     expect(currentTab()!.zoomed_pane).toBe(currentTab()!.focused_pane);
     toggleZoomFocused();
+    expect(currentTab()!.zoomed_pane).toBeNull();
+  });
+
+  it('opening runs un-zooms the session tab, on first open and on re-open', async () => {
+    await revealSession(SHOP_CLAUDE);
+    toggleZoomFocused();
+    expect(currentTab()!.zoomed_pane).not.toBeNull();
+    await openRuns(SHOP_CLAUDE);
+    expect(currentTab()!.zoomed_pane).toBeNull();
+    toggleZoomFocused();
+    await openRuns(SHOP_CLAUDE);
     expect(currentTab()!.zoomed_pane).toBeNull();
   });
 

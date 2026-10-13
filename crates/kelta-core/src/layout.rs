@@ -65,12 +65,14 @@ fn first_pane(node: &LayoutNode) -> Option<PaneId> {
     all_panes(node).first().map(|(id, _)| (*id).clone())
 }
 
-/// Session ids shown by terminal panes of a tree.
+/// Session ids shown by terminal or workflow-runs panes of a tree.
 pub fn sessions_in(node: &LayoutNode) -> Vec<SessionId> {
     all_panes(node)
         .into_iter()
         .filter_map(|(_, c)| match c {
-            PaneContent::Terminal { session_id } => Some(session_id.clone()),
+            PaneContent::Terminal { session_id } | PaneContent::ClaudeRuns { session_id } => {
+                Some(session_id.clone())
+            }
             _ => None,
         })
         .collect()
@@ -382,7 +384,8 @@ pub fn open_node(l: &mut Layout, node: LayoutNode, req: &OpenPaneRequest) -> (Ta
 /// Remove every pane showing `sid` (session removed).
 pub fn remove_session(l: &mut Layout, sid: &SessionId) -> bool {
     let mut changed = false;
-    while let Some((t, p)) = find_session(l, sid) {
+    let is_sid = |c: &PaneContent| matches!(c, PaneContent::Terminal { session_id } | PaneContent::ClaudeRuns { session_id } if session_id == sid);
+    while let Some((t, p)) = find_content(l, is_sid) {
         close_pane(l, &t, &p);
         changed = true;
     }
@@ -422,6 +425,17 @@ mod tests {
         assert_eq!(l.active_tab.as_ref(), Some(&t));
         assert!(remove_session(&mut l, &SessionId::new("b")));
         assert_eq!(l.tabs.len(), 1);
+    }
+
+    #[test]
+    fn remove_session_drops_runs_pane() {
+        let mut l = empty(&ProjectId::new("p"));
+        let runs = PaneContent::ClaudeRuns { session_id: SessionId::new("a") };
+        open_node(&mut l, pane(term("a")), &req(term("a"), Placement::NewTab));
+        open_node(&mut l, pane(runs.clone()), &req(runs, Placement::SplitRight));
+        assert_eq!(layout_sessions(&l).len(), 2);
+        assert!(remove_session(&mut l, &SessionId::new("a")));
+        assert!(l.tabs.is_empty());
     }
 
     #[test]
