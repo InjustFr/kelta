@@ -2530,5 +2530,12 @@
   "Open theme": "Design öffnen",
   "Showing cached tickets: the last refresh failed": "Zwischengespeicherte Tickets: die letzte Aktualisierung ist fehlgeschlagen",
   "Everything works.": "Alles funktioniert.",
-  "Fixing failed": "Beheben fehlgeschlagen"
+  "Fixing failed": "Beheben fehlgeschlagen",
+  "Your loop": "Dein Ablauf",
+  "Add a project": "Ein Projekt hinzufügen",
+  "Connect a ticket source": "Eine Ticketquelle verbinden",
+  "Start work on a ticket": "Arbeit an einem Ticket beginnen",
+  "Review what Claude changed": "Prüfen, was Claude geändert hat",
+  "No tickets?": "Keine Tickets?",
+  "starts a branch and a Claude from one sentence.": "startet aus einem Satz einen Branch und einen Claude."
 }
