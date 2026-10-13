@@ -55,7 +55,7 @@ test('p on a ticket lands on its PR in Reviews, and its linked ticket leads back
 
   // Reviews, on the PR (Mine), its detail in the column beside the list.
   await expect(host).toHaveAttribute('data-view', 'reviews');
-  await expect(host.locator('.k-row.selected')).toHaveAttribute(
+  await expect(host.locator('[data-testid="reviews-pane"] .row.selected')).toHaveAttribute(
     'data-key',
     'gitlab-corp:fin/billing/core#42',
   );
@@ -99,44 +99,32 @@ test('Now, Reviews and Tickets fill the window: their hint bar sits at the botto
   }
 });
 
-test('Reviews rows beside the split detail never cut a chip on the left: it fits or ends in an ellipsis (#308)', async ({
+test('Reviews keeps the brief beside the list down to a 900px window, under it below (#401)', async ({
   page,
 }) => {
   await boot(page);
   const host = page.getByTestId('global-host');
   await page.getByTestId('rail-reviews').click();
-  await host.locator('.k-row-title', { hasText: 'SHOP-150: cache product images' }).click();
-  await expect(host.getByTestId('review-detail')).toBeVisible();
-  for (const width of [1440, 1024]) {
+  const pane = host.getByTestId('reviews-pane');
+  await expect(host.getByTestId('review-brief')).toBeVisible();
+  for (const [width, beside] of [
+    [1440, true],
+    [936, true],
+    [860, false],
+  ] as const) {
     await page.setViewportSize({ width, height: 900 });
-    for (const tab of ['1', '2', '3']) {
-      await host.getByTestId('reviews-pane').focus();
-      await page.keyboard.press(tab);
-      await expect(host.getByTestId('review-detail')).toBeVisible();
-      await expect(host.locator('.k-row-tail .k-badge').first()).toBeVisible();
-      const bad = await host.locator('.k-row-tail').evaluateAll((tails) =>
-        tails.flatMap((tail) => {
-          const left = tail.getBoundingClientRect().left;
-          return [...tail.querySelectorAll<HTMLElement>('.k-badge')]
-            .filter(
-              (b) =>
-                b.checkVisibility() &&
-                (b.getBoundingClientRect().left < left - 0.5 ||
-                  (b.scrollWidth > b.clientWidth && getComputedStyle(b).textOverflow !== 'ellipsis')),
-            )
-            .map((b) => b.textContent);
-        }),
-      );
-      expect(bad, `clipped chips at ${width}px, tab ${tab}`).toEqual([]);
-      if (width === 1440) {
-        // The linked ticket key, the most identifying chip, is never the one that gives way (#310).
-        const cut = await host
-          .locator('.k-row-tail .k-row-keep .k-badge')
-          .evaluateAll((bs) =>
-            bs.filter((b) => b.checkVisibility() && b.scrollWidth > b.clientWidth).map((b) => b.textContent),
-          );
-        expect(cut, `truncated ticket keys at tab ${tab}`).toEqual([]);
-      }
-    }
+    await expect(pane.locator('.row[data-key]').first()).toBeVisible();
+    await expect
+      .poll(async () => {
+        const list = (await pane.locator('.list').boundingBox())!;
+        const side = (await pane.locator('.side').boundingBox())!;
+        return beside ? side.x >= list.x + list.width - 1 : side.y >= list.y + list.height - 1;
+      }, `${width}px`)
+      .toBe(true);
+    // No row runs past the list: the title wraps, the state line ends in an ellipsis.
+    const over = await pane
+      .locator('.row[data-key]')
+      .evaluateAll((rows) => rows.filter((r) => r.scrollWidth > r.clientWidth + 1).length);
+    expect(over, `${width}px`).toBe(0);
   }
 });

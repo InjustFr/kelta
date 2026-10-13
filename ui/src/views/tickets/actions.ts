@@ -43,7 +43,7 @@ registerAction('tickets.board', async () => {
 /** `tickets.overview`'s tab id: one per project, focused when open, rebuilt once closed. */
 const OVERVIEW_TAB = 'overview';
 
-// My tickets beside Reviews For me stacked over Reviews Mine, in the active project.
+// My tickets beside Reviews (its sections: asked of me, team, mine), in the active project.
 registerAction('tickets.overview', async () => {
   const projectId = projects.activeId;
   if (!projectId) {
@@ -62,9 +62,7 @@ registerAction('tickets.overview', async () => {
   layout.update(projectId, (l) => {
     if (findTab(l, OVERVIEW_TAB)) return activateTab(l, OVERVIEW_TAB);
     const tickets = pane({ kind: 'tickets', scope, view_id: null, mode: 'list', who: 'mine' });
-    const forMe = pane({ kind: 'reviews', scope: reviewScope, tab: 'review_requested' });
-    const mine = pane({ kind: 'reviews', scope: reviewScope, tab: 'authored' });
-    const root = splitPane(splitPane(tickets, tickets.id, 'row', forMe), forMe.id, 'column', mine);
+    const root = splitPane(tickets, tickets.id, 'row', pane({ kind: 'reviews', scope: reviewScope }));
     return addTab(l, makeTab('Overview', root, { id: OVERVIEW_TAB }));
   });
 });

@@ -329,6 +329,11 @@ const BLURBS: Record<string, string> = {
   'acme/shop-api#311':
     'Product images are fetched from S3 on every page view. Cache them at the edge for a day.',
 };
+/** A PR template's deploy section (#401): Reviews lifts it into "Before merging". */
+const BEFORE_MERGING: Record<string, string> = {
+  'acme/shop-api#311':
+    '<h3>Before merging</h3><ul><li>Purge the CDN once after the deploy.</li><li>The old <code>img-proxy</code> route stays until the cache is warm.</li></ul>',
+};
 const MOCK_BODY = 'Mock body rendered from the in-memory fixtures.';
 
 function ticketDetailFor({ ticket: t, prs, caps }: TicketItem, comments: string[]): TicketDetail {
@@ -1377,8 +1382,11 @@ export function createMockTransport(options: MockOptions = {}): {
       const detail: ReviewDetail = {
         ...clone(samples.reviewDetail),
         review: clone(item.review),
+        ...(item.review.files.length > 0 ? { files: clone(item.review.files) } : {}),
         pending_comments: state.pending[prKey(review)] ?? 0,
-        body_html: `<p>${escapeHtml(item.review.title)}</p><p>${escapeHtml(BLURBS[prKey(review)] ?? 'Mock description.')} <a href="${item.review.url}">View on host</a></p>`,
+        body_html:
+          `<p>${escapeHtml(item.review.title)}</p><p>${escapeHtml(BLURBS[prKey(review)] ?? 'Mock description.')} <a href="${item.review.url}">View on host</a></p>` +
+          (BEFORE_MERGING[prKey(review)] ?? ''),
       };
       return detail;
     },

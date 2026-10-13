@@ -16,6 +16,8 @@
   // The selected item's brief in a side panel (#399): what it is and where it stands, the primary action
   // filled, the two likely next ones, the rest behind "N more actions" (`.`), then Claude's last message
   // and the facts. Now uses it; Tickets and Reviews reuse it (#400, #401).
+  import type { Snippet } from 'svelte';
+
   import { t, tn } from '$lib/i18n/index.svelte';
   import { Kbd, Spinner } from '$lib/ui';
 
@@ -35,6 +37,10 @@
     /** A run under way: its button spins. */
     busy?: boolean;
     testid?: string;
+    /** Under `where`, before the actions (Reviews: the branch). */
+    sub?: Snippet;
+    /** After the facts (Reviews: review status, change map, description). */
+    children?: Snippet;
   }
 
   let {
@@ -48,6 +54,8 @@
     facts = [],
     busy = false,
     testid = 'brief',
+    sub,
+    children,
   }: Props = $props();
 
   const SHOWN = 2;
@@ -59,6 +67,7 @@
     {#if id}<span class="id">{id}</span>{/if}
     <h3>{title}</h3>
     {#if where}<p class="where">{where}</p>{/if}
+    {@render sub?.()}
   </div>
   {#if primary || actions.length}
     <div class="actions">
@@ -98,6 +107,7 @@
       {/each}
     </dl>
   {/if}
+  {@render children?.()}
 </aside>
 
 <style>

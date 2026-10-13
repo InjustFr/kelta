@@ -137,6 +137,8 @@ impl GiteaHost {
             linked_tickets: linked_tickets(&[&branch, &title]),
             additions: v.get("additions").and_then(Value::as_u64).map(|n| n as u32),
             deletions: v.get("deletions").and_then(Value::as_u64).map(|n| n as u32),
+            changed_files: v.get("changed_files").and_then(Value::as_u64).map(|n| n as u32),
+            created_at: s(v, "created_at").map(str::to_owned),
             title,
             ..Review::default()
         })

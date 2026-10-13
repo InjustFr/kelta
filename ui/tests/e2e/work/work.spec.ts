@@ -95,7 +95,7 @@ test.describe('reviews', () => {
   test('approves a review with the displayed head_sha', async ({ page }) => {
     const errors = await boot(page);
     await dispatch(page, 'reviews.open', { project_id: 'shop' });
-    await expect(page.locator('.k-row-title', { hasText: 'SHOP-150: cache product images' })).toBeVisible();
+    await expect(page.locator('.row .ttl', { hasText: 'SHOP-150: cache product images' })).toBeVisible();
     await page.keyboard.press('Enter'); // focuses the first review's detail, in the column beside the list
     const detail = page.getByTestId('review-detail');
     await expect(detail).toBeVisible();
@@ -114,7 +114,7 @@ test.describe('reviewing others', () => {
   test('request row, Enter, detail, s, Ctrl+Enter starts a local review', async ({ page }) => {
     const errors = await boot(page);
     await dispatch(page, 'reviews.open', { project_id: 'shop' });
-    await expect(page.locator('.k-row-title', { hasText: 'SHOP-150: cache product images' })).toBeVisible();
+    await expect(page.locator('.row .ttl', { hasText: 'SHOP-150: cache product images' })).toBeVisible();
     await page.keyboard.press('Enter'); // first request: SHOP-150, its detail column takes the keys
     const detail = page.getByTestId('review-detail');
     await expect(detail).toBeVisible();
@@ -194,11 +194,13 @@ test.describe('now', () => {
 });
 
 test.describe('tickets and reviews side by side', () => {
-  test('one action opens my tickets beside For me over Mine', async ({ page }) => {
+  test('one action opens my tickets beside Reviews', async ({ page }) => {
     const errors = await boot(page);
     await dispatch(page, 'tickets.overview');
-    await expect(page.getByRole('tab', { name: /^For me/, selected: true })).toHaveCount(1);
-    await expect(page.getByRole('tab', { name: /^Mine/, selected: true })).toHaveCount(2);
+    await expect(page.getByTestId('tickets-pane')).toBeVisible();
+    await expect(
+      page.getByTestId('reviews-pane').getByRole('button', { name: /^Asked of you/ }),
+    ).toBeVisible();
     expect(errors).toEqual([]);
   });
 });

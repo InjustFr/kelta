@@ -154,6 +154,7 @@ impl BitbucketHost {
                 .then(|| mine.map_or(MyReviewState::Pending, |p| state_of(p))),
             kind,
             updated_at: s(v, "updated_on").unwrap_or("").to_owned(),
+            created_at: s(v, "created_on").map(str::to_owned),
             linked_tickets: linked_tickets(&[&branch, &title]),
             title,
             ..Review::default()

@@ -56,7 +56,7 @@ describe('L9 actions', () => {
     expect(l && findContent(l, (c) => c.kind === 'tickets' && c.mode === 'board')).toBeTruthy();
   });
 
-  it('tickets.overview opens my tickets beside For me over Mine, once per project', async () => {
+  it('tickets.overview opens my tickets beside Reviews, once per project', async () => {
     ui.view = 'reviews';
     await dispatch('tickets.overview');
     expect(ui.view).toBeNull();
@@ -68,14 +68,7 @@ describe('L9 actions', () => {
       dir: 'row',
       children: [
         { type: 'pane', content: { kind: 'tickets', scope: { kind: 'project', id: 'shop' }, who: 'mine' } },
-        {
-          type: 'split',
-          dir: 'column',
-          children: [
-            { type: 'pane', content: { kind: 'reviews', tab: 'review_requested' } },
-            { type: 'pane', content: { kind: 'reviews', tab: 'authored' } },
-          ],
-        },
+        { type: 'pane', content: { kind: 'reviews' } },
       ],
     });
     const tabs = l?.tabs.length;

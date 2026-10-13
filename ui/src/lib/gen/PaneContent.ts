@@ -37,6 +37,6 @@ sort?: TicketSort | null,
  */
 person?: string | null, } | { "kind": "ticket_detail", ticket: TicketRef, } | { "kind": "reviews", scope: Scope, 
 /**
- * The shown tab (For me / Team / Mine); `None` = For me.
+ * The tab shown before #401 put every section on one list; kept so saved layouts load.
  */
 tab?: ReviewKind | null, density?: RowDensity | null, } | { "kind": "review_detail", review: ReviewRef, } | { "kind": "inbox", density?: RowDensity | null, } | { "kind": "work_item", id: WorkItemId, } | { "kind": "settings", section: string | null, } | { "kind": "diagnostics" } | { "kind": "welcome" } | { "kind": "empty" };

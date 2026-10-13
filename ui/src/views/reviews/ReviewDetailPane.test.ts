@@ -91,15 +91,27 @@ describe('ReviewDetailPane', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('keeps Tags and Refresh in More; Tags opens the tag menu', async () => {
+  it('briefs the PR: Review locally first, Approve and Comment, the rest behind more actions (#401)', async () => {
     mountDetail();
-    await screen.findByTestId('head-sha');
-    expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
-    await fireEvent.click(screen.getByRole('button', { name: 'More' }));
-    const more = await screen.findByRole('menu', { name: 'More actions' });
-    expect(within(more).getByRole('menuitem', { name: /Refresh/ })).toBeTruthy();
-    await fireEvent.click(within(more).getByRole('menuitem', { name: /Tags/ }));
+    const brief = within(await screen.findByTestId('review-brief'));
+    const shown = () =>
+      [...screen.getByTestId('review-brief').querySelectorAll<HTMLElement>('.actions button')].map(
+        (b) => b.dataset.key ?? b.textContent?.trim(),
+      );
+    expect(shown()).toEqual(['s', 'a', 'm', expect.stringMatching(/more actions/)]);
+    expect(screen.getByTestId('review-status').textContent).toContain('Review status');
+    await fireEvent.keyDown(screen.getByTestId('review-detail'), { key: '.' });
+    expect(shown()).toEqual(['s', 'a', 'm', 'c', 'o', 't', 'shift+r']);
+    await fireEvent.click(brief.getByRole('button', { name: 'Tags' }));
     expect(await screen.findByRole('menu', { name: 'Tags' })).toBeTruthy();
+  });
+
+  it("lifts the description's before-merging section into its own callout", async () => {
+    mountDetail();
+    expect((await screen.findByTestId('before-merging')).textContent).toContain('Purge the CDN');
+    const description = screen.getByRole('region', { name: 'Description' });
+    expect(description.textContent).toContain('Cache them at the edge');
+    expect(description.textContent).not.toContain('Purge the CDN');
   });
 
   it('approves with the head_sha that is displayed', async () => {
@@ -138,7 +150,7 @@ describe('ReviewDetailPane', () => {
   it('comments and requests changes with a body', async () => {
     mountDetail();
     await screen.findByTestId('head-sha');
-    await fireEvent.click(screen.getByRole('button', { name: 'Request changes' }));
+    await fireEvent.keyDown(screen.getByTestId('review-detail'), { key: 'c' });
     const body = await screen.findByLabelText(/What should change/);
     const submit = screen.getAllByRole('button', { name: 'Request changes' }).at(-1) as HTMLElement;
     expect(submit.hasAttribute('disabled')).toBe(true);
@@ -203,12 +215,15 @@ describe('ReviewDetailPane', () => {
     const saved = structuredClone(reviewDetail);
     const check = reviewDetail.checks[0]!;
     reviewDetail.checks.push({ ...check, state: 'failure', url: null });
-    reviewDetail.files.push({ ...reviewDetail.files[0]! });
+    const files = mock.state.reviews.find((r) => r.review.ref.number === 311)!.review.files;
+    files.push({ ...files[0]! }); // the same path twice
     try {
       mountDetail();
       const checks = within(await screen.findByRole('region', { name: 'Checks' }));
       expect(checks.getAllByText(check.name)).toHaveLength(2);
-      expect(within(screen.getByRole('region', { name: /Files/ })).getAllByRole('listitem')).toHaveLength(2);
+      expect(within(screen.getByRole('region', { name: /Files/ })).getAllByRole('listitem')).toHaveLength(
+        files.length,
+      );
     } finally {
       Object.assign(reviewDetail, saved);
     }

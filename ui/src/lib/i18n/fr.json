@@ -621,8 +621,6 @@
   "Open settings": "Ouvrir les paramètres",
   "PR changed, refresh. The head moved since you opened it, nothing was approved.": "La PR a changé, actualisez. La tête a bougé depuis que vous l’avez ouverte, rien n’a été approuvé.",
   "draft": "brouillon",
-  "Author": "Auteur",
-  "Head": "Tête",
   "Changes": "Modifications",
   "Merge": "Fusion",
   "conflicts": "conflits",
@@ -631,10 +629,7 @@
   "Description": "Description",
   "No description.": "Aucune description.",
   "Open link": "Ouvrir le lien",
-  "Reviewers": "Relecteurs",
-  "No reviewers.": "Aucun relecteur.",
   "Checks": "Vérifications",
-  "No checks reported.": "Aucune vérification signalée.",
   "Open check": "Ouvrir la vérification",
   "Files": "Fichiers",
   "Comment (Markdown)": "Commentaire (Markdown)",
@@ -643,7 +638,6 @@
     "one": "{n} commentaire en attente",
     "other": "{n} commentaires en attente"
   },
-  "For me": "Pour moi",
   "Team": "Équipe",
   "Mine": "Les miennes",
   "No ticket": "Aucun ticket",
@@ -659,21 +653,14 @@
   "All projects": "Tous les projets",
   "Repository": "Dépôt",
   "All repos": "Tous les dépôts",
-  "Drafts": "Brouillons",
-  "Compact": "Compact",
   "Loading reviews": "Chargement des revues",
   "Could not load reviews": "Impossible de charger les revues",
   "No ticket source feeds a project with a repository yet": "Aucune source de tickets n’alimente encore un projet avec un dépôt",
   "Add a ticket source": "Ajouter une source de tickets",
-  "No open PRs on your sources' repos": "Aucune PR ouverte sur les dépôts de vos sources",
-  "No open PRs of yours.": "Aucune PR ouverte de votre part.",
-  "No review requests.": "Aucune demande de revue.",
-  "Pull requests where you are a requested reviewer show up here.": "Les pull requests dont vous êtes relecteur demandé apparaissent ici.",
   "Pull requests": "Pull requests",
   "new": "nouveau",
   "Review detail": "Détail de la revue",
   "Select a pull request to see it here.": "Sélectionnez une pull request pour la voir ici.",
-  "Group by ticket": "Grouper par ticket",
   "Own pane": "Panneau dédié",
   "Nudge (my PRs)": "Relancer (mes PR)",
   "Merge when ready": "Fusionner quand prête",
@@ -2396,7 +2383,6 @@
   },
   "Filter id, title, project, branch (/)": "Filtrer id, titre, projet, branche (/)",
   "Repository: {name}": "Dépôt : {name}",
-  "No drafts": "Sans brouillons",
   "Filter title, repo, number, author, branch, ticket (/)": "Filtrer titre, dépôt, numéro, auteur, branche, ticket (/)",
   "Person: {name}": "Personne : {name}",
   "Filter by status": "Filtrer par statut",
@@ -2410,12 +2396,8 @@
     "other": "{n} vous attendent"
   },
   "Unmark": "Retirer la marque",
-  "Pull requests waiting for your review": "Pull requests qui attendent votre revue",
-  "Open pull requests on your ticket sources' repositories": "Pull requests ouvertes sur les dépôts de vos sources de tickets",
-  "Pull requests you opened": "Pull requests que vous avez ouvertes",
   "Open in own pane": "Ouvrir dans un panneau dédié",
   "Detail": "Détail",
-  "Open review (Enter)": "Ouvrir la revue (Entrée)",
   "Deselect": "Désélectionner",
   "Tickets assigned to you": "Tickets qui vous sont assignés",
   "Tickets nobody owns yet": "Tickets que personne n’a encore pris",
@@ -2450,5 +2432,55 @@
   "waiting on others": "en attente des autres",
   "broken": "en échec",
   "At {stage}, {whose}; furthest stage reached: {reached}": "À l’étape {stage}, {whose} ; étape la plus avancée : {reached}",
-  "Deploy": "Déploiement"
+  "Deploy": "Déploiement",
+  "Asked of you": "Demandées à vous",
+  "Before merging": "Avant de fusionner",
+  "Before merging, from the description": "Avant de fusionner, d’après la description",
+  "Checks running": "Vérifications en cours",
+  "Code": "Code",
+  "Config and deploy": "Config et déploiement",
+  "More than the 2k lines the bar shows": "Plus que les 2k lignes que la barre montre",
+  "No review yet, nobody requested": "Pas encore de revue, personne de sollicité",
+  "Nobody has asked you for a review.": "Personne ne vous a demandé de revue.",
+  "Open since today": "Ouverte depuis aujourd’hui",
+  "Open {n} days": {
+    "one": "Ouverte depuis {n} jour",
+    "other": "Ouverte depuis {n} jours"
+  },
+  "Review status": "État de la revue",
+  "Team drafts": "Brouillons de l’équipe",
+  "Team, needs a reviewer": "Équipe, attend un relecteur",
+  "Tests": "Tests",
+  "Yours, as reviewers see them": "Les vôtres, vues par les relecteurs",
+  "base of a stack of {n}": "base d’une pile de {n}",
+  "merges into #{n}": "fusionne dans #{n}",
+  "nobody requested": "personne de sollicité",
+  "today": "auj.",
+  "{lines} lines": "{lines} lignes",
+  "{lines} lines, {n} files": "{lines} lignes, {n} fichiers",
+  "{n} approvals": {
+    "one": "{n} approbation",
+    "other": "{n} approbations"
+  },
+  "{n} change requests": {
+    "one": "{n} demande de modifications",
+    "other": "{n} demandes de modifications"
+  },
+  "{n} comments": {
+    "one": "{n} commentaire",
+    "other": "{n} commentaires"
+  },
+  "{n} d": "{n} j",
+  "{n} reviewers requested, none reviewed": {
+    "one": "{n} relecteur sollicité, sans revue",
+    "other": "{n} relecteurs sollicités, aucune revue"
+  },
+  "{n} reviewers still requested": {
+    "one": "{n} relecteur encore sollicité",
+    "other": "{n} relecteurs encore sollicités"
+  },
+  "{n}, biggest first": {
+    "one": "{n}, les plus gros d’abord",
+    "other": "{n}, les plus gros d’abord"
+  }
 }

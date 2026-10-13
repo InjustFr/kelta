@@ -143,6 +143,21 @@ pub struct Review {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub last_comment_at: Option<String>,
+    /// When the PR was opened (RFC 3339).
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub created_at: Option<String>,
+    /// Files changed, as far as the list returns them (GitHub: the first 100; GitLab: from the diff;
+    /// empty elsewhere). `changed_files` is the full count.
+    #[serde(default)]
+    pub files: Vec<FileChange>,
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub changed_files: Option<u32>,
+    /// Each reviewer's latest review, the author left out (GitHub, GitLab; empty elsewhere). Who is
+    /// still asked and has not reviewed is `waiting_on`.
+    #[serde(default)]
+    pub reviewers: Vec<Reviewer>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

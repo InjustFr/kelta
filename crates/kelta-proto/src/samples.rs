@@ -152,6 +152,13 @@ pub fn review() -> Review {
         assigned: false,
         unresolved_threads: None,
         last_comment_at: None,
+        created_at: Some(TS.into()),
+        files: vec![
+            FileChange { path: "src/prices/cache.rs".into(), additions: 100, deletions: 10 },
+            FileChange { path: "tests/prices.rs".into(), additions: 20, deletions: 4 },
+        ],
+        changed_files: Some(2),
+        reviewers: vec![],
     }
 }
 

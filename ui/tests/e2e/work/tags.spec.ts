@@ -35,7 +35,7 @@ test('a tag made in Settings goes on a ticket and a PR and filters the list', as
 
   await dispatch(page, 'reviews.open');
   const reviews = page.getByTestId('reviews-pane');
-  const pr = reviews.locator('.k-row.selected');
+  const pr = reviews.locator('.row.selected');
   await pr.click();
   await page.keyboard.press('t');
   await page.getByRole('menu', { name: 'Tags' }).getByRole('menuitem', { name: 'retest' }).click();
@@ -44,5 +44,5 @@ test('a tag made in Settings goes on a ticket and a PR and filters the list', as
     .getByRole('group', { name: 'Filter by tag' })
     .getByRole('button', { name: /retest/ })
     .click();
-  await expect(reviews.locator('.k-row')).toHaveCount(1);
+  await expect(reviews.locator('.row[data-key]')).toHaveCount(1);
 });
