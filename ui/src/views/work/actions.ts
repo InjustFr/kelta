@@ -40,6 +40,7 @@ import { goToWork, openReview, showZoomedInWorkTab } from './nav';
 import type { Phase, WorkActionId } from './phase';
 import { selection } from './selection.svelte';
 import { startWorkOnTicket } from './startWork';
+import { story } from './story/panel.svelte';
 import { workUi } from './ui.svelte';
 
 export const NOT_YET = msg('not available yet');
@@ -420,6 +421,11 @@ registerAction(
   onFocused((item) => void (workUi.menu = item.id)),
 );
 registerAction('work.next', onFocused(runPrimary));
+registerAction('work.story', () => {
+  const tab = ui.view ? null : currentTab();
+  if (tab?.work_item_id) story.toggle(tab.id);
+  else toasts.info(t('Focus a work item tab first'));
+});
 for (const a of WORK_ACTIONS)
   if (a.key)
     registerAction(

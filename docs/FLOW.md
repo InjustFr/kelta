@@ -124,12 +124,13 @@ Writes are field-level (§8): the hook listener never overwrites `pr_url` or `st
 | Place | What it shows |
 |---|---|
 | Tab | `[phase lamp] KEY title` (scratch: `wip title`). Mono key, lamp slot per DESIGN §6.3. |
-| Context bar, the work segment (above the rail and all panes, survives pane zoom; DESIGN §6.3) | after the breadcrumb (`project › KEY title`): ticket status chip (opens the status picker), phase chip (lamp + label + detail), PR chip (`PR #482` + CI lamp, opens the PR), `↑a ↓b`, cost, `⎇` (branch, worktree, ports, armed, `+ins −del`, uncommitted changes in its tooltip; a dot when armed or dirty), primary button, **Work ⌘.** menu. Clicking the phase chip opens the existing `WorkItemPane` (saga steps, sessions) as a split down. The return strip sits directly under the bar. |
+| Context bar, the work segment (above the rail and all panes, survives pane zoom; DESIGN §6.3) | after the breadcrumb (`project › KEY title`): ticket status chip (opens the status picker), phase chip (lamp + label + detail), PR chip (`PR #482` + CI lamp, opens the PR), `↑a ↓b`, cost, `⎇` (branch, worktree, ports, armed, `+ins −del`, uncommitted changes in its tooltip; a dot when armed or dirty), primary button, **Work ⌘.** menu. Clicking the phase chip opens the Story panel. |
+| Story panel (docked right of the work tab, `⌘I`; DESIGN §6.4) | the item's story in stage order: Since you left (the return brief), Ticket, Claude, Changes, Pull request, Log (start steps, open by itself on a failed step with Retry / Skip step). The current stage's section is open, the others fold to a one-line summary. |
 | Rail row | a work tab's lamp (DESIGN §6.2) folds in `review_due`, `claude_replied` and work-item errors, not just sessions. |
 | Now | one row (§3). |
 | Palette | Work items group (§3.5). |
 
-No status strip segment and no header row in the tab: the context bar is always visible above the focused tab's panes and says the same thing. `views/work/WorkContext.svelte` is its work segment, `views/work/ReturnBrief.svelte` the return strip; `WorkItemPane` has no header of its own.
+No status strip segment and no header row in the tab: the context bar is always visible above the focused tab's panes and says the same thing. `views/work/WorkContext.svelte` is its work segment, `views/work/StoryPanel.svelte` the Story panel (sections in `views/work/story/`, the return brief in `story/ReturnBrief.svelte`).
 
 ![Work tab with the work bar and the work menu open (before the context bar, #248)](images/flow/f2-work-tab.png)
 
@@ -144,7 +145,7 @@ No status strip segment and no header row in the tab: the context bar is always 
 | `V` | Review the whole diff in nvim | §4.1 |
 | `p` | Ship (push + PR) / Push / Force push… | one letter, wording follows the phase |
 | `R` | Mark reviewed | only with `review_due` |
-| `b` | Edit the `next:` note | Louis's own reminder, shown on the row and the return strip |
+| `b` | Edit the `next:` note | Louis's own reminder, shown on the row and the return brief |
 | `f` | Fix with Claude | needs a PR |
 | `r` | Rebase onto {base} | |
 | `c` | Continue rebase | only in Rebase stopped |
