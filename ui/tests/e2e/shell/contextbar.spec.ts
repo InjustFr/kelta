@@ -16,7 +16,7 @@ test('one 30px bar; the window title follows the breadcrumb', async ({ page }) =
   await page.locator('[data-testid="rail-row"][data-tab-id="shop-t2"]').click();
   await expect(page).toHaveTitle('Shop › ~/code/shop-api');
   await page.getByTestId('rail-inbox').click();
-  await expect(page).toHaveTitle('Now');
+  await expect(page).toHaveTitle('Queue');
   await expect(bar(page).getByTestId('context-underneath')).toContainText('Shop › Shell');
 });
 

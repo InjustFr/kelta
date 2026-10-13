@@ -23,6 +23,10 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
   await page.keyboard.press('Control+0');
   await expect(now(page)).toBeVisible();
   await expect(now(page).locator('[data-zone="yours"]')).toBeVisible();
+  // SHOP-142's Claude is working: the Claude working zone (#413).
+  await expect(
+    now(page).locator('.row.claude[data-row="w:0199a6b2-0000-7000-8000-00000000a001"]'),
+  ).toBeVisible();
 
   // Up next → s → start sheet → Ctrl+Enter: the work tab opens focused and Now closes.
   await select(page, 't:jira-acme:SHOP-151');

@@ -69,7 +69,7 @@ placeholders work in `cwd`, `command` and `args`, and `|` picks the first one th
 ## Where a tool opens
 
 A tool opens where you are: in the project you are looking at, in the worktree of the focused work item; from
-Home, Tickets, Now or Reviews, in Home (in `~`). A tool that takes a project, because a field uses
+Home, Tickets, Queue or Reviews, in Home (in `~`). A tool that takes a project, because a field uses
 `{project.*}` or `{repo.*}`, asks which project when there is none. [Sapling ISL](sapling-isl.md) is one:
 its `start` args hold `--cwd {repo.path}`, so it needs a project's repo.
 
@@ -90,5 +90,5 @@ work item focuses that pane instead of opening a second copy, and in another wor
 there. `project` runs it once per project, as its own tab. `user` runs it once for you, as its own tab in Home,
 from wherever you open it (Settings > Tools: **One instance**). Each running copy is a line under the tool in
 the sidebar that goes to its pane. Pressing the tool's key again while it is in front takes you back where you
-were, Now included; a tool that takes a project asks for another project instead. When the program is not installed, the pane says so with its
+were, the Queue included; a tool that takes a project asks for another project instead. When the program is not installed, the pane says so with its
 install hint and a **Check again** button; Settings > Tools > **Check** runs the same check.

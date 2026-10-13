@@ -27,7 +27,7 @@ notification daemon) and offers the first steps:
    also reuse your `gh` / `glab` login or sign in with the browser ([oauth](oauth.md)).
 3. Click **Tickets** at the top of the rail (`Cmd+Shift+B`). It shows your tickets from every open project (Mine);
    `2` and `3` switch to Unassigned and Team ([working with tickets](tickets.md)). Select one and press
-   **Start work**: Kelta creates a worktree in the ticket's project and opens Claude and nvim side by side. **Now**
+   **Start work**: Kelta creates a worktree in the ticket's project and opens Claude and nvim side by side. **Queue**
    and **Reviews**, just below, show what waits on you and the PRs to review, across projects too
    ([reviews](reviews.md)).
 
@@ -48,7 +48,7 @@ Settings > Diagnostics checks the things Kelta depends on: graphics, WebKitGTK, 
 
 ## The rail
 
-The rail on the left holds Search, **Tickets**, **Now** and **Reviews**, your open projects with their tabs, the
+The rail on the left holds Search, **Tickets**, **Queue** and **Reviews**, your open projects with their tabs, the
 Tools, and Settings.
 
 - **Width.** Drag the edge of the rail to resize it (200 to 480 px). With the edge focused, the arrow keys move
@@ -89,12 +89,14 @@ Copy and paste in a terminal are `Ctrl+Shift+C` / `Ctrl+Shift+V`. If you never u
 `keys.linux_terminal = "kelta_first"` (Settings > Keys) and Kelta's `Ctrl+letter` wins in terminals too. Your
 desktop may already take `Ctrl+Alt+arrows` for workspaces: rebind either side in Settings > Keys.
 
-## Now
+## Queue
 
-**Now** lists your work across projects in one list split by whose move it is: **Your move** (Claude needs you,
-ready for review, next up, new for you, fix, review requests, ship and clean up, up next) and **Waiting on others**
-(in flight, elsewhere, blocked, then waiting to deploy, collapsed: tickets in a status their source lists as waiting
-for a deployment, set in Settings → Sources). Each row has a stage track, Ticket, Claude, PR, Review, Merge, Deploy:
+The **Queue** is where all your work waits, across projects, in one list split in three zones by whose move it is:
+**Your move** (Claude needs you, ready for review, next up, new for you, fix, review requests, ship and clean up, up
+next), **Claude working** (work whose Claude is working, background runs included: back in minutes) and **Waiting on
+others** (reviewers, checks and deploys: in flight, elsewhere, blocked, then waiting to deploy, collapsed: tickets in a
+status their source lists as waiting for a deployment, set in Settings → Sources). The header sums them up: "9 your
+move, 2 Claude working, 2 waiting on others". Each row has a stage track, Ticket, Claude, PR, Review, Merge, Deploy:
 the line runs to the furthest stage reached and the mark sits where the item is now, filled when it is your move, a
 ring while it waits, a diamond when something broke. The row's next step is a button that runs it. The selected
 item's brief sits beside the list (under it in a narrow pane): its next action, the two likely after it, the rest

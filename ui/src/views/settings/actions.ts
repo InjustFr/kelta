@@ -88,7 +88,7 @@ registerAction('claude.mcp_never', async () => {
 // The startup offer of Kelta's hook relay (#345): sessions started outside Kelta show in Now.
 registerAction('claude.hooks_install', async () => {
   await ipc.claudeHooksInstall();
-  toasts.info(t('Installed: Claude sessions you start from now on show in Now'));
+  toasts.info(t('Installed: Claude sessions you start from now on show in the Queue'));
 });
 registerAction('claude.hooks_never', async () => {
   await ipc.settingsSet({ layer: 'global', path: 'claude.hooks_offer', value: false });

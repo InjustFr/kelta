@@ -830,7 +830,7 @@ pub struct ClaudeSettings {
     #[schemars(extend("x-kelta-scope" = ["global"]))]
     pub mcp_offer: bool,
     /// At startup, offer to register Kelta's hook relay in Claude Code's user settings, so sessions
-    /// Kelta did not start show in Now (#345); false = never ask.
+    /// Kelta did not start show in the Queue (#345); false = never ask.
     #[schemars(extend("x-kelta-scope" = ["global"]))]
     pub hooks_offer: bool,
     /// Passed via `--allowedTools`.
@@ -1884,7 +1884,7 @@ pub struct Source {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[ts(as = "Option<Vec<SourceField>>", optional)]
     pub fields: Vec<SourceField>,
-    /// Status names (as the tracker spells them) that count as done for Now: my part is over, the
+    /// Status names (as the tracker spells them) that count as done for the Queue: my part is over, the
     /// ticket waits on something else (a deployment). Left out of Up next, Next up and New for you;
     /// Tickets still lists them.
     #[serde(skip_serializing_if = "Vec::is_empty")]

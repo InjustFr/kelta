@@ -41,7 +41,7 @@ export function standing(
       where: deploying
         ? deploy
         : yours
-          ? t('{phase}. Your move in Now.', { phase: phase.label })
+          ? t('{phase}. Your move in the Queue.', { phase: phase.label })
           : t('{phase}.', { phase: phase.label }),
     };
   }
@@ -85,7 +85,7 @@ export function standingNow(item: TicketItem, mine: boolean): Standing {
     return {
       stage: stage(CLAUDE, yours ? 'you' : 'wait'),
       where: yours
-        ? t('{phase}. Your move in Now.', { phase: phase.label })
+        ? t('{phase}. Your move in the Queue.', { phase: phase.label })
         : t('{phase}.', { phase: phase.label }),
     };
   }

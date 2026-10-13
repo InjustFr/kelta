@@ -19,7 +19,7 @@ You can do all of it by hand: see [getting started](getting-started.md#first-lau
 ## Status on every pane
 
 Kelta starts Claude with hooks that report its state: working, needs you, done. The state shows on the pane, its
-tab, the project in the rail and in Now. If Kelta cannot tell (the hooks are not installed in that session), the
+tab, the project in the rail and in the Queue. If Kelta cannot tell (the hooks are not installed in that session), the
 pane shows **Live status off** with a **Fix** button that opens Diagnostics.
 
 ## Tickets from any Claude session
@@ -30,7 +30,7 @@ Kelta's MCP server gives Claude its ticket tools, also in a `claude` you start i
 ## Questions from Claude
 
 In a session Kelta starts, Claude has an `ask` tool: a question with up to nine fixed answers and an optional
-Markdown body. Kelta shows one button per answer on the session's row in Now and in Peek (`Cmd+Shift+Y`,
+Markdown body. Kelta shows one button per answer on the session's row in the Queue and in Peek (`Cmd+Shift+Y`,
 `Ctrl+Shift+Y` on Linux). A click types the answer into the session and presses Enter, so Claude gets it as your
 next message. Typing something else works too. While the session shows one of Claude's own prompts (a permission
 request), the buttons are off until you answer that prompt, so the click cannot answer it by mistake.
@@ -43,7 +43,7 @@ that waits on a permission prompt.
 A `claude` you start in another terminal can show in Kelta too, with its state. Install Kelta's hook relay once:
 
 - At launch, when Claude Code is found and the relay is not installed, a toast asks "Show the Claude sessions
-  you start outside Kelta in Now?". **Install** adds Kelta's hooks to Claude Code's user settings
+  you start outside Kelta in the Queue?". **Install** adds Kelta's hooks to Claude Code's user settings
   (`~/.claude/settings.json`, or `$CLAUDE_CONFIG_DIR/settings.json`); **Never** stops asking
   (`claude.hooks_offer = false`).
 - Settings > Claude > **Claude sessions started outside Kelta** installs or removes it any time. Remove drops only
@@ -52,7 +52,7 @@ A `claude` you start in another terminal can show in Kelta too, with its state. 
 The relay is `kelta-ctl hook --outside`. It reports a session only when Kelta runs, never fails Claude, and does
 nothing inside a Kelta pane (those report as usual).
 
-Such sessions are listed under **Elsewhere** in the rail and in Now, dimmed, with their state. One that needs you
+Such sessions are listed under **Elsewhere** in the rail and in the Queue, dimmed, with their state. One that needs you
 moves up to **Claude needs you**. If the session has a ticket, its row shows the state too.
 
 `Enter` or `g` on one (or a click in the rail) jumps to it:
@@ -100,7 +100,7 @@ A workflow is a task for Claude that runs in the background in its own tab. Kelt
 `~/.claude/workflows/`. On a ticket, `w` runs one: Kelta claims the ticket for it, starts Claude in a new tab and
 tells it to run that workflow on the ticket. The run reports its phase, and the ticket's row shows it.
 
-A run that claimed a ticket shows its phase on that ticket: its row in Now, and its tab's row in the rail. Any
+A run that claimed a ticket shows its phase on that ticket: its row in the Queue, and its tab's row in the rail. Any
 other running run shows under its session's row in the rail (`<workflow> · <phase>`, `+N` when the session runs
 several). Click that line, or the `⚙` chip of the context bar, for the session's runs: they open beside its
 terminal, in the same tab, so you can follow the run and talk to Claude at once.

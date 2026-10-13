@@ -78,7 +78,7 @@ locally on Bitbucket.
   conversation (when Claude is working, it gets them when it stops).
 - **Draft.** `d` marks a draft ready for review, or converts a pull request back to a draft. Marking ready asks
   first: the code host then asks the required reviewers to review it. The same action is in the work menu
-  (**Mark ready / Convert to draft**) and in the Now row of a draft. It works on GitHub, GitLab, Bitbucket and
+  (**Mark ready / Convert to draft**) and in the Queue row of a draft. It works on GitHub, GitLab, Bitbucket and
   Gitea; a plugin code host may not support it, and the action says so.
 - **Nudge.** `n` offers **Re-request review** (asks the reviewers again) and **Comment ping** (posts
   `reviews.nudge_template`, `{reviewers} friendly ping: this is waiting on your review.` by default). Each
