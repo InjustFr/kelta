@@ -22,6 +22,7 @@ import {
   focusedSessionId,
   gotoRailRow,
   liveSessionsOfTab,
+  openView,
   revealSession,
   splitFocused,
   toggleFocusedPaneWindow,
@@ -146,7 +147,7 @@ registerAction('project.open', () => ui.toggleOverlay('reopen'));
 // Toast action of a start refused for want of a project with a repository (SPEC §3.1).
 registerAction('project.new', () => ui.openSheet('project_new'));
 for (let n = 1; n <= 9; n += 1) registerAction(`project.goto.${n}`, () => gotoRailRow(n));
-registerAction('inbox.open', () => toggleNow());
+registerAction('inbox.open', (args) => (args?.chord ? toggleNow() : openView('now')));
 registerAction('rail.toggle', () => sidebar.toggle());
 registerAction('toast.run_last', async () => {
   const last = toasts.lastActionable;

@@ -82,6 +82,8 @@ describe('shell actions', () => {
     expect(projects.activeId).toBe('billing');
     await dispatch('inbox.open');
     expect(ui.view).toBe('now');
+    await dispatch('inbox.open'); // the palette and the HUD only open it (#415)
+    expect(ui.view).toBe('now');
   });
 
   it('terminal.search targets the focused session', async () => {

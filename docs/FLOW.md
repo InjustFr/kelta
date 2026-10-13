@@ -490,7 +490,7 @@ All follow DESIGN §6.13: one sentence saying what happened, one or two actions.
 
 | Action id | macOS | Linux | Prefix | Context |
 |---|---|---|---|---|
-| `inbox.open` (label "Open Queue") | `⌘0` | `Ctrl+0` | `0` | global, unchanged chord; on the Queue, goes back (below) |
+| `inbox.open` (label "Open Queue") | `⌘0` | `Ctrl+0` | `0` | global, unchanged chord; on the Queue, the chord goes back (below); the palette entry and the HUD only open it |
 | `attention.next` (label "Next waiting") | `⌘J` | `Ctrl+J` | `u` | global, walks the Now queue (§3.4) |
 | `attention.peek` (label "Peek waiting session") | `⇧⌘Y` | `Ctrl+Shift+Y` | `y` | global, peek & reply without switching (#139) |
 | `work.new` | `⇧⌘N` | `Ctrl+Shift+N` | `w` | global |
