@@ -226,6 +226,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         work::work_create_ticket,
         work::work_status_all,
         work::work_diff,
+        work::work_delta_files,
         work::work_mark_reviewed,
         work::work_set_note,
         work::work_left,

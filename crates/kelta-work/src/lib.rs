@@ -46,8 +46,8 @@ use kelta_proto::events::{BusEvent, bus};
 use kelta_proto::ext::BlockingOutcome;
 use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{
-    EditorTarget, FinishMergedReport, FinishOpts, GitStatus, RebaseOp, SendFile, SessionInfo, ShipOrigin,
-    StartWorkPlan, StepStatus, WORK_STEPS, WorkItem, WorkSource, WorkStepStatus,
+    DeltaFile, EditorTarget, FinishMergedReport, FinishOpts, GitStatus, RebaseOp, SendFile, SessionInfo,
+    ShipOrigin, StartWorkPlan, StepStatus, WORK_STEPS, WorkItem, WorkSource, WorkStepStatus,
 };
 use kelta_proto::tracker::TicketRef;
 use parking_lot::{Mutex, RwLock};
@@ -366,14 +366,20 @@ impl WorkService {
 
     /// `work_diff`: spawns the review diff session (editor with `editor.review_args`, else a shell).
     /// `delta`: only what changed since Louis's last review (`reviewed..last`); `from`: a review
-    /// item's reviewed PR head (`git range-diff` in a shell after a force push).
+    /// item's reviewed PR head (`git range-diff` in a shell after a force push); `path`: at that file.
     pub async fn diff(
         &self,
         id: &WorkItemId,
         delta: bool,
         from: Option<&str>,
+        path: Option<&str>,
     ) -> Result<SessionInfo, KeltaError> {
-        self.diff_impl(id, delta, from).await
+        self.diff_impl(id, delta, from, path).await
+    }
+
+    /// `work_delta_files`: the files of `reviewed..last` with their `+a −b` (empty before the first `Stop`).
+    pub async fn delta_files(&self, id: &WorkItemId) -> Result<Vec<DeltaFile>, KeltaError> {
+        self.delta_files_impl(id).await
     }
 
     /// `work_set_note`: Louis's `next:` note (blank clears it).

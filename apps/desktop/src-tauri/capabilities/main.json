@@ -139,6 +139,7 @@
     "allow-work-create-ticket",
     "allow-work-status-all",
     "allow-work-diff",
+    "allow-work-delta-files",
     "allow-work-mark-reviewed",
     "allow-work-set-note",
     "allow-work-left",

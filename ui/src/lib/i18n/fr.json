@@ -2487,6 +2487,14 @@
     "one": "{checked} critère sur {n} coché",
     "other": "{checked} critères sur {n} cochés"
   },
+  "Changes so far": "Modifications en cours",
+  "Review changes at this file": "Relire les modifications de ce fichier",
+  "test": "test",
+  "Note to Claude": "Note pour Claude",
+  "{n} lockfiles or generated files": {
+    "one": "{n} fichier de verrouillage ou généré",
+    "other": "{n} fichiers de verrouillage ou générés"
+  },
   "Ship pushes the branch and opens a draft PR.": "Livrer pousse la branche et ouvre une PR en brouillon.",
   "Open the Story panel": "Ouvrir le panneau Récit",
   "{whose}: {what}": "{whose} : {what}"

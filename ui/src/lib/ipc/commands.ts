@@ -18,6 +18,7 @@ import type {
   ClipboardKind,
   Column,
   Cursor,
+  DeltaFile,
   Diagnostics,
   EditorTarget,
   EffectiveSettings,
@@ -342,8 +343,14 @@ export interface Commands {
   /** Every unfinished item (one fetch per repo, 5 min floor). */
   work_status_all: { args: NoArgs; result: Record<WorkItemId, GitStatus> };
   /** Spawns the review diff session; the UI places it zoomed in the work tab. */
-  /** `delta`: since the last review (`reviewed..last`); `from`: a review item's reviewed PR head. */
-  work_diff: { args: { id: WorkItemId; delta?: boolean; from?: string | null }; result: SessionInfo };
+  /** `delta`: since the last review (`reviewed..last`); `from`: a review item's reviewed PR head;
+   *  `path`: the same diff at that file. */
+  work_diff: {
+    args: { id: WorkItemId; delta?: boolean; from?: string | null; path?: string | null };
+    result: SessionInfo;
+  };
+  /** The files of `reviewed..last` with their `+a −b` (empty before Claude's first `Stop`). */
+  work_delta_files: { args: { id: WorkItemId }; result: DeltaFile[] };
   work_mark_reviewed: { args: { id: WorkItemId }; result: WorkItem };
   work_set_note: { args: { id: WorkItemId; note: string | null }; result: WorkItem };
   work_left: { args: { id: WorkItemId }; result: WorkItem };
@@ -528,6 +535,7 @@ export const COMMAND_NAMES = [
   'work_create_ticket',
   'work_status_all',
   'work_diff',
+  'work_delta_files',
   'work_mark_reviewed',
   'work_set_note',
   'work_left',
@@ -776,6 +784,7 @@ export const workLink = wrap('work_link');
 export const workCreateTicket = wrap('work_create_ticket');
 export const workStatusAll = wrap('work_status_all');
 export const workDiff = wrap('work_diff');
+export const workDeltaFiles = wrap('work_delta_files');
 export const workMarkReviewed = wrap('work_mark_reviewed');
 export const workSetNote = wrap('work_set_note');
 export const workLeft = wrap('work_left');

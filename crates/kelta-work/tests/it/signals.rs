@@ -319,23 +319,34 @@ async fn ready_for_review_is_the_delta_since_the_last_look() {
     assert_eq!(git(&wt, &["show", &format!("{last}:login.rs")]), "fn a() {}\nfn b() {}");
 
     // `v`: the delta range (shell without review_args), then in nvim.
-    let s = w.diff(&item.id, true, None).await.unwrap();
+    let s = w.diff(&item.id, true, None, None).await.unwrap();
     let base = git(&wt, &["merge-base", "origin/main", "HEAD"]);
     let tip = git(&wt, &["rev-parse", &last]);
     assert_eq!(fx.core.written_text(&s.id), format!("git diff {base} {tip}\r"));
+    // The Story panel's Changes list, and a click on a file: the delta at that file.
+    let files = w.delta_files(&item.id).await.unwrap();
+    assert_eq!(files.iter().map(|f| (f.path.as_str(), f.insertions)).collect::<Vec<_>>(), [("login.rs", 2)]);
+    let s = w.diff(&item.id, true, None, Some("login.rs")).await.unwrap();
+    assert_eq!(fx.core.written_text(&s.id), format!("git diff {base} {tip} -- 'login.rs'\r"));
     fx.settings(|s| s.editor.review_args = vec!["-c".into(), "DiffviewOpen {range}".into()]);
-    w.diff(&item.id, true, None).await.unwrap();
+    w.diff(&item.id, true, None, None).await.unwrap();
+    assert_eq!(spawn_args(&fx)["args"], json!(["-c", format!("DiffviewOpen {base}..{tip}")]));
+    w.diff(&item.id, true, None, Some("login.rs")).await.unwrap();
+    assert_eq!(spawn_args(&fx)["args"], json!(["-c", format!("DiffviewOpen {base}..{tip} -- login.rs")]));
+    // A name that would break out of the editor command line opens the whole delta.
+    w.diff(&item.id, true, None, Some("a|!rm x")).await.unwrap();
     assert_eq!(spawn_args(&fx)["args"], json!(["-c", format!("DiffviewOpen {base}..{tip}")]));
     // `V`: the full diff keeps `<remote>/<base>`.
-    w.diff(&item.id, false, None).await.unwrap();
+    w.diff(&item.id, false, None, None).await.unwrap();
     assert_eq!(spawn_args(&fx)["args"], json!(["-c", "DiffviewOpen origin/main"]));
 
     // `R`: reviewed = last, the row goes.
     let out = w.mark_reviewed(&item.id).await.unwrap();
     assert!(!out.review_due && out.delta.is_none());
     assert_eq!(git(&wt, &["rev-parse", &reviewed]), tip);
-    let e = w.diff(&item.id, true, None).await.unwrap_err();
+    let e = w.diff(&item.id, true, None, None).await.unwrap_err();
     assert!(e.message.contains("Nothing new"), "{}", e.message);
+    assert!(w.delta_files(&item.id).await.unwrap().is_empty());
 
     // Done with an empty delta: a reply, never ready for review.
     fx.core.publish(hook(&claude, "UserPromptSubmit", json!({})));

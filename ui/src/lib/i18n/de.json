@@ -2487,6 +2487,14 @@
     "one": "{checked} von {n} Kriterium erfüllt",
     "other": "{checked} von {n} Kriterien erfüllt"
   },
+  "Changes so far": "Bisherige Änderungen",
+  "Review changes at this file": "Änderungen dieser Datei prüfen",
+  "test": "Test",
+  "Note to Claude": "Notiz an Claude",
+  "{n} lockfiles or generated files": {
+    "one": "{n} Lock- oder generierte Datei",
+    "other": "{n} Lock- oder generierte Dateien"
+  },
   "Ship pushes the branch and opens a draft PR.": "Ausliefern pusht den Branch und öffnet einen Entwurfs-PR.",
   "Open the Story panel": "Verlaufs-Panel öffnen",
   "{whose}: {what}": "{whose}: {what}"

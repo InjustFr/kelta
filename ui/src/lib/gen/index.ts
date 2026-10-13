@@ -60,6 +60,7 @@ export type * from './CtlResponse';
 export type * from './Cursor';
 export type * from './CursorStyle';
 export type * from './Decorations';
+export type * from './DeltaFile';
 export type * from './Diagnostics';
 export type * from './EditorMeta';
 export type * from './EditorOpenMode';
