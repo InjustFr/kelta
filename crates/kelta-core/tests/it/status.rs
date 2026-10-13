@@ -680,7 +680,13 @@ async fn focus_mode_holds_notifications_but_blocked_ones() {
     settings.notifications.quiet_hours = String::new();
     settings.notifications.only_when_unfocused = false;
     let h = start(tmp.path(), settings, vec![project("shop", tmp.path())]);
-    let n = |title: &str, urgency| Notification { title: title.into(), body: None, urgency, project_id: None, session_id: None };
+    let n = |title: &str, urgency| Notification {
+        title: title.into(),
+        body: None,
+        urgency,
+        project_id: None,
+        session_id: None,
+    };
     assert!(h.core.notify_focus(true).is_empty());
     h.core.notify(n("SHOP-1 ready to review", Urgency::Normal)).await.unwrap();
     h.core.notify(n("SHOP-2: Claude replied", Urgency::Critical)).await.unwrap();

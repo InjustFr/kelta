@@ -13,6 +13,7 @@ const SHOWN = 4;
 /** "While you were focused: 2× PR approved, SHOP-12 ready to review", or `null` when nothing was held. */
 export function heldSummary(held: readonly string[]): string | null {
   if (held.length === 0) return null;
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local tally, not state
   const counts = new Map<string, number>();
   for (const text of held) counts.set(text, (counts.get(text) ?? 0) + 1);
   const parts = [...counts].map(([text, n]) => (n > 1 ? `${n}× ${text}` : text));
