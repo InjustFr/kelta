@@ -73,11 +73,22 @@ async fn hooks_set_and_clear_signals() {
     fx.core.publish(hook(&claude, "UserPromptSubmit", json!({})));
     wait_item(&fx, &item, |w| !w.claude_replied).await;
 
-    // Stop with changes (uncommitted): to review, with a notification.
+    // Stop with changes (uncommitted): to review, notified only with `claude_done` on (#433).
     std::fs::write(item.worktree.join("login.rs"), "fn login() {}\n").unwrap();
     fx.core.publish(hook(&claude, "Stop", json!({})));
     let cur = wait_item(&fx, &item, |w| w.review_due).await;
     assert!(!cur.claude_replied);
+    assert_eq!(fx.core.notifications().len(), 1, "ready to review is opt-in");
+    let mut s = (*fx.core.settings(None)).clone();
+    s.notifications.claude_done = true;
+    fx.core.set_settings(s);
+    std::fs::write(item.worktree.join("login.rs"), "fn login() { todo!() }\n").unwrap();
+    fx.core.publish(hook(&claude, "Stop", json!({})));
+    let t0 = std::time::Instant::now();
+    while fx.core.notifications().len() < 2 && t0.elapsed() < Duration::from_secs(5) {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(fx.core.notifications().len(), 2);
     assert_eq!(last_notification(&fx), "SHOP-141 ready to review");
 
     // Mark reviewed clears review_due only.

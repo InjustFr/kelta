@@ -400,11 +400,13 @@ async fn hooks_inactive_falls_back_to_heuristics() {
 }
 
 /// Ticket #366: a `Stop` whose client closed right after writing it (macOS dropped those) still
-/// marks the background session done, with the "finished" notification.
+/// marks the background session done, with the "finished" notification (opt-in since #433).
 #[tokio::test]
 async fn stop_from_a_closed_client_marks_done_and_notifies() {
     let tmp = tempfile::tempdir().unwrap();
-    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let mut settings = Settings::defaults();
+    settings.notifications.claude_done = true;
+    let h = start(tmp.path(), settings, vec![project("shop", tmp.path())]);
     let sock = h.core.server().start_ctl().await.unwrap();
     let s = h.core.session_spawn(claude_req()).await.unwrap();
     let token = h.term.with_session(&s.id, |x| x.spec.env["KELTA_HOOK_TOKEN"].clone()).unwrap();
