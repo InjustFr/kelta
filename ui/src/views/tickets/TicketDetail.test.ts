@@ -140,7 +140,7 @@ describe('TicketDetail', () => {
     const folds = [...screen.getByTestId('ticket-detail').querySelectorAll('details')];
     expect(folds.map((d) => [d.querySelector('summary')?.textContent, d.open])).toEqual([
       ['Description', true],
-      ['Acceptance2', false],
+      ['Acceptance3', false],
       ['Notes2', false],
     ]);
     const bar = screen.getByRole('toolbar', { name: 'Ticket actions' });

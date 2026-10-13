@@ -207,7 +207,7 @@
       try {
         const item = await workResume({ id: seed.existing });
         work.upsert(item);
-        toasts.info(t('Resumed {branch}', { branch: item.branch }));
+        toasts.info(t('Resumed {branch}', { branch: item.branch }), { view: null });
         void activateProject(item.project_id);
         onclose();
       } catch (err) {
@@ -231,6 +231,7 @@
         item.state.kind === 'queued'
           ? t('Queued {branch}', { branch: item.branch })
           : t('Started {branch}', { branch: item.branch }),
+        { view: null },
       );
       // The work tab is the project's active tab: bring it to the front (leaves Now).
       void activateProject(item.project_id);

@@ -80,7 +80,7 @@
       }
       if (item.state.kind === 'failed')
         toasts.warn(t('{branch}: start failed at {step}', { branch: item.branch, step: item.state.step }));
-      else toasts.info(t('Started {branch}', { branch: item.branch }));
+      else toasts.info(t('Started {branch}', { branch: item.branch }), { view: null });
       onclose();
       await activateProject(projectId);
     } catch (err) {

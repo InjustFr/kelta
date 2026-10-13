@@ -3,8 +3,16 @@
   import { settings, toasts } from '$lib/stores';
   import { fadeMove, glide, Toast } from '$lib/ui';
 
+  import { viewKey } from './nav';
+
   // The key that runs the last toast's action is printed on that toast's button (FLOW §7.1).
   const runLastKey = $derived(effectiveChords('toast.run_last', settings.value()?.keys ?? null)[0] ?? null);
+  // Info toasts belong to the view they were raised in: leaving it closes them.
+  toasts.where = viewKey;
+  $effect(() => {
+    const view = viewKey();
+    if (view) toasts.leave(view);
+  });
   const lastId = $derived(toasts.lastActionable?.id ?? null);
 </script>
 
