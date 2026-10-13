@@ -1,9 +1,10 @@
 // The stage track (#399): where an item stands on the way from ticket to deploy, and whose move it is.
 // Pure; Now draws it on every row, Tickets and Reviews reuse it (#400, #401).
 
-import { msg } from '$lib/i18n/index.svelte';
+import { msg, t } from '$lib/i18n/index.svelte';
 import type { Review, WorkItem } from '$lib/gen';
 
+import { ZONES, zoneOf } from '../inbox/groups';
 import type { Phase, PhaseId } from './phase';
 
 export const STAGES = [
@@ -77,4 +78,20 @@ export function workStage(
     phase.lamp === 'error' ? 'broken' : mine ? 'you' : 'wait',
     reviewed ? REVIEW : opened ? PR : CLAUDE,
   );
+}
+
+/** The work tab header (#428): the item's stage, its mark by Now's zone, and why in one sentence. */
+export function workHeader(
+  item: Pick<WorkItem, 'pr_url' | 'review' | 'feedback_at'>,
+  phase: Pick<Phase, 'id' | 'lamp' | 'label' | 'detail' | 'section'>,
+  pr: Pick<Review, 'decision'> | null,
+): { stage: Stage; why: string } {
+  const zone = zoneOf(phase.section);
+  return {
+    stage: workStage(item, phase, pr, zone === 'yours'),
+    why: t('{whose}: {what}', {
+      whose: t(ZONES.find((z) => z.id === zone)!.label),
+      what: phase.detail ? `${phase.label}, ${phase.detail}` : phase.label,
+    }),
+  };
 }

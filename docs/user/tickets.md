@@ -1,7 +1,7 @@
 # Working with tickets
 
 The Tickets pane is a list, not a board: one row per ticket, grouped by the tracker's status (what the rest of the
-team sees), with the keyboard doing most of the work. Each row carries Now's stage track, from Ticket to Deploy. A
+team sees), with the keyboard doing most of the work. Each row carries the Queue's stage track, from Ticket to Deploy. A
 reading pane on the right follows the selection and opens on where the ticket stands. Board mode stays available
 with the list/board toggle.
 
@@ -34,7 +34,7 @@ accounts, so one board can show Jira and GitHub tickets together.
 - The palette and the ticket pickers search the trackers themselves (Jira `text ~`, Linear title and description,
   GitHub / GitLab / Gitea search, Redmine subject), so they find tickets past the first page. A tracker that cannot
   search matches the loaded first page instead; a typed key is also looked up directly.
-- With no source yet, Tickets and Now say "Add a ticket source: pick a board". **Pick a board** (also "Add
+- With no source yet, Tickets and the Queue say "Add a ticket source: pick a board". **Pick a board** (also "Add
   source..." in the `v` menu and Settings > Sources) opens a sheet: choose the account, type to search, press
   `Enter` on a result. It creates a source labelled after the board, feeding the project you opened it from; the
   toast's action opens Settings > Sources to choose its projects. **Add view...** on a source adds a view to it.
@@ -70,7 +70,7 @@ Otherwise the person stays apart and is marked "(tracker only)". Choosing a pers
 with the pane; "Any person" clears it. Picking a tab clears it too.
 
 A row whose pull request waits on someone shows `waiting on Anna · 26h` (`+2` when several; hover for who and why)
-next to the PR chip. Reviews and Now show the same chip. A ticket that only waits on its assignee shows no chip:
+next to the PR chip. Reviews and the Queue show the same chip. A ticket that only waits on its assignee shows no chip:
 the avatar already says it.
 
 ## Current iteration
@@ -91,7 +91,7 @@ Each view can be limited to the current iteration (Settings > Sources, or `curre
 | Key | Action |
 |---|---|
 | `j` `k` | move the selection |
-| `Enter` | with the detail column shown, focus it; hidden, a ticket with work runs its next step (as in Now), others open the detail (on a group header: expand or collapse) |
+| `Enter` | with the detail column shown, focus it; hidden, a ticket with work runs its next step (as in the Queue), others open the detail (on a group header: expand or collapse) |
 | `g` | open the detail: focus the detail column, or its own pane in a narrow pane |
 | `Shift+Enter` | open the detail as its own pane |
 | `Space` | show or hide the detail column |
@@ -152,14 +152,14 @@ Key, then the title on up to two lines with the epic's name and the pull request
 failed`, `No PR found`), then the stage track and the days in status. The status is the group's, and the actions
 live in the reading pane: rows carry no buttons.
 
-The stage track is Now's: Ticket, Claude, PR, Review, Merge, Deploy. The line runs to the furthest stage reached,
+The stage track is the Queue's: Ticket, Claude, PR, Review, Merge, Deploy. The line runs to the furthest stage reached,
 the mark sits where the ticket is now and its shape says whose move it is (filled: yours, ring: waiting on others,
-diamond: something broke, a small dot once done). It follows the ticket's work item as Now does, else its linked pull
+diamond: something broke, a small dot once done). It follows the ticket's work item as the Queue does, else its linked pull
 request. A ticket in a status its source lists as waiting for a deploy, with no branch or pull request found, gets a
 dotted line labelled "per the tracker": Kelta did not see the stages before. Hover the row for where it stands.
 
 With the reading pane hidden (or a narrow pane), `Enter` on a ticket with work under way runs the phase's next
-action, as `Enter` does in Now (the key hints name it); `g` opens the pane instead.
+action, as `Enter` does in the Queue (the key hints name it); `g` opens the pane instead.
 
 ## The reading pane
 
@@ -195,7 +195,7 @@ account, else in the browser; `P` always opens the browser. With several pull re
 ## Blocked tickets
 
 A ticket can be marked blocked without changing its status. A blocked ticket shows a Blocked chip, goes to
-Waiting in the Flow grouping and sorts last in its group. In Now it leaves Next up, New for you and Up next for the Blocked
+Waiting in the Flow grouping and sorts last in its group. In the Queue it leaves Next up, New for you and Up next for the Blocked
 section, with its work items unless they need you (Claude needs you, Ready for review, Fix); unblocked, it comes
 back on the next refresh.
 
@@ -221,7 +221,7 @@ tracker or the code host.
   everywhere, after a confirmation.
 - `t` on a ticket (or **Tags** under More) opens a menu to tick the tags it carries. With no tag yet it takes
   you to Settings > Tags.
-- A tag shows as a chip on the row, in the detail and in Now. The toolbar has one chip per tag in the list, with its count; click it to
+- A tag shows as a chip on the row, in the detail and in the Queue. The toolbar has one chip per tag in the list, with its count; click it to
   keep only those tickets, click again to clear.
 - Reviews has the same `t` key and filter ([reviews](reviews.md#local-tags)). The MCP tool `list_tickets` takes
   a `tag` argument.

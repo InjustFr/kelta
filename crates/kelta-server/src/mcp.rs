@@ -250,7 +250,7 @@ pub(crate) fn tool_defs() -> Value {
         },
         {
             "name": "ask",
-            "description": "Ask the user a question with fixed answers: Kelta shows it (and the Markdown body) with one button per option on this session's rows, in Now and in Peek. Returns at once: then end your turn and wait. The chosen option arrives as the user's next message, exactly as written in `options` (the user may also type something else).",
+            "description": "Ask the user a question with fixed answers: Kelta shows it (and the Markdown body) with one button per option on this session's rows, in the Queue and in Peek. Returns at once: then end your turn and wait. The chosen option arrives as the user's next message, exactly as written in `options` (the user may also type something else).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -348,7 +348,7 @@ pub(crate) fn tool_defs() -> Value {
         },
         {
             "name": "report_progress",
-            "description": "Report how far the run on a claimed ticket got. `phase` is free text (the workflow's phase title); `state` drives the lamp; blocked and failed runs show in Kelta's Now with their `note`.",
+            "description": "Report how far the run on a claimed ticket got. `phase` is free text (the workflow's phase title); `state` drives the lamp; blocked and failed runs show in Kelta's Queue with their `note`.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

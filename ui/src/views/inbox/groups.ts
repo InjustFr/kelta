@@ -1,4 +1,4 @@
-// Now's sections (FLOW §3.1): one row per thing, a work item once (in its phase's section),
+// The Queue's sections (FLOW §3.1): one row per thing, a work item once (in its phase's section),
 // sections in the order to work in, each with its own order. Pure: the pane and the rail feed it.
 
 import { msg, t } from '$lib/i18n/index.svelte';
@@ -67,6 +67,7 @@ export const SECTIONS: readonly { id: NowSection; label: string; lamp: Lamp; fol
   { id: 'fix', label: msg('Fix'), lamp: 'error' },
   { id: 'requests', label: msg('Review requests'), lamp: 'none' },
   { id: 'ship', label: msg('Ship and clean up'), lamp: 'none' },
+  { id: 'claude', label: msg('Claude working'), lamp: 'working' },
   { id: 'in_flight', label: msg('In flight'), lamp: 'working' },
   { id: 'elsewhere', label: msg('Elsewhere'), lamp: 'none' },
   { id: 'blocked', label: msg('Blocked'), lamp: 'none' },
@@ -134,8 +135,10 @@ export function nowSections(input: NowInput): Section[] {
     const waiting = deploying(tk) && phase.section !== 'needs_you' && phase.section !== 'fix';
     // A blocked ticket's work waits in Blocked unless it needs me now (a question, red CI, a diff).
     const held = !waiting && !!tk?.ticket.blocked && !NEEDS_ME.has(phase.section);
+    // In flight with Claude working (a background run included): Claude working, back in minutes (#413).
+    const claude = phase.section === 'in_flight' && phase.lamp === 'working';
     add(
-      waiting ? 'waiting' : held ? 'blocked' : phase.section,
+      waiting ? 'waiting' : held ? 'blocked' : claude ? 'claude' : phase.section,
       {
         type: 'work',
         id: `w:${item.id}`,
@@ -254,9 +257,9 @@ export function nowSections(input: NowInput): Section[] {
       add('waiting', { type: 'ticket', id: `t:${ticketKey(t)}`, ticket: t }, 9, String(i).padStart(6, '0')),
     );
 
-  // Oldest first, except In flight (latest activity first). Ticket sections keep their order (`at` = index).
+  // Oldest first, except Claude working and In flight (latest activity first). Ticket sections keep their order (`at` = index).
   // Work items are aged by when Claude last asked or stopped (`claude_at`), else when they started.
-  const newestFirst = new Set<NowSection>(['in_flight']);
+  const newestFirst = new Set<NowSection>(['claude', 'in_flight']);
   return SECTIONS.flatMap((s) => {
     const ranked = by
       .get(s.id)!
@@ -282,18 +285,25 @@ export function waitingCount(sections: readonly Section[]): number {
   return WAITING.reduce((n, id) => n + count(sections, id), 0);
 }
 
-/** Now's two zones (#399): what waits on my move, and what waits on someone else (Claude, a reviewer,
- *  another team, a deploy). Rows keep their section order inside a zone. */
-export type Zone = 'yours' | 'waiting';
+/** The Queue's three zones (#399, #413): what waits on my move, what a Claude is working on (back in
+ *  minutes), and what waits on someone else (a reviewer, checks, a deploy, a blocker). Rows keep their
+ *  section order inside a zone. */
+export type Zone = 'yours' | 'claude' | 'waiting';
 
-export const ZONES: readonly { id: Zone; label: string }[] = [
-  { id: 'yours', label: msg('Your move') },
-  { id: 'waiting', label: msg('Waiting on others') },
+export const ZONES: readonly { id: Zone; label: string; hint: string }[] = [
+  { id: 'yours', label: msg('Your move'), hint: msg('Answer, review, fix, ship or start: it waits on you.') },
+  { id: 'claude', label: msg('Claude working'), hint: msg('Your parallel capacity: back in minutes.') },
+  {
+    id: 'waiting',
+    label: msg('Waiting on others'),
+    hint: msg('Reviewers, checks, deploys and blockers: hours or days.'),
+  },
 ];
 
 const OTHERS = new Set<NowSection>(['in_flight', 'elsewhere', 'blocked', 'waiting']);
 
-export const zoneOf = (section: NowSection): Zone => (OTHERS.has(section) ? 'waiting' : 'yours');
+export const zoneOf = (section: NowSection): Zone =>
+  section === 'claude' ? 'claude' : OTHERS.has(section) ? 'waiting' : 'yours';
 
 /** The projects a row belongs to; a Claude session Kelta did not start has none. */
 function rowProjects(row: NowRow): readonly string[] {

@@ -90,7 +90,7 @@ test.describe('palette', () => {
     // Then SHOP-155 to review: its closed work tab is recreated around its Claude session.
     await dispatch(page, 'attention.next');
     await expect.poll(() => activeProject(page)).toBe('shop');
-    await expect(page.getByTestId('context-work')).toHaveAttribute('data-phase', 'to_review');
+    await expect(page.getByTestId('work-header')).toHaveAttribute('data-phase', 'to_review');
     expect((await callsOf(page, 'session_kill')).length).toBe(0);
     // Back skips shop's old tab, passed through while the work tab was recreated.
     await dispatch(page, 'nav.back');

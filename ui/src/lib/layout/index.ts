@@ -509,7 +509,7 @@ export function defaultTitle(content: PaneContent): string {
     case 'review_detail':
       return `${content.review.repo}#${content.review.number}`;
     case 'inbox':
-      return msg('Now');
+      return msg('Queue');
     case 'work_item':
       return msg('Work item');
     case 'settings':

@@ -20,7 +20,7 @@ async function boot(page: Page): Promise<string[]> {
     await k.projects.activate('kelta-tools');
     await k.layout.ensure('kelta-tools');
   });
-  await expect(page.getByTestId('work-branch')).toHaveAttribute('title', /feat\/gh-12-json-output/);
+  await expect(page.getByTestId('work-header')).toBeVisible();
   return errors;
 }
 
@@ -83,7 +83,7 @@ test('Flow 2: Fix with Claude sends the checked feedback into the previous conve
 
 test('a conflicted rebase stops, aborts, then resolves into a confirmed force push', async ({ page }) => {
   const errors = await boot(page);
-  const header = page.getByTestId('context-work');
+  const header = page.getByTestId('work-header');
   await fromMenu(page, /Rebase onto main/);
   await expect(header).toContainText('1 conflicted file');
   await expect(page.getByTestId('toasts')).toContainText('Rebase stopped: 1 conflicted file.');

@@ -18,10 +18,19 @@ async function claudeStatus(page: Page, status: string): Promise<void> {
   );
 }
 
+// The shipped mock has SHOP-120 open on #305; these flows start from it merged.
+async function mergeShop120(page: Page): Promise<void> {
+  await page.evaluate((id) => {
+    const w = window.__keltaMock!.state.work.find((x) => x.id === id)!;
+    w.state = { kind: 'merged', detail: null };
+    window.__keltaMock!.emit({ type: 'work.updated', work: w });
+  }, SHOP_120_MERGED);
+}
+
 test.describe('ship', () => {
   test('refused while Claude works, then ⌘↵ ships and the toast key opens the PR', async ({ page }) => {
     await boot(page);
-    const header = page.getByTestId('context-work');
+    const header = page.getByTestId('work-header');
     await dispatch(page, 'work.ship', { id: SHOP_142 });
     const dialog = page.getByRole('dialog', { name: /^Ship SHOP-142/ });
     await expect(dialog).toContainText('Claude is working in this worktree. Ship when it stops.');
@@ -53,6 +62,7 @@ test.describe('ship', () => {
 test.describe('finish', () => {
   test('a merged item finishes from a prefilled dialog with ⌘↵', async ({ page }) => {
     await boot(page);
+    await mergeShop120(page);
     await dispatch(page, 'work.finish', { id: SHOP_120_MERGED });
     const dialog = page.getByRole('dialog', { name: /^Finish feat\/SHOP-120/ });
     await expect(dialog.getByRole('switch', { name: 'Remove the worktree' })).toBeChecked();
@@ -74,6 +84,7 @@ test.describe('finish', () => {
 
   test('Finish all merged from the palette skips dirty worktrees', async ({ page }) => {
     await boot(page);
+    await mergeShop120(page);
     await page.keyboard.press('Control+Shift+K');
     await page.getByTestId('palette-input').fill('finish all merged');
     await expect(page.getByTestId('palette-item').first()).toContainText('Finish all merged');
