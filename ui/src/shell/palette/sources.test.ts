@@ -410,18 +410,21 @@ describe('recent places, pull requests, settings keys and prefixes (#420)', () =
     flushJump();
     noteRecent({ id: 'work:gone', label: 'finished' });
 
-    expect(recentPlaces().map((r) => r.id).slice(0, 4)).toEqual([
-      'work:gone',
-      'ticket:jira-acme:SHOP-7',
-      'setting:keys',
-      `session:${session.id}`,
-    ]);
+    expect(
+      recentPlaces()
+        .map((r) => r.id)
+        .slice(0, 4),
+    ).toEqual(['work:gone', 'ticket:jira-acme:SHOP-7', 'setting:keys', `session:${session.id}`]);
     const items = recentItems(buildItems());
     // a work item no longer listed drops out; the others keep their item's label and run
     expect(items.slice(0, 3).map((i) => [i.group, i.id, i.label])).toEqual([
       ['Recent', 'recent:ticket:jira-acme:SHOP-7', 'T'],
       ['Recent', 'recent:setting:keys', 'Settings: Keys'],
-      ['Recent', `recent:session:${session.id}`, sessionItems().find((i) => i.id === `session:${session.id}`)!.label],
+      [
+        'Recent',
+        `recent:session:${session.id}`,
+        sessionItems().find((i) => i.id === `session:${session.id}`)!.label,
+      ],
     ]);
 
     focus({ kind: 'empty' });
