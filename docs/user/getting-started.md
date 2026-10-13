@@ -28,8 +28,8 @@ notification daemon) and offers the first steps:
 3. Click **Tickets** at the top of the rail (`Cmd+Shift+B`). It shows your tickets from every open project (Mine);
    `2` and `3` switch to Unassigned and Team ([working with tickets](tickets.md)). Select one and press
    **Start work**: Kelta creates a worktree in the ticket's project and opens Claude and nvim side by side. **Queue**
-   and **Reviews**, just below, show what waits on you and the PRs to review, across projects too
-   ([reviews](reviews.md)).
+   and **Pull requests**, just below, show what waits on you and the PRs to review, across projects too
+   ([pull requests](reviews.md)).
 
 While your Queue is empty and your first item has not shipped yet, it shows **Your loop** instead of a blank list: the stage track and the five steps Kelta
 works in, each checked off from what it finds. The current step is highlighted, with its button.
@@ -60,7 +60,7 @@ Settings > Diagnostics checks the things Kelta depends on: graphics, WebKitGTK, 
 
 ## The rail
 
-The rail on the left holds Search, **Tickets**, **Queue** and **Reviews**, your open projects with their tabs, the
+The rail on the left holds Search, **Tickets**, **Queue** and **Pull requests**, your open projects with their tabs, the
 Tools, and Settings.
 
 - **Width.** Drag the edge of the rail to resize it (200 to 480 px). With the edge focused, the arrow keys move
@@ -115,8 +115,11 @@ the line runs to the furthest stage reached and the mark sits where the item is 
 ring while it waits, a diamond when something broke. The row's next step is a button that runs it. The selected
 item's brief sits beside the list (under it in a narrow pane): its next action, the two likely after it, the rest
 behind "more actions" (`.`), Claude's last message and the facts. `j` `k` move, `Enter` runs the next step, `g` goes
-to its place without acting, `/` filters, `R` refreshes, `?` lists every key. `Cmd+.` (`Ctrl+.` on Linux) works on any
-selection: in the Queue, Tickets and Reviews it opens the selected row's actions in a menu, the next step first, so
+to its place without acting, `/` filters, `Cmd+Shift+R` refreshes, `?` lists every key. A letter means the same in
+the Queue, Tickets and Pull requests: `s` work on it (start a ticket, go to a work item's tab, review a pull request
+locally), `v` view changes (`Shift+V` the whole diff), `o` open on the host, `m` move the ticket, `c` comment, `e`
+expand Claude's message, `Shift+R` mark reviewed. `Cmd+.` (`Ctrl+.` on Linux) works on any
+selection: in the Queue, Tickets and Pull requests it opens the selected row's actions in a menu, the next step first, so
 `Cmd+.` `Enter` runs it; on a work tab, the work menu; with nothing selected, the palette.
 
 ## Language

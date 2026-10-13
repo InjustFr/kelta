@@ -62,6 +62,12 @@ describe('direct chords (Linux)', () => {
     expect(ids()).toEqual(['palette.open']);
   });
 
+  it('marks reviews.open as run by its chord (the leader key does not)', () => {
+    const { manager, calls } = setup();
+    manager.handleKeyDown(ctrlShift('KeyR', 'R'));
+    expect(calls).toEqual([{ id: 'reviews.open', args: { chord: true } }]);
+  });
+
   it('matches digits on the physical key', () => {
     const { manager, ids } = setup();
     manager.handleKeyDown(ctrl('Digit2', '2'));

@@ -45,7 +45,7 @@ test.describe('tickets board', () => {
     await page.keyboard.press('Enter'); // the first move (In progress) is lit
     await expect(lane(page, 'in_progress').locator('[data-key="jira-acme:SHOP-151"]')).toBeVisible();
 
-    await page.keyboard.press('Shift+R'); // refresh from the backend
+    await page.keyboard.press('Control+Shift+R'); // refresh from the backend (#417)
     await expect(lane(page, 'in_progress').locator('[data-key="jira-acme:SHOP-151"]')).toBeVisible();
     expect(errors).toEqual([]);
   });
@@ -107,6 +107,27 @@ test.describe('reviews', () => {
       () => window.__keltaMock!.calls.filter((c) => c.cmd === 'review_approve').at(-1)?.args,
     );
     expect(sent).toMatchObject({ head_sha: shown });
+    expect(errors).toEqual([]);
+  });
+
+  test('Yours rows are dimmed with a quiet next step; Review locally says what it does', async ({ page }) => {
+    const errors = await boot(page);
+    await dispatch(page, 'reviews.open', { project_id: 'shop' });
+    const pane = page.getByTestId('reviews-pane');
+    const asked = pane.locator('.row[data-key="github-acme:acme/shop-api#311"]');
+    const yours = pane.locator('.row[data-key="github-acme:acme/shop-api#305"]');
+    await expect(asked).toBeVisible();
+    await expect(asked).not.toHaveClass(/\bdim\b/);
+    const detail = page.getByTestId('review-detail');
+    await expect(detail.getByTestId('review-locally-hint')).toContainText(
+      'Checks out #311 in its own worktree and opens Claude in plan mode',
+    );
+    await expect(detail.getByRole('button', { name: /Review locally/ })).toHaveClass(/\bprimary\b/);
+
+    await yours.click();
+    await expect(yours).toHaveClass(/\bdim\b/);
+    await expect(detail.getByRole('button', { name: /Go to work item/ })).not.toHaveClass(/\bprimary\b/);
+    await expect(detail.getByTestId('review-locally-hint')).toBeHidden();
     expect(errors).toEqual([]);
   });
 });

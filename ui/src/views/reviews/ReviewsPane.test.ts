@@ -81,11 +81,25 @@ describe('ReviewsPane row actions (#397)', () => {
   });
 });
 
+describe('ReviewsPane keys (#417)', () => {
+  it("c comments on someone's PR; v without a checkout says how to get one", async () => {
+    ui.sheets = [];
+    mountReviews();
+    await waitFor(() => expect(document.querySelector('.row.selected')).not.toBeNull());
+    const pane = screen.getByTestId('reviews-pane');
+    await fireEvent.keyDown(pane, { key: 'c' });
+    expect(ui.sheets.map((s) => s.key)).toEqual(['reviews.comment']);
+    expect(sheetRegistry['reviews.comment']).toBeTypeOf('function');
+    await fireEvent.keyDown(pane, { key: 'v' });
+    await waitFor(() => expect(toasts.list.at(-1)?.toast.text).toMatch(/review it locally first \(s\)/));
+  });
+});
+
 describe('ReviewsPane filters', () => {
   it('a filter that hides every PR says which filters are on; Clear all brings them back (#370)', async () => {
     const { container } = mountReviews();
     await waitFor(() => expect(container.querySelectorAll('.row').length).toBeGreaterThan(0));
-    await fireEvent.input(screen.getByLabelText('Filter reviews'), { target: { value: 'zzzz' } });
+    await fireEvent.input(screen.getByLabelText('Filter pull requests'), { target: { value: 'zzzz' } });
     expect(await screen.findByText(/^No match: .*"zzzz"/)).toBeTruthy();
     await fireEvent.click(screen.getAllByRole('button', { name: 'Clear all' })[0]!);
     await waitFor(() => expect(container.querySelectorAll('.row').length).toBeGreaterThan(0));

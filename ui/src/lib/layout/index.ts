@@ -508,7 +508,7 @@ export function defaultTitle(content: PaneContent): string {
     case 'ticket_detail':
       return content.ticket.key;
     case 'reviews':
-      return msg('Reviews');
+      return msg('Pull requests');
     case 'review_detail':
       return `${content.review.repo}#${content.review.number}`;
     case 'inbox':

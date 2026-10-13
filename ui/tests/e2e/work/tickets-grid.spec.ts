@@ -43,7 +43,7 @@ async function openRailTickets(page: Page): Promise<void> {
   await boot(page);
   await seed(page);
   await page.getByTestId('rail-tickets').click();
-  await page.getByTestId('tickets-pane').press('Shift+R'); // past the lists loaded at boot
+  await page.getByTestId('tickets-pane').press('Control+Shift+R'); // past the lists loaded at boot
   // These specs were written for Status; Mine opens on To start (#418), whose first ticket sits below the seeded rows.
   await page.getByRole('button', { name: /^View/ }).click();
   await page.getByLabel('Group (Shift+G)').selectOption('status');

@@ -308,7 +308,13 @@ export class KeyManager {
     if (binding) {
       const ctx = this.#context(event);
       if (this.#runnable(binding, ctx) && !this.#terminalKeeps(chord, ctx)) {
-        this.#run(binding);
+        // `reviews.open` only refreshes the pane in focus when the chord itself (not the leader key or
+        // the palette) ran it (#417).
+        this.#run(
+          binding.action === 'reviews.open'
+            ? { ...binding, args: { ...binding.args, chord: true } }
+            : binding,
+        );
         return this.#consume(event);
       }
     }

@@ -135,7 +135,7 @@
       bind:this={sourceBtn}
       aria-haspopup="menu"
       aria-expanded={sourceOpen}
-      title={t('Source (v)')}
+      title={t('Source (f then v)')}
       onclick={onsource}
     >
       {sourceText}
@@ -241,7 +241,7 @@
     <span class="asof" data-testid="tickets-asof">{t('Updated {ago}', { ago: relativeTime(fetchedAt) })}</span
     >
   {/if}
-  <IconButton icon="refresh-cw" label={t('Refresh')} chord="shift+r" size="sm" onclick={onrefresh} />
+  <IconButton icon="refresh-cw" label={t('Refresh')} chord="mod+shift+r" size="sm" onclick={onrefresh} />
 </header>
 
 <style>

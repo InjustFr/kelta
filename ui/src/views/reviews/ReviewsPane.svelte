@@ -25,13 +25,14 @@
     type MenuItem,
   } from '$lib/ui';
 
-  import { runWorkAction } from '../work/actions';
+  import { runWorkAction, viewPrChanges } from '../work/actions';
   import { isAuthError, reviewPhase } from '../work/common';
   import { openFrom } from '../work/nav';
   import ReviewDetailPane from './ReviewDetailPane.svelte';
   import ActionMenu, { below, under, type RowAction } from '../work/shared/ActionMenu.svelte';
-  import { onActions } from '../work/ui.svelte';
+  import { onActions, onRefresh } from '../work/ui.svelte';
   import KeyHints from '../work/shared/KeyHints.svelte';
+  import { reviewsKeys } from '../work/shared/keymap';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { reviewLocally } from '../work/startWork';
@@ -254,6 +255,20 @@
     else toasts.info(t('Merge when ready: only for my PRs with a work item'));
   }
 
+  /** `v` (#417): my PR's work since my last look; someone's PR, its diff. */
+  function viewChanges(item: ReviewItem): void {
+    const w = item.review.kind === 'authored' ? workOf(item) : null;
+    void (w ? runWorkAction('review_delta', w) : viewPrChanges(item.review.ref));
+  }
+
+  const NOT_MINE = msg('Only on pull requests by others');
+
+  /** `c` (#417): a comment on someone's PR. */
+  function comment(item: ReviewItem): void {
+    if (item.review.kind === 'authored') toasts.info(`${t('Comment')}: ${t(NOT_MINE)}`);
+    else ui.openSheet('reviews.comment', { review: item.review.ref });
+  }
+
   function browse(item: ReviewItem): void {
     openExternal({ url: item.review.url }).catch((err) => toasts.error(err, t('Open in browser')));
   }
@@ -313,20 +328,7 @@
 
   /** The full key list (`?`); the footer shows the first five. */
   let keysOpen = $state(false);
-  const hints = $derived<[string, string][]>([
-    ['j k', msg('Move')],
-    ['enter', msg('Open')],
-    ['s', msg('Review locally')],
-    ['/', msg('Filter')],
-    ['shift+enter', msg('Own pane')],
-    ['n', msg('Nudge (my PRs)')],
-    ['d', msg('Mark ready / draft (my PRs)')],
-    ['t', msg('Tags')],
-    ['w', msg('Run workflow')],
-    ['o', msg('Open in browser')],
-    ['shift+m', msg('Merge when ready')],
-    ['shift+r', msg('Refresh')],
-  ]);
+  const hints = reviewsKeys();
 
   function onkeydown(e: KeyboardEvent): void {
     const target = e.target as HTMLElement;
@@ -367,8 +369,11 @@
       case '?':
         keysOpen = true;
         break;
-      case 'R':
-        refresh();
+      case 'v':
+        if (item) viewChanges(item);
+        break;
+      case 'c':
+        if (item) comment(item);
         break;
       case 'o':
         if (item) browse(item);
@@ -423,6 +428,14 @@
         key: 's',
         run: () => reviewLocally(rv.ref, pid ?? undefined),
       },
+      { id: 'view', label: t('View changes'), key: 'v', run: () => viewChanges(item) },
+      {
+        id: 'comment',
+        label: t('Comment'),
+        key: 'c',
+        reason: rv.kind === 'authored' ? t(NOT_MINE) : null,
+        run: () => comment(item),
+      },
       { id: 'workflow', label: t('Run workflow…'), key: 'w', run: () => pickPrWorkflow(rv.ref, pid) },
       { id: 'tags', label: t('Tags…'), key: 't', run: () => openTags(item) },
       { id: 'browser', label: t('Open in browser'), key: 'o', run: () => browse(item) },
@@ -475,13 +488,14 @@
   bind:this={root}
   tabindex="0"
   role="group"
-  aria-label={t('Reviews')}
+  aria-label={t('Pull requests')}
   {onkeydown}
   use:onActions={menuKey}
+  use:onRefresh={refresh}
 >
   <!-- k-toolbar: its selects keep their label for screen readers only. -->
   <header class="bar k-toolbar">
-    <span class="title">{t('Reviews')}</span>
+    <span class="title">{t('Pull requests')}</span>
     <TagFilter
       kind="prs"
       keys={allItems.map((i) => reviewKey(i.review.ref))}
@@ -508,15 +522,15 @@
     bind:input={filterInput}
     active={activeFilters}
     placeholder={t('Filter title, repo, number, author, branch, ticket (/)')}
-    aria-label={t('Filter reviews')}
+    aria-label={t('Filter pull requests')}
     onkeydown={filterKeys}
   />
-  <LoadBar active={!noData && shown.some((l) => l.loading)} label={t('Loading reviews')} />
+  <LoadBar active={!noData && shown.some((l) => l.loading)} label={t('Loading pull requests')} />
 
   {#if noData && !firstError}
-    <Loading label={t('Loading reviews')} />
+    <Loading label={t('Loading pull requests')} />
   {:else if noData && firstError}
-    <ErrorState error={firstError} title={t('Could not load reviews')} onretry={refresh}>
+    <ErrorState error={firstError} title={t('Could not load pull requests')} onretry={refresh}>
       {#snippet actions()}
         <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
           {isAuthError(firstError) ? t('Re-authenticate') : t('Open account settings')}
@@ -599,6 +613,7 @@
                     tabindex="-1"
                     class="row grid"
                     class:selected={sel}
+                    class:dim={mine}
                     aria-current={sel ? 'true' : undefined}
                     data-key={key}
                     onclick={() => (selId = l.id)}
@@ -926,6 +941,11 @@
 
   .row:hover {
     background: var(--k-bg-hover);
+  }
+
+  /* Yours (#419): their next step is in the Queue, so the words are quieter. */
+  .row.dim > * {
+    opacity: 0.6;
   }
 
   /* Subtle and muted text on the selected row take their -sel steps (as Now, #399). */

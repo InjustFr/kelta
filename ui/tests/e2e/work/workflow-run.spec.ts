@@ -11,7 +11,7 @@ test('detail w: the run opens a background tab, the toast opens and peeks its se
   await page.getByRole('tab', { name: 'List' }).click(); // the mock layout opens the board
   const row = page.locator('[data-key="jira-acme:SHOP-151"]');
   await row.locator('.k-row-key').click();
-  await page.keyboard.press('Enter');
+  await page.keyboard.press('g'); // Enter starts work now (#417); g opens the detail
   const detail = page.getByTestId('ticket-detail');
   await expect(detail.getByRole('heading', { level: 1 })).toHaveText('Checkout: show tax breakdown');
   // The opened detail is saved first: a backend layout change drops a pending local save.

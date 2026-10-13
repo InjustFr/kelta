@@ -17,7 +17,8 @@
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { reviewLocally } from '../work/startWork';
-  import { onActions } from '../work/ui.svelte';
+  import { viewPrChanges } from '../work/actions';
+  import { onActions, onRefresh } from '../work/ui.svelte';
   import { configWorkflows, pickPrWorkflow } from '../tickets/workflow.svelte';
   import { draftBlocked, draftLabel, toggleDraft } from './draft';
   import { beforeMerging } from './beforeMerging';
@@ -44,7 +45,7 @@
   /** The commit shown on screen: the only value `Approve` ever sends. */
   const shownSha = $derived(rv?.head_sha ?? null);
 
-  /** Line comments waiting in my pending review; a / c / m publish them with the decision. */
+  /** Line comments waiting in my pending review; a / c / ⇧C publish them with the decision. */
   const pendingCount = $derived(detail?.pending_comments ?? 0);
 
   let changed = $state(false);
@@ -124,7 +125,7 @@
       ...(configWorkflows('pr').length > 0
         ? [{ key: 'w', label: t('Run workflow'), run: () => pickPrWorkflow(ref, projectId) }]
         : []),
-      { key: 'shift+r', label: t('Refresh'), run: refresh },
+      { key: 'mod+shift+r', label: t('Refresh'), run: refresh },
     ];
     if (own)
       return [
@@ -134,9 +135,11 @@
         ...tail,
       ];
     return [
+      // One verb per letter (#417): `c` comments here as in every list, `⇧C` asks for changes.
       { key: 'a', label: t('Approve'), run: approve },
-      { key: 'm', label: t('Comment'), run: () => (dialog = 'comment') },
-      { key: 'c', label: t('Request changes'), run: () => (dialog = 'changes') },
+      { key: 'c', label: t('Comment'), run: () => (dialog = 'comment') },
+      { key: 'shift+c', label: t('Request changes'), run: () => (dialog = 'changes') },
+      { key: 'v', label: t('View changes'), run: () => viewPrChanges(ref) },
       { key: 'o', label: t('Open in browser'), run: browse },
       ...tail,
     ];
@@ -156,25 +159,25 @@
       else void reviewLocally(ref, projectId);
       return;
     }
-    if (own && ['a', 'c', 'm'].includes(e.key)) return;
+    if (own && ['a', 'c', 'C', 'v'].includes(e.key)) return;
     switch (e.key) {
       case 'a':
         void approve();
         break;
       case 'c':
+        dialog = 'comment';
+        break;
+      case 'C':
         dialog = 'changes';
         break;
-      case 'm':
-        dialog = 'comment';
+      case 'v':
+        void viewPrChanges(ref);
         break;
       case 'o':
         browse();
         break;
       case 's':
         void reviewLocally(ref, projectId);
-        break;
-      case 'R':
-        refresh();
         break;
       case 't':
         openTags();
@@ -210,6 +213,7 @@
   aria-label={t('Review {pr}', { pr: `${ref.repo}#${ref.number}` })}
   {onkeydown}
   use:onActions={() => ((more = !!rv), !!rv)}
+  use:onRefresh={refresh}
 >
   {#if slot?.loading && !detail}
     <Loading label={t('Loading review')} />
@@ -267,6 +271,7 @@
       primary={own
         ? { key: 'g', label: t('Go to work item'), run: () => reviewLocally(ref, projectId) }
         : { key: 's', label: t('Review locally'), run: () => reviewLocally(ref, projectId) }}
+      quiet={own}
       actions={briefActions}
       bind:more
       testid="review-brief"
@@ -284,6 +289,14 @@
           <TagChips kind="prs" itemKey={reviewKey(ref)} />
         </p>
       {/snippet}
+      {#if !own}
+        <p class="hint" data-testid="review-locally-hint">
+          {t(
+            "Checks out #{n} in its own worktree and opens Claude in plan mode with the review prompt, next to the diff in nvim. Claude's line comments go into your pending review.",
+            { n: ref.number },
+          )}
+        </p>
+      {/if}
       <PluginActions kind="review" size="md" ctx={reviewCtx(rv.ref, projectId)} />
       <section class="callout" aria-label={t('Review status')} data-testid="review-status">
         <b>{t('Review status')}</b>
@@ -673,6 +686,13 @@
   }
 
   .muted {
+    color: var(--k-fg-subtle);
+  }
+
+  /* What Review locally does (#419), under the buttons. */
+  .hint {
+    margin: 0;
+    font-size: var(--k-font-size-sm);
     color: var(--k-fg-subtle);
   }
 

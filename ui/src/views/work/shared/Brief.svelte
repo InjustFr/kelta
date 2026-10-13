@@ -28,6 +28,8 @@
     where?: string;
     /** Filled, first. */
     primary?: BriefAction | null;
+    /** The primary outlined, not filled: its step is taken elsewhere (my PRs in Pull requests: the Queue). */
+    quiet?: boolean;
     /** In likely order: the first two show, the rest wait behind "N more actions". */
     actions?: BriefAction[];
     /** The rest are shown (`.` toggles it). */
@@ -50,6 +52,7 @@
     title,
     where = '',
     primary = null,
+    quiet = false,
     actions = [],
     more = $bindable(false),
     message = '',
@@ -68,6 +71,10 @@
   let openFor = $state<string | null>(null);
   const expanded = $derived(openFor === message);
   let overflows = $state(false);
+  /** `e` in the Queue (#417): folds or unfolds Claude's message, as its Show more button. */
+  export function toggleMessage(): void {
+    openFor = expanded ? null : message;
+  }
   let msgEl = $state<HTMLElement>();
   $effect(() => {
     void message;
@@ -86,7 +93,7 @@
     <div class="actions">
       {#if primary}
         {@const a = primary}
-        <button type="button" class="btn primary" data-key={a.key} onclick={() => void a.run()}
+        <button type="button" class="btn" class:primary={!quiet} data-key={a.key} onclick={() => void a.run()}
           ><span
             >{#if busy}<Spinner size={10} />{/if}{a.label}</span
           ><span aria-hidden="true"><Kbd chord={a.key} /></span></button
@@ -111,7 +118,7 @@
       <cite>{t('Claude, last message')}</cite>
       <span class="msg" class:clamped={!expanded} bind:this={msgEl}>{message}</span>
       {#if overflows || expanded}
-        <Button size="sm" variant="ghost" onclick={() => (openFor = expanded ? null : message)}
+        <Button size="sm" variant="ghost" onclick={toggleMessage}
           >{expanded ? t('Show less') : t('Show more')}</Button
         >
       {/if}

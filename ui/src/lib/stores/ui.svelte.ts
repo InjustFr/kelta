@@ -21,6 +21,8 @@ export type SheetKey =
   | 'work_dialog'
   | 'tracker.source_picker'
   | 'tickets.move'
+  | 'tickets.comment'
+  | 'reviews.comment'
   | 'workflow_run'
   | 'groom';
 /** `reopen`: the switcher listing closed projects only (#363). */

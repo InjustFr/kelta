@@ -282,7 +282,7 @@ pub fn default_title(c: &PaneContent) -> String {
             }
         }
         PaneContent::TicketDetail { ticket } => ticket.key.clone(),
-        PaneContent::Reviews { .. } => "Reviews".into(),
+        PaneContent::Reviews { .. } => "Pull requests".into(),
         PaneContent::ReviewDetail { review } => format!("{}#{}", review.repo, review.number),
         PaneContent::Inbox { .. } => "Inbox".into(),
         PaneContent::WorkItem { .. } => "Work item".into(),

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { msg, t } from '$lib/i18n/index.svelte';
+  import { t } from '$lib/i18n/index.svelte';
   import { tick, untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
@@ -37,13 +37,14 @@
   import { openFrom, persistPaneContent } from '../work/nav';
   import ActionMenu, { below, under, type RowAction } from '../work/shared/ActionMenu.svelte';
   import KeyHints from '../work/shared/KeyHints.svelte';
+  import { ticketsKeys } from '../work/shared/keymap';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
   import { startWorkOnTicket } from '../work/startWork';
   import { batch, batchKey } from '../work/batch.svelte';
   import { runPrimary } from '../work/actions';
-  import { onActions } from '../work/ui.svelte';
+  import { onActions, onRefresh } from '../work/ui.svelte';
   import AskBar from '../work/AskBar.svelte';
   import { askerOf, phaseNow } from '../work/live';
   import { STAGES } from '../work/stage';
@@ -420,9 +421,9 @@
         : null
       : (shown.find((i) => keyOf(i) === selKey) ?? null),
   );
-  /** What Enter will do on the selected row, named before it is pressed (mirrors the Enter key below). */
-  const enterLabel = $derived.by(
-    () => (cur && mode === 'list' && !splitShown && nextLabel(cur)) || t('Open'),
+  /** What Enter will do on the selected row, named before it is pressed (mirrors `next` below). */
+  const enterLabel = $derived.by(() =>
+    cur ? (nextLabel(cur) ?? (hasWork(cur) ? t('Resume work') : t('Start work'))) : t('Open'),
   );
 
   /** The selected row's last index: a row that leaves the list (moved to Done) hands over to its neighbour. */
@@ -523,30 +524,7 @@
   let tagMenu = $state<{ x: number; y: number; key: string } | null>(null);
   /** The full key list (`?`); the footer shows the first five. */
   let keysOpen = $state(false);
-  const hints = $derived<[string, string][]>([
-    ['j k', msg('Move')],
-    ['enter', enterLabel],
-    ['s shift+s', msg('Start work, start now')],
-    ['w', msg('Run workflow')],
-    ['m', msg('Move to')],
-    ['/', msg('Filter')],
-    ['space', msg('Split')],
-    ['g', msg('Open detail')],
-    ['shift+enter', msg('Own pane')],
-    ['1 2 3', msg('Who')],
-    [chordFor('work.start') ?? 'mod+enter', msg('Start marked')],
-    ['x', msg('Select')],
-    ['b', msg('Mark for batch start')],
-    ['p shift+p', msg('Pull request, in browser')],
-    ['f then s', msg('Current sprint')],
-    ['a shift+a', msg('Assign me, unassign')],
-    ['v', msg('Source')],
-    ['shift+g', msg('Group')],
-    ['c', msg('Comment')],
-    ['t', msg('Tags')],
-    ['o', msg('Open in browser')],
-    ['shift+r', msg('Refresh')],
-  ]);
+  const hints = $derived(ticketsKeys(enterLabel));
 
   // ---- split view (T3): the selected ticket's detail in a column on the right ---------------
   // shortcut: on/off is per mount, not persisted; add `PaneContent::Tickets.split` if it should stick.
@@ -592,6 +570,13 @@
     void inflight.track(keyOf(item), () =>
       startWorkOnTicket(item.ticket.ref, null, { preview, source: item.source_ids[0] ?? null }),
     );
+  }
+
+  /** Enter (#417): the next step, as in the Queue: the work's phase action, else start work. */
+  function next(item: TicketItem): void {
+    const w = liveWork(item);
+    if (w) void runPrimary(w);
+    else start(item);
   }
 
   /** Opens the status picker under the first ticket's status chip (its card on the board). */
@@ -704,13 +689,8 @@
     const marked = batch.has(item.ticket.ref);
     const w = liveWork(item);
     const acts: (RowAction | false)[] = [
-      // Work under way: its next step first, as Now's (#404); Enter runs it on a list row with the detail closed.
-      !!w && {
-        id: 'next',
-        label: nextLabel(item)!,
-        key: mode === 'list' && !splitShown ? 'enter' : undefined,
-        run: () => runPrimary(w),
-      },
+      // Work under way: its next step first, as the Queue's (#404); Enter runs it.
+      !!w && { id: 'next', label: nextLabel(item)!, key: 'enter', run: () => runPrimary(w) },
       {
         id: 'start',
         label: hasWork(item) ? t('Resume work') : t('Start work'),
@@ -824,8 +804,9 @@
     const item = cur;
     const first = chord;
     chord = null;
-    if (first === 'f' && e.key === 's') {
-      currentSprint = !currentSprint;
+    if (first === 'f' && (e.key === 's' || e.key === 'v')) {
+      if (e.key === 's') currentSprint = !currentSprint;
+      else if (menuChoices) openSourceMenu();
       e.preventDefault();
       return;
     }
@@ -887,12 +868,7 @@
         if (e.shiftKey) {
           if (item) openDetail(item);
         } else if (selRow?.kind === 'group') toggleGroup(selRow);
-        else if (item) {
-          const w = liveWork(item);
-          // List, detail closed, work under way: the phase's next step, as in Now. Board: Enter opens.
-          if (w && !splitShown && mode === 'list') void runPrimary(w);
-          else void focusDetail(item);
-        }
+        else if (item) next(item);
         break;
       case ' ':
         if (mode !== 'list') return;
@@ -911,17 +887,11 @@
       case '3':
         setWho(WHOS[Number(e.key) - 1] ?? 'mine');
         break;
-      case 'v':
-        if (menuChoices) openSourceMenu();
-        break;
       case 'g':
         if (item) void focusDetail(item);
         break;
       case 'G':
         setGroup(GROUP_BYS[(GROUP_BYS.indexOf(groupBy) + 1) % GROUP_BYS.length] ?? 'flow');
-        break;
-      case 'R':
-        refresh();
         break;
       case 'm':
         if (picked.length > 0) openPicker(pickedItems);
@@ -1009,6 +979,7 @@
   aria-label={t('Tickets')}
   {onkeydown}
   use:onActions={menuKey}
+  use:onRefresh={refresh}
 >
   <TicketsToolbar
     hasSource={!noSource}

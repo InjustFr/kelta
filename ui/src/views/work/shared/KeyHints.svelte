@@ -9,7 +9,8 @@
 
   import { chordFor } from '../../../shell/labels';
 
-  type Hint = readonly [string, string];
+  // A third entry (the list's verb, keymap.ts) is not shown.
+  type Hint = readonly [string, string, ...unknown[]];
 
   interface Props {
     /** `[keys, label]`, most useful first; alternative keys are separated by a space (`'j k'`), a sequence by `then` (`'f then s'`). */

@@ -86,7 +86,7 @@ describe('ReviewDetailPane', () => {
     if (!open) throw new Error('fixture: the review has no plugin actions');
     await fireEvent.click(open);
     const menu = await screen.findByRole('menu');
-    for (const key of ['a', 'c', 'm']) await fireEvent.keyDown(menu, { key });
+    for (const key of ['a', 'c', 'C']) await fireEvent.keyDown(menu, { key });
     expect(approveCalls()).toHaveLength(0);
     expect(screen.queryByRole('dialog')).toBeNull();
   });
@@ -98,10 +98,10 @@ describe('ReviewDetailPane', () => {
       [...screen.getByTestId('review-brief').querySelectorAll<HTMLElement>('.actions button')].map(
         (b) => b.dataset.key ?? b.textContent?.trim(),
       );
-    expect(shown()).toEqual(['s', 'a', 'm', expect.stringMatching(/more actions/)]);
+    expect(shown()).toEqual(['s', 'a', 'c', expect.stringMatching(/more actions/)]);
     expect(screen.getByTestId('review-status').textContent).toContain('Review status');
     await fireEvent.keyDown(screen.getByTestId('review-detail'), { key: '.' });
-    expect(shown()).toEqual(['s', 'a', 'm', 'c', 'o', 't', 'shift+r']);
+    expect(shown()).toEqual(['s', 'a', 'c', 'shift+c', 'v', 'o', 't', 'mod+shift+r']);
     await fireEvent.click(brief.getByRole('button', { name: 'Tags' }));
     expect(await screen.findByRole('menu', { name: 'Tags' })).toBeTruthy();
   });
@@ -147,10 +147,10 @@ describe('ReviewDetailPane', () => {
     expect((approveCalls()[1]?.args as { head_sha: string }).head_sha).toBe('f'.repeat(40));
   });
 
-  it('comments and requests changes with a body', async () => {
+  it('comments (c) and requests changes (⇧C) with a body (#417)', async () => {
     mountDetail();
     await screen.findByTestId('head-sha');
-    await fireEvent.keyDown(screen.getByTestId('review-detail'), { key: 'c' });
+    await fireEvent.keyDown(screen.getByTestId('review-detail'), { key: 'C', shiftKey: true });
     const body = await screen.findByLabelText(/What should change/);
     const submit = screen.getAllByRole('button', { name: 'Request changes' }).at(-1) as HTMLElement;
     expect(submit.hasAttribute('disabled')).toBe(true);
@@ -163,7 +163,7 @@ describe('ReviewDetailPane', () => {
     });
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    await fireEvent.keyDown(screen.getByTestId('review-detail'), { key: 'm' });
+    await fireEvent.keyDown(screen.getByTestId('review-detail'), { key: 'c' });
     const comment = await screen.findByLabelText(/Comment \(Markdown\)/);
     await fireEvent.input(comment, { target: { value: 'LGTM so far' } });
     await fireEvent.keyDown(comment, { key: 'Enter', ctrlKey: true });
@@ -174,7 +174,7 @@ describe('ReviewDetailPane', () => {
     mock.state.pending['acme/shop-api#311'] = 2;
     mountDetail();
     expect((await screen.findByTestId('pending-comments')).textContent).toContain('2 pending comments');
-    await fireEvent.keyDown(screen.getByTestId('review-detail'), { key: 'c' });
+    await fireEvent.keyDown(screen.getByTestId('review-detail'), { key: 'C', shiftKey: true });
     await screen.findByLabelText(/What should change/);
     const submit = screen.getAllByRole('button', { name: 'Request changes' }).at(-1) as HTMLElement;
     expect(submit.hasAttribute('disabled')).toBe(false);
@@ -187,7 +187,7 @@ describe('ReviewDetailPane', () => {
     mountDetail({ account: 'gitlab-corp', repo: 'fin/billing/core', number: 42 });
     await screen.findByRole('button', { name: 'Fix with Claude' });
     const pane = screen.getByTestId('review-detail');
-    for (const key of ['a', 'c', 'm']) await fireEvent.keyDown(pane, { key });
+    for (const key of ['a', 'c', 'C']) await fireEvent.keyDown(pane, { key });
     expect(approveCalls()).toEqual([]);
     expect(screen.queryByRole('dialog')).toBeNull();
   });

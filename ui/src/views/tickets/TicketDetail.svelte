@@ -32,7 +32,7 @@
   import { askerOf, phaseNow } from '../work/live';
   import { openContent } from '../work/nav';
   import StateBanner from '../work/shared/StateBanner.svelte';
-  import { onActions } from '../work/ui.svelte';
+  import { onActions, onRefresh } from '../work/ui.svelte';
   import { STAGES } from '../work/stage';
   import { startPreview, startWorkOnTicket } from '../work/startWork';
   import ActionBar from './ActionBar.svelte';
@@ -392,7 +392,6 @@
     if (action) run(action.id);
     else if (e.key === 'S') run('start', true);
     else if (e.key === 'P') run('pr', true);
-    else if (e.key === 'R') void tickets.loadDetail(ref);
     else if (e.key === 'u') openField('assignee');
     else if (e.key === '!') openField('priority');
     else return;
@@ -468,6 +467,7 @@
   aria-label={t('Ticket {key}', { key: ref.key })}
   {onkeydown}
   use:onActions={moreKey}
+  use:onRefresh={() => void tickets.loadDetail(ref)}
 >
   <StateBanner
     stale={slot?.stale ?? false}

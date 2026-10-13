@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { dispatch } from '$lib/actions';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
@@ -19,7 +19,7 @@ import { batch } from './batch.svelte';
 import { REVIEW_READONLY } from './common';
 import type { Phase, PhaseId, WorkActionId } from './phase';
 import { selectTicket } from './selection.svelte';
-import { onActions, workUi } from './ui.svelte';
+import { onActions, REFRESH_EVENT, workUi } from './ui.svelte';
 
 let mock: MockControls;
 
@@ -50,6 +50,21 @@ describe('L9 actions', () => {
     await dispatch('reviews.open');
     expect(ui.view).toBe('reviews');
     expect(layout.get('shop')?.tabs.length).toBe(tabs);
+    ui.view = null;
+  });
+
+  it('reviews.open from the leader key opens Reviews even where the chord would refresh (#417)', async () => {
+    const pane = document.body.appendChild(document.createElement('div'));
+    pane.tabIndex = 0;
+    const refreshed = vi.fn((e: Event) => e.preventDefault());
+    pane.addEventListener(REFRESH_EVENT, refreshed);
+    pane.focus();
+    ui.view = null;
+    await dispatch('reviews.open', { chord: true });
+    expect([refreshed.mock.calls.length, ui.view]).toEqual([1, null]);
+    await dispatch('reviews.open'); // leader key `r`, palette
+    expect([refreshed.mock.calls.length, ui.view]).toEqual([1, 'reviews']);
+    pane.remove();
     ui.view = null;
   });
 
