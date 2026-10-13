@@ -10,6 +10,7 @@
   import WelcomePane from '../views/welcome/WelcomePane.svelte';
   import { applyZoom, dropTarget, layoutGeometry, type Gutter as GutterSpec } from './geometry';
   import GutterView from './Gutter.svelte';
+  import { focus } from './focus.svelte';
   import { chordFor } from './labels';
   import { lazyComponents } from './lazy.svelte';
   import { attachTab, detachTab } from './nav';
@@ -206,7 +207,7 @@
           </div>
         {/if}
       </div>
-      {#if tab.work_item_id && StoryComponent && !storyPane}
+      {#if tab.work_item_id && StoryComponent && !storyPane && !focus.on}
         <StoryComponent {projectId} tabId={tab.id} workItemId={tab.work_item_id} />
       {/if}
     </div>

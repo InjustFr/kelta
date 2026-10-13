@@ -1434,6 +1434,14 @@ impl Core {
 
     /// Desktop notification, falling back to an in-app toast when the daemon is missing.
     pub(crate) fn deliver(&self, n: Notification) {
+        // Focus mode: a blocked Claude (critical) still goes through while `focus_allow_blocked`.
+        if let Some(held) = self.focus.lock().as_mut()
+            && !(n.urgency == Urgency::Critical
+                && self.cfg.effective(n.project_id.as_ref()).notifications.focus_allow_blocked)
+        {
+            held.push(n.title);
+            return;
+        }
         if let Err(e) = self.bridge.notify(n.clone()) {
             tracing::debug!(error = %e, "notification failed; toast instead");
             let text = match &n.body {

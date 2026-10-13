@@ -7,7 +7,8 @@
 // - Letters and punctuation match the character of the active layout, digits and named keys the
 //   physical key (`eventCode`). After the prefix, the next key is matched on `KeyboardEvent.key`
 //   (characters such as `%`, `"`, `(`, `N`).
-// - `Esc` `Esc` in a tool's terminal hides the tool (`tools.hide`); the first `Esc` reaches it.
+// - `Esc` `Esc` in a tool's terminal hides the tool (`tools.hide`); the first `Esc` reaches it. Outside
+//   terminals, fields and overlays it leaves focus mode (`view.unfocus`, registered only while it is on).
 // - Linux chords follow the Mac set with Cmd → Ctrl. In a focused terminal a plain Ctrl+letter goes to
 //   the terminal (`keys.linux_terminal = "terminal_first"`, the default); the catalog keeps those actions
 //   on Ctrl+Shift+letter too.
@@ -320,17 +321,26 @@ export class KeyManager {
     return (this.#opts.context ?? contextFromEvent)(event);
   }
 
-  /** `Esc` `Esc` in a tool's terminal runs `tools.hide` (#412); the first `Esc` still reaches the program. */
+  /**
+   * `Esc` `Esc` in a tool's terminal runs `tools.hide` (#412), outside terminals and fields
+   * `view.unfocus` (#421); the first `Esc` still reaches the program or the page.
+   */
   #escapeTwice(event: KeyboardEvent): boolean {
     const plain =
       event.key === 'Escape' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
     const ctx = plain ? this.#context(event) : null;
+    const binding: Binding | null =
+      ctx?.kind === 'tool'
+        ? { action: 'tools.hide', context: 'terminal' }
+        : ctx && !ctx.terminal && !ctx.textInput && !ctx.overlay
+          ? { action: 'view.unfocus', context: 'global' }
+          : null;
+    const armed = binding !== null && this.#runnable(binding, ctx!);
     const now = Date.now();
-    const twice = ctx?.kind === 'tool' && now - this.#lastEscape <= ESCAPE_TWICE_MS;
-    this.#lastEscape = ctx?.kind === 'tool' && !twice ? now : -Infinity;
-    const hide: Binding = { action: 'tools.hide', context: 'terminal' };
-    if (!twice || !this.#runnable(hide, ctx!)) return false;
-    this.#run(hide);
+    const twice = armed && now - this.#lastEscape <= ESCAPE_TWICE_MS;
+    this.#lastEscape = armed && !twice ? now : -Infinity;
+    if (!twice) return false;
+    this.#run(binding!);
     return true;
   }
 
