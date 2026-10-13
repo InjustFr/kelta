@@ -246,8 +246,16 @@ pub fn session_info() -> SessionInfo {
             files_touched: vec![PathBuf::from("src/login.rs")],
             hooks_active: true,
             tasks: vec![
-                ClaudeTask { id: Some("1".into()), title: "Fix the login redirect".into(), state: ClaudeTaskState::Completed },
-                ClaudeTask { id: Some("2".into()), title: "Run the tests".into(), state: ClaudeTaskState::InProgress },
+                ClaudeTask {
+                    id: Some("1".into()),
+                    title: "Fix the login redirect".into(),
+                    state: ClaudeTaskState::Completed,
+                },
+                ClaudeTask {
+                    id: Some("2".into()),
+                    title: "Run the tests".into(),
+                    state: ClaudeTaskState::InProgress,
+                },
             ],
             usage: statusline(true).usage().map(|u| ClaudeUsage { unsaved_usd: u.cost_usd, ..u }),
             question: None,
@@ -558,7 +566,7 @@ pub fn statusline(subscription: bool) -> HookPayload {
 
 pub fn ui_event_samples() -> Vec<(&'static str, UiEvent)> {
     vec![
-        ("ui_event_session_updated", UiEvent::SessionUpdated { session: session_info() }),
+        ("ui_event_session_updated", UiEvent::SessionUpdated { session: Box::new(session_info()) }),
         ("ui_event_session_removed", UiEvent::SessionRemoved { id: SessionId::new(SID2) }),
         (
             "ui_event_attention_changed",

@@ -675,7 +675,14 @@ export function createMockTransport(options: MockOptions = {}): {
       work_item_id: null,
       claude:
         kind.type === 'claude'
-          ? { session_uuid: uuid(), model: null, preview: null, files_touched: [], hooks_active: true, tasks: [] }
+          ? {
+              session_uuid: uuid(),
+              model: null,
+              preview: null,
+              files_touched: [],
+              hooks_active: true,
+              tasks: [],
+            }
           : null,
       editor: kind.type === 'editor' ? { adapter: kind.adapter, socket: null } : null,
       cols: 120,

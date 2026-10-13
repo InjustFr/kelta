@@ -246,8 +246,10 @@ async fn v17_backfills_the_ticket_source_once_from_the_only_source_on_the_accoun
         }
         // back to a v16 database holding items started before sources were stored
         s.call(|c| {
-            c.execute_batch("DELETE FROM schema_version WHERE v >= 17; ALTER TABLE sessions DROP COLUMN tasks_json")
-                .map_err(kelta_core::store::db_err)
+            c.execute_batch(
+                "DELETE FROM schema_version WHERE v >= 17; ALTER TABLE sessions DROP COLUMN tasks_json",
+            )
+            .map_err(kelta_core::store::db_err)
         })
         .await
         .unwrap();

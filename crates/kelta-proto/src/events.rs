@@ -81,7 +81,7 @@ pub enum AccountStatus {
 #[serde(tag = "type")]
 pub enum UiEvent {
     #[serde(rename = "session.updated")]
-    SessionUpdated { session: SessionInfo },
+    SessionUpdated { session: Box<SessionInfo> },
     #[serde(rename = "session.removed")]
     SessionRemoved { id: SessionId },
     #[serde(rename = "attention.changed")]

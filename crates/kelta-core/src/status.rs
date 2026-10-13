@@ -232,7 +232,8 @@ pub fn truncate_preview(s: &str) -> String {
 pub fn apply_tasks(tasks: &mut Vec<ClaudeTask>, p: &HookPayload) -> bool {
     let before = tasks.clone();
     let input = p.tool_input.as_ref();
-    let field = |v: Option<&Value>, k: &str| v.and_then(|v| v.get(k)).and_then(Value::as_str).map(str::to_owned);
+    let field =
+        |v: Option<&Value>, k: &str| v.and_then(|v| v.get(k)).and_then(Value::as_str).map(str::to_owned);
     let event = p.hook_event_name.as_str();
     if event == names::SESSION_START && p.source.as_deref() == Some("clear") {
         tasks.clear();
@@ -326,7 +327,10 @@ mod tests {
         assert!(apply_tasks(&mut tasks, &p));
         assert_eq!(
             tasks,
-            vec![task(None, "Read", ClaudeTaskState::Completed), task(None, "Write", ClaudeTaskState::InProgress)]
+            vec![
+                task(None, "Read", ClaudeTaskState::Completed),
+                task(None, "Write", ClaudeTaskState::InProgress)
+            ]
         );
         assert!(!apply_tasks(&mut tasks, &p), "same list: no change");
     }
@@ -334,19 +338,29 @@ mod tests {
     #[test]
     fn task_create_appends_and_task_update_changes_a_state() {
         let mut tasks = vec![];
-        let mut create = tool("TaskCreate", json!({ "subject": "Parse", "description": "d", "activeForm": "Parsing" }));
+        let mut create =
+            tool("TaskCreate", json!({ "subject": "Parse", "description": "d", "activeForm": "Parsing" }));
         create.extra.insert("tool_response".into(), json!({ "task": { "id": "7", "subject": "Parse" } }));
         assert!(apply_tasks(&mut tasks, &create));
         // No response: the next number.
         assert!(apply_tasks(&mut tasks, &tool("TaskCreate", json!({ "subject": "Test" }))));
         assert_eq!(
             tasks,
-            vec![task(Some("7"), "Parse", ClaudeTaskState::Pending), task(Some("2"), "Test", ClaudeTaskState::Pending)]
+            vec![
+                task(Some("7"), "Parse", ClaudeTaskState::Pending),
+                task(Some("2"), "Test", ClaudeTaskState::Pending)
+            ]
         );
 
-        assert!(apply_tasks(&mut tasks, &tool("TaskUpdate", json!({ "taskId": "7", "status": "in_progress" }))));
+        assert!(apply_tasks(
+            &mut tasks,
+            &tool("TaskUpdate", json!({ "taskId": "7", "status": "in_progress" }))
+        ));
         assert_eq!(tasks[0].state, ClaudeTaskState::InProgress);
-        assert!(!apply_tasks(&mut tasks, &tool("TaskUpdate", json!({ "taskId": "99", "status": "completed" }))));
+        assert!(!apply_tasks(
+            &mut tasks,
+            &tool("TaskUpdate", json!({ "taskId": "99", "status": "completed" }))
+        ));
         assert!(apply_tasks(&mut tasks, &tool("TaskUpdate", json!({ "taskId": "2", "status": "deleted" }))));
         assert_eq!(tasks.len(), 1);
     }
@@ -371,7 +385,10 @@ mod tests {
     #[test]
     fn clear_empties_the_list() {
         let mut tasks = vec![task(None, "a", ClaudeTaskState::Completed)];
-        assert!(apply_tasks(&mut tasks, &hook(json!({ "hook_event_name": "SessionStart", "source": "clear" }))));
+        assert!(apply_tasks(
+            &mut tasks,
+            &hook(json!({ "hook_event_name": "SessionStart", "source": "clear" }))
+        ));
         assert!(tasks.is_empty());
     }
 

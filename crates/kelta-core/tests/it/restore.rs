@@ -134,7 +134,11 @@ async fn dormant_sessions_spawn_on_first_attach() {
     let args = term.with_session(&seeded.claude, |s| s.spec.args.clone()).unwrap();
     assert_eq!(args, vec!["-n", "x", "--resume", "U-1"]);
     let tasks = h.core.session_get(&seeded.claude).unwrap().claude.unwrap().tasks;
-    assert_eq!(tasks.iter().map(|t| t.title.as_str()).collect::<Vec<_>>(), ["Ship it"], "the task list survives");
+    assert_eq!(
+        tasks.iter().map(|t| t.title.as_str()).collect::<Vec<_>>(),
+        ["Ship it"],
+        "the task list survives"
+    );
 
     // nvim → -S <session file>
     h.core.session_attach(&seeded.editor, 80, 24, Box::new(RecordingSink::new())).await.unwrap();
