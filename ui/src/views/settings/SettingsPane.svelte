@@ -11,6 +11,7 @@
   import type { ValidationIssue } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
   import { projects, settings as settingsStore } from '$lib/stores';
+  import Badge from '$lib/ui/Badge.svelte';
   import Button from '$lib/ui/Button.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
   import Icon from '$lib/ui/Icon.svelte';
@@ -25,6 +26,7 @@
   import { provideEditor, SettingsEditor, type EditLayer } from './lib/editor.svelte';
   import { COPY, leafFields, descriptionOf, titleOf, enumOptions, type LeafField } from './lib/schema';
   import { SECTION_GROUPS, SECTION_ROOTS, sectionLabel } from './lib/sections';
+  import { health } from './lib/health.svelte';
   import RepoTrust from './RepoTrust.svelte';
 
   let { projectId, content }: PaneProps<'settings'> = $props();
@@ -72,8 +74,12 @@
 
   $effect(() => {
     // initial load only: layer / project / repo changes reload through editor.target()
-    untrack(() => void editor.load());
+    untrack(() => {
+      void editor.load();
+      void health.refresh(); // the Health nav count
+    });
   });
+  const problemCount = $derived(health.problems.length);
 
   const section = $derived<SettingsSection | undefined>(sections.find((s) => s.id === sectionId));
 
@@ -296,6 +302,9 @@
           >
             <Icon name={s.icon} size={14} />
             {sectionLabel(s)}
+            {#if s.id === 'health' && problemCount > 0}
+              <span class="count" data-testid="health-count"><Badge tone="danger">{problemCount}</Badge></span>
+            {/if}
           </button>
         {/each}
       {/each}
@@ -472,6 +481,10 @@
     color: var(--k-fg-muted);
     text-align: left;
     cursor: pointer;
+  }
+
+  nav .count {
+    margin-left: auto;
   }
 
   nav button:hover {

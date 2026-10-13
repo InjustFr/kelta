@@ -2512,5 +2512,17 @@
   "{done} of {n} tasks": {
     "one": "{done} tâche sur {n}",
     "other": "{done} tâches sur {n}"
-  }
+  },
+  "Health": "Santé",
+  "Kelta's hooks are not installed in Claude Code: sessions started in another terminal do not show in the Queue": "Les hooks de Kelta ne sont pas installés dans Claude Code : les sessions lancées dans un autre terminal n’apparaissent pas dans la file",
+  "Kelta's ticket tools are not installed in Claude Code": "Les outils de tickets de Kelta ne sont pas installés dans Claude Code",
+  "Install hooks": "Installer les hooks",
+  "Install MCP": "Installer le MCP",
+  "Reconnect account": "Reconnecter le compte",
+  "Open account": "Ouvrir le compte",
+  "Open source": "Ouvrir la source",
+  "Open theme": "Ouvrir le thème",
+  "Showing cached tickets: the last refresh failed": "Tickets en cache affichés : la dernière actualisation a échoué",
+  "Everything works.": "Tout fonctionne.",
+  "Fixing failed": "La correction a échoué"
 }
