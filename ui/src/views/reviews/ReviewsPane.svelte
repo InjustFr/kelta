@@ -29,7 +29,8 @@
   import { isAuthError, reviewPhase } from '../work/common';
   import { openFrom } from '../work/nav';
   import ReviewDetailPane from './ReviewDetailPane.svelte';
-  import ActionMenu, { below, type RowAction } from '../work/shared/ActionMenu.svelte';
+  import ActionMenu, { below, under, type RowAction } from '../work/shared/ActionMenu.svelte';
+  import { onActions } from '../work/ui.svelte';
   import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
@@ -397,7 +398,14 @@
   }
 
   // ---- the row's actions (#397): every key in the `⋯` menu (right click too) -----------------
-  let more = $state.raw<{ x: number; y: number; actions: RowAction[] } | null>(null);
+  let more = $state.raw<{ x: number; y: number; actions: RowAction[]; lit?: boolean } | null>(null);
+
+  /** `⌘.` (#404), from the list or the brief: the selected row's menu, under its `⋯`. */
+  function menuKey(): boolean {
+    if (!cur) return false;
+    more = { ...under(root?.querySelector('.row.selected .acts')), actions: rowActions(cur.s.item), lit: true };
+    return true;
+  }
 
   function rowActions(item: ReviewItem): RowAction[] {
     const rv = item.review;
@@ -465,6 +473,7 @@
   role="group"
   aria-label={t('Reviews')}
   {onkeydown}
+  use:onActions={menuKey}
 >
   <!-- k-toolbar: its selects keep their label for screen readers only. -->
   <header class="bar k-toolbar">

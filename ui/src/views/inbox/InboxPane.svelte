@@ -61,12 +61,14 @@
     type NowSection,
     type WorkActionId,
   } from '../work/phase';
+  import ActionMenu, { under, type RowAction } from '../work/shared/ActionMenu.svelte';
   import Brief, { type BriefAction, type Fact } from '../work/shared/Brief.svelte';
   import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StageTrack from '../work/shared/StageTrack.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
+  import { onActions } from '../work/ui.svelte';
   import { CLAUDE, DEPLOY, PR, REVIEW, STAGES, TICKET, stage, workStage, type Stage } from '../work/stage';
   import RowButton from '../tickets/RowButton.svelte';
   import {
@@ -721,6 +723,25 @@
     e.stopPropagation();
   }
 
+  // `⌘.` (#404): the brief's actions in a menu under the selected row's next step, that step first.
+  let more = $state.raw<{ x: number; y: number; actions: RowAction[] } | null>(null);
+
+  function menuKey(): boolean {
+    const row = cur;
+    const actions = curView?.actions ?? [];
+    if (!row || actions.length === 0) return false;
+    more = {
+      ...under(root?.querySelector('.row.selected .next')),
+      actions: actions.map((a) => ({
+        id: a.key,
+        label: a.label,
+        key: a.key,
+        run: () => inflight.track(row.id, a.run),
+      })),
+    };
+    return true;
+  }
+
   function rowMenu(e: MouseEvent, row: NowRow): void {
     if (row.type !== 'work' || row.item.state.kind !== 'queued') return;
     e.preventDefault();
@@ -756,6 +777,7 @@
   role="group"
   aria-label={t('Queue')}
   {onkeydown}
+  use:onActions={menuKey}
 >
   <header class="bar">
     <span class="title">{t('Queue')}</span>
@@ -1020,6 +1042,16 @@
     {hints}
     onclose={() => {
       keysOpen = false;
+      root?.focus();
+    }}
+  />
+{/if}
+{#if more}
+  <ActionMenu
+    {...more}
+    lit
+    onclose={() => {
+      more = null;
       root?.focus();
     }}
   />

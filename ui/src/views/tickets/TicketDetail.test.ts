@@ -9,6 +9,9 @@ import { layout, projects, reviews, tickets, toasts, ui, work } from '$lib/store
 import { ticketKey } from '$lib/stores/tickets.svelte';
 
 import { sheetRegistry } from '$app/registry';
+import { dispatch } from '$lib/actions';
+
+import '../work/actions';
 
 import { acceptanceCriteria, refines, withCriteria } from './refine.svelte';
 import TicketDetail from './TicketDetail.svelte';
@@ -92,13 +95,10 @@ describe('TicketDetail', () => {
         .map((b) => b.getAttribute('aria-keyshortcuts')),
     ).toEqual(['s', 'm', 'p', 'a', 'c', 'Control+.']);
     expect(action('Open PRs')).toBeTruthy(); // two PRs
-    // the rest under More (Mod+.), each with its key
-    await fireEvent.keyDown(screen.getByTestId('ticket-detail'), {
-      key: '.',
-      code: 'Period',
-      ctrlKey: true,
-    });
-    const more = screen.getByRole('menu', { name: 'More actions' });
+    // the rest under More (Mod+. while the detail has the keys, #404), each with its key
+    screen.getByTestId('ticket-detail').focus();
+    await dispatch('work.menu');
+    const more = await screen.findByRole('menu', { name: 'More actions' });
     expect(
       within(more)
         .getAllByRole('menuitem')

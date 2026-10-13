@@ -1526,7 +1526,6 @@
   "Recreate": "Recréer",
   "Ask Claude to resolve": "Demander à Claude de résoudre",
   "No PR": "Aucune PR",
-  "Focus a work item tab first": "Sélectionnez d’abord un onglet d’élément de travail",
   "Select a ticket to start work": "Sélectionnez un ticket pour commencer le travail",
   "Branch name is required": "Le nom de branche est obligatoire",
   "Branch name must not start or end with a space": "Le nom de branche ne doit pas commencer ni finir par un espace",

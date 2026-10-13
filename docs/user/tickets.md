@@ -118,6 +118,7 @@ Each view can be limited to the current iteration (Settings > Sources, or `curre
 | `y` | copy the branch name (in the detail) |
 | `o` | open in the tracker |
 | `R` | refresh |
+| `Cmd+.` (`Ctrl+.` on Linux) | the selected ticket's actions in a menu, its next step first (`Enter` runs it); in the detail, its More menu |
 
 ## Grouping and sorting
 

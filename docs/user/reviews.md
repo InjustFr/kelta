@@ -55,6 +55,7 @@ In the list:
 | `t` | put a local tag on the pull request |
 | `w` | run a workflow on the pull request |
 | `R` | refresh |
+| `Cmd+.` (`Ctrl+.` on Linux) | the selected pull request's actions in a menu, Open review first (`Enter` runs it); also from the detail |
 
 In the detail of someone else's pull request: `a` approve, `c` request changes, `m` comment, `s` review
 locally, `o` open on the host, `t` tags, `w` workflow, `R` refresh, `.` every action. On your own pull request the detail offers

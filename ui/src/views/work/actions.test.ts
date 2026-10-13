@@ -1,10 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { dispatch } from '$lib/actions';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import type { RunClaim, SessionStatus, WorkItem } from '$lib/gen';
-import { layout, projects, reviews, sessions, toasts, ui } from '$lib/stores';
+import { layout, projects, reviews, sessions, toasts, ui, work } from '$lib/stores';
 import { menuView, type MenuItem } from '$lib/ui/Menu.svelte';
 
 import '../reviews/actions';
@@ -19,6 +19,7 @@ import { batch } from './batch.svelte';
 import { REVIEW_READONLY } from './common';
 import type { Phase, PhaseId, WorkActionId } from './phase';
 import { selectTicket } from './selection.svelte';
+import { onActions, workUi } from './ui.svelte';
 
 let mock: MockControls;
 
@@ -240,5 +241,61 @@ describe('work menu: what can run now, then Not available now (#405)', () => {
       expect(`${letters(now)} / ${off.map((e) => e.key).join(' ')}`, id).toBe(want);
       expect(off.every((e) => e.reason)).toBe(true);
     }
+  });
+});
+
+describe('⌘. opens the menu of what has the keys (#404)', () => {
+  /** A focusable pane in the document whose `⌘.` handler logs and answers `opens`. */
+  function pane(name: string, opens: boolean, log: string[], parent: HTMLElement = document.body): HTMLElement {
+    const el = document.createElement('div');
+    el.tabIndex = 0;
+    parent.append(el);
+    onActions(el, () => (log.push(name), opens));
+    return el;
+  }
+
+  afterEach(() => {
+    document.body.replaceChildren();
+    ui.closeOverlay();
+    ui.view = null;
+    workUi.menu = null;
+  });
+
+  it('the focused detail opens its menu first; its list, the work menu and the palette are not asked', async () => {
+    const log: string[] = [];
+    const list = pane('list', true, log);
+    pane('detail', true, log, list).focus();
+    await dispatch('work.menu');
+    expect(log).toEqual(['detail']);
+    expect([ui.overlay, workUi.menu]).toEqual([null, null]);
+  });
+
+  it('a detail with nothing to offer hands it to its list: the selected row', async () => {
+    const log: string[] = [];
+    const list = pane('list', true, log);
+    pane('detail', false, log, list).focus();
+    await dispatch('work.menu');
+    expect(log).toEqual(['detail', 'list']);
+    expect(ui.overlay).toBeNull();
+  });
+
+  it('nothing selected and no work tab: the palette opens, never a toast', async () => {
+    const log: string[] = [];
+    ui.view = 'now'; // a view, not a work tab
+    pane('list', false, log).focus();
+    await dispatch('work.menu');
+    expect(log).toEqual(['list']);
+    expect(ui.overlay).toBe('palette');
+    expect(toasts.list).toHaveLength(0);
+  });
+
+  it('a named work item (palette, rows) opens its work menu without asking the panes', async () => {
+    const log: string[] = [];
+    pane('list', true, log).focus();
+    await work.load();
+    const id = work.all[0]!.id;
+    await dispatch('work.menu', { id });
+    expect(log).toEqual([]);
+    expect(workUi.menu).toBe(id);
   });
 });
