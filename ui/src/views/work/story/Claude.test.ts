@@ -65,4 +65,19 @@ describe('Story Claude section', () => {
     await vi.advanceTimersByTimeAsync(4 * 60_000);
     expect(screen.getByTestId('claude-status').textContent).toBe('Working 4 min');
   });
+
+  it('a panel mounted mid-work counts the age from claude_at; a live transition counts from now', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    const w = { ...item(0), claude_at: new Date(Date.now() - 10 * 60_000).toISOString() };
+    const view = mount(w);
+    expect(screen.getByTestId('claude-status').textContent).toBe('Working 10 min');
+    view.unmount();
+
+    const s = claudeOf(w)!;
+    sessions.upsert({ ...s, status: 'done' });
+    mount(w);
+    sessions.upsert({ ...s, status: 'working' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByTestId('claude-status').textContent).toBe('Working 1 min');
+  });
 });
