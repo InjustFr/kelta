@@ -25,16 +25,12 @@ test('start work from Now: the row, its Start work button, the sheet', async ({ 
   await expect(page.getByTestId('context-key')).toHaveText('SHOP-151');
 });
 
-test('start work from Tickets: the row menu lists the keys, Start work opens the sheet', async ({ page }) => {
+test("start work from Tickets: the reading pane's Start work opens the sheet", async ({ page }) => {
   await boot(page);
   await page.getByTestId('rail-tickets').click();
   const pane = page.getByTestId('tickets-pane');
-  const row = pane.locator('[data-key="jira-acme:SHOP-151"]');
-  await row.click();
-  await row.getByRole('button', { name: 'More actions' }).click();
-  const menu = page.getByRole('menu', { name: 'More actions' });
-  await expect(menu.getByRole('menuitem', { name: /^Assign to me/ }).locator('kbd')).toHaveText('A');
-  await menu.getByRole('menuitem', { name: /^Start work/ }).click();
+  await pane.locator('[data-key="jira-acme:SHOP-151"]').click();
+  await pane.getByTestId('ticket-detail').getByRole('button', { name: 'Start work' }).click();
   await expect(page.getByRole('dialog', { name: /Start work on SHOP-151/ })).toBeVisible();
 });
 

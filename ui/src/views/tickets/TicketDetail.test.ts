@@ -115,14 +115,43 @@ describe('TicketDetail', () => {
     await fireEvent.keyDown(more, { key: 'Escape' });
     const meta = screen.getByTestId('ticket-detail').querySelector('dl')!;
     expect(meta.textContent).toContain('SHOP Sprint 12');
-    expect(meta.textContent?.replace(/\s+/g, ' ')).toContain('Estimate 5');
+    // type and points sit beside the status, with where the ticket stands (#400)
+    expect(screen.getByTestId('ticket-detail').querySelector('[data-kind]')?.textContent).toMatch(
+      /5 points$/,
+    );
+    expect(screen.getByTestId('ticket-detail').querySelector('[data-where]')?.textContent).toBeTruthy();
     const prs = screen.getByTestId('ticket-pr');
     expect(prs.querySelectorAll('.pr')).toHaveLength(2);
     expect(prs.textContent).toContain('#309');
     expect(prs.textContent).toContain('#98');
     expect(await screen.findByText(/Mock body rendered/)).toBeTruthy();
-    expect(screen.getByText('Can we keep the existing behaviour behind a flag?')).toBeTruthy();
+    // the latest comment opens the pane, before the spec, and stays in the comments (#400)
+    const latest = screen.getAllByText('Can we keep the existing behaviour behind a flag?');
+    expect(latest).toHaveLength(2);
+    expect(screen.getByTestId('ticket-latest').contains(latest[0]!)).toBe(true);
     expect(screen.getByLabelText(/Add a comment/)).toBeTruthy();
+  });
+
+  it('opens on where it stands: the spec folded by heading, no Assign to me on my ticket, no filled Start without work (#400)', async () => {
+    await tickets.load({ kind: 'all' }, null, false, 'mine');
+    const mine = tickets.items({ kind: 'all' }, null, 'mine').find((i) => !work.forTicket(i.ticket.ref))!;
+    render(TicketDetail, { props: { item: mine, projectId: 'shop', embedded: true } });
+    await screen.findByText(/Mock body rendered/);
+    const folds = [...screen.getByTestId('ticket-detail').querySelectorAll('details')];
+    expect(folds.map((d) => [d.querySelector('summary')?.textContent, d.open])).toEqual([
+      ['Description', true],
+      ['Acceptance2', false],
+      ['Notes2', false],
+    ]);
+    const bar = screen.getByRole('toolbar', { name: 'Ticket actions' });
+    expect(within(bar).queryByRole('button', { name: 'Assign to me' })).toBeNull();
+    expect(action('Start work').classList.contains('primary')).toBe(false);
+  });
+
+  it('Resume work is the filled primary while the ticket has work under way (#400)', async () => {
+    await work.load();
+    mount('SHOP-142');
+    expect(action('Resume work').classList.contains('primary')).toBe(true);
   });
 
   it('drops a half-written comment when the item changes under it (split view)', async () => {
@@ -234,8 +263,10 @@ describe('TicketDetail', () => {
   });
 
   it('the priority picker shows why a tracker cannot change it', async () => {
-    mount('#88'); // gitlab-corp: read-only tracker
-    await fireEvent.click(screen.getByRole('button', { name: 'None' }));
+    const root = mount('#88'); // gitlab-corp: read-only tracker
+    // no priority: the field is hidden (#400), `!` still opens its picker
+    expect(root.querySelector('[data-field="priority"]')).toBeNull();
+    await fireEvent.keyDown(root, { key: '!' });
     const menu = await screen.findByRole('menu', { name: 'Priority of #88' });
     expect(await within(menu).findByText('gitlab-corp cannot set priorities')).toBeTruthy();
   });
@@ -283,7 +314,7 @@ describe('TicketDetail', () => {
 
   it('shows the parent above the title; Enter on it opens its detail', async () => {
     mount('SHOP-160');
-    const link = screen.getByRole('button', { name: /parent SHOP-142/ });
+    const link = screen.getByRole('button', { name: /Parent SHOP-142/ });
     expect(link.textContent).toContain('Rate-limit login');
     await waitFor(() => expect(tickets.details[ticketKey(itemOf('SHOP-160').ticket.ref)]?.data).toBeTruthy());
     link.focus();

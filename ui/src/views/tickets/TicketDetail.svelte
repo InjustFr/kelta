@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { locale, t } from '$lib/i18n/index.svelte';
+  import { locale, t, tn } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { Assignee, CiState, ProjectId, TicketItem, TicketRef } from '$lib/gen';
@@ -38,6 +38,8 @@
   import PickMenu from './PickMenu.svelte';
   import { discard, refine, refines } from './refine.svelte';
   import { pickWorkflow, workflows } from './workflow.svelte';
+  import { readSpec } from './spec';
+  import { assignedToMe, standingNow } from './standing';
   import { ciLamp, ensureReviews, mainPr, openPr, openPrs, prLabel, prMenuItems, reviewWord } from './prs';
   import StatusChip from './StatusChip.svelte';
   import TagChips from '../tags/TagChips.svelte';
@@ -45,8 +47,10 @@
   import StatusPicker from './StatusPicker.svelte';
 
   // Ticket detail body (TICKETS.md T3): the standalone pane wraps it, the tickets list embeds it as
-  // its split view. Header (key, title, status, actions) comes from the list item at once; the
-  // description and comments load with `tracker_get`.
+  // its split view. It opens on where the ticket stands (#400): key, epic and title; status, type,
+  // points and the situation; the actions; the latest comment and what the spec leaves open; then the
+  // spec in foldable sections, the fields that have a value and the comments. Header and actions come
+  // from the list item at once; the description and comments load with `tracker_get`.
   interface Props {
     item: TicketItem;
     projectId: ProjectId | null;
@@ -67,6 +71,37 @@
   const asker = $derived(workItem && workItem.state.kind !== 'finished' ? askerOf(workItem) : null);
   const branch = $derived(workItem?.branch || mainPr(item.prs)?.branch || null);
   const proposal = $derived(refines[key] ?? null);
+  const mine = $derived(assignedToMe(item));
+  const where = $derived(standingNow(item, mine).where);
+  /** Tickets in any loaded list by URL: a raw link to one reads as its key and title. */
+  const known = $derived(
+    new Map(
+      Object.values(tickets.lists)
+        .flatMap((l) => l.data?.items ?? [])
+        .map((i) => [i.ticket.url, i.ticket]),
+    ),
+  );
+  const spec = $derived(
+    detail
+      ? readSpec(detail.body_html, (href) => {
+          const k = known.get(href);
+          return k ? { key: k.ref.key, title: k.title } : null;
+        })
+      : null,
+  );
+  const latest = $derived(detail?.comments.at(-1) ?? null);
+  /** Type and points, as one line: `Story, 2 points`. */
+  const kind = $derived(
+    [
+      ticket.kind,
+      ticket.estimate &&
+        (/^\d+(\.\d+)?$/.test(ticket.estimate)
+          ? tn('{n} point', '{n} points', Number(ticket.estimate))
+          : ticket.estimate),
+    ]
+      .filter(Boolean)
+      .join(', '),
+  );
 
   let root = $state<HTMLDivElement>();
   let bar = $state<{ openMore(): void }>();
@@ -401,16 +436,16 @@
     <div class="line">
       <span class="key k-selectable">{ref.key}</span>
       {#if parent}
+        <!-- The epic by name (#400); Redmine sends no title, so its key. -->
         <button
           type="button"
           class="link parent"
           data-parent
           onclick={openParent}
-          title={parent.title || undefined}
+          aria-label={t('Parent {key}: {title}', { key: parent.key, title: parent.title || parent.key })}
+          title={parent.key}
         >
-          {t('parent {key}', { key: parent.key })}{#if parent.title}<span class="parent-title"
-              >&#32;{parent.title}</span
-            >{/if}
+          <span class="parent-title">{parent.title || parent.key}</span>
         </button>
       {/if}
       {#if runPhase?.id === 'run'}<span class="run" data-run title={runPhase.detail}
@@ -430,120 +465,40 @@
           <Icon name="chevron-down" size={14} />
         </Button>
       </span>
+      {#if kind}<span class="muted" data-kind>{kind}</span>{/if}
+      <span class="where" data-where>{where}</span>
       <TagChips kind="tickets" itemKey={key} />
     </div>
     {#if asker}<AskBar session={asker} full />{/if}
-    <ActionBar bind:this={bar} {item} {branch} {projectId} resume={workItem !== null} onrun={(a) => run(a)} />
+    <ActionBar
+      bind:this={bar}
+      {item}
+      {branch}
+      {projectId}
+      {mine}
+      resume={workItem !== null}
+      open={workItem !== null && workItem.state.kind !== 'finished'}
+      onrun={(a) => run(a)}
+    />
   </header>
 
   <div class="scroll">
-    <dl class="k-meta">
-      <dt>{t('Assignee')}</dt>
-      <dd>
-        <button
-          type="button"
-          class="field"
-          data-field="assignee"
-          aria-haspopup="menu"
-          aria-keyshortcuts="u"
-          title={t('Assign to… (u)')}
-          onclick={() => openField('assignee')}>{ticket.assignee?.name ?? t('Unassigned')}</button
+    {#if latest}
+      <div class="callout" data-testid="ticket-latest">
+        <b
+          >{t('Latest comment, {name}, {ago}', {
+            name: latest.author.name,
+            ago: relativeTime(Date.parse(latest.created_at)),
+          })}</b
         >
-      </dd>
-      <dt>{t('Priority')}</dt>
-      <dd>
-        <button
-          type="button"
-          class="field"
-          data-field="priority"
-          aria-haspopup="menu"
-          aria-keyshortcuts="Shift+1"
-          title={t('Change priority (!)')}
-          onclick={() => openField('priority')}>{ticket.priority ?? t('None')}</button
-        >
-      </dd>
-      <dt>{t('Sprint')}</dt>
-      <dd>
-        {#if ticket.sprint}
-          {ticket.sprint.name}
-          {#if ticket.sprint.ends_at}<span class="muted"
-              >{t('ends {date}', { date: dateFmt.format(day(ticket.sprint.ends_at)) })}</span
-            >{/if}
-        {:else}<span class="muted">{t('None')}</span>{/if}
-      </dd>
-      <dt>{t('Estimate')}</dt>
-      <dd>
-        {#if ticket.estimate}{ticket.estimate}{:else}<span class="muted">{t('None')}</span>{/if}
-      </dd>
-      <dt>{t('Due')}</dt>
-      <dd class="k-num">
-        {#if ticket.due}
-          <span class:late={overdue} title={overdue ? t('Overdue') : undefined}
-            >{dateFmt.format(day(ticket.due))}</span
-          >
-          {#if overdue}<span class="late">{t('overdue')}</span>{/if}
-        {:else}<span class="muted">{t('None')}</span>{/if}
-      </dd>
-      <dt>{t('Updated')}</dt>
-      <dd class="k-num">{relativeTime(Date.parse(ticket.updated_at))}</dd>
-      {#if ticket.kind}<dt>{t('Type')}</dt>
-        <dd>{ticket.kind}</dd>{/if}
-      {#each ticket.fields ?? [] as f, i (i)}<dt>{f.label || t('Field')}</dt>
-        <dd data-field>{f.value}</dd>{/each}
-      {#if ticket.labels.length > 0}<dt>{t('Labels')}</dt>
-        <dd>
-          {#each ticket.labels as l (l)}<Badge>{l}</Badge>{/each}
-        </dd>{/if}
-    </dl>
-
-    <section aria-label={t('Pull requests')} data-testid="ticket-pr">
-      <h2 class="k-section-title">
-        {t('Pull requests')}
-        {#if item.prs.length > 1}<span class="muted k-num">{item.prs.length}</span>{/if}
-      </h2>
-      {#each item.prs as pr (pr.url)}
-        <div class="pr">
-          <button
-            type="button"
-            class="link k-mono"
-            title={pr.account ? t('Open in Kelta') : t('Open in browser')}
-            onclick={() => openPr(pr, project ?? '', !project)}>{prLabel(pr)}</button
-          >
-          <span class="pr-title">{pr.title || pr.repo}</span>
-          <span class="pr-meta">
-            <span>{reviewWord(pr)}</span>
-            {#if pr.ci !== 'none'}<span class="ci"
-                ><Lamp level={ciLamp(pr.ci)} title={CI_WORDS[pr.ci]} />{CI_WORDS[pr.ci]}</span
-              >{/if}
-            {#if pr.branch}<code class="k-mono">{pr.branch}</code>{/if}
-          </span>
-        </div>
-      {:else}
-        <p class="muted">{t('No pull request yet.')}</p>
-      {/each}
-    </section>
-
-    {#if detail && detail.children.length > 0}
-      <section aria-label={t('Sub-tasks')}>
-        <h2 class="k-section-title">
-          {t('Sub-tasks')} <span class="muted k-num">{detail.children.length}</span>
-        </h2>
-        {#each detail.children as c (c.ticket.ref.key)}
-          <button
-            type="button"
-            class="child"
-            data-child
-            aria-keyshortcuts="s"
-            title={t('Open (Enter), start work (s)')}
-            onclick={() => openTicket(c.ticket.ref)}
-            onkeydown={(e) => childKeys(e, c)}
-          >
-            <span class="key">{c.ticket.ref.key}</span>
-            <StatusChip status={c.ticket.status} source={c.source_ids[0] ?? item.source_ids[0]} />
-            <span class="pr-title">{c.ticket.title}</span>
-          </button>
-        {/each}
-      </section>
+        <HtmlContent html={latest.body_html} onerror={(e) => toasts.error(e, t('Open link'))} />
+      </div>
+    {/if}
+    {#if spec?.open}
+      <div class="callout open" data-testid="ticket-open">
+        <b>{spec.open.title}</b>
+        <HtmlContent html={spec.open.html} onerror={(e) => toasts.error(e, t('Open link'))} />
+      </div>
     {/if}
 
     {#if proposal}
@@ -572,20 +527,124 @@
       </section>
     {/if}
 
-    <section aria-label={t('Description')}>
-      <h2 class="k-section-title">{t('Description')}</h2>
+    {#if item.prs.length > 0}<section aria-label={t('Pull requests')} data-testid="ticket-pr">
+        <h2 class="k-section-title">
+          {t('Pull requests')}
+          {#if item.prs.length > 1}<span class="muted k-num">{item.prs.length}</span>{/if}
+        </h2>
+        {#each item.prs as pr (pr.url)}
+          <div class="pr">
+            <button
+              type="button"
+              class="link k-mono"
+              title={pr.account ? t('Open in Kelta') : t('Open in browser')}
+              onclick={() => openPr(pr, project ?? '', !project)}>{prLabel(pr)}</button
+            >
+            <span class="pr-title">{pr.title || pr.repo}</span>
+            <span class="pr-meta">
+              <span>{reviewWord(pr)}</span>
+              {#if pr.ci !== 'none'}<span class="ci"
+                  ><Lamp level={ciLamp(pr.ci)} title={CI_WORDS[pr.ci]} />{CI_WORDS[pr.ci]}</span
+                >{/if}
+              {#if pr.branch}<code class="k-mono">{pr.branch}</code>{/if}
+            </span>
+          </div>
+        {/each}
+      </section>{/if}
+
+    <section class="spec" aria-label={t('Description')}>
       {#if !detail}
         <p class="muted">
           {slot?.error
             ? t('Could not load the description: {message}', { message: slot.error.message })
             : t('Loading…')}
         </p>
-      {:else if detail.body_html.trim() === ''}
+      {:else if !spec || (spec.sections.length === 0 && !spec.open)}
         <p class="muted">{t('No description.')}</p>
       {:else}
-        <HtmlContent html={detail.body_html} onerror={(e) => toasts.error(e, t('Open link'))} class="body" />
+        {#each spec.sections as s, i (i)}
+          <details open={i === 0 || !s.title}>
+            <summary
+              >{s.title || t('Description')}{#if s.count}<span class="muted k-num">{s.count}</span
+                >{/if}</summary
+            >
+            <HtmlContent html={s.html} onerror={(e) => toasts.error(e, t('Open link'))} class="body" />
+          </details>
+        {/each}
       {/if}
     </section>
+
+    {#if detail && detail.children.length > 0}
+      <section aria-label={t('Sub-tasks')}>
+        <h2 class="k-section-title">
+          {t('Sub-tasks')} <span class="muted k-num">{detail.children.length}</span>
+        </h2>
+        {#each detail.children as c (c.ticket.ref.key)}
+          <button
+            type="button"
+            class="child"
+            data-child
+            aria-keyshortcuts="s"
+            title={t('Open (Enter), start work (s)')}
+            onclick={() => openTicket(c.ticket.ref)}
+            onkeydown={(e) => childKeys(e, c)}
+          >
+            <span class="key">{c.ticket.ref.key}</span>
+            <StatusChip status={c.ticket.status} source={c.source_ids[0] ?? item.source_ids[0]} />
+            <span class="pr-title">{c.ticket.title}</span>
+          </button>
+        {/each}
+      </section>
+    {/if}
+
+    <dl class="k-meta">
+      <dt>{t('Assignee')}</dt>
+      <dd>
+        <button
+          type="button"
+          class="field"
+          data-field="assignee"
+          aria-haspopup="menu"
+          aria-keyshortcuts="u"
+          title={t('Assign to… (u)')}
+          onclick={() => openField('assignee')}>{ticket.assignee?.name ?? t('Unassigned')}</button
+        >
+      </dd>
+      {#if ticket.priority}<dt>{t('Priority')}</dt>
+        <dd>
+          <button
+            type="button"
+            class="field"
+            data-field="priority"
+            aria-haspopup="menu"
+            aria-keyshortcuts="Shift+1"
+            title={t('Change priority (!)')}
+            onclick={() => openField('priority')}>{ticket.priority}</button
+          >
+        </dd>{/if}
+      {#if ticket.sprint}<dt>{t('Sprint')}</dt>
+        <dd>
+          {ticket.sprint.name}
+          {#if ticket.sprint.ends_at}<span class="muted"
+              >{t('ends {date}', { date: dateFmt.format(day(ticket.sprint.ends_at)) })}</span
+            >{/if}
+        </dd>{/if}
+      {#if ticket.due}<dt>{t('Due')}</dt>
+        <dd class="k-num">
+          <span class:late={overdue} title={overdue ? t('Overdue') : undefined}
+            >{dateFmt.format(day(ticket.due))}</span
+          >
+          {#if overdue}<span class="late">{t('overdue')}</span>{/if}
+        </dd>{/if}
+      <dt>{t('Updated')}</dt>
+      <dd class="k-num">{relativeTime(Date.parse(ticket.updated_at))}</dd>
+      {#each ticket.fields ?? [] as f, i (i)}<dt>{f.label || t('Field')}</dt>
+        <dd data-field>{f.value}</dd>{/each}
+      {#if ticket.labels.length > 0}<dt>{t('Labels')}</dt>
+        <dd>
+          {#each ticket.labels as l (l)}<Badge>{l}</Badge>{/each}
+        </dd>{/if}
+    </dl>
 
     <section aria-label={t('Comments')}>
       <h2 class="k-section-title">
@@ -725,6 +784,109 @@
     align-items: center;
     flex-wrap: wrap;
     gap: var(--k-space-3);
+  }
+
+  .where {
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-sm);
+  }
+
+  .scroll > * + * {
+    margin-top: var(--k-space-4);
+  }
+
+  /* The latest comment and what is still open: where the ticket stands, before the spec. */
+  .callout {
+    max-width: var(--k-measure);
+    padding: var(--k-space-2) var(--k-space-3);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-bezel-raised);
+  }
+
+  .callout b {
+    display: block;
+    margin-bottom: var(--k-space-1);
+    font-size: var(--k-font-size-xs);
+    font-weight: var(--k-weight-strong);
+    color: var(--k-fg-muted);
+  }
+
+  .callout.open {
+    background: color-mix(in oklab, var(--k-warn) 14%, var(--k-well));
+  }
+
+  .callout.open b {
+    color: var(--k-warn);
+  }
+
+  /* The spec: a section per heading, folded but the first. */
+  details {
+    max-width: var(--k-measure);
+    border-top: 1px solid var(--k-border);
+  }
+
+  summary {
+    display: flex;
+    align-items: baseline;
+    gap: var(--k-space-2);
+    padding: var(--k-space-2) 0;
+    font-weight: var(--k-weight-strong);
+    color: var(--k-fg-strong);
+    cursor: pointer;
+  }
+
+  summary:focus-visible {
+    outline: 2px solid var(--k-focus);
+    outline-offset: 1px;
+  }
+
+  details > :global(.k-html.body) {
+    margin-bottom: var(--k-space-3);
+  }
+
+  /* A raw ticket link as a chip: its key, then its title. */
+  .spec :global(a.ref) {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--k-space-2);
+    padding: 1px var(--k-space-2);
+    border: 1px solid var(--k-border);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-well);
+    color: var(--k-fg);
+    text-decoration: none;
+  }
+
+  .spec :global(a.ref:hover) {
+    border-color: var(--k-border-strong);
+  }
+
+  .spec :global(.ref-key) {
+    font-family: var(--k-font-mono);
+    font-size: var(--k-font-size-xs);
+    color: var(--k-fg-muted);
+  }
+
+  .spec :global(.gwt-title) {
+    display: block;
+    margin-bottom: var(--k-space-1);
+  }
+
+  /* Acceptance criteria: Given / When / Then in the accent, the rest beside it. */
+  .spec :global(dl.gwt) {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 2px var(--k-space-3);
+    margin: 0 0 var(--k-space-2);
+  }
+
+  .spec :global(dl.gwt dt) {
+    font-weight: var(--k-weight-strong);
+    color: var(--k-accent);
+  }
+
+  .spec :global(dl.gwt dd) {
+    margin: 0;
   }
 
   .run {
@@ -870,7 +1032,6 @@
   /* The description is content inside the ticket: an indented block keeps its headings inside it. */
   section :global(.k-html.body) {
     padding-left: var(--k-space-4);
-    border-left: 1px solid var(--k-border);
   }
 
   .comment {

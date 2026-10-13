@@ -22,8 +22,8 @@ export const REVIEW = 3;
 export const MERGE = 4;
 export const DEPLOY = 5;
 
-/** Whose move: filled for mine, a ring while it waits on others, a diamond when something broke. */
-export type Mark = 'you' | 'wait' | 'broken';
+/** Whose move: filled for mine, a ring while it waits on others, a diamond when something broke, a dot once done. */
+export type Mark = 'you' | 'wait' | 'broken' | 'done';
 
 export interface Stage {
   /** Where the item is now (an index of STAGES). */
@@ -31,6 +31,8 @@ export interface Stage {
   /** The furthest stage it reached: an item sent back to Claude after review keeps the line to Review. */
   reached: number;
   mark: Mark;
+  /** Only the tracker's word for it (#400): no branch or PR seen, so the line is dotted. */
+  unconfirmed?: boolean;
 }
 
 /** Phases past Claude; every other phase sits with Claude (asking, working, to review, failed start). */
