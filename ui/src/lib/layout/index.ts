@@ -8,6 +8,7 @@ import type {
   OpenPaneRequest,
   PaneContent,
   PaneId,
+  Scope,
   SessionId,
   SplitDir,
   Tab,
@@ -385,6 +386,30 @@ export function closeTab(layout: Layout, tabId: TabId): Layout {
     active = next ? next.id : null;
   }
   return { ...layout, tabs, active_tab: active };
+}
+
+/** A tab showing only a list the global views now hold (#409): a project's Tickets or Board, its Reviews, an Inbox. */
+function listTabScope(tab: Tab): Scope | null {
+  const c = tab.root.type === 'pane' ? tab.root.content : null;
+  if (c?.kind === 'inbox') return { kind: 'all' };
+  if (c?.kind === 'reviews' || (c?.kind === 'tickets' && c.scope.kind === 'project')) return c.scope;
+  return null;
+}
+
+/**
+ * Closes a saved layout's list tabs (#409). `scope` is the last closed tab's, for the global lists
+ * to show once; `null` when none was closed.
+ */
+export function dropListTabs(layout: Layout): { layout: Layout; scope: Scope | null } {
+  let scope: Scope | null = null;
+  let next = layout;
+  for (const tab of layout.tabs) {
+    const s = listTabScope(tab);
+    if (!s) continue;
+    scope = s;
+    next = closeTab(next, tab.id);
+  }
+  return { layout: next, scope };
 }
 
 export function activateTab(layout: Layout, tabId: TabId): Layout {

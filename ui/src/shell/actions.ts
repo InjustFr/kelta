@@ -30,6 +30,7 @@ import {
 } from './nav';
 import { navStep } from './jumplist';
 import { peek, peekWaiting } from './peek.svelte';
+import './scope.svelte'; // wires the layout migration's scope (#409) before any layout loads
 import { sidebar } from './sidebar.svelte';
 import { restartApp } from './updates.svelte';
 

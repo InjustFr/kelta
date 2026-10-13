@@ -124,12 +124,13 @@ Writes are field-level (§8): the hook listener never overwrites `pr_url` or `st
 | Place | What it shows |
 |---|---|
 | Tab | `[phase lamp] KEY title` (scratch: `wip title`). Mono key, lamp slot per DESIGN §6.3. |
-| Context bar, the work segment (above the rail and all panes, survives pane zoom; DESIGN §6.3) | after the breadcrumb (`project › KEY title`): ticket status chip (opens the status picker), phase chip (lamp + label + detail), PR chip (`PR #482` + CI lamp, opens the PR), `↑a ↓b`, cost, `⎇` (branch, worktree, ports, armed, `+ins −del`, uncommitted changes in its tooltip; a dot when armed or dirty), primary button, **Work ⌘.** menu. Clicking the phase chip opens the existing `WorkItemPane` (saga steps, sessions) as a split down. The return strip sits directly under the bar. |
+| Context bar, the work segment (above the rail and all panes, survives pane zoom; DESIGN §6.3) | after the breadcrumb (`project › KEY title`): ticket status chip (opens the status picker), phase chip (lamp + label + detail), PR chip (`PR #482` + CI lamp, opens the PR), `↑a ↓b`, cost, `⎇` (branch, worktree, ports, armed, `+ins −del`, uncommitted changes in its tooltip; a dot when armed or dirty), primary button, **Work ⌘.** menu. Clicking the phase chip opens the Story panel. |
+| Story panel (docked right of the work tab, `⌘I`; DESIGN §6.4) | the item's story in stage order: Since you left (the return brief), Ticket, Claude, Changes, Pull request, Log (start steps, open by itself on a failed step with Retry / Skip step). The current stage's section is open, the others fold to a one-line summary. |
 | Rail row | a work tab's lamp (DESIGN §6.2) folds in `review_due`, `claude_replied` and work-item errors, not just sessions. |
 | Now | one row (§3). |
 | Palette | Work items group (§3.5). |
 
-No status strip segment and no header row in the tab: the context bar is always visible above the focused tab's panes and says the same thing. `views/work/WorkContext.svelte` is its work segment, `views/work/ReturnBrief.svelte` the return strip; `WorkItemPane` has no header of its own.
+No status strip segment and no header row in the tab: the context bar is always visible above the focused tab's panes and says the same thing. `views/work/WorkContext.svelte` is its work segment, `views/work/StoryPanel.svelte` the Story panel (sections in `views/work/story/`, the return brief in `story/ReturnBrief.svelte`).
 
 ![Work tab with the work bar and the work menu open (before the context bar, #248)](images/flow/f2-work-tab.png)
 
@@ -144,7 +145,7 @@ No status strip segment and no header row in the tab: the context bar is always 
 | `V` | Review the whole diff in nvim | §4.1 |
 | `p` | Ship (push + PR) / Push / Force push… | one letter, wording follows the phase |
 | `R` | Mark reviewed | only with `review_due` |
-| `b` | Edit the `next:` note | Louis's own reminder, shown on the row and the return strip |
+| `b` | Edit the `next:` note | Louis's own reminder, shown on the row and the return brief |
 | `f` | Fix with Claude | needs a PR |
 | `r` | Rebase onto {base} | |
 | `c` | Continue rebase | only in Rebase stopped |
@@ -181,7 +182,7 @@ Does not work, because Kelta cannot type into that Claude:
 
 ![Now](images/flow/f1-now.png)
 
-Now replaces the Inbox. It keeps the Inbox's plumbing (`⌘0`, action id `inbox.open`), so settings and keybindings do not break; only the label and contents change. On the rail it sits between the two other global views, in the order of the loop: **Tickets** (`⌘⇧B`, pick a ticket from any source), **Now**, **Reviews** (`⌘⇧R`, review PRs). All three render in `GlobalHost` outside any project, live in the built-in `global` layout (one tab per view, its active tab the view shown: polled like a visible pane, restored on relaunch), and follow the "leaves Now" rule of §3.3.
+Now replaces the Inbox. It keeps the Inbox's plumbing (`⌘0`, action id `inbox.open`), so settings and keybindings do not break; only the label and contents change. On the rail it sits between the two other global views, in the order of the loop: **Tickets** (`⌘⇧B`, pick a ticket from any source), **Now**, **Reviews** (`⌘⇧R`, review PRs). All three render in `GlobalHost` outside any project, live in the built-in `global` layout (one tab per view, its active tab the view shown: polled like a visible pane, restored on relaunch), and follow the "leaves Now" rule of §3.3. They share one project scope (#409, DESIGN §6.8): `All projects ▾` in each toolbar narrows all three to one project, switching view keeps it, and it is restored on relaunch. A project's Board, Reviews or Inbox is that global view scoped to it, never a tab: the commands that opened such a tab open the view instead, and saved tabs of these lists close on load, their project applied once as the scope.
 
 ### 3.1 Sections
 
@@ -237,7 +238,7 @@ The **selected row expands** to a second line: Claude's last message for Claude 
 | `S` / `J` / `K` | Next up rows: start the top ones / move the row down / up |
 | `o` | open on the host (PR) or tracker (ticket) |
 
-In the Tickets list (not Now; the same in the rail's Tickets view, where the source chip names the project and the board toggle is hidden): `1` `2` `3` Mine / Unassigned / Team, `v` choose sources (all by default, "Add source…" at the end), `Shift+g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, Parent, None), `f` `s` current sprint only, `x` mark the ticket, `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `w` run a workflow (§4.8), `t` put a local tag on the ticket or take it off, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it, `Enter` moves the keys into it (`y` copies the branch there, `b` blocks or unblocks the ticket, `r` refines the ticket with Claude, `u` assigns to anyone the tracker offers, `!` changes the priority; with the column hidden, `Enter` on a ticket with work runs its phase's next action, as in Now, and `g` opens the detail), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
+In the Tickets list (not Now; the rail's Tickets view, in the scope of §3; the board toggle shows once one source is in effect): `1` `2` `3` Mine / Unassigned / Team, `v` choose sources (all by default, "Add source…" at the end), `Shift+g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, Parent, None), `f` `s` current sprint only, `x` mark the ticket, `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `w` run a workflow (§4.8), `t` put a local tag on the ticket or take it off, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it, `Enter` moves the keys into it (`y` copies the branch there, `b` blocks or unblocks the ticket, `r` refines the ticket with Claude, `u` assigns to anyone the tracker offers, `!` changes the priority; with the column hidden, `Enter` on a ticket with work runs its phase's next action, as in Now, and `g` opens the detail), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
 
 A ticket the source marks **blocked** (`b`; a flag, a label, a relation or a status, SETTINGS §2) shows a Blocked chip, sorts last in its group and lands in the **Waiting** flow group of the Tickets list (so does a ticket whose status reads blocked, on hold, waiting or impediment). Blocked tickets still count as unfinished work in the start sheet's finish-first list (§4.1).
 | `N` | New work item |
@@ -245,7 +246,7 @@ A ticket the source marks **blocked** (`b`; a flag, a label, a relation or a sta
 | `/` | filter on id, title, project, branch |
 | `R` | refresh |
 
-Gating is the work menu's (§2.5): disabled keys on review items do nothing and flash the reason. Every action that leaves Now (or the Tickets and Reviews views) **closes it and focuses the target in its project** (`ui.view = null` through `activateProject`, focus tab and pane: the target's rail row is selected); the project is the item's first, else the active one, never the `GLOBAL` sentinel. Panes opened from Now use `new_tab` placement with reuse (one Reviews tab per project), never a split inside whatever tab happened to be active. This fixes bug B1.
+Gating is the work menu's (§2.5): disabled keys on review items do nothing and flash the reason. Every action that leaves Now (or the Tickets and Reviews views) **closes it and focuses the target in its project** (`ui.view = null` through `activateProject`, focus tab and pane: the target's rail row is selected); the project is the item's first, else the active one, never the `GLOBAL` sentinel. Panes opened from Now use `new_tab` placement with reuse (one tab per target), never a split inside whatever tab happened to be active. This fixes bug B1.
 
 ### 3.4 Next waiting, without opening Now
 

@@ -141,6 +141,12 @@
 
   let modeOverride = $state<TicketsMode | undefined>(undefined);
   const wantedMode = $derived(modeOverride ?? content.mode);
+  const savedMode = $derived(content.mode);
+  // `tickets.board` sets the saved mode of a pane already on screen: it wins over the last click.
+  $effect(() => {
+    void savedMode;
+    untrack(() => (modeOverride = undefined));
+  });
   const mode = $derived<TicketsMode>(wantedMode === 'board' && single ? 'board' : 'list');
   let groupOverride = $state<GroupBy | undefined>(undefined);
   let sortOverride = $state<TicketSort | undefined>(undefined);
@@ -971,7 +977,7 @@
   {onkeydown}
 >
   <TicketsToolbar
-    allProjects={scope.kind === 'all'}
+    scoped={projectId === GLOBAL}
     hasSource={!noSource}
     who={WHOS.map((w) => {
       const n = countOf(w);

@@ -713,6 +713,7 @@ impl CoreApi for Core {
     fn session_claude_runs_hook(&self, id: &SessionId, payload: &kelta_proto::hooks::HookPayload) {
         self.remember_permission_mode(id, payload);
         self.claude_runs_hook(id, payload);
+        self.apply_tasks(id, payload);
     }
     fn claude_permission_mode(&self) -> Option<kelta_proto::settings::PermissionMode> {
         *self.claude_mode.lock()

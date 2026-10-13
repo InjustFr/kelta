@@ -34,7 +34,7 @@ test.describe('scaffold', () => {
       failed: [],
       projects: 4,
       active: 'shop',
-      sessions: 11,
+      sessions: 12,
       layoutTabs: 3,
       work: 9,
       theme: 'system',

@@ -1,6 +1,6 @@
 <script lang="ts">
-  // The return strip under the context bar (#248): where you left a work item, decided when the item
-  // is (re)focused; leaving it stamps `left_at` (no timers).
+  // Since you left (#248, in the Story panel since #423): where you left a work item, decided when the
+  // item is (re)focused; leaving it stamps `left_at` (no timers). A closed panel shows itself for it.
   import { t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
@@ -8,14 +8,16 @@
   import { workLeft } from '$lib/ipc/commands';
   import { settings, work } from '$lib/stores';
   import { terminalPool } from '$lib/terminal';
-  import { Button } from '$lib/ui';
+  import { Button, relativeTime } from '$lib/ui';
 
-  import { focusedSessionId } from '../../shell/nav';
-  import { runWorkAction } from './actions';
-  import { claudeOf } from './live';
-  import { returnBrief } from './phase';
+  import { focusedSessionId } from '../../../shell/nav';
+  import { runWorkAction } from '../actions';
+  import { claudeOf } from '../live';
+  import { returnBrief } from '../phase';
+  import { story } from './panel.svelte';
+  import Section from './Section.svelte';
 
-  let { workItemId }: TabHeaderProps = $props();
+  let { workItemId, tabId }: TabHeaderProps & { tabId?: string } = $props();
 
   const item = $derived(work.get(workItemId));
 
@@ -30,6 +32,7 @@
       const mins = settings.value()?.work.return_brief_after_mins ?? 20;
       briefFor = w && returnBrief(w, claudeOf(w)?.status ?? null, Date.now(), mins) ? id : null;
       briefFocus = briefFor !== null;
+      if (briefFor && tabId) story.reveal(tabId);
     });
     return () =>
       void workLeft({ id }).then(
@@ -66,56 +69,62 @@
 </script>
 
 {#if brief}
-  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-  <div
-    class="brief"
-    role="region"
-    aria-label={t('Where you left off')}
-    data-testid="return-brief"
-    tabindex="-1"
-    bind:this={briefEl}
-    onkeydown={briefKey}
+  <Section
+    title={t('Since you left')}
+    summary={brief.left_at ? relativeTime(Date.parse(brief.left_at)) : ''}
+    open
+    testid="story-since"
   >
-    <div class="brief-text">
-      {#if brief.next_note}<div class="note"><b>{t('next:')}</b> {brief.next_note}</div>{/if}
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div
+      class="brief"
+      role="region"
+      aria-label={t('Where you left off')}
+      data-testid="return-brief"
+      tabindex="-1"
+      bind:this={briefEl}
+      onkeydown={briefKey}
+    >
+      <div class="brief-text">
+        {#if brief.next_note}<div class="note"><b>{t('next:')}</b> {brief.next_note}</div>{/if}
+        {#if brief.delta}
+          <div class="since">
+            <span class="ins">+{brief.delta.insertions}</span>/<span class="del"
+              >−{brief.delta.deletions}</span
+            >
+            {t('since you reviewed')}
+          </div>
+        {/if}
+        {#if brief.claude_message}
+          <details>
+            <summary>{brief.claude_message.split('\n')[0]}</summary>
+            <pre>{brief.claude_message}</pre>
+          </details>
+        {/if}
+      </div>
       {#if brief.delta}
-        <div class="since">
-          <span class="ins">+{brief.delta.insertions}</span>/<span class="del">−{brief.delta.deletions}</span>
-          {t('since you reviewed')}
-        </div>
+        <Button
+          size="sm"
+          variant="secondary"
+          chord="v"
+          onclick={() => void runWorkAction('review_delta', brief)}>{t('Review changes')}</Button
+        >
       {/if}
-      {#if brief.claude_message}
-        <details>
-          <summary>{brief.claude_message.split('\n')[0]}</summary>
-          <pre>{brief.claude_message}</pre>
-        </details>
-      {/if}
+      <Button size="sm" variant="ghost" chord="x" onclick={dismissBrief}>{t('Dismiss')}</Button>
     </div>
-    {#if brief.delta}
-      <Button
-        size="sm"
-        variant="secondary"
-        chord="v"
-        onclick={() => void runWorkAction('review_delta', brief)}>{t('Review changes')}</Button
-      >
-    {/if}
-    <Button size="sm" variant="ghost" chord="x" onclick={dismissBrief}>{t('Dismiss')}</Button>
-  </div>
+  </Section>
 {/if}
 
 <style>
   .brief {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
-    gap: var(--k-space-3);
-    padding: var(--k-space-2) var(--k-space-4);
-    border-bottom: 1px solid var(--k-border);
-    background: var(--k-bg-elev);
-    font-size: var(--k-font-size-sm);
+    gap: var(--k-space-2);
   }
 
   .brief-text {
-    flex: 1;
+    flex: 1 0 100%;
     min-width: 0;
     display: flex;
     flex-direction: column;

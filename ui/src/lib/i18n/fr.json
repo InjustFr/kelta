@@ -1461,16 +1461,12 @@
   "Uncommitted changes": "Modifications non commitées",
   "No next action": "Aucune action suivante",
   "Move to…": "Déplacer vers…",
-  "{phase} (steps and sessions)": "{phase} (étapes et sessions)",
   "{title} ({ci}): open in the browser": "{title} ({ci}) : ouvrir dans le navigateur",
   "PR": "PR",
   "{ahead} commits to push, {behind} behind {base}": "{ahead} commits à pousser, {behind} de retard sur {base}",
   "status unavailable, retry": "statut indisponible, réessayer",
   "Work menu": "Menu du travail",
   "Work item not found": "Élément de travail introuvable",
-  "live": "active",
-  "dormant": "en sommeil",
-  "exited": "terminée",
   "sent": "envoyée",
   "touched": "touchée",
   "untouched": "non touchée",
@@ -1478,9 +1474,7 @@
   "Send review notes": "Envoyer les notes de revue",
   "Resolve note": "Résoudre la note",
   "It was finished and removed, or it belongs to another project.": "Il a été terminé et supprimé, ou il appartient à un autre projet.",
-  "base": "base",
   "Pull request": "Pull request",
-  "Failure": "Échec",
   "Steps": "Étapes",
   "Review notes": "Notes de revue",
   "since feedback": "depuis les retours",
@@ -1490,8 +1484,6 @@
   "send": "envoyer",
   "resolve": "résoudre",
   "open in editor": "ouvrir dans l’éditeur",
-  "No sessions are attached to this work item.": "Aucune session n’est rattachée à cet élément de travail.",
-  "Resume sessions": "Reprendre les sessions",
   "Send {n} open notes to Claude": {
     "one": "Envoyer {n} note ouverte à Claude",
     "other": "Envoyer {n} notes ouvertes à Claude"
@@ -2483,5 +2475,16 @@
   "{n} points": {
     "one": "{n} point",
     "other": "{n} points"
-  }
+  },
+  "Log": "Journal",
+  "No pull request": "Pas de pull request",
+  "Not started": "Pas démarré",
+  "Nothing new": "Rien de nouveau",
+  "Since you left": "Depuis votre départ",
+  "Story panel width": "Largeur du panneau Récit",
+  "Story": "Récit",
+  "Work: Story panel": "Travail : panneau Récit",
+  "{done} of {n} steps": "{done} étapes sur {n}",
+  "{phase} (story)": "{phase} (récit)",
+  "{step} failed": "Échec : {step}"
 }
