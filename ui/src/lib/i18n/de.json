@@ -2486,5 +2486,10 @@
   "Work: Story panel": "Arbeit: Verlaufs-Panel",
   "{done} of {n} steps": "{done} von {n} Schritten",
   "{phase} (story)": "{phase} (Verlauf)",
-  "{step} failed": "{step} fehlgeschlagen"
+  "{step} failed": "{step} fehlgeschlagen",
+  "Acceptance criteria": "Akzeptanzkriterien",
+  "{checked} of {n} criteria checked": {
+    "one": "{checked} von {n} Kriterium erfüllt",
+    "other": "{checked} von {n} Kriterien erfüllt"
+  }
 }

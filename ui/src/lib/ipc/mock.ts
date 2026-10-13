@@ -334,18 +334,24 @@ const BEFORE_MERGING: Record<string, string> = {
   'acme/shop-api#311':
     '<h3>Before merging</h3><ul><li>Purge the CDN once after the deploy.</li><li>The old <code>img-proxy</code> route stays until the cache is warm.</li></ul>',
 };
+/** Acceptance criteria beyond the two every mock ticket has (#424): SHOP-142 shows three. */
+const MORE_CRITERIA: Record<string, string> = {
+  'SHOP-142': 'Limit documented in the README',
+};
 const MOCK_BODY = 'Mock body rendered from the in-memory fixtures.';
 
 function ticketDetailFor({ ticket: t, prs, caps }: TicketItem, comments: string[]): TicketDetail {
   // Headings, lists, a rule and a task list, as tracker descriptions carry them. No `#`: the title is the only h1.
   const blurb = BLURBS[t.ref.key] ?? MOCK_BODY;
-  const body = `Ticket **${t.ref.key}** (${t.title}).\n\n${blurb}\n\n## Acceptance\n\n- [x] Shown in the detail\n- [ ] Covered by a test\n\n---\n\n### Notes\n\n1. First\n2. Second`;
+  const body = `Ticket **${t.ref.key}** (${t.title}).\n\n${blurb}\n\n## Acceptance\n\n- [x] Shown in the detail\n- [ ] Covered by a test\n${MORE_CRITERIA[t.ref.key] ? `- [ ] ${MORE_CRITERIA[t.ref.key]}\n` : ''}\n---\n\n### Notes\n\n1. First\n2. Second`;
   return {
     ticket: t,
     body_md: body,
     body_html:
       `<p>Ticket <strong>${t.ref.key}</strong> (${escapeHtml(t.title)}).</p><p>${escapeHtml(blurb)} <a href="${t.url}">Open in tracker</a></p>` +
-      '<h2>Acceptance</h2><ul><li><input disabled="" type="checkbox" checked="">Shown in the detail</li><li><input disabled="" type="checkbox">Covered by a test</li></ul>' +
+      '<h2>Acceptance</h2><ul><li><input disabled="" type="checkbox" checked="">Shown in the detail</li><li><input disabled="" type="checkbox">Covered by a test</li>' +
+      (MORE_CRITERIA[t.ref.key] ? `<li><input disabled="" type="checkbox">${MORE_CRITERIA[t.ref.key]}</li>` : '') +
+      '</ul>' +
       '<hr><h3>Notes</h3><ol><li>First</li><li>Second</li></ol>',
     body_format: 'markdown',
     comments: [

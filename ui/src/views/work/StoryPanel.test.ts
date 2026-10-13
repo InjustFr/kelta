@@ -38,6 +38,17 @@ describe('Story panel', () => {
     expect(screen.getByTestId('story-pr').textContent).toContain('No pull request');
   });
 
+  it('Ticket: key, status and the acceptance criteria as a checklist (SHOP-142: 3, 1 checked)', async () => {
+    mount(item(0));
+    const ticket = await screen.findByTestId('story-ticket');
+    const list = await screen.findByTestId('story-criteria');
+    const boxes = [...list.querySelectorAll<HTMLInputElement>('input[type=checkbox]')];
+    expect(boxes.map((b) => b.checked)).toEqual([true, false, false]);
+    expect(ticket.textContent).toContain('SHOP-142');
+    expect(ticket.querySelector('summary')!.textContent).toMatch(/, 1 of 3 criteria checked$/);
+    expect(screen.getByTestId('story-ticket-status')).toBeTruthy();
+  });
+
   it('Log opens by itself on a failed step; Retry and Skip step rerun the saga', async () => {
     mount(item(1)); // 4567: tracker_side_effects failed
     const log = await screen.findByTestId('story-log');
