@@ -91,9 +91,9 @@
       if (s.kind.type === 'claude' && s.lifecycle === 'live') void sessions.loadRuns(s.id);
   });
 
-  // The pane in front (no global view): marks the tool row or sub-line it belongs to.
-  const front = $derived(ui.view ? null : focusedPane());
-  const frontTab = $derived(ui.view ? null : currentTab());
+  // The pane in front (no global view or Settings over it): marks the tool row or sub-line it belongs to.
+  const front = $derived(ui.view || ui.settings ? null : focusedPane());
+  const frontTab = $derived(ui.view || ui.settings ? null : currentTab());
   const frontTool = $derived(front ? (lines.get(front.id)?.tool ?? null) : null);
 
   // Startup and window focus refresh Now's sources (no polling).
@@ -252,7 +252,9 @@
   }
 
   function isFront(project: ProjectId, tabId: string): boolean {
-    return !ui.view && projects.activeId === project && layout.get(project)?.active_tab === tabId;
+    return (
+      !ui.view && !ui.settings && projects.activeId === project && layout.get(project)?.active_tab === tabId
+    );
   }
 
   function instanceLabel(x: ToolInstance): string {
@@ -330,10 +332,10 @@
   <button
     type="button"
     class="item place"
-    class:active={ui.view === view}
+    class:active={ui.view === view && !ui.settings}
     onclick={() => openView(view)}
     title={`${name}: ${sub}`}
-    aria-current={ui.view === view ? 'page' : undefined}
+    aria-current={ui.view === view && !ui.settings ? 'page' : undefined}
     data-testid={`rail-${id}`}
   >
     <span class="tile plain"><Icon name={icon} size={18} /></span>
@@ -719,6 +721,8 @@
     <button
       type="button"
       class="item settings"
+      class:active={ui.settings !== null}
+      aria-current={ui.settings ? 'page' : undefined}
       title={tip(t('Settings'), 'settings.open')}
       onclick={() => void dispatch('settings.open')}
       data-testid="rail-settings"

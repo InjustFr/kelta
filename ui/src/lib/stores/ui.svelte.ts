@@ -47,6 +47,8 @@ export class UiStore {
   focused = $state(true);
   /** Global view shown instead of the active project (`null` = the project). */
   view = $state<GlobalView | null>(null);
+  /** Settings shown over the window (#410), above the view or project; a new object retargets its section. */
+  settings = $state<{ section: string | null } | null>(null);
   /** A cross link's target in a global view (row key), read once by that view's pane on mount, then cleared. */
   select = $state<{ view: GlobalView; key: string } | null>(null);
 

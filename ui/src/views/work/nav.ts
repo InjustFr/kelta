@@ -50,6 +50,7 @@ export async function openContent(
   content: PaneContent,
   opts: OpenOptions = {},
 ): Promise<boolean> {
+  ui.settings = null;
   if (ui.view !== null) {
     await activateProject(projectId);
     if (ui.view !== null) return false; // unknown project: stay in the view
