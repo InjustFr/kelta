@@ -114,7 +114,8 @@
   {/if}
   {#if item}
     <div class="sections">
-      <ReturnBrief {projectId} workItemId={item.id} {tabId} />
+      <!-- `id`, not `item.id`: the brief stamps `left_at` whenever its item id changes. -->
+      <ReturnBrief {projectId} workItemId={id} {tabId} />
       <Ticket {item} open={at === TICKET} />
       <Claude {item} open={at === CLAUDE} />
       <Changes {item} open={false} />
