@@ -660,6 +660,13 @@
       case '.':
         allActions = !allActions;
         break;
+      case 'Escape':
+        // #415: clears what the list holds first (filter, marks, the brief's actions), then goes back.
+        if (activeFilters.length > 0) clearAll(activeFilters);
+        else if (batch.list.length > 0) batch.clear();
+        else if (allActions) allActions = false;
+        else void dispatch('nav.back');
+        break;
       case 'N':
         void dispatch('work.new');
         break;

@@ -54,7 +54,8 @@ function toolBindings(): ExtraBinding[] {
 /** The window-wide key manager (started by the shell). */
 export const keyManager = new KeyManager({
   keys: () => settings.value()?.keys ?? null,
-  dispatch,
+  // ⌘0 on the Queue goes back (#415); the same action from the palette or the HUD only opens it.
+  dispatch: (id, args) => dispatch(id, id === 'inbox.open' ? { chord: true } : args),
   hasAction,
   extraBindings: toolBindings,
   onError: (err, id) => toasts.error(err, t('Action {id} failed', { id })),
