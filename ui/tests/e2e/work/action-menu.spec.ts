@@ -76,4 +76,11 @@ test('Reviews: ⌘. opens the selected PR’s menu, ↵ opens the review', async
   await page.keyboard.press('Enter');
   await expect(menu(page)).toHaveCount(0);
   await expect(page.getByTestId('review-detail')).toBeFocused();
+
+  // The detail has the keys: ⌘. expands its actions (Request changes is not a row action), not the row menu.
+  const brief = page.getByTestId('review-brief');
+  await expect(brief).toBeVisible();
+  await actionsKey(page);
+  await expect(brief.getByRole('button', { name: /Request changes/ })).toBeVisible();
+  await expect(menu(page)).toHaveCount(0);
 });

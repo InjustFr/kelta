@@ -17,6 +17,7 @@
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { reviewLocally } from '../work/startWork';
+  import { onActions } from '../work/ui.svelte';
   import { configWorkflows, pickPrWorkflow } from '../tickets/workflow.svelte';
   import { draftBlocked, draftLabel, toggleDraft } from './draft';
   import { beforeMerging } from './beforeMerging';
@@ -208,6 +209,7 @@
   role="group"
   aria-label={t('Review {pr}', { pr: `${ref.repo}#${ref.number}` })}
   {onkeydown}
+  use:onActions={() => ((more = !!rv), !!rv)}
 >
   {#if slot?.loading && !detail}
     <Loading label={t('Loading review')} />
