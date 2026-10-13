@@ -490,13 +490,15 @@ All follow DESIGN §6.13: one sentence saying what happened, one or two actions.
 
 | Action id | macOS | Linux | Prefix | Context |
 |---|---|---|---|---|
-| `inbox.open` (label "Open Now") | `⌘0` | `Ctrl+0` | `0` | global, unchanged chord |
+| `inbox.open` (label "Open Queue") | `⌘0` | `Ctrl+0` | `0` | global, unchanged chord; on the Queue, the chord goes back (below); the palette entry and the HUD only open it |
 | `attention.next` (label "Next waiting") | `⌘J` | `Ctrl+J` | `u` | global, walks the Now queue (§3.4) |
 | `attention.peek` (label "Peek waiting session") | `⇧⌘Y` | `Ctrl+Shift+Y` | `y` | global, peek & reply without switching (#139) |
 | `work.new` | `⇧⌘N` | `Ctrl+Shift+N` | `w` | global |
 | `work.menu` | `⌘.` | `Ctrl+.` | `.` | global: the menu of what has the keys, a selected row, a detail or a work tab (§2.5); else the palette |
 | `toast.run_last` (label "Run last toast action") | `⇧⌘O` | `Ctrl+Shift+O` | `o` | global, runs the primary action of the most recent toast still shown |
 | `work.start` | `⌘↵` | `Ctrl+Enter` | `s` | unchanged; also submits every work sheet and dialog |
+
+`⌘0` zooms out and back (#415): opening the Queue records the tab and pane that had focus as the way back (the `‹` tooltip names it); `⌘0` on the Queue returns there through the jumplist, focused. `Esc` on the Queue clears what the list holds first (the filter, then the marks, then the brief's extra actions; an open menu closes itself) and, with nothing left to clear, does the same.
 
 Now's single keys are in §3.3, the work menu's in §2.5. If `⌘.` turns out to be swallowed by macOS cancel handling in the webview, rebind it; the prefix key `.` always works. Check this first when implementing, and check `⇧⌘O` against existing defaults.
 

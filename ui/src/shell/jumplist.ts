@@ -3,7 +3,7 @@
 
 import type { PaneContent, PaneId, ProjectId, TabId } from '$lib/gen';
 import { findPane } from '$lib/layout';
-import { GLOBAL, layout, projects, type GlobalView } from '$lib/stores';
+import { GLOBAL, layout, projects, ui, type GlobalView } from '$lib/stores';
 
 import { GLOBAL_VIEWS } from '../views/work/nav';
 
@@ -192,4 +192,11 @@ export function navStep(delta: 1 | -1): void {
   }
   jumplist.at = from; // no live place that way: stay put, not on a dead entry
   save();
+}
+
+/** `⌘0` (#415): opens the Queue, recording where focus was as the way back; on the Queue, goes back. */
+export function toggleNow(): void {
+  if (ui.view === 'now' && !ui.settings) return navStep(-1);
+  flushJump(); // a pane focused just before ⌘0 has not settled yet
+  openView('now');
 }
