@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Local mirror of .github/workflows/ci.yml. Run it before opening a PR so GitHub CI only confirms.
-#   scripts/ci-local.sh [--base <ref>] [--full] [--linux]
+#   scripts/ci-local.sh [--base <ref>] [--full] [--linux] [--keep-going]
 # Runs scripts/qa.sh, the Playwright e2e on mock IPC and cargo-deny, only for what the diff against --base
 # (default origin/main, plus uncommitted and untracked files) affects, as computed by scripts/affected.py:
 # the Rust steps on the changed workspace packages and their reverse dependencies, the UI half when ui/,
@@ -8,18 +8,21 @@
 # when Cargo.lock or deny.toml changed. --full (release tags, nightly) runs every step, as does a change under
 # scripts/ or a failed detection. scripts/linux-check.sh (Ubuntu in Docker) runs only with --linux or --full.
 # Each run logs to its own file under ${TMPDIR}/kelta-gate/logs/ (e2e, which runs alongside qa, in its own
-# -e2e.log, printed when it ends). Stops at the first failing step. Exit code 0 only when every step that ran passed.
+# -e2e.log, printed when it ends). Stops at the first failing step; --keep-going runs every step (and every QA
+# command inside qa.sh) to list all failures in one run. Exit code 0 only when every step that ran passed.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 base=origin/main
 linux=0
 full=0
+keep_going=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --base) base="${2:?--base needs a ref}"; shift 2 ;;
     --linux) linux=1; shift ;;
     --full) full=1; linux=1; shift ;;
+    --keep-going) keep_going=1; export QA_KEEP_GOING=1; shift ;;
     -h | --help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown argument: $1 (try --help)" >&2; exit 2 ;;
   esac
@@ -52,7 +55,7 @@ skip() { printf '\n##### %s: skipped (%s)\n' "$1" "$2" >&2; record "$1" "skipped
 run() { # run <name> <command...>
   local name="$1" t0=$SECONDS
   shift
-  if [ "$failed" = 1 ]; then record "$name" "not run" "-"; return 0; fi
+  if [ "$failed" = 1 ] && [ "$keep_going" = 0 ]; then record "$name" "not run" "-"; return 0; fi
   printf '\n##### %s\n' "$name"
   if "$@"; then record "$name" pass "$((SECONDS - t0))"; else record "$name" FAIL "$((SECONDS - t0))"; failed=1; fi
 }
@@ -76,7 +79,7 @@ e2e_pid=
 if [ "$e2e" = 1 ]; then
   # e2e runs on the Vite dev server, not ui/dist: it overlaps qa once the dependencies are installed.
   run pnpm-install pnpm install --frozen-lockfile
-  if [ "$failed" = 0 ]; then
+  if [ "$failed" = 0 ] || [ "$keep_going" = 1 ]; then
     e2e_log="${log%.log}-e2e.log" e2e_t0=$SECONDS
     e2e >"$e2e_log" 2>&1 &
     e2e_pid=$!

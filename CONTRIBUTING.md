@@ -92,7 +92,8 @@ untracked files), see `scripts/affected.py`:
   nightly use `--full`.
 
 Each run writes its own log under `${TMPDIR}/kelta-gate/logs/`; the summary shows the
-time of each step and the log path. The e2e suite runs alongside `qa.sh` (it uses the Vite dev server, not
+time of each step and the log path. It stops at the first failing step; `--keep-going` runs every step, and every
+command inside `qa.sh` (`QA_KEEP_GOING=1`), so one run lists all the failures (ticket passes use it). The e2e suite runs alongside `qa.sh` (it uses the Vite dev server, not
 `ui/dist`) and writes its own `-e2e.log`, printed when it ends. `.config/nextest.toml` starts the slowest
 tests first so they do not become the tail of the run; give a new test that takes several seconds a priority
 there. It also stops a test still running after 90 s: it fails as `TIMEOUT` with its name.
