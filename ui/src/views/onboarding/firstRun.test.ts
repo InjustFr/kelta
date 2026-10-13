@@ -41,6 +41,7 @@ describe('offerOnboarding', () => {
 });
 
 const w = (over: Partial<Parameters<typeof loopDone>[2][number]> = {}) => ({
+  kind: 'ticket' as const,
   pr_url: null,
   claude_at: null,
   review_due: false,
@@ -63,6 +64,11 @@ describe('Your loop', () => {
       current(shop, true, [w({ claude_at: 'now', pr_url: 'https://x/pr/1' })]),
     ];
     expect(seen).toEqual(['project', 'source', 'start', 'review', 'ship', null]);
+  });
+
+  it('a review of someone else’s pull request is not part of the loop', () => {
+    const done = loopDone([{ builtin: false }], true, [w({ kind: 'review', pr_url: 'https://x/pr/9' })]);
+    expect(done).toMatchObject({ start: false, ship: false });
   });
 
   it('a shipped item is remembered for the next launch', () => {

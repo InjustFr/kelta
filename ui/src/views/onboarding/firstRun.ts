@@ -39,8 +39,10 @@ export const LOOP_STEPS: readonly { id: LoopStepId; label: string; at: number }[
 export function loopDone(
   list: readonly Pick<ProjectInfo, 'builtin'>[],
   hasSources: boolean | null,
-  work: readonly Pick<WorkItem, 'pr_url' | 'claude_at' | 'review_due' | 'claude_replied'>[],
+  work: readonly Pick<WorkItem, 'kind' | 'pr_url' | 'claude_at' | 'review_due' | 'claude_replied'>[],
 ): Record<LoopStepId, boolean> {
+  // Reviewing someone else's pull request is not this loop: its PR must not count as shipped.
+  work = work.filter((w) => w.kind !== 'review');
   return {
     project: list.some((p) => !p.builtin),
     source: hasSources === true,
