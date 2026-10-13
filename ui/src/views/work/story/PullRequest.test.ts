@@ -21,7 +21,8 @@ beforeEach(async () => {
 const item = (i: number, over: Partial<WorkItem> = {}): WorkItem =>
   ({ ...mock.state.work[i], ...over }) as WorkItem;
 const mount = (w: WorkItem) => render(PullRequest, { props: { item: w, open: true } });
-const buttons = () => [...screen.getByTestId('story-pr').querySelectorAll('button')].map((b) => b.textContent!.trim());
+const buttons = () =>
+  [...screen.getByTestId('story-pr').querySelectorAll('button')].map((b) => b.textContent!.trim());
 
 describe('Story > Pull request', () => {
   it('SHOP-120 (#305): 3 threads with the first one quoted, reviewers, who it waits on', async () => {

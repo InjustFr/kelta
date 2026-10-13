@@ -23,7 +23,7 @@
 
   const pr = $derived(prOf(item));
   const num = $derived(pr?.ref.number ?? item.pr_url?.match(/\/(\d+)\/?$/)?.[1] ?? null);
-  const state = $derived(
+  const word = $derived(
     item.state.kind === 'merged'
       ? t('merged')
       : item.state.kind === 'pr_closed'
@@ -81,7 +81,7 @@
 
 <Section
   title={t('Pull request')}
-  summary={item.pr_url || pr ? `${num ? `#${num} ` : ''}${state}` : t('No pull request')}
+  summary={item.pr_url || pr ? `${num ? `#${num} ` : ''}${word}` : t('No pull request')}
   {open}
   testid="story-pr"
 >
@@ -89,7 +89,7 @@
     <div class="head">
       <span class="num">#{num}</span>
       <span class="title">{pr?.title ?? ''}</span>
-      <span class="state">{live ? (pr?.draft ? t('Draft') : t('Ready for review')) : state}</span>
+      <span class="state">{live ? (pr?.draft ? t('Draft') : t('Ready for review')) : word}</span>
     </div>
     {#if checks.length > 0}
       <ul class="plain" aria-label={t('Checks')} data-testid="story-pr-checks">
@@ -104,7 +104,8 @@
         {#each pr.reviewers as r (r.user.id)}
           <li>
             <span class="who">{r.user.name}</span>
-            <span class="st {r.state ?? 'pending'}">{t(REVIEWER_STATE[r.state ?? 'pending'] ?? r.state)}</span>
+            <span class="st {r.state ?? 'pending'}">{t(REVIEWER_STATE[r.state ?? 'pending'] ?? r.state)}</span
+            >
           </li>
         {/each}
         {#if wait}<li class="wait" class:late={wait.late} title={wait.title}>{wait.label}</li>{/if}

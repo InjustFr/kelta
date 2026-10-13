@@ -18,10 +18,12 @@ export const REVIEWER_STATE: Record<string, string> = {
   dismissed: msg('dismissed'),
 };
 
-const rank = (c: CiCheck): number => (c.state === 'failure' || c.state === 'error' ? 0 : c.state === 'pending' ? 1 : 2);
+const rank = (c: CiCheck): number =>
+  c.state === 'failure' || c.state === 'error' ? 0 : c.state === 'pending' ? 1 : 2;
 
 /** Failed checks first, then running, then the rest; each group keeps the host's order. */
-export const checksFirst = (checks: readonly CiCheck[]): CiCheck[] => [...checks].sort((a, b) => rank(a) - rank(b));
+export const checksFirst = (checks: readonly CiCheck[]): CiCheck[] =>
+  [...checks].sort((a, b) => rank(a) - rank(b));
 
 /** `waiting on Anna · 26h` from the polled lists (null when the PR is in none of them yet). */
 export function prWait(rv: Review, slaHours: number): WaitChip | null {
