@@ -1261,7 +1261,7 @@
     cursor: pointer;
   }
 
-  @container now (max-width: 1179px) {
+  @container now (max-width: 1115px) {
     .body {
       grid-template-columns: minmax(0, 1fr) 300px;
     }
@@ -1291,8 +1291,8 @@
     }
   }
 
-  /* Narrow: the brief stacks under the list, which keeps at least half the height. */
-  @container now (max-width: 899px) {
+  /* Narrow: the brief stacks under the list, which keeps at least half the height. Pane widths: the window minus the 64px compact rail (835 = a 900px window, 1115 = 1180px). */
+  @container now (max-width: 835px) {
     .body {
       display: flex;
       flex-direction: column;

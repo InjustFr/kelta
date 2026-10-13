@@ -232,3 +232,12 @@ test('a Claude session Kelta did not start: Elsewhere, Claude needs you, Mod+J, 
   await expect(rail).toHaveCount(0);
   await expect.poll(waiting).toBe(before);
 });
+
+test('at 936px the brief stays beside the list, not under it', async ({ page }) => {
+  await page.setViewportSize({ width: 936, height: 1000 });
+  await boot(page);
+  await page.keyboard.press('Control+0');
+  const list = await now(page).locator('.list').boundingBox();
+  const side = await now(page).locator('.side').boundingBox();
+  expect(side!.x).toBeGreaterThanOrEqual(list!.x + list!.width);
+});
