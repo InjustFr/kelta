@@ -5,15 +5,14 @@ import * as samples from '$lib/gen/fixtures';
 
 import type { Phase, PhaseId, NowSection } from '../work/phase';
 import {
-  headerChips,
   jumpQueue,
   nowSections,
   rowKey,
-  topChip,
   waitingCount,
+  zoneCount,
+  zoneOf,
   type NowInput,
   type Section,
-  type WorkEntry,
 } from './groups';
 
 let n = 0;
@@ -313,7 +312,8 @@ describe('nowSections', () => {
     const row = waiting.rows[0]!;
     expect(row.type === 'work' && [row.status, row.phase.section]).toEqual(['A MEPP', 'ship']);
     expect(waitingCount(sections)).toBe(1);
-    expect(headerChips(sections, 0).map((c) => c.section)).toEqual(['fix', 'up_next']);
+    // Fix and Up next are my move; Waiting to deploy waits on others (#399).
+    expect([zoneCount(sections, 'yours'), zoneCount(sections, 'waiting')]).toEqual([3, 4]);
   });
 
   const blockedTicket = (key: string, category: TicketItem['ticket']['status']['category']): TicketItem => {
@@ -387,8 +387,16 @@ describe('nowSections', () => {
   });
 });
 
-describe('header and badge', () => {
-  it('chips in section order, zero ones dropped, lamp only where Louis is needed', () => {
+describe('zones and badge (#399)', () => {
+  it('two zones: my move, and waiting on others (Claude, a reviewer, another team, a deploy)', () => {
+    expect(
+      (['needs_you', 'to_review', 'next_up', 'new', 'fix', 'requests', 'ship', 'up_next'] as const).map(
+        zoneOf,
+      ),
+    ).toEqual(Array(8).fill('yours'));
+    expect((['in_flight', 'elsewhere', 'blocked', 'waiting'] as const).map(zoneOf)).toEqual(
+      Array(4).fill('waiting'),
+    );
     const sections = nowSections({
       ...empty,
       work: [
@@ -396,34 +404,15 @@ describe('header and badge', () => {
         entry('to_review', 'to_review'),
         entry('to_review', 'to_review'),
         entry('checks_failed', 'fix'),
+        entry('in_review', 'in_flight'),
       ],
       requested: [review(1), review(2), review(3)],
       tickets: [ticket('T-1', 'todo')],
     });
-    const chips = headerChips(sections, 1);
-    expect(chips.map((c) => [c.section, c.text, c.lamp])).toEqual([
-      ['needs_you', '1 needs you', 'needs_input'],
-      ['to_review', '2 ready for review', null],
-      ['fix', '1 to fix', 'error'],
-      ['requests', '3 review requests', null],
-      ['in_flight', '1 Claude working', null],
-      ['up_next', '1 up next', null],
-    ]);
+    expect([zoneCount(sections, 'yours'), zoneCount(sections, 'waiting')]).toEqual([8, 1]);
+    // The badge counts what needs me now, not the tickets still to start.
     expect(waitingCount(sections)).toBe(7);
-    expect(headerChips(nowSections(empty), 0)).toEqual([]);
-  });
-
-  it('the rail shows the most urgent chip only', () => {
-    const chips = (work: WorkEntry[]) =>
-      headerChips(nowSections({ ...empty, work, tickets: [ticket('T-1', 'todo')] }), 0);
-    expect(topChip(chips([entry('replied', 'needs_you'), entry('checks_failed', 'fix')]))?.text).toBe(
-      '1 needs you',
-    );
-    expect(topChip(chips([entry('to_review', 'to_review'), entry('checks_failed', 'fix')]))?.text).toBe(
-      '1 to fix',
-    );
-    expect(topChip(chips([]))?.text).toBe('1 up next');
-    expect(topChip([])).toBeUndefined();
+    expect(zoneCount(nowSections(empty), 'yours')).toBe(0);
   });
 });
 

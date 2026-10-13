@@ -2,11 +2,11 @@
   // Now (FLOW §3): one screen across projects answering "review Claude's work, or grab a feature?".
   // It keeps the Inbox slot (rail top tile, ⌘0, `inbox.open`, pane kind `inbox`).
   import { msg, t, tn } from '$lib/i18n/index.svelte';
-  import { tick, untrack } from 'svelte';
+  import { untrack } from 'svelte';
 
   import type { PaneProps } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import type { AccountError, RowDensity, SessionInfo, TicketRef } from '$lib/gen';
+  import type { AccountError, SessionInfo, TicketRef } from '$lib/gen';
   import { openExternal } from '$lib/ipc/commands';
   import {
     GLOBAL,
@@ -31,16 +31,12 @@
     ErrorState,
     Icon,
     IconButton,
-    Kbd,
-    Lamp,
     LoadBar,
     Menu,
     ROW_HEIGHT,
     Spinner,
-    Toggle,
     VirtualList,
     relativeTime,
-    type IconName,
   } from '$lib/ui';
 
   import { chordFor } from '../../shell/labels';
@@ -60,15 +56,18 @@
     reviewOf,
     testsMissing,
     workKey,
-    type Lamp as LampKind,
     type NowSection,
     type WorkActionId,
   } from '../work/phase';
+  import Brief, { type BriefAction, type Fact } from '../work/shared/Brief.svelte';
   import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
+  import StageTrack from '../work/shared/StageTrack.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
-  import { isNextUp, SECTION_HINTS, type NowRow, type Section } from './groups';
+  import { CLAUDE, DEPLOY, PR, REVIEW, STAGES, TICKET, stage, workStage, type Stage } from '../work/stage';
+  import RowButton from '../tickets/RowButton.svelte';
+  import { isNextUp, ZONES, zoneOf, type NowRow, type Section, type Zone } from './groups';
   import { asOf, enterRow, goToRow, nowSummary, refreshNow, reviewRowLocally, startNextUp } from './now';
   import { nextUp } from './nextUp.svelte';
   import { waitChip } from '../people/waiting';
@@ -77,16 +76,7 @@
   import FilterBar from '../filters/FilterBar.svelte';
   import { clearAll, commonFilters, noMatch } from '../filters/filters';
 
-  let { projectId, paneId, content, focused }: PaneProps<'inbox'> = $props();
-
-  let densityOverride = $state<RowDensity | null>(null);
-  /** Compact keeps the single 32px line (#383); comfortable is the two-line row. */
-  const compact = $derived((densityOverride ?? content.density) === 'compact');
-
-  function setCompact(on: boolean): void {
-    densityOverride = on ? 'compact' : 'comfortable';
-    persistPaneContent(projectId, paneId, { density: densityOverride });
-  }
+  let { focused }: PaneProps<'inbox'> = $props();
 
   const ALL = { kind: 'all' } as const;
 
@@ -125,29 +115,28 @@
   });
 
   interface View {
-    lamp: LampKind;
-    /** What the id is: a branch of work, a pull request, a ticket, a terminal or an outside Claude. */
-    icon: IconName;
     id: string;
     title: string;
     project: string | null;
     color: string | null;
-    /** The row's state ("Changes requested", "Claude working"): line 2 when the row has no next action. */
+    /** The row's state ("Changes requested", "Claude working"): the brief's first line, and the row's
+     *  next-step cell when it has no next action. */
     reason: string;
-    /** Line 2 after the next action: the one detail that says why (Claude's words, failed checks, who asked). */
+    /** The row's line 2: the one detail that says why (Claude's words, failed checks, who asked). */
     hint: string;
-    /** Status and numbers, on the selected row only. */
-    meta: string[];
+    /** Where it is on the way to deploy, and whose move (#399). */
+    stage: Stage;
+    /** The brief's facts: status and numbers. */
+    facts: Fact[];
+    /** Claude's last words, in the brief. */
+    message: string;
     /** Ticket and review rows: where their local tags live (#349). */
     tagged?: { kind: TagKind; key: string };
-    /** Work rows: Claude context use and spend. */
-    ctx?: { text: string; hot: boolean } | null;
-    cost?: { text: string; over: boolean } | null;
-    /** The meta part shown as a warning (`tests: none` when source changed). */
+    /** Shown as a warning on the row (`tests: none` when source changed). */
     warn?: string;
     age: string;
-    /** The selected row's buttons (#397), the key on each; the `enter` one is the primary. */
-    actions: { key: string; label: string; run: () => unknown }[];
+    /** The brief's buttons, the key on each; the `enter` one is the primary and the row's next step. */
+    actions: BriefAction[];
     /** A Claude session Kelta did not start: shown dimmed. */
     dim?: boolean;
   }
@@ -158,18 +147,8 @@
   }
 
   const age = (iso: string): string => relativeTime(Date.parse(iso));
-
-  /** Section weight: what needs me now stands out, work that can wait steps back. */
-  const TIER: Partial<Record<NowSection, 'urgent' | 'quiet'>> = {
-    needs_you: 'urgent',
-    to_review: 'urgent',
-    fix: 'urgent',
-    in_flight: 'quiet',
-    elsewhere: 'quiet',
-    blocked: 'quiet',
-    up_next: 'quiet',
-    waiting: 'quiet',
-  };
+  const fact = (label: string, value: string | null | undefined, tone?: Fact['tone']): Fact[] =>
+    value ? [{ label, value, ...(tone ? { tone } : {}) }] : [];
 
   // Work row letters in Now (FLOW §3.3); `o` opens the PR, else the ticket. `R` marks reviewed on a
   // row that has something to review, else refreshes.
@@ -189,24 +168,15 @@
     C: 'start_claude',
   };
 
-  function view(row: NowRow): View {
+  function view(row: NowRow, section: NowSection): View {
+    const yours = zoneOf(section) === 'yours';
+    const mark = (broken = false) => (broken ? 'broken' : yours ? 'you' : 'wait');
     switch (row.type) {
       case 'work': {
         const { item, phase } = row;
         const git = work.git[item.id];
         const pr = prOf(item);
-        const meta: string[] = [];
         const delta = phase.section === 'to_review' ? item.delta : null;
-        if (delta) meta.push(...deltaParts(delta));
-        else if (git && (git.insertions || git.deletions))
-          meta.push(`+${git.insertions} −${git.deletions}${git.dirty ? ` ${t('uncommitted')}` : ''}`);
-        else if (pr) meta.push(`#${pr.ref.number}`);
-        if (git?.behind) meta.push(t('{n} behind {base}', { n: git.behind, base: item.base }));
-        if (item.auto_finish) meta.push(t('armed'));
-        if (phase.lamp === 'parked' && item.parked_at)
-          meta.push(t('parked {ago}', { ago: age(item.parked_at) }));
-        if (item.nvim_kept)
-          meta.push(tn('nvim kept: {n} unsaved buffer', 'nvim kept: {n} unsaved buffers', item.nvim_kept));
         const p = projectOf([item.project_id]);
         const actions = [
           ...(phase.primary ? [{ key: 'enter', label: phase.primaryLabel, run: () => enterRow(row) }] : []),
@@ -218,15 +188,6 @@
             label: a.label({ item, phase }),
             run: () => runWorkAction(a.id, item),
           })),
-          ...(item.claude_message && phase.section === 'to_review'
-            ? [
-                {
-                  key: 'm',
-                  label: expanded === row.id ? t('Hide message') : t('Full message'),
-                  run: () => (expanded = expanded === row.id ? null : row.id),
-                },
-              ]
-            : []),
           { key: 'o', label: t('Open in browser'), run: () => browse(row) },
           { key: 'g', label: t('Go to work tab'), run: () => goToRow(row) },
         ];
@@ -253,28 +214,50 @@
         // Waiting to deploy: its tracker status is the news; Claude asking: its question. A bare `#309`
         // (Merged, Reviewed) only repeats the id: the state says more.
         const hint = row.status || !more || /^#\d+$/.test(more) ? reason : more;
+        const changes =
+          git && (git.insertions || git.deletions)
+            ? `+${git.insertions} −${git.deletions}${git.dirty ? ` ${t('uncommitted')}` : ''}`
+            : null;
         return {
-          lamp: phase.lamp,
-          icon: 'git-branch',
           id: workKey(item),
           title: workTitle(item),
           project: p.name,
           color: p.color,
           reason,
-          // Without a next action the reason is line 2 already; the hint must not repeat it.
-          hint: phase.primary || hint !== reason ? hint : '',
-          meta: [...(phase.primary && hint !== reason ? [reason] : []), ...meta],
-          ctx:
-            u && u.context_pct !== null
-              ? { text: `${t('ctx')} ${Math.round(u.context_pct)}%`, hot: ctxHot(u) }
-              : null,
-          cost:
-            spent > 0
-              ? {
-                  text: usd(spent),
-                  over: overBudget(spent, settings.value(item.project_id)?.claude.budget_usd),
-                }
-              : null,
+          hint,
+          stage: workStage(item, phase, pr, yours, !!row.status),
+          facts: [
+            ...fact(t('Project'), p.name),
+            ...fact(
+              t('Changes'),
+              delta ? deltaParts(delta).join(' · ') : changes,
+              delta && testsMissing(delta) ? 'warn' : undefined,
+            ),
+            ...fact(t('Pull request'), pr ? `#${pr.ref.number}` : null),
+            ...fact(
+              t('Behind {base}', { base: item.base }),
+              git?.behind ? tn('{n} commit', '{n} commits', git.behind) : null,
+            ),
+            ...fact(
+              t('Context'),
+              u && u.context_pct !== null ? `${Math.round(u.context_pct)}%` : null,
+              u && ctxHot(u) ? 'warn' : undefined,
+            ),
+            ...fact(
+              t('Cost'),
+              spent > 0 ? usd(spent) : null,
+              overBudget(spent, settings.value(item.project_id)?.claude.budget_usd) ? 'danger' : undefined,
+            ),
+            ...fact(t('Auto finish'), item.auto_finish ? t('armed') : null),
+            ...fact(t('Parked'), phase.lamp === 'parked' && item.parked_at ? age(item.parked_at) : null),
+            ...fact(
+              t('Editor'),
+              item.nvim_kept
+                ? tn('nvim kept: {n} unsaved buffer', 'nvim kept: {n} unsaved buffers', item.nvim_kept)
+                : null,
+            ),
+          ],
+          message: item.claude_message?.trim() || preview,
           warn: delta && testsMissing(delta) ? t('tests: none') : row.blocked ? t('Blocked') : undefined,
           // Ready for review: how long it has waited since Claude stopped.
           age: age(delta ? (item.claude_at ?? item.created_at) : item.created_at),
@@ -286,15 +269,15 @@
         const p = projectOf([s.project_id]);
         const preview = s.claude?.preview ?? '';
         return {
-          lamp: 'needs_input',
-          icon: 'terminal',
           id: s.kind.type,
           title: sessionLabel(s),
           project: p.name,
           color: p.color,
           reason: t('Needs input'),
-          hint: preview,
-          meta: [],
+          hint: preview || t('Needs input'),
+          stage: stage(CLAUDE, mark()),
+          facts: fact(t('Project'), p.name),
+          message: preview,
           age: age(s.created_at),
           actions: [{ key: 'enter', label: t('Go to session'), run: () => enterRow(row) }],
         };
@@ -303,15 +286,15 @@
         const s = row.session;
         const ph = outsidePhase(s);
         return {
-          lamp: ph.lamp,
-          icon: 'bot',
           id: s.ticket?.key ?? 'claude',
           title: s.title,
           project: null,
           color: null,
           reason: ph.label,
-          hint: s.preview ?? '',
-          meta: [s.branch, s.cwd].filter((x): x is string => !!x),
+          hint: ph.label,
+          stage: stage(CLAUDE, mark()),
+          facts: [...fact(t('Branch'), s.branch), ...fact(t('Folder'), s.cwd)],
+          message: s.preview ?? '',
           age: age(s.updated_at),
           actions: [],
           dim: true,
@@ -320,7 +303,6 @@
       case 'review': {
         const r = row.review.review;
         const p = projectOf(row.review.project_ids);
-        const stat = r.additions !== null && r.deletions !== null ? [`+${r.additions} −${r.deletions}`] : [];
         // Who is waiting on whom: only while it sits with the reviewers, not once they sent it back to me.
         const chip =
           row.mine && row.reason === 'In review'
@@ -331,9 +313,8 @@
           : r.ci === 'failure'
             ? t('checks failed')
             : '';
+        const red = row.reason === 'Checks failed';
         return {
-          lamp: 'none',
-          icon: 'git-pull-request',
           id: `#${r.ref.number}`,
           title: r.title,
           project: p.name ?? r.ref.repo,
@@ -344,15 +325,21 @@
           hint:
             !row.mine && row.reason === 'Review requested'
               ? t('from {name}', { name: r.author.name })
-              : row.reason === 'Checks failed'
+              : red
                 ? [checks || t(row.reason), reviewOf(r)].filter(Boolean).join(' · ')
                 : (chip?.label ?? t(row.reason)),
+          stage: red ? stage(PR, 'broken', r.decision ? REVIEW : PR) : stage(REVIEW, mark()),
           tagged: { kind: 'prs', key: reviewKey(r.ref) },
-          meta: [
-            ...stat,
-            `${r.source_branch} ${t('into')} ${r.target_branch}`,
-            ...(row.reason !== 'Checks failed' && checks ? [checks] : []),
+          facts: [
+            ...fact(t('Project'), p.name ?? r.ref.repo),
+            ...fact(
+              t('Changes'),
+              r.additions !== null && r.deletions !== null ? `+${r.additions} −${r.deletions}` : null,
+            ),
+            ...fact(t('Branch'), `${r.source_branch} ${t('into')} ${r.target_branch}`),
+            ...fact(t('Checks'), checks, 'danger'),
           ],
+          message: '',
           warn: chip?.late ? chip.label : undefined,
           age: age((!row.mine && r.requested_at) || r.updated_at),
           actions: [
@@ -366,8 +353,6 @@
         const tk = row.ticket.ticket;
         const p = projectOf(row.ticket.project_ids);
         return {
-          lamp: 'none',
-          icon: 'ticket',
           id: tk.ref.key,
           title: tk.title,
           project: p.name,
@@ -376,8 +361,14 @@
           hint: batch.has(tk.ref)
             ? t('marked')
             : (waitChip(row.ticket.waiting, { withWhy: true })?.label ?? tk.status.name),
+          stage: section === 'waiting' ? stage(DEPLOY, 'wait') : stage(TICKET, mark()),
           tagged: { kind: 'tickets', key: ticketKey(tk.ref) },
-          meta: tk.priority ? [tk.priority] : [],
+          facts: [
+            ...fact(t('Project'), p.name),
+            ...fact(t('Status'), tk.status.name),
+            ...fact(t('Priority'), tk.priority),
+          ],
+          message: '',
           warn: tk.blocked ? t('Blocked') : undefined,
           age: age(tk.updated_at),
           actions: [
@@ -410,26 +401,26 @@
     }
   }
 
-  function matches(row: NowRow, q: string): boolean {
+  function matches(row: NowRow, section: NowSection, q: string): boolean {
     if (!q) return true;
-    const v = view(row);
+    const v = view(row, section);
     const branch =
       row.type === 'work' ? row.item.branch : row.type === 'review' ? row.review.review.source_branch : '';
     return `${v.id} ${v.title} ${v.project ?? ''} ${branch}`.toLowerCase().includes(q.toLowerCase());
   }
 
   type Line =
-    | { type: 'section'; id: string; section: Section; count: number; open: boolean }
-    | { type: 'row'; id: string; row: NowRow }
-    | { type: 'detail'; id: string; row: NowRow }
+    | { type: 'zone'; id: string; zone: Zone; label: string; count: number }
+    /** A folded section's header (Waiting to deploy). */
+    | { type: 'fold'; id: string; section: Section; count: number; open: boolean }
+    | { type: 'row'; id: string; row: NowRow; section: NowSection }
     /** The option buttons of the row's question (#356). */
     | { type: 'ask'; id: string; session: SessionInfo }
-    | { type: 'msg'; id: string; text: string }
     | { type: 'more'; id: string; count: number };
 
   let selId = $state<string | null>(null);
-  /** Row whose full Claude message is unfolded under its detail line (`m`). */
-  let expanded = $state<string | null>(null);
+  /** The brief shows every action (`.`); closes when the selection moves. */
+  let allActions = $state(false);
   /** Folded sections (Waiting to deploy) opened by their header. */
   let unfolded = $state<string[]>([]);
   const isOpen = (s: Section): boolean => !s.folded || unfolded.includes(s.id);
@@ -437,32 +428,42 @@
     unfolded = isOpen(s) ? unfolded.filter((id) => id !== s.id) : [...unfolded, s.id];
   };
 
+  // Sections in zone order (#399): Your move, then Waiting on others, each keeping its section order.
   const visible = $derived(
-    summary.sections
-      .map((s) => ({ ...s, rows: s.rows.filter((r) => matches(r, filter.trim())) }))
+    ZONES.flatMap((z) => summary.sections.filter((s) => zoneOf(s.id) === z.id))
+      .map((s) => ({ ...s, rows: s.rows.filter((r) => matches(r, s.id, filter.trim())) }))
       .filter((s) => s.rows.length > 0 || s.more > 0),
   );
   const activeFilters = $derived(commonFilters(filter, () => (filter = '')));
-  const selectable = $derived(visible.filter(isOpen).flatMap((s) => s.rows));
-  const cur = $derived(selectable.find((r) => r.id === selId) ?? selectable[0] ?? null);
+  const selectable = $derived(visible.filter(isOpen).flatMap((s) => s.rows.map((row) => ({ row, s: s.id }))));
+  const curAt = $derived(selectable.find((r) => r.row.id === selId) ?? selectable[0] ?? null);
+  const cur = $derived(curAt?.row ?? null);
+  const curView = $derived(curAt ? view(curAt.row, curAt.s) : null);
+
+  $effect(() => {
+    void cur?.id;
+    allActions = false;
+  });
 
   const lines = $derived.by((): Line[] => {
     const out: Line[] = [];
-    for (const s of visible) {
-      const open = isOpen(s);
-      out.push({ type: 'section', id: `s:${s.id}`, section: s, count: s.rows.length + s.more, open });
-      if (!open) continue;
-      for (const row of s.rows) {
-        out.push({ type: 'row', id: row.id, row });
-        const asker = rowAsker(row);
-        if (asker) out.push({ type: 'ask', id: `a:${row.id}`, session: asker });
-        if (row === cur) out.push({ type: 'detail', id: `d:${row.id}`, row });
-        if (row === cur && expanded === row.id && row.type === 'work')
-          (row.item.claude_message ?? '')
-            .split('\n')
-            .forEach((text, i) => out.push({ type: 'msg', id: `m:${row.id}:${i}`, text }));
+    for (const z of ZONES) {
+      const secs = visible.filter((s) => zoneOf(s.id) === z.id);
+      if (secs.length === 0) continue;
+      const count = secs.reduce((n, s) => n + s.rows.length + s.more, 0);
+      out.push({ type: 'zone', id: `z:${z.id}`, zone: z.id, label: z.label, count });
+      for (const s of secs) {
+        const open = isOpen(s);
+        if (s.folded)
+          out.push({ type: 'fold', id: `s:${s.id}`, section: s, count: s.rows.length + s.more, open });
+        if (!open) continue;
+        for (const row of s.rows) {
+          out.push({ type: 'row', id: row.id, row, section: s.id });
+          const asker = rowAsker(row);
+          if (asker) out.push({ type: 'ask', id: `a:${row.id}`, session: asker });
+        }
+        if (s.more > 0) out.push({ type: 'more', id: `m:${s.id}`, count: s.more });
       }
-      if (s.more > 0) out.push({ type: 'more', id: `m:${s.id}`, count: s.more });
     }
     return out;
   });
@@ -485,21 +486,11 @@
       root.focus({ preventScroll: true });
   });
 
-  /** A header chip: selects its section's first row and brings the section heading into view. */
-  async function jumpTo(id: NowSection): Promise<void> {
-    const first = visible.find((s) => s.id === id)?.rows[0];
-    if (!first) return;
-    selId = first.id;
-    root?.focus({ preventScroll: true });
-    await tick();
-    vlist?.scrollToIndex(lines.findIndex((l) => l.type === 'section' && l.section.id === id));
-  }
-
   function step(delta: number): void {
     if (selectable.length === 0) return;
-    const at = cur ? selectable.indexOf(cur) : -1;
+    const at = curAt ? selectable.indexOf(curAt) : -1;
     const next = selectable[Math.min(selectable.length - 1, Math.max(0, at + delta))];
-    if (next) selId = next.id;
+    if (next) selId = next.row.id;
   }
 
   function browse(row: NowRow): void {
@@ -559,11 +550,12 @@
     openView('tickets');
   }
 
-  /** The full key list (`?`); the footer shows the first five. */
+  /** The full key list (`?`). */
   let keysOpen = $state(false);
   const hints = $derived<[string, string][]>([
     ['j k', msg('Move')],
     ['enter', msg('Next action')],
+    ['.', msg('More actions')],
     ['g', msg('Go to')],
     ['/', msg('Filter')],
     ['space', msg('Mark ticket')],
@@ -575,6 +567,9 @@
   function onkeydown(e: KeyboardEvent): void {
     // A section header keeps its own keys (Enter, Space); they must not act on the selected row.
     if (e.target instanceof HTMLButtonElement && e.target.classList.contains('fold')) return;
+    // A brief button pressed with the keyboard runs itself, not the row's next action too. (The row itself is a button: don't match it.)
+    if (e.target instanceof Element && e.target.closest('.side') && (e.key === 'Enter' || e.key === ' '))
+      return;
     const ticket =
       cur?.type === 'ticket'
         ? { ref: cur.ticket.ticket.ref, projectId: cur.ticket.project_ids[0] ?? null }
@@ -594,10 +589,10 @@
         step(-1);
         break;
       case 'Home':
-        if (selectable[0]) selId = selectable[0].id;
+        if (selectable[0]) selId = selectable[0].row.id;
         break;
       case 'End':
-        if (selectable.at(-1)) selId = selectable.at(-1)!.id;
+        if (selectable.at(-1)) selId = selectable.at(-1)!.row.id;
         break;
       case 'Enter':
         if (cur) {
@@ -619,8 +614,8 @@
         if (cur?.type === 'work' && blockedReason('mark_reviewed', cur.item) === null) letter(cur, 'R');
         else refresh();
         break;
-      case 'm':
-        if (cur?.type === 'work' && cur.item.claude_message) expanded = expanded === cur.id ? null : cur.id;
+      case '.':
+        allActions = !allActions;
         break;
       case 'N':
         void dispatch('work.new');
@@ -675,10 +670,14 @@
   }
 </script>
 
+{#snippet count(text: string, n: number)}
+  {@const at = text.indexOf(String(n))}
+  {#if at < 0}{text}{:else}{text.slice(0, at)}<b class="k-num">{n}</b>{text.slice(at + String(n).length)}{/if}
+{/snippet}
+
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
   class="pane"
-  class:compact
   data-testid="inbox-pane"
   bind:this={root}
   tabindex="0"
@@ -688,27 +687,15 @@
 >
   <header class="bar">
     <span class="title">{t('Now')}</span>
-    <span class="split" data-testid="now-header" title={summary.header}>
-      {#each summary.chips as c (c.section)}
-        {@const at = c.text.indexOf(String(c.n))}
-        <Button
-          size="sm"
-          variant="ghost"
-          class="count {c.lamp ?? ''}"
-          disabled={!visible.some((s) => s.id === c.section && s.rows.length > 0)}
-          data-testid="now-chip-{c.section}"
-          onclick={() => void jumpTo(c.section)}
-          >{#if at < 0}{c.text}{:else}{c.text.slice(0, at)}<b class="k-num">{c.n}</b>{c.text.slice(
-              at + String(c.n).length,
-            )}{/if}</Button
-        >
-      {/each}
+    <!-- One summary line (#399): the zones below carry the rest. -->
+    <span class="split" data-testid="now-header">
+      <span>{@render count(t('{n} your move', { n: summary.yours }), summary.yours)}</span>
+      <span>{@render count(t('{n} waiting on others', { n: summary.others }), summary.others)}</span>
     </span>
     {#if stale}<span class="asof" data-testid="now-asof"
         >{t('Updated {ago}', { ago: relativeTime(stale.ms) })}</span
       >{/if}
     <span class="spacer"></span>
-    <Toggle label={t('Compact')} checked={compact} onchange={setCompact} />
     <IconButton
       icon="plus"
       size="sm"
@@ -716,9 +703,6 @@
       chord={chordFor('work.new')}
       onclick={() => void dispatch('work.new')}
     />
-    <Button variant="ghost" size="sm" icon="refresh-cw" chord="shift+r" onclick={refresh}
-      >{t('Refresh')}</Button
-    >
   </header>
   <FilterBar
     bind:value={filter}
@@ -772,148 +756,141 @@
         {/snippet}
       </EmptyState>
     {:else}
-      <div class="list">
-        <VirtualList
-          bind:this={vlist}
-          items={lines}
-          itemHeight={ROW_HEIGHT}
-          measure={!compact}
-          key={(l) => l.id}
-          label={t('Now')}
-          sticky={(l) => l.type === 'section'}
-        >
-          {#snippet row(l)}
-            {#if l.type === 'section'}
-              <div
-                class="section {TIER[l.section.id] ?? ''}"
-                role="heading"
-                aria-level="2"
-                data-section={l.section.id}
-                title={t(SECTION_HINTS[l.section.id])}
-              >
-                {#if l.section.folded}
+      <div class="body">
+        <div class="main">
+          <div class="cols grid" aria-hidden="true">
+            <span></span><span></span>
+            <span class="ends"><span>{t(STAGES[0])}</span><span>{t(STAGES[STAGES.length - 1])}</span></span>
+            <span class="next-h">{t('Next step')}</span><span class="right">{t('Last change')}</span>
+          </div>
+          <div class="list">
+            <VirtualList
+              bind:this={vlist}
+              items={lines}
+              itemHeight={ROW_HEIGHT}
+              measure
+              key={(l) => l.id}
+              label={t('Now')}
+              sticky={(l) => l.type === 'zone'}
+            >
+              {#snippet row(l)}
+                {#if l.type === 'zone'}
+                  <div class="zone {l.zone}" role="heading" aria-level="2" data-zone={l.zone}>
+                    {t(l.label)} <span class="count">{l.count}</span>
+                  </div>
+                {:else if l.type === 'fold'}
                   {@const s = l.section}
-                  <button type="button" class="fold" aria-expanded={l.open} onclick={() => toggleSection(s)}>
-                    <span class="slot chevron"><Icon name="chevron-right" size={12} /></span>
-                    {t(s.label)}
-                    <span class="count">{l.count}</span>
-                  </button>
-                {:else}
-                  <span class="slot"><Lamp level={l.section.lamp} title="" /></span>
-                  {t(l.section.label)}
-                  <span class="count">{l.count}</span>
-                {/if}
-              </div>
-            {:else if l.type === 'ask'}
-              <div class="row askline"><AskBar session={l.session} /></div>
-            {:else if l.type === 'msg'}
-              <div class="row msgline" data-testid="now-message">{l.text}</div>
-            {:else if l.type === 'more'}
-              <button type="button" tabindex="-1" class="row moreline" onclick={() => void showAll()}>
-                {t('{n} more, show all', { n: l.count })}
-              </button>
-            {:else}
-              {@const v = view(l.row)}
-              {@const next = v.actions.find((a) => a.key === 'enter')}
-              {#if l.type === 'row'}
-                <button
-                  type="button"
-                  tabindex="-1"
-                  class="row"
-                  class:two={!compact}
-                  class:dim={v.dim}
-                  class:selected={cur === l.row}
-                  class:over={overId === l.row.id && dragId !== l.row.id}
-                  aria-current={cur === l.row ? 'true' : undefined}
-                  data-row={l.row.id}
-                  draggable={isNextUp(l.row) ? 'true' : undefined}
-                  ondragstart={(e) => {
-                    dragId = l.row.id;
-                    selId = l.row.id;
-                    e.dataTransfer?.setData('text/plain', l.row.id);
-                  }}
-                  ondragover={(e) => {
-                    if (dragId && isNextUp(l.row)) {
-                      e.preventDefault();
-                      overId = l.row.id;
-                    }
-                  }}
-                  ondragleave={() => (overId = null)}
-                  ondrop={(e) => {
-                    e.preventDefault();
-                    drop(l.row);
-                  }}
-                  ondragend={() => (dragId = overId = null)}
-                  style:--hue={resolveProjectColor(v.color) ?? 'transparent'}
-                  onclick={() => (selId = l.row.id)}
-                  ondblclick={() => void enterRow(l.row)}
-                  oncontextmenu={(e) => rowMenu(e, l.row)}
-                  use:peekHover={() => rowSession(l.row)}
-                >
-                  <span class="slot"
-                    >{#if inflight.has(l.row.id)}<Spinner size={10} />{:else}<Lamp
-                        level={v.lamp}
-                        title={v.reason}
-                      />{/if}</span
-                  >
-                  <span class="id"><Icon name={v.icon} size={12} />{v.id}</span>
-                  <span class="ttl">{v.title}</span>
-                  <!-- Line 2 (#399): what Enter does, the one detail that says why, warnings, age. The rest
-                       waits on the selected row. -->
-                  <span class="sub">
-                    {#if next}<span class="verb">{next.label}</span>{:else}<span class="reason"
-                        >{v.reason}</span
-                      >{/if}
-                    {#if v.hint}<span class="hint" class:warn={v.hint === v.warn} title={v.hint}
-                        >{v.hint}</span
-                      >{/if}
-                    {#if v.warn && v.warn !== v.hint}<span class="meta warn">{v.warn}</span>{/if}
-                    {#if v.ctx?.hot}<span class="meta hot" title={t('Compacts soon')}>{v.ctx.text}</span>{/if}
-                    {#if v.cost?.over}<span class="meta over" title={t('Over budget')}>{v.cost.text}</span
-                      >{/if}
-                    {#if v.tagged}<TagChips kind={v.tagged.kind} itemKey={v.tagged.key} />{/if}
-                    <span class="meta age">{v.age}</span>
-                  </span>
-                </button>
-              {:else}
-                <div
-                  class="row detail"
-                  style:--hue={resolveProjectColor(v.color) ?? 'transparent'}
-                  data-testid="now-detail"
-                >
-                  <span class="info">
-                    {#if v.project}<span class="proj">{v.project}</span>{/if}
-                    {#each v.meta.filter((m) => m !== v.warn) as m (m)}<span class="meta">{m}</span>{/each}
-                    {#if v.ctx}<span class="meta" class:hot={v.ctx.hot} title={t('Context window used')}
-                        >{v.ctx.text}</span
-                      >{/if}
-                    {#if v.cost}<span
-                        class="meta"
-                        class:over={v.cost.over}
-                        title={t('Claude spend on this item')}>{v.cost.text}</span
-                      >{/if}
-                  </span>
-                  {#each v.actions as a (a.key)}
+                  <div class="foldline" data-section={s.id}>
                     <button
                       type="button"
-                      tabindex="-1"
-                      class="act"
-                      class:primary={a.key === 'enter'}
-                      data-key={a.key}
-                      onclick={() => void inflight.track(l.row.id, a.run)}
-                      ><Kbd chord={a.key} />{a.label}</button
+                      class="fold"
+                      aria-expanded={l.open}
+                      onclick={() => toggleSection(s)}
                     >
-                  {/each}
-                </div>
-              {/if}
-            {/if}
-          {/snippet}
-        </VirtualList>
+                      <span class="chevron"><Icon name="chevron-right" size={12} /></span>
+                      {t(s.label)}
+                      <span class="count">{l.count}</span>
+                    </button>
+                  </div>
+                {:else if l.type === 'ask'}
+                  <div class="askline"><AskBar session={l.session} /></div>
+                {:else if l.type === 'more'}
+                  <button type="button" tabindex="-1" class="moreline" onclick={() => void showAll()}>
+                    {t('{n} more, show all', { n: l.count })}
+                  </button>
+                {:else}
+                  {@const v = view(l.row, l.section)}
+                  {@const next = v.actions.find((a) => a.key === 'enter')}
+                  {@const sel = cur === l.row}
+                  <button
+                    type="button"
+                    tabindex="-1"
+                    class="row grid {zoneOf(l.section)}"
+                    class:dim={v.dim}
+                    class:selected={sel}
+                    class:over={overId === l.row.id && dragId !== l.row.id}
+                    aria-current={sel ? 'true' : undefined}
+                    data-row={l.row.id}
+                    draggable={isNextUp(l.row) ? 'true' : undefined}
+                    ondragstart={(e) => {
+                      dragId = l.row.id;
+                      selId = l.row.id;
+                      e.dataTransfer?.setData('text/plain', l.row.id);
+                    }}
+                    ondragover={(e) => {
+                      if (dragId && isNextUp(l.row)) {
+                        e.preventDefault();
+                        overId = l.row.id;
+                      }
+                    }}
+                    ondragleave={() => (overId = null)}
+                    ondrop={(e) => {
+                      e.preventDefault();
+                      drop(l.row);
+                    }}
+                    ondragend={() => (dragId = overId = null)}
+                    style:--hue={resolveProjectColor(v.color) ?? 'transparent'}
+                    onclick={() => (selId = l.row.id)}
+                    ondblclick={() => void enterRow(l.row)}
+                    oncontextmenu={(e) => rowMenu(e, l.row)}
+                    use:peekHover={() => rowSession(l.row)}
+                  >
+                    <span class="id">{v.id}</span>
+                    <span class="what">
+                      <span class="ttl">{v.title}</span>
+                      <span class="why">
+                        {#if v.hint}<span class="hint" class:warn={v.hint === v.warn} title={v.hint}
+                            >{v.hint}</span
+                          >{/if}
+                        {#if v.warn && v.warn !== v.hint}<span class="meta warn">{v.warn}</span>{/if}
+                        {#if v.tagged}<TagChips kind={v.tagged.kind} itemKey={v.tagged.key} />{/if}
+                      </span>
+                    </span>
+                    <span class="stage"><StageTrack stage={v.stage} named={sel} /></span>
+                    <!-- The next step is a real control (#399): it runs, it is not a styled label. -->
+                    <span class="next">
+                      {#if next}<RowButton
+                          label={next.label}
+                          onclick={() => void inflight.track(l.row.id, next.run)}
+                          ><span class="act" class:broken={v.stage.mark === 'broken'} data-next
+                            >{#if inflight.has(l.row.id)}<Spinner size={10} />{/if}{next.label}</span
+                          ></RowButton
+                        >{:else}<span class="reason"
+                          >{#if inflight.has(l.row.id)}<Spinner size={10} />{/if}{v.reason}</span
+                        >{/if}
+                    </span>
+                    <span class="age">{v.age}</span>
+                  </button>
+                {/if}
+              {/snippet}
+            </VirtualList>
+          </div>
+        </div>
+        {#if cur && curView}
+          {@const row = cur}
+          {@const v = curView}
+          {@const track = (a: BriefAction): BriefAction => ({
+            ...a,
+            run: () => inflight.track(row.id, a.run),
+          })}
+          <div class="side">
+            <Brief
+              id={v.id}
+              title={v.title}
+              where={v.reason}
+              primary={v.actions.filter((a) => a.key === 'enter').map(track)[0] ?? null}
+              actions={v.actions.filter((a) => a.key !== 'enter').map(track)}
+              bind:more={allActions}
+              message={v.message}
+              facts={v.facts}
+              busy={inflight.has(row.id)}
+              testid="now-brief"
+            />
+          </div>
+        {/if}
       </div>
     {/if}
   {/if}
-
-  <KeyHints {hints} onopen={() => (keysOpen = true)} />
 </div>
 
 {#if keysOpen}
@@ -945,7 +922,7 @@
 
 <style>
   .pane {
-    --id-w: 92px;
+    container: now / inline-size;
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -964,7 +941,7 @@
     align-items: center;
     gap: var(--k-space-4);
     min-height: var(--k-toolbar-height);
-    padding: 0 var(--k-space-3);
+    padding: 0 var(--k-space-3) 0 var(--k-space-4);
     border-bottom: 1px solid var(--k-border);
     background: var(--k-bg-elev);
   }
@@ -974,34 +951,19 @@
     font-weight: 600;
   }
 
-  /* The chips wrap on a narrow pane rather than cut the last ones off. */
   .split {
     display: inline-flex;
     flex-wrap: wrap;
-    gap: var(--k-space-1);
+    gap: 0 var(--k-space-4);
     min-width: 0;
-    padding-block: var(--k-space-1);
     font-size: var(--k-font-size-sm);
     font-variant-numeric: tabular-nums;
     color: var(--k-fg-muted);
-    white-space: nowrap;
   }
 
-  .split :global(.count) {
-    color: var(--k-fg-muted);
-  }
-
-  .split :global(.count b) {
+  .split :global(b) {
     font-weight: 600;
-  }
-
-  /* Only the sections that need Louis take their lamp colour. */
-  .split :global(.count.needs_input) {
-    color: var(--k-lamp-needs-input);
-  }
-
-  .split :global(.count.error) {
-    color: var(--k-lamp-error);
+    color: var(--k-fg);
   }
 
   .asof {
@@ -1013,56 +975,75 @@
     flex: 1;
   }
 
+  /* The list, and the selected item's brief beside it (#399): 340px, 300px below 1180px, under the
+     list below 900px. */
+  .body {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+
+  .main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+
   .list {
     flex: 1;
     min-height: 0;
   }
 
-  .section {
-    display: flex;
+  .side {
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    border-left: 1px solid var(--k-border);
+    background: var(--k-bg-elev);
+  }
+
+  /* id, title and why, the stage track, the next step, the age: one grid for the header and the rows. */
+  .grid {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr) 160px 180px 64px;
+    column-gap: var(--k-space-4);
     align-items: center;
-    gap: var(--k-space-2);
-    height: 100%;
-    padding: 0 var(--k-space-3) 0 var(--k-space-4);
-    font-size: var(--k-font-size-sm);
-    font-weight: 600;
-    color: var(--k-fg-muted);
-    background: var(--k-bezel-raised);
-    box-shadow:
-      inset 0 1px 0 var(--k-border),
-      inset 0 -1px 0 var(--k-border);
+    padding-inline: var(--k-space-4);
   }
 
-  .section.urgent {
-    color: var(--k-fg-strong);
-  }
-
-  .section.quiet {
-    font-weight: 500;
+  .cols {
+    flex: none;
+    padding-block: var(--k-space-2) var(--k-space-1);
+    border-bottom: 1px solid var(--k-border);
+    font-size: var(--k-font-size-xs);
     color: var(--k-fg-subtle);
   }
 
-  /* The chevron turns as the section folds or opens; the rows fade in and out (VirtualList). */
-  .chevron :global(svg) {
-    transition: rotate var(--k-duration-fast) var(--k-ease);
-  }
-
-  .fold[aria-expanded='true'] .chevron :global(svg) {
-    rotate: 90deg;
-  }
-
-  .fold {
+  .ends {
     display: flex;
-    flex: 1;
-    align-items: center;
+    justify-content: space-between;
+  }
+
+  .right {
+    text-align: right;
+  }
+
+  .zone {
+    display: flex;
+    align-items: baseline;
     gap: var(--k-space-2);
     height: 100%;
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    color: inherit;
-    cursor: pointer;
+    padding: var(--k-space-4) var(--k-space-4) var(--k-space-1);
+    background: var(--k-bg);
+    font-size: var(--k-font-size-sm);
+    font-weight: 600;
+    color: var(--k-fg-strong);
+  }
+
+  .zone.waiting {
+    color: var(--k-fg-muted);
   }
 
   .count {
@@ -1071,86 +1052,103 @@
     color: var(--k-fg-subtle);
   }
 
-  .slot {
-    display: inline-flex;
-    justify-content: center;
-    flex: none;
-    width: 12px;
-    margin-right: var(--k-space-2);
+  .foldline {
+    padding: var(--k-space-1) var(--k-space-4);
   }
 
-  .row {
+  .fold {
     display: flex;
     align-items: center;
     gap: var(--k-space-2);
+    padding: var(--k-space-1) 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: var(--k-font-size-sm);
+    color: var(--k-fg-muted);
+    cursor: pointer;
+  }
+
+  /* The chevron turns as the section folds or opens; the rows fade in and out (VirtualList). */
+  .chevron {
+    display: inline-flex;
+  }
+
+  .chevron :global(svg) {
+    transition: rotate var(--k-duration-fast) var(--k-ease);
+  }
+
+  .fold[aria-expanded='true'] .chevron :global(svg) {
+    rotate: 90deg;
+  }
+
+  .row {
     width: 100%;
-    min-height: var(--k-row-height);
-    padding: 0 var(--k-space-3) 0 var(--k-space-4);
+    min-height: 56px;
+    padding-block: var(--k-space-2);
     border: 0;
     box-shadow: inset 3px 0 0 var(--hue);
     background: transparent;
     color: inherit;
     font: inherit;
-    font-size: var(--k-font-size-md, 13px);
+    font-size: var(--k-font-size);
     text-align: left;
     cursor: default;
+    --track-bg: var(--k-bg);
   }
 
   .row:hover {
     background: var(--k-bg-hover);
   }
 
-  /* Outside Kelta (#345): the lamp at full strength, the words quieter. */
-  .row.dim > :not(.slot) {
+  /* Outside Kelta (#345): the words quieter. */
+  .row.dim > :not(.stage) {
     opacity: 0.6;
   }
 
-  .selected,
-  .detail {
+  /* Subtle and muted text on the selected row take their -sel steps (#399: 3.58:1 before, in light). */
+  .selected {
     background: var(--k-bg-selected-row);
     --k-fg-subtle: var(--k-fg-subtle-sel);
     --k-fg-muted: var(--k-fg-muted-sel);
+    --track-bg: var(--k-bg-selected-row);
   }
 
   .id {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--k-space-1);
-    flex: none;
-    width: var(--id-w);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-family: var(--k-font-mono);
     font-size: var(--k-font-size-sm);
-    color: var(--k-info);
+    color: var(--k-fg-muted);
   }
 
-  .ttl {
-    flex: 1;
+  .what {
+    display: flex;
+    flex-direction: column;
     min-width: 0;
+  }
+
+  /* Titles wrap to two lines instead of one cut line (#399). */
+  .ttl {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: var(--k-weight-medium);
+    overflow-wrap: anywhere;
     color: var(--k-fg-strong);
   }
 
-  .selected .ttl {
-    font-weight: var(--k-weight-strong);
+  .waiting .ttl {
+    color: var(--k-fg-muted);
   }
 
-  .id :global(svg) {
-    flex: none;
-    color: var(--k-fg-subtle);
-  }
-
-  /* What Enter does: the row's instruction, read first on line 2. */
-  .verb {
-    flex: none;
-    font-size: var(--k-font-size-sm);
-    font-weight: var(--k-weight-medium);
-    color: var(--k-accent);
+  .why {
+    display: flex;
+    align-items: center;
+    gap: var(--k-space-2);
+    min-width: 0;
   }
 
   .hint {
@@ -1160,46 +1158,78 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: var(--k-font-size-sm);
-    color: var(--k-fg-muted);
-  }
-
-  .hint.warn {
-    color: var(--k-warn);
-  }
-
-  .proj {
-    flex: none;
-    font-size: var(--k-font-size-xs);
     color: var(--k-fg-subtle);
   }
 
-  .reason {
-    flex: none;
-    max-width: 36ch;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: var(--k-font-size-sm);
-    color: var(--k-fg);
+  .hint.warn,
+  .meta.warn {
+    color: var(--k-warn);
   }
 
   .meta {
     flex: none;
     font-size: var(--k-font-size-xs);
-    font-variant-numeric: tabular-nums;
-    color: var(--k-fg-subtle);
   }
 
-  .meta.hot {
-    color: var(--k-warn);
+  .next {
+    display: flex;
+    min-width: 0;
   }
 
-  .meta.over {
+  .next :global(.rb) {
+    max-width: 100%;
+  }
+
+  /* The next step: outlined, accent when it is my move, danger when something broke. */
+  .act {
+    max-width: 100%;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-1);
+    padding: 3px var(--k-space-2);
+    border: 1px solid var(--k-border-strong);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-bg);
+    color: var(--k-fg);
+    font-size: var(--k-font-size-sm);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .yours .act {
+    border-color: var(--k-accent);
+    color: var(--k-accent);
+    font-weight: var(--k-weight-medium);
+  }
+
+  .yours .act.broken {
+    border-color: var(--k-danger);
     color: var(--k-danger);
   }
 
-  .meta.warn {
-    color: var(--k-warn);
+  .act:hover {
+    background: var(--k-bg-active);
+  }
+
+  .reason {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-1);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--k-font-size-sm);
+    color: var(--k-fg-muted);
+  }
+
+  .age {
+    white-space: nowrap;
+    font-size: var(--k-font-size-xs);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    color: var(--k-fg-subtle);
   }
 
   .nosource {
@@ -1209,118 +1239,8 @@
     font-size: var(--k-font-size-sm);
   }
 
-  .msgline {
-    padding-left: calc(var(--k-space-4) + 12px + var(--id-w) + 3 * var(--k-space-2));
-    background: var(--k-bg-selected-row);
-    --k-fg-muted: var(--k-fg-muted-sel);
-    font-size: var(--k-font-size-sm);
-    color: var(--k-fg-muted);
-    white-space: pre;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
   .askline {
-    padding-left: calc(var(--k-space-4) + 12px + var(--id-w) + 3 * var(--k-space-2));
-  }
-
-  /* Two-line row (#383): lamp, id and title on line 1; the meta under the title, wrapping rather
-     than cut. */
-  .two {
-    display: grid;
-    grid-template-columns: auto auto minmax(0, 1fr);
-    column-gap: var(--k-space-2);
-    row-gap: var(--k-space-1);
-    padding-block: var(--k-space-2);
-  }
-
-  /* Compact: the meta joins the row's own line. */
-  .row:not(.two) .sub {
-    display: contents;
-  }
-
-  /* The age closes line 2 on the right, one column to scan. */
-  .age {
-    margin-left: auto;
-    padding-left: var(--k-space-3);
-  }
-
-  .compact .age {
-    width: 64px;
-    text-align: right;
-  }
-
-  .sub {
-    grid-column: 3;
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-1) var(--k-space-3);
-    min-width: 0;
-  }
-
-  /* The selected row's status and numbers, then its actions; actions wrap rather than cut. */
-  .detail {
-    flex-wrap: wrap;
-    gap: var(--k-space-1) var(--k-space-3);
-    padding-block: 0 var(--k-space-2);
-    padding-left: calc(var(--k-space-4) + 12px + var(--id-w) + 3 * var(--k-space-2));
-  }
-
-  .compact .detail {
-    flex-wrap: nowrap;
-    padding-block: 0;
-  }
-
-  .info {
-    display: flex;
-    flex: 1 0 100%;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--k-space-1) var(--k-space-3);
-    min-width: 0;
-  }
-
-  .compact .info {
-    flex: none;
-    flex-wrap: nowrap;
-  }
-
-  /* The selected row's actions (#397): outlined like the Tickets row actions, the next step in accent. */
-  .act {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--k-space-1);
-    flex: none;
-    padding: 0 var(--k-space-2) 0 var(--k-space-1);
-    border: 1px solid var(--k-border-strong);
-    border-radius: var(--k-radius-sm);
-    background: none;
-    font: inherit;
-    font-size: var(--k-font-size-xs);
-    line-height: 20px;
-    color: var(--k-fg);
-    cursor: pointer;
-  }
-
-  .act:hover {
-    background: var(--k-bg-active);
-  }
-
-  .act.primary {
-    border-color: var(--k-accent);
-    background: var(--k-accent);
-    color: var(--k-accent-fg);
-  }
-
-  .act.primary :global(.k-kbd) {
-    color: inherit;
-    background: none;
-    border-color: currentColor;
-  }
-
-  .act.primary:hover {
-    background: var(--k-accent);
-    filter: brightness(1.1);
+    padding-left: calc(var(--k-space-4) + 76px + var(--k-space-4));
   }
 
   /* Next up drag (#397): the row it lands on carries the accent line. */
@@ -1329,8 +1249,95 @@
   }
 
   .moreline {
-    padding-left: calc(var(--k-space-4) + 12px + 2 * var(--k-space-2));
+    width: 100%;
+    padding: var(--k-space-2) var(--k-space-4) var(--k-space-2)
+      calc(var(--k-space-4) + 76px + var(--k-space-4));
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: var(--k-font-size-sm);
+    text-align: left;
     color: var(--k-accent);
     cursor: pointer;
+  }
+
+  @container now (max-width: 1115px) {
+    .body {
+      grid-template-columns: minmax(0, 1fr) 300px;
+    }
+
+    .grid {
+      grid-template-columns: 76px minmax(0, 1fr) 130px 64px;
+      row-gap: var(--k-space-1);
+    }
+
+    .next-h {
+      display: none;
+    }
+
+    .row .next {
+      grid-column: 2;
+      grid-row: 2;
+    }
+
+    .row .stage {
+      grid-column: 3;
+      grid-row: 1;
+    }
+
+    .row .age {
+      grid-column: 4;
+      grid-row: 1;
+    }
+  }
+
+  /* Narrow: the brief stacks under the list, which keeps at least half the height. Pane widths: the window minus the 64px compact rail (835 = a 900px window, 1115 = 1180px). */
+  @container now (max-width: 835px) {
+    .body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .main {
+      flex: 1 1 0;
+    }
+
+    .side {
+      flex: 0 1 auto;
+      max-height: 50%;
+      border-left: 0;
+      border-top: 1px solid var(--k-border);
+    }
+  }
+
+  @container now (max-width: 699px) {
+    .cols {
+      display: none;
+    }
+
+    .grid {
+      grid-template-columns: 64px minmax(0, 1fr) 56px;
+      padding-inline: var(--k-space-3);
+    }
+
+    .row .stage {
+      grid-column: 2 / 4;
+      grid-row: 2;
+    }
+
+    .row .next {
+      grid-column: 2 / 4;
+      grid-row: 3;
+    }
+
+    .row .age {
+      grid-column: 3;
+      grid-row: 1;
+    }
+
+    .askline,
+    .moreline {
+      padding-left: calc(var(--k-space-3) + 64px + var(--k-space-4));
+    }
   }
 </style>

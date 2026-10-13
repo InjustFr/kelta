@@ -78,7 +78,9 @@ test('Now, Reviews and Tickets fill the window: their hint bar sits at the botto
     for (const view of ['inbox', 'reviews', 'tickets']) {
       await page.getByTestId(`rail-${view}`).click();
       const pane = host.getByTestId(`${view}-pane`);
-      await expect(pane.locator('footer')).toBeVisible();
+      // Now has no footer key bar (#399): its pane itself must reach the bottom.
+      const foot = view === 'inbox' ? pane : pane.locator('footer');
+      await expect(foot).toBeVisible();
       for (const filter of ['', 'no-such-item-zzz']) {
         if (filter) {
           await page.keyboard.press('/');
@@ -91,9 +93,7 @@ test('Now, Reviews and Tickets fill the window: their hint bar sits at the botto
         const want = await bottom(host);
         const msg = `${view} at ${height}px, filter "${filter}"`;
         await expect.poll(async () => Math.abs((await bottom(pane)) - want), msg).toBeLessThanOrEqual(1);
-        await expect
-          .poll(async () => Math.abs((await bottom(pane.locator('footer'))) - want), msg)
-          .toBeLessThanOrEqual(1);
+        await expect.poll(async () => Math.abs((await bottom(foot)) - want), msg).toBeLessThanOrEqual(1);
       }
     }
   }

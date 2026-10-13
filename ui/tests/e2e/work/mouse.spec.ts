@@ -5,7 +5,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { activeProject, boot, callsOf } from '../shell/helpers';
 
 const now = (page: Page) => page.getByTestId('inbox-pane');
-const detail = (page: Page) => now(page).getByTestId('now-detail');
+const detail = (page: Page) => now(page).getByTestId('now-brief');
 const FLAKY = '0199a6b2-0000-7000-8000-00000000a004'; // SHOP-155, Ready for review in the mock
 
 test.use({ viewport: { width: 1280, height: 1200 } });
@@ -62,7 +62,10 @@ test('ship from Now: the Ship button opens the dialog, its Ship button opens the
   await boot(page);
   await page.getByTestId('rail-inbox').click();
   await now(page).locator(`[data-row="w:${FLAKY}"]`).click();
-  await detail(page).getByRole('button', { name: /Ship$/ }).click();
+  await detail(page)
+    .getByRole('button', { name: /more actions$/ })
+    .click();
+  await detail(page).getByRole('button', { name: 'Ship' }).click();
   const dialog = page.getByRole('dialog', { name: /^Ship SHOP-155/ });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: /^Ship/ }).click();

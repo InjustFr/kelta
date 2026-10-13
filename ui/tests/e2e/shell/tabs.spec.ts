@@ -11,6 +11,8 @@ test('the context bar names the project and the row, with no tab list or tool st
 });
 
 test("a rail row's × shows on hover and focus and closes it after the tab confirm", async ({ page }) => {
+  // The full sidebar (not the icon column) needs a window of 1400px or more.
+  await page.setViewportSize({ width: 1440, height: 900 });
   await boot(page);
   const rows = page.locator('[data-testid="rail-row"][data-project-id="shop"]');
   const row = page.locator('li', { has: page.locator('[data-tab-id="shop-t2"]') });

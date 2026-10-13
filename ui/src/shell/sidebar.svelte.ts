@@ -5,7 +5,7 @@ export const SIDEBAR_MIN = 200;
 export const SIDEBAR_MAX = 480;
 export const SIDEBAR_DEFAULT = 288;
 /** Below this window width the rail starts as the icon column. */
-const NARROW = '(max-width: 1099px)';
+const NARROW = '(max-width: 1399px)';
 
 const clamp = (w: number): number => Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w)));
 

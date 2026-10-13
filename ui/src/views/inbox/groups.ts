@@ -1,7 +1,7 @@
 // Now's sections (FLOW §3.1): one row per thing, a work item once (in its phase's section),
 // sections in the order to work in, each with its own order. Pure: the pane and the rail feed it.
 
-import { msg, t, tn } from '$lib/i18n/index.svelte';
+import { msg, t } from '$lib/i18n/index.svelte';
 import type { OutsideSession, ReviewItem, SessionInfo, TicketItem, WorkItem } from '$lib/gen';
 
 import { reviewPhase } from '../work/common';
@@ -58,22 +58,6 @@ export interface Section {
   /** Starts collapsed; its header opens it. */
   folded?: boolean;
 }
-
-/** What each section holds and why, in one line after its header (#397). */
-export const SECTION_HINTS: Record<NowSection, string> = {
-  needs_you: msg('Claude stopped and is waiting for your answer'),
-  to_review: msg('Claude finished: look at the changes, then ship or ask for more'),
-  next_up: msg('Tickets you lined up, in your order; drag to reorder'),
-  new: msg('Tickets assigned to you that you have not opened yet'),
-  fix: msg('Failed checks, requested changes, conflicts or failed steps'),
-  requests: msg('Pull requests waiting for your review'),
-  ship: msg('Approved or ready: push, merge or clean up'),
-  in_flight: msg('Your other work under way'),
-  elsewhere: msg('Claude sessions Kelta did not start'),
-  blocked: msg('Waiting on another ticket or team'),
-  up_next: msg('Tickets assigned to you that nobody started'),
-  waiting: msg('Done on your side, waiting for a deploy'),
-};
 
 export const SECTIONS: readonly { id: NowSection; label: string; lamp: Lamp; folded?: boolean }[] = [
   { id: 'needs_you', label: msg('Claude needs you'), lamp: 'needs_input' },
@@ -298,40 +282,22 @@ export function waitingCount(sections: readonly Section[]): number {
   return WAITING.reduce((n, id) => n + count(sections, id), 0);
 }
 
-/** A Now header chip: a count that scrolls to its section. */
-export interface Chip {
-  section: NowSection;
-  n: number;
-  text: string;
-  /** The section's lamp when it needs Louis (Claude needs you, Fix); null stays muted. */
-  lamp: Lamp | null;
-}
+/** Now's two zones (#399): what waits on my move, and what waits on someone else (Claude, a reviewer,
+ *  another team, a deploy). Rows keep their section order inside a zone. */
+export type Zone = 'yours' | 'waiting';
 
-/**
- * The Now header in section order, zero chips dropped:
- * `1 needs you`, `3 ready for review`, `2 to fix`, `2 review requests`, `1 Claude working`, `4 up next`.
- * Each chip reads like the section it jumps to.
- */
-export function headerChips(sections: readonly Section[], working: number): Chip[] {
-  const chip = (section: NowSection, n: number, text: string, lamp: Lamp | null = null): Chip[] =>
-    n ? [{ section, n, text, lamp }] : [];
-  const asks = count(sections, 'needs_you');
-  const ready = count(sections, 'to_review');
-  const fix = count(sections, 'fix');
-  const prs = count(sections, 'requests');
-  const next = count(sections, 'up_next');
-  return [
-    ...chip('needs_you', asks, tn('{n} needs you', '{n} need you', asks), 'needs_input'),
-    ...chip('to_review', ready, t('{n} ready for review', { n: ready })),
-    ...chip('fix', fix, tn('{n} to fix', '{n} to fix', fix), 'error'),
-    ...chip('requests', prs, tn('{n} review request', '{n} review requests', prs)),
-    ...chip('in_flight', working, t('{n} Claude working', { n: working })),
-    ...chip('up_next', next, t('{n} up next', { n: next })),
-  ];
-}
+export const ZONES: readonly { id: Zone; label: string }[] = [
+  { id: 'yours', label: msg('Your move') },
+  { id: 'waiting', label: msg('Waiting on others') },
+];
 
-/** The rail's Now line: the first chip that needs Louis, else the first one. */
-export const topChip = (chips: readonly Chip[]): Chip | undefined => chips.find((c) => c.lamp) ?? chips[0];
+const OTHERS = new Set<NowSection>(['in_flight', 'elsewhere', 'blocked', 'waiting']);
+
+export const zoneOf = (section: NowSection): Zone => (OTHERS.has(section) ? 'waiting' : 'yours');
+
+/** Rows in a zone, the ones past a cap included. */
+export const zoneCount = (sections: readonly Section[], zone: Zone): number =>
+  sections.reduce((n, s) => (zoneOf(s.id) === zone ? n + s.rows.length + s.more : n), 0);
 
 // ---- Mod+J (ticket #136) ----------------------------------------------------------------------
 
