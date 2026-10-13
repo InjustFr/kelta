@@ -727,7 +727,10 @@ impl Default for PollingSettings {
 #[serde(default, deny_unknown_fields)]
 pub struct NotificationSettings {
     pub enabled: bool,
-    pub claude_needs_input: bool,
+    // Was `claude_needs_input` (#433): kelta-config reads the old key as this one.
+    /// Claude needs input, asks a question or replied without changes.
+    pub claude_blocked: bool,
+    /// Claude is ready for review or finished.
     pub claude_done: bool,
     /// Keeps review subscriptions polling in background.
     pub review_requested: bool,
@@ -745,8 +748,8 @@ impl Default for NotificationSettings {
     fn default() -> Self {
         Self {
             enabled: true,
-            claude_needs_input: true,
-            claude_done: true,
+            claude_blocked: true,
+            claude_done: false,
             review_requested: true,
             ci_failed_mine: true,
             pr_approved: true,
