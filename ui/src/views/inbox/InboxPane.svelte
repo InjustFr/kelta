@@ -106,8 +106,8 @@
   const pickBoard = () => ui.openSheet('tracker.source_picker', {});
   /** First run (#422): the loop's steps from real state, until a first item has shipped. */
   const loop = $derived(loopDone(projects.list, settings.hasSources(), work.all));
-  // Only while setup is incomplete: with a project and a source the plain empty state is right.
-  const showLoop = $derived(!(loop.project && loop.source) && !loop.ship && !loopShipped());
+  // Steps 3-5 (start, review, ship) are part of the loop: it stays until a first item has shipped.
+  const showLoop = $derived(!loop.ship && !loopShipped());
   $effect(() => {
     if (loop.ship) rememberShipped();
   });

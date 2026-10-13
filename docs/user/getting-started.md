@@ -31,7 +31,7 @@ notification daemon) and offers the first steps:
    and **Reviews**, just below, show what waits on you and the PRs to review, across projects too
    ([reviews](reviews.md)).
 
-While your Queue is empty and setup is incomplete (no project or no ticket source yet), it shows **Your loop** instead of a blank list: the stage track and the five steps Kelta
+While your Queue is empty and your first item has not shipped yet, it shows **Your loop** instead of a blank list: the stage track and the five steps Kelta
 works in, each checked off from what it finds. The current step is highlighted, with its button.
 
 1. **Add a project.**
@@ -40,8 +40,8 @@ works in, each checked off from what it finds. The current step is highlighted, 
 4. **Review what Claude changed** (`Enter`).
 5. **Ship** (`p`): the pull request opens.
 
-No tickets? `Shift+Cmd+N` starts a branch and a Claude from one sentence. Once a project and a source are set up, or
-your first item has shipped, the panel never shows again.
+No tickets? `Shift+Cmd+N` starts a branch and a Claude from one sentence. Once your first item has shipped, the
+panel never shows again.
 
 Settings > Diagnostics checks the things Kelta depends on: graphics, WebKitGTK, notification daemon, keyring,
 `claude`, `nvim`, `git`, `gh`, `glab`, hook health and socket paths.

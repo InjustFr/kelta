@@ -472,12 +472,17 @@ describe('Now', () => {
     expect(within(row).getByText('A MEPP')).toBeTruthy();
   });
 
-  it('with a project and a source, an empty Queue is the plain empty state, not Your loop', async () => {
+  it('with a project and a source, an empty Queue shows Your loop at "Start work"; after a ship, the plain empty state', async () => {
     localStorage.clear();
     mock.state.tickets = [];
     mock.state.reviews = [];
     sessions.byId = {};
     work.byId = {};
+    const first = mountNow();
+    const loop = await screen.findByTestId('your-loop');
+    expect(loop.querySelector('[aria-current="step"]')?.textContent).toContain('Start work on a ticket');
+    first.unmount();
+    localStorage.setItem(LOOP_SHIPPED, '1');
     mountNow();
     expect(await screen.findByText('Nothing needs you right now')).toBeTruthy();
     expect(screen.queryByTestId('your-loop')).toBeNull();
