@@ -201,7 +201,11 @@ describe('TicketDetail', () => {
     await fireEvent.click(action('More'));
     const branch = screen.getByRole('menuitem', { name: /^Copy branch/ });
     expect(branch.getAttribute('aria-disabled')).toBe('true');
-    expect(branch.title).toBe('No branch yet. Start work first.');
+    expect(branch.querySelector('.reason')?.textContent).toBe('No branch yet. Start work first.');
+    expect(screen.getByText(/^Not available now \(\d\)$/)).toBeTruthy();
+    // Its letter flashes the reason (#405).
+    await fireEvent.keyDown(screen.getByRole('menu'), { key: 'y' });
+    expect(toasts.list.at(-1)?.toast.text).toBe('Copy branch: No branch yet. Start work first.');
     await fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     expect(action('Move').getAttribute('aria-disabled')).toBeNull();
     expect(screen.queryByLabelText(/Add a comment/)).toBeNull();
