@@ -2488,5 +2488,18 @@
     "other": "{checked} critères sur {n} cochés"
   },
   "Open the Story panel": "Ouvrir le panneau Récit",
-  "{whose}: {what}": "{whose} : {what}"
+  "{whose}: {what}": "{whose} : {what}",
+  "Asks you": "Vous demande",
+  "{n} min": "{n} min",
+  "Tasks": "Tâches",
+  "Completed": "Terminée",
+  "In progress": "En cours",
+  "Pending": "À faire",
+  "Show more": "Voir plus",
+  "Show less": "Voir moins",
+  "Context {pct}%": "Contexte {pct} %",
+  "{done} of {n} tasks": {
+    "one": "{done} tâche sur {n}",
+    "other": "{done} tâches sur {n}"
+  }
 }
