@@ -318,7 +318,11 @@ function rowProjects(row: NowRow): readonly string[] {
  */
 export function scopeSections(sections: readonly Section[], project: string | null): readonly Section[] {
   if (!project) return sections;
-  return sections.map((s) => ({ ...s, rows: s.rows.filter((r) => rowProjects(r).includes(project)), more: 0 }));
+  return sections.map((s) => ({
+    ...s,
+    rows: s.rows.filter((r) => rowProjects(r).includes(project)),
+    more: 0,
+  }));
 }
 
 /** Rows in a zone, the ones past a cap included. */

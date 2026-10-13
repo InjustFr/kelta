@@ -226,7 +226,7 @@ describe('tabs', () => {
 });
 
 describe('dropListTabs (#409)', () => {
-  const tickets = (mode: 'list' | 'board', id = 'shop'): PaneContent => ({
+  const tickets = (mode: 'list' | 'board', id = 'shop'): Extract<PaneContent, { kind: 'tickets' }> => ({
     kind: 'tickets',
     scope: { kind: 'project', id },
     view_id: null,
@@ -238,7 +238,10 @@ describe('dropListTabs (#409)', () => {
     let l = layoutOf(p('a'));
     l = addTab(l, makeTab('Board', pane(tickets('board'), 'b')));
     l = addTab(l, makeTab('Inbox', pane({ kind: 'inbox' }, 'i')));
-    l = addTab(l, makeTab('Reviews', pane({ kind: 'reviews', scope: { kind: 'project', id: 'billing' } }, 'r')));
+    l = addTab(
+      l,
+      makeTab('Reviews', pane({ kind: 'reviews', scope: { kind: 'project', id: 'billing' } }, 'r')),
+    );
     const { layout, scope } = dropListTabs(l);
     expect(layout.tabs.map((t) => t.id)).toEqual(['t1']);
     expect(layout.active_tab).toBe('t1');
@@ -251,8 +254,18 @@ describe('dropListTabs (#409)', () => {
   });
 
   it('keeps every other tab: splits holding a list (Overview), detail panes, a source-wide list', () => {
-    let l = layoutOf(splitPane(pane(tickets('list'), 'x'), 'x', 'row', pane({ kind: 'reviews', scope: { kind: 'all' } }, 'y')));
-    l = addTab(l, makeTab('Source', pane({ ...tickets('list'), scope: { kind: 'source', id: 'jira' } }, 's')));
+    let l = layoutOf(
+      splitPane(
+        pane(tickets('list'), 'x'),
+        'x',
+        'row',
+        pane({ kind: 'reviews', scope: { kind: 'all' } }, 'y'),
+      ),
+    );
+    l = addTab(
+      l,
+      makeTab('Source', pane({ ...tickets('list'), scope: { kind: 'source', id: 'jira' } }, 's')),
+    );
     l = addTab(l, makeTab('Settings', pane({ kind: 'settings', section: null }, 'g')));
     const r = dropListTabs(l);
     expect(r.layout).toBe(l);

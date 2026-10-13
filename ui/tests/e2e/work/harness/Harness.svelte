@@ -27,23 +27,23 @@
     {#if ui.view}
       <GlobalHost view={ui.view} />
     {:else}
-    {#each panes as p (p.id)}
-      {#if p.content.kind !== 'empty'}
-        <div class="pane" data-pane={p.content.kind}>
-          {#await paneRegistry[p.content.kind]() then mod}
-            {@const Pane = mod.default}
-            <Pane
-              {projectId}
-              tabId={tab?.id ?? ''}
-              paneId={p.id}
-              content={p.content}
-              visible={true}
-              focused={tab?.focused_pane === p.id}
-            />
-          {/await}
-        </div>
-      {/if}
-    {/each}
+      {#each panes as p (p.id)}
+        {#if p.content.kind !== 'empty'}
+          <div class="pane" data-pane={p.content.kind}>
+            {#await paneRegistry[p.content.kind]() then mod}
+              {@const Pane = mod.default}
+              <Pane
+                {projectId}
+                tabId={tab?.id ?? ''}
+                paneId={p.id}
+                content={p.content}
+                visible={true}
+                focused={tab?.focused_pane === p.id}
+              />
+            {/await}
+          </div>
+        {/if}
+      {/each}
     {/if}
   </div>
 </main>

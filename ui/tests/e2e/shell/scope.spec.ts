@@ -25,13 +25,13 @@ test('Tickets: scoping to Shop leaves its tickets, and Reviews opens in that sco
   await expect(scopeOf(page)).toHaveValue('shop');
 });
 
-test('Reviews: scoping to Billing leaves its pull requests; its repo filter stays inside the scope', async ({
+test('Reviews: scoping to Billing leaves its pull requests, All projects brings the rest back', async ({
   page,
 }) => {
   await boot(page);
   await page.getByTestId('rail-reviews').click();
   const pane = host(page).getByTestId('reviews-pane');
-  const shopPr = pane.locator('.row', { hasText: 'SHOP-150: cache product images' });
+  const shopPr = pane.locator('[data-key="github-acme:acme/shop-api#311"]');
   const billingPr = pane.locator('[data-key="gitlab-corp:fin/billing/core#42"]');
   await expect(shopPr).toBeVisible();
   await expect(billingPr).toBeVisible();

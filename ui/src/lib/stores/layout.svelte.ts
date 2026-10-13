@@ -38,8 +38,7 @@ export class LayoutStore {
     try {
       const saved = await ipc.layoutGet({ project_id: projectId });
       // The global views' own layout holds the lists by design: only project layouts migrate.
-      const { layout, scope } =
-        projectId === GLOBAL ? { layout: saved, scope: null } : dropListTabs(saved);
+      const { layout, scope } = projectId === GLOBAL ? { layout: saved, scope: null } : dropListTabs(saved);
       this.byProject = { ...this.byProject, [projectId]: layout };
       this.errors = { ...this.errors, [projectId]: null };
       if (scope) {

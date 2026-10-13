@@ -159,7 +159,16 @@ describe('LayoutStore', () => {
       ...shop,
       tabs: [
         ...shop.tabs,
-        makeTab('Board', pane({ kind: 'tickets', scope: { kind: 'project', id: 'shop' }, view_id: null, mode: 'board', who: null })),
+        makeTab(
+          'Board',
+          pane({
+            kind: 'tickets',
+            scope: { kind: 'project', id: 'shop' },
+            view_id: null,
+            mode: 'board',
+            who: null,
+          }),
+        ),
       ],
     };
     const store = new LayoutStore();

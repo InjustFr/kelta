@@ -11,10 +11,7 @@
         "root": {
           "type": "split",
           "dir": "row",
-          "ratios": [
-            0.5,
-            0.5
-          ],
+          "ratios": [0.5, 0.5],
           "children": [
             {
               "type": "pane",
@@ -44,10 +41,7 @@
         "root": {
           "type": "split",
           "dir": "column",
-          "ratios": [
-            0.6,
-            0.4
-          ],
+          "ratios": [0.6, 0.4],
           "children": [
             {
               "type": "pane",
@@ -99,10 +93,7 @@
         "root": {
           "type": "split",
           "dir": "row",
-          "ratios": [
-            0.55,
-            0.45
-          ],
+          "ratios": [0.55, 0.45],
           "children": [
             {
               "type": "pane",
@@ -115,10 +106,7 @@
             {
               "type": "split",
               "dir": "column",
-              "ratios": [
-                0.7,
-                0.3
-              ],
+              "ratios": [0.7, 0.3],
               "children": [
                 {
                   "type": "pane",

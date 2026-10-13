@@ -49,12 +49,15 @@ describe('ListScope (#409)', () => {
     spy.mockRestore();
   });
 
-  it("a migrated Reviews tab scopes the lists to its project, once", async () => {
+  it('a migrated Reviews tab scopes the lists to its project, once', async () => {
     listScope.set(null);
     const billing = mock.state.layouts.billing!;
     mock.state.layouts.billing = {
       ...billing,
-      tabs: [...billing.tabs, makeTab('Reviews', pane({ kind: 'reviews', scope: { kind: 'project', id: 'billing' } }))],
+      tabs: [
+        ...billing.tabs,
+        makeTab('Reviews', pane({ kind: 'reviews', scope: { kind: 'project', id: 'billing' } })),
+      ],
     };
     await layout.load('billing');
     expect(listScope.project).toBe('billing');
