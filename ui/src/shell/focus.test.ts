@@ -24,7 +24,7 @@ describe('focus mode (#421)', () => {
         // The backend held one desktop notification; `calls` is the order it handled them in, and
         // turning it on is the slower one.
         const on = (args as { on: boolean }).on;
-        return new Promise((r) =>
+        return new Promise<T>((r) =>
           setTimeout(
             () => {
               calls.push(args);
