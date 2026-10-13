@@ -30,9 +30,11 @@ export {
   isWebviewDefault,
   KeyManager,
   type ExtraBinding,
+  type HintGroup,
   type KeyContext,
   type KeyManagerOptions,
   type KeyResult,
+  type PrefixHint,
 } from './manager';
 
 /** Tool keybindings (`ToolInfo.keybinding`) open the tool through the `tools.open` action. */
