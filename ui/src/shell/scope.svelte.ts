@@ -1,5 +1,5 @@
 // The one project scope of the global lists, Now, Tickets and Reviews (#409): all projects or one.
-// Set from each list's toolbar, kept in the webview's storage like the rail.
+// Set from the window's top bar (#429), kept in the webview's storage like the rail.
 
 import type { ProjectId, Scope } from '$lib/gen';
 import { layout, projects } from '$lib/stores';

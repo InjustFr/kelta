@@ -43,7 +43,6 @@
   import { openView } from '../../shell/nav';
   import { peekHover } from '../../shell/peek.svelte';
   import { listScope } from '../../shell/scope.svelte';
-  import ScopeSelect from '../../shell/ScopeSelect.svelte';
   import { ctxHot, itemCost, overBudget, usd } from '../../shell/usage';
   import { blockedReason, runWorkAction, workAction, WORK_ACTIONS } from '../work/actions';
   import { batch, batchKey } from '../work/batch.svelte';
@@ -703,7 +702,6 @@
 >
   <header class="bar">
     <span class="title">{t('Queue')}</span>
-    <ScopeSelect />
     <!-- One summary line (#399): the zones below carry the rest. -->
     <span class="split" data-testid="now-header">
       <span>{@render count(t('{n} your move', { n: yours }), yours)}</span>

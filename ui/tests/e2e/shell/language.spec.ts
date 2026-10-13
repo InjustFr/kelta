@@ -12,7 +12,7 @@ test.describe('interface language', () => {
       await boot(page);
       await expect(page.locator('html')).toHaveAttribute('lang', 'de');
       await expect(page.getByTestId('rail')).toContainText('Einstellungen');
-      await expect(page.getByTestId('rail-search')).toContainText('Suchen oder ausführen…');
+      await expect(page.getByTestId('context-search')).toContainText('Suchen oder ausführen…');
     });
   });
 

@@ -22,7 +22,7 @@ for (const locale of ['en-US', 'fr-FR', 'de-DE']) {
         if (width === 1920) {
           // The labels beside a chord badge are whole: the badge gives way, not the label.
           const cut = await page
-            .locator('[data-testid="rail-search"] .search-text, [data-testid="rail-settings"] .name')
+            .locator('[data-testid="rail-settings"] .name')
             .evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth).map((e) => e.textContent));
           expect(cut).toEqual([]);
         }
@@ -112,7 +112,7 @@ test.describe('sidebar', () => {
     expect(await railWidth(page)).toBe(64);
     await page.getByTestId('rail-toggle').click();
     await expect.poll(() => railWidth(page)).toBe(288);
-    await expect(page.getByTestId('rail-search')).toContainText('Search or run…');
+    await expect(page.getByTestId('rail-settings')).toContainText('Settings');
     await page.getByTestId('rail-toggle').click();
     await expect.poll(() => railWidth(page)).toBe(64);
   });

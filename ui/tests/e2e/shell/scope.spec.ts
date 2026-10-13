@@ -1,11 +1,11 @@
-// One project scope for the global lists (#409): the toolbar menu of Tickets, Reviews and Now sets it,
-// all three keep it when switching view, and it survives a reload.
+// One project scope for the global lists (#409): the top bar's menu sets it (#429), Tickets, Reviews and
+// Now follow it, keep it when switching view, and it survives a reload.
 import { expect, test, type Page } from '@playwright/test';
 
 import { boot } from './helpers';
 
 const host = (page: Page) => page.getByTestId('global-host');
-const scopeOf = (page: Page) => host(page).getByTestId('list-scope').locator('select');
+const scopeOf = (page: Page) => page.getByTestId('contextbar').getByTestId('list-scope').locator('select');
 
 test('Tickets: scoping to Shop leaves its tickets, and Reviews opens in that scope', async ({ page }) => {
   await boot(page);
