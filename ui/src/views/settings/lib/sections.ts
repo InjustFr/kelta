@@ -42,6 +42,7 @@ export const SECTION_GROUPS: readonly { label: string; ids: readonly SettingsSec
 export const ADVANCED: readonly string[] = [
   'app.log_level',
   'keys.list_keys',
+  'keys.prefix_hint_ms',
   'keys.prefix_timeout_ms',
   'terminal.env',
   'terminal.history_log',

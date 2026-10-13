@@ -85,6 +85,8 @@ Linux shortcuts are the macOS ones with `Cmd` replaced by `Ctrl`: `Ctrl+K` palet
 split, `Ctrl+W` close pane, `Ctrl+Alt+arrows` move between panes. Inside a terminal a plain `Ctrl+letter` belongs to
 the shell (`Ctrl+D` still ends it, `Ctrl+W` deletes a word), so the same actions also answer to `Ctrl+Shift+letter`
 (`Ctrl+Shift+K`, `Ctrl+Shift+W`...), and the prefix key (`Ctrl+Shift+Space`, then one key) reaches every action.
+Pause after the prefix and a panel lists the keys that follow (`Esc` closes it, `?` opens the full list);
+`keys.prefix_hint_ms` sets the pause, `0` turns the panel off.
 Copy and paste in a terminal are `Ctrl+Shift+C` / `Ctrl+Shift+V`. If you never use those shell keys, set
 `keys.linux_terminal = "kelta_first"` (Settings > Keys) and Kelta's `Ctrl+letter` wins in terminals too. Your
 desktop may already take `Ctrl+Alt+arrows` for workspaces: rebind either side in Settings > Keys.

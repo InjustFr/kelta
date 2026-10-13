@@ -2222,6 +2222,7 @@ export const settingsDefault: Settings = {
       "work.new": "w",
       "work.start": "s"
     },
+    "prefix_hint_ms": 400,
     "prefix_timeout_ms": 1000
   },
   "linux": {
