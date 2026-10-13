@@ -117,7 +117,7 @@ describe('TicketDetailPane', () => {
   it('opens the move menu from the status value and moves with a digit', async () => {
     mountDetail();
     await screen.findByRole('heading', { level: 1 });
-    expect(screen.getByTestId('ticket-pr').textContent).toContain('No pull request yet.');
+    expect(screen.queryByTestId('ticket-pr')).toBeNull(); // no PR: nothing said (#400)
     await fireEvent.click(screen.getByRole('button', { name: /^Status To Do/ }));
     const menu = await screen.findByRole('menu', { name: 'Move SHOP-151' });
     expect(menu.querySelector('[aria-current="step"]')?.textContent).toBe('To Do');

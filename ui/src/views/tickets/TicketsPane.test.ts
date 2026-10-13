@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { sheetRegistry } from '$app/registry';
 import * as ipc from '$lib/ipc/commands';
@@ -412,15 +412,12 @@ describe('TicketsPane workbench', () => {
     expect(screen.getByRole('tab', { name: /^Team/ }).getAttribute('aria-selected')).toBe('true');
   });
 
-  it('groups by flow by default, cycles the grouping with Shift+g, and keeps Done collapsed', async () => {
+  it('groups by tracker status by default (#400), cycles the grouping with Shift+g', async () => {
+    // A viewport with a height: jsdom's 0 would scroll the selected row's group out of the rendered slice.
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 2000 });
+    onTestFinished(() => void delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight);
     const { container } = mountBoard('list');
     await waitFor(() => expect(card(container, 'SHOP-151')).not.toBeNull());
-    expect(groupNames(container)).toEqual(['Doing 1', 'Waiting 2', 'Ready 2']);
-    // Each flow header says what it holds (#397).
-    expect(container.querySelector('[data-group="ready"] .k-group-hint')?.textContent).toBe(
-      'To do, ready to start',
-    );
-    await press('G');
     // in the order of the source's board columns once they load
     await waitFor(() =>
       expect(groupNames(container)).toEqual(['To Do 2', 'In Progress 1', 'In Review 1', 'Blocked 1']),
@@ -441,6 +438,12 @@ describe('TicketsPane workbench', () => {
     await press('G'); // none
     await waitFor(() => expect(groupNames(container)).toEqual([]));
     expect(card(container, 'SHOP-151')).not.toBeNull();
+    await press('G');
+    expect(groupNames(container)).toEqual(['Doing 1', 'Waiting 2', 'Ready 2']);
+    // Each flow header says what it holds (#397).
+    expect(container.querySelector('[data-group="ready"] .k-group-hint')?.textContent).toBe(
+      'To do, ready to start',
+    );
   });
 
   it('one IPC per list load: the person filter reads the pages, no second call', async () => {
@@ -464,7 +467,7 @@ describe('TicketsPane workbench', () => {
   });
 
   it('opens a collapsed Done group with Enter', async () => {
-    const { container } = mountBoard('list', 'billing');
+    const { container } = mountBoard('list', 'billing', { group: 'flow' });
     const key = (k: string) => container.querySelector(`[data-key="redmine-corp:${k}"]`);
     await waitFor(() => expect(key('4590')).not.toBeNull());
     const done = container.querySelector<HTMLElement>('[data-group="done"]');
@@ -565,16 +568,16 @@ describe('TicketsPane workbench', () => {
     expect(container.querySelector('.hints')).toBeNull();
   });
 
-  it('shows the PR chip of a ticket linked by a review', async () => {
+  it('names the PR of a ticket linked by a review and its state under the title (#400)', async () => {
     const { container } = mountBoard('list');
-    await waitFor(() => {
-      const chip = card(container, 'SHOP-120')?.querySelector('[data-pr]');
-      expect(chip?.textContent?.trim()).toBe('#305Changes requested');
-      // CI and review apart (#373): the lamp is CI's, the review is in words
-      const lamp = chip?.querySelector('[data-attention="done"]');
-      expect(lamp?.getAttribute('aria-label')).toBe('CI passed');
-    });
-    expect(card(container, 'SHOP-151')?.querySelector('[data-pr]')).toBeNull();
+    await waitFor(() =>
+      expect(card(container, 'SHOP-120')?.querySelector('[data-pr]')?.textContent).toBe(
+        '#305 changes requested',
+      ),
+    );
+    expect(card(container, 'SHOP-151')?.querySelector('[data-pr]')?.textContent).toBe('No PR found');
+    // the epic by its name, not its key
+    expect(card(container, 'SHOP-160')?.querySelector('[data-epic]')?.textContent).toBe('Rate-limit login');
   });
 });
 
@@ -628,7 +631,7 @@ describe('TicketsPane list: group, sort, age, sprint, person', () => {
     await press('G');
     await openView();
     await fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'key' } });
-    expect(savedContent()).toMatchObject({ group: 'status', sort: 'key' });
+    expect(savedContent()).toMatchObject({ group: 'priority', sort: 'key' });
   });
 
   it("opens with the pane's grouping and sorts within each group", async () => {
@@ -646,19 +649,20 @@ describe('TicketsPane list: group, sort, age, sprint, person', () => {
     ]);
   });
 
-  it('shows the status age at 7, 14 and 21 days', async () => {
+  it('shows the days in status under "In status", past 14 days highlighted (#400)', async () => {
     const { container } = mountBoard('list');
     await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
-    const age = (k: string, acc?: string) => row(container, k, acc).querySelector<HTMLElement>('[data-age]');
-    expect(age('SHOP-142')).toBeNull(); // 3 days
-    expect(age('SHOP-151')?.dataset.age).toBe('old'); // 10 days
-    expect(age('SHOP-151')?.textContent).toBe('10d');
-    expect(age('SHOP-155')?.dataset.age).toBe('danger'); // 25 days
-    expect(age('SHOP-155')?.title).toBe('25 days in To Do');
+    expect(container.querySelector('.cols')?.textContent).toContain('In status');
+    const age = (k: string, acc?: string) => row(container, k, acc).querySelector<HTMLElement>('[data-age]')!;
+    expect(age('SHOP-142').textContent).toBe('3d');
+    expect(age('SHOP-151').textContent).toBe('10d');
+    expect(age('SHOP-151').classList.contains('stale')).toBe(false);
+    expect(age('SHOP-155').classList.contains('stale')).toBe(true); // 25 days
+    expect(age('SHOP-155').title).toBe('25 days in To Do');
   });
 
   it('turns the Doing header amber above tickets.wip_limit', async () => {
-    const { container } = mountBoard('list');
+    const { container } = mountBoard('list', 'shop', { group: 'flow' });
     await waitFor(() => expect(row(container, 'SHOP-142')).not.toBeNull());
     const doing = () => container.querySelector<HTMLElement>('[data-group="doing"]');
     await waitFor(() => expect(settings.value()).not.toBeNull());
@@ -689,7 +693,7 @@ describe('TicketsPane list: group, sort, age, sprint, person', () => {
     await press('f');
     await press('j'); // not a chord: j moves on
     expect(row(container, 'SHOP-155')).not.toBeNull();
-    for (let i = 0; i < 3; i++) await press('G'); // sprint
+    for (let i = 0; i < 2; i++) await press('G'); // sprint
     await waitFor(() => expect(container.querySelector('[data-group="SHOP Sprint 12"]')).toBeNull());
     expect(row(container, 'SHOP-142').title).not.toContain('Sprint:');
   });
@@ -710,30 +714,15 @@ describe('TicketsPane list: group, sort, age, sprint, person', () => {
     expect(savedContent()).toMatchObject({ person: null, who: 'mine' });
   });
 
-  it('status chips narrow to one status; on Team, assignee chips pick the person (#376)', async () => {
-    inLayout();
+  it('no filter chips (#400); a filter that hides the selected ticket selects the first match', async () => {
     const { container } = mountBoard('list');
-    await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
-    const name = mock.state.tickets.find((i) => i.ticket.ref.key === 'SHOP-142')!.ticket.status.name;
-    const chip = within(screen.getByRole('group', { name: 'Filter by status' })).getByRole('button', {
-      name: new RegExp(`^${name}`),
+    await ready(container, 'SHOP-151');
+    expect(screen.queryByRole('group', { name: 'Filter by status' })).toBeNull();
+    await fireEvent.input(screen.getByLabelText('Filter tickets'), {
+      target: { value: 'SHOP-14' },
     });
-    await fireEvent.click(chip);
     await waitFor(() => expect(row(container, 'SHOP-151')).toBeNull());
-    expect(row(container, 'SHOP-142')).not.toBeNull();
-    await fireEvent.click(screen.getByRole('button', { name: `Remove filter Status: ${name}` }));
-    await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
-    expect(chip.getAttribute('aria-pressed')).toBe('false');
-
-    expect(screen.queryByRole('group', { name: 'Filter by assignee' })).toBeNull();
-    await press('3');
-    const bob = await waitFor(() =>
-      within(screen.getByRole('group', { name: 'Filter by assignee' })).getByRole('button', { name: /Bob/ }),
-    );
-    await fireEvent.click(bob);
-    await waitFor(() => expect(row(container, 'SHOP-151')).toBeNull());
-    expect(row(container, 'SHOP-120')).not.toBeNull();
-    expect(savedContent()).toMatchObject({ person: 'jira-acme:u-bob', who: 'anyone' });
+    await waitFor(() => expect(row(container, 'SHOP-142').classList.contains('selected')).toBe(true));
   });
 
   it('a person id saved before team people still filters', async () => {
@@ -753,8 +742,8 @@ describe('TicketsPane list: group, sort, age, sprint, person', () => {
     byKey('SHOP-151').waiting = [{ ...wait, why: 'assigned', since: null }];
     const { container } = mountBoard('list');
     await waitFor(() => expect(row(container, 'SHOP-142')).not.toBeNull());
-    expect(row(container, 'SHOP-142').textContent).toMatch(/waiting on Anna/);
-    expect(row(container, 'SHOP-151').textContent).not.toMatch(/waiting on/);
+    expect(row(container, 'SHOP-142').title).toMatch(/waiting on Anna/);
+    expect(row(container, 'SHOP-151').title).not.toMatch(/waiting on/);
   });
 });
 
@@ -773,25 +762,14 @@ describe('TicketsPane list: PRs, status chip, selection, row actions', () => {
     await waitFor(() => expect(JSON.stringify(layout.get('billing'))).toContain('"review_detail"'));
   });
 
-  it('several PRs open a picker, from p or the row PR chip', async () => {
+  it('several PRs open a picker from p', async () => {
     const { container } = mountBoard('list');
-    await waitFor(() => expect(row(container, 'SHOP-142')).not.toBeNull());
-    const chip = row(container, 'SHOP-142').querySelector<HTMLElement>('[data-pr] [role="button"]')!;
-    expect(chip.getAttribute('aria-label')).toBe('Open #309 (p)');
-    await fireEvent.click(chip);
+    await ready(container, 'SHOP-142');
+    await press('p');
     const menu = await screen.findByRole('menu', { name: 'Open pull request' });
     expect(menu.querySelectorAll('[role="menuitem"]').length).toBe(2);
     await fireEvent.click(screen.getByRole('menuitem', { name: /#98/ }));
     await waitFor(() => expect(JSON.stringify(layout.get('shop'))).toContain('"number":98'));
-  });
-
-  it('the row status chip opens the status picker', async () => {
-    const { container } = mountBoard('list');
-    await waitFor(() => expect(row(container, 'SHOP-151')).not.toBeNull());
-    await fireEvent.click(
-      row(container, 'SHOP-151').querySelector<HTMLElement>('[data-status] [role="button"]')!,
-    );
-    expect(await screen.findByRole('menu', { name: 'Move SHOP-151' })).toBeTruthy();
   });
 
   it('x and Shift+j select rows; m moves them all through the moves they share', async () => {
@@ -844,31 +822,14 @@ describe('TicketsPane list: PRs, status chip, selection, row actions', () => {
     expect(container.querySelectorAll('.picked').length).toBe(0);
   });
 
-  it('row actions are two labelled buttons, then a menu of every other action with its key', async () => {
+  it('rows carry no buttons (#400): the actions live in the pane; a checkbox shows while picking', async () => {
     const { container } = mountBoard('list');
     await ready(container, 'SHOP-151');
-    const acts = row(container, 'SHOP-151').querySelector<HTMLElement>('[data-acts]')!;
-    expect([...acts.querySelectorAll('[role="button"]')].map((b) => b.getAttribute('aria-label'))).toEqual([
-      'Start work (s)',
-      'Move (m)',
-      'More actions',
-    ]);
-    // #397: the `⋯` menu holds what was keys only, each entry with its key; one without a PR is off.
-    await fireEvent.click(acts.querySelector('[aria-label="More actions"]')!);
-    const more = await screen.findByRole('menu', { name: 'More actions' });
-    const entry = (name: string) => within(more).getByRole('menuitem', { name: new RegExp(`^${name}`) });
-    expect(entry('Assign to me').querySelector('kbd')?.textContent).toBe('A');
-    expect(entry('Open PR in browser').getAttribute('aria-disabled')).toBe('true');
-    await fireEvent.click(entry('Select'));
+    expect(row(container, 'SHOP-151').querySelector('[role="button"]')).toBeNull();
+    await press('x');
     await waitFor(() => expect(row(container, 'SHOP-151').getAttribute('aria-pressed')).toBe('true'));
-    // While a selection exists every row has a checkbox in its lamp slot.
     await fireEvent.click(row(container, 'SHOP-151').querySelector('[aria-label="Deselect"]')!);
     await waitFor(() => expect(row(container, 'SHOP-151').getAttribute('aria-pressed')).toBeNull());
-    await fireEvent.click(acts.querySelector('[aria-label="Move (m)"]')!);
-    expect(await screen.findByRole('menu', { name: 'Move SHOP-151' })).toBeTruthy();
-    await fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
-    await fireEvent.click(acts.querySelector('[aria-label="Start work (s)"]')!);
-    await waitFor(() => expect(ui.sheet?.key).toBe('start_work'));
   });
 
   it('a read-only tracker refuses assign and comment with the reason', async () => {
@@ -954,22 +915,20 @@ describe('TicketsPane split view', () => {
     await waitFor(() => expect(JSON.stringify(layout.get('shop'))).toContain('"ticket_detail"'));
   });
 
-  it('a row with work shows its phase; Enter runs the next step with the detail closed, g opens it', async () => {
+  it('a row with work sits on the stage track; Enter runs the next step with the detail closed, g opens it', async () => {
     await work.load();
     const w = work.forTicket({ account: 'jira-acme', key: 'SHOP-142', id: '10142' })!;
     work.upsert({ ...w, review_due: true });
     const { container } = mountBoard('list');
     await ready(container, 'SHOP-142');
-    expect(row(container, 'SHOP-142').querySelector('[data-phase]')?.textContent).toBe('To review');
-    expect(row(container, 'SHOP-142').querySelector('[data-phase-word]')?.textContent).toBe('Your turn');
-    expect(row(container, 'SHOP-151').querySelector('[data-phase]')).toBeNull();
-    // The next step as a labelled row button (#373); none without work
-    expect(row(container, 'SHOP-151').querySelector('[data-next]')).toBeNull();
-    vi.mocked(runPrimary).mockClear();
-    await fireEvent.click(
-      row(container, 'SHOP-142').querySelector('[data-acts] [aria-label="Review changes"]')!,
+    // Now's stage track (#399, #400): a diff to review sits with Claude, my move; named on the selected row
+    const track = row(container, 'SHOP-142').querySelector('[role="img"]')!;
+    expect(track.getAttribute('aria-label')).toMatch(/^At Claude, your move/);
+    expect(track.textContent?.trim()).toBe('Claude');
+    expect(row(container, 'SHOP-151').querySelector('[role="img"]')?.getAttribute('aria-label')).toMatch(
+      /^At Ticket/,
     );
-    expect(vi.mocked(runPrimary)).toHaveBeenCalledWith(expect.objectContaining({ id: w.id }));
+    vi.mocked(runPrimary).mockClear();
     await press('Enter'); // detail shown: Enter focuses it
     await waitFor(() => expect(document.activeElement).toBe(detail()));
     await fireEvent.keyDown(detail()!, { key: 'Escape' });

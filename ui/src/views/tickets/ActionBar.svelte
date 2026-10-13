@@ -17,12 +17,16 @@
     branch: string | null;
     /** A work item exists: Start reads Resume. */
     resume: boolean;
+    /** Unfinished work to open: only then is Start (Resume) the filled primary (#400). */
+    open?: boolean;
+    /** Assigned to me: no Assign to me (#400). */
+    mine?: boolean;
     onrun: (action: TicketAction) => void;
     /** The detail's project; `null` in a global view. */
     projectId?: ProjectId | null;
   }
 
-  let { item, branch, resume, onrun, projectId = null }: Props = $props();
+  let { item, branch, resume, open = false, mine = false, onrun, projectId = null }: Props = $props();
 
   /** Plugin actions run where the ticket's work runs, else in the ticket's (or the pane's) project. */
   const pluginCtx = $derived(ticketCtx(item.ticket.ref, item.work_item_id, item.project_ids, projectId));
@@ -47,7 +51,9 @@
   const chordText = (c: string): string => formatChord(c).join(mac ? '' : '+');
 
   const actions = $derived(
-    TICKET_ACTIONS.filter((a) => a.id !== 'unassign' || item.ticket.assignee).map((a) => ({
+    TICKET_ACTIONS.filter(
+      (a) => (a.id !== 'unassign' || item.ticket.assignee) && (a.id !== 'assign' || !mine),
+    ).map((a) => ({
       ...a,
       label:
         a.id === 'start' && resume
@@ -78,7 +84,7 @@
   {#each row as a (a.id)}
     <Button
       size="sm"
-      variant={a.id === 'start' ? 'primary' : 'ghost'}
+      variant={a.id === 'start' && open ? 'primary' : 'ghost'}
       class={a.reason ? 'off' : ''}
       aria-label={a.label}
       aria-keyshortcuts={a.key === 'A' ? 'Shift+A' : a.key}

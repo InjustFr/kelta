@@ -45,13 +45,13 @@
   import { runPrimary } from '../work/actions';
   import AskBar from '../work/AskBar.svelte';
   import { askerOf, phaseNow } from '../work/live';
+  import { STAGES } from '../work/stage';
   import { outsidePhase, questionOf } from '../work/phase';
   import CommentDialog from './CommentDialog.svelte';
   import MoveDialogs from './MoveDialogs.svelte';
   import StatusPicker from './StatusPicker.svelte';
   import TicketDetail from './TicketDetail.svelte';
   import { blockedReason, type TicketAction } from './caps';
-  import { assigneeChips, statusChips } from './chips';
   import {
     FLOW_HINTS,
     GROUP_BYS,
@@ -64,12 +64,12 @@
   import { MoveController } from './move.svelte';
   import { ensureReviews, openPr, openPrs, prMenuItems } from './prs';
   import RowButton from './RowButton.svelte';
+  import { assignedToMe, standingNow } from './standing';
   import TicketRow from './TicketRow.svelte';
   import TicketsToolbar from './TicketsToolbar.svelte';
   import { pickWorkflow } from './workflow.svelte';
   import TagChips from '../tags/TagChips.svelte';
   import TagMenu from '../tags/TagMenu.svelte';
-  import CountChips from '../filters/CountChips.svelte';
   import FilterBar from '../filters/FilterBar.svelte';
   import { clearAll, commonFilters, noMatch, type ActiveFilter } from '../filters/filters';
   import { chordFor } from '../../shell/labels';
@@ -201,8 +201,6 @@
   let filter = $state('');
   /** The toolbar's tag chip (#349). shortcut: per mount, not persisted. */
   let tagFilter = $state<string | null>(null);
-  /** The filter bar's status chip (#376), by name. shortcut: per mount like the tag chip, not persisted. */
-  let statusFilter = $state<string | null>(null);
   const shown = $derived.by(() => {
     const needle = filter.trim().toLowerCase();
     const tag = tags.live(tagFilter);
@@ -211,7 +209,6 @@
       if (person && !isPerson(t)) return false;
       if (currentSprint && !t.sprint?.active) return false;
       if (tag && !tags.has('tickets', keyOf(i), tag)) return false;
-      if (statusFilter && t.status.name.toLowerCase() !== statusFilter.toLowerCase()) return false;
       return (
         needle === '' ||
         `${t.ref.key} ${t.title} ${t.status.name} ${t.kind ?? ''} ${t.labels.join(' ')} ${t.assignee?.name ?? ''}`
@@ -259,15 +256,6 @@
       : []),
     ...(currentSprint
       ? [{ id: 'sprint', label: t('Current sprint'), clear: () => (currentSprint = false) }]
-      : []),
-    ...(statusFilter
-      ? [
-          {
-            id: 'status',
-            label: t('Status: {name}', { name: statusFilter }),
-            clear: () => (statusFilter = null),
-          },
-        ]
       : []),
   ]);
 
@@ -324,8 +312,9 @@
   /** Groups the user opened or closed (`groupBy:id`); Done groups start closed. */
   let toggled = $state<Record<string, boolean>>({});
   const groupBy = $derived.by<GroupBy>(() => {
-    const g = groupOverride ?? content.group ?? 'flow';
-    return GROUP_BYS.includes(g) ? g : 'flow';
+    // By tracker status (#400): what the rest of the team sees; Flow repeats Now.
+    const g = groupOverride ?? content.group ?? 'status';
+    return GROUP_BYS.includes(g) ? g : 'status';
   });
   const wipLimit = $derived(settings.value(project?.id)?.tickets?.wip_limit ?? 3);
   const sorted = $derived(sortTickets(shown, sort));
@@ -415,7 +404,14 @@
 
   /** The selected row's last index: a row that leaves the list (moved to Done) hands over to its neighbour. */
   let lastIndex: number | null = null;
+  /** The filters the last selection was made under: a filter that hides it selects the first match (#400). */
+  let lastFilters = '';
   $effect(() => {
+    const filters = JSON.stringify([filter, tagFilter, person, currentSprint]);
+    if (filters !== lastFilters) {
+      lastFilters = filters;
+      lastIndex = null;
+    }
     if ((mode === 'list' ? selRow : cur) || shown.length === 0) return;
     const first =
       mode === 'board'
@@ -1027,26 +1023,7 @@
     placeholder={t('Filter key, title, status, type, labels, assignee (/)')}
     aria-label={t('Filter tickets')}
     onkeydown={filterKeys}
-  >
-    <CountChips
-      label={t('Filter by status')}
-      chips={statusChips(items, statusFilter)}
-      value={statusFilter}
-      onchange={(s) => (statusFilter = s)}
-    />
-    {#if whoTab === 'anyone'}
-      <CountChips
-        label={t('Filter by assignee')}
-        chips={assigneeChips(
-          items,
-          people,
-          person ? { id: personEntry?.key ?? person, name: personEntry?.name ?? person } : null,
-        )}
-        value={personEntry?.key ?? person}
-        onchange={setPerson}
-      />
-    {/if}
-  </FilterBar>
+  ></FilterBar>
   <LoadBar active={list.loading && !!list.data} label={t('Loading tickets')} />
 
   {#if noSource}
@@ -1103,10 +1080,16 @@
     {:else if mode === 'list'}
       <div class="k-split">
         <div class="list" style:--key-chars={keyChars}>
+          <div class="cols" aria-hidden="true">
+            <span></span>
+            <span class="ends"><span>{t(STAGES[0])}</span><span>{t(STAGES[STAGES.length - 1])}</span></span>
+            <span class="right">{t('In status')}</span>
+          </div>
           <VirtualList
             bind:this={vlist}
             items={rows}
             itemHeight={ROW_HEIGHT}
+            measure
             key={(r) => r.key}
             label={t('Tickets')}
             sticky={(r) => r.kind === 'group'}
@@ -1156,10 +1139,7 @@
                   selected={cur === r.item}
                   picked={picked.includes(r.key)}
                   picking={picked.length > 0}
-                  phase={shownPhase(r.item)}
-                  next={nextLabel(r.item)}
-                  hasWork={hasWork(r.item)}
-                  marked={batch.has(r.item.ticket.ref)}
+                  standing={standingNow(r.item, assignedToMe(r.item, whoTab === 'mine' ? items : []))}
                   {groupBy}
                   source={showSource ? sourceOf(r.item) : null}
                   showAssignee={whoTab !== 'mine'}
@@ -1168,18 +1148,6 @@
                     if (e.metaKey || e.ctrlKey) togglePick(r.key);
                   }}
                   onopen={() => openDetail(r.item)}
-                  onnext={() => {
-                    selKey = r.key;
-                    const w = liveWork(r.item);
-                    if (w) void inflight.track(r.key, () => runPrimary(w));
-                  }}
-                  onmove={() => {
-                    selKey = r.key;
-                    pickOrMove(r.item);
-                  }}
-                  onpr={() => openPrOf(r.item, false)}
-                  onstart={() => start(r.item)}
-                  onmore={(e) => openMore(e, r.item)}
                   onpick={() => togglePick(r.key)}
                 />
               {/if}
@@ -1370,6 +1338,53 @@
   /* The split view's column paints the surface (base.css .k-split-side). */
   .k-split-side > :global(.detail) {
     background: none;
+  }
+
+  /* The rows' last two tracks (TicketRow): the stage track and the days in status, under one header. */
+  .list {
+    display: flex;
+    flex-direction: column;
+    --tk-stage: 166px;
+    --tk-age: 64px;
+  }
+
+  .list > :global(:last-child) {
+    flex: 1;
+    min-height: 0;
+  }
+
+  @container (width < 1000px) {
+    .list {
+      --tk-stage: 136px;
+    }
+  }
+
+  .cols {
+    flex: none;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--tk-stage) var(--tk-age);
+    padding: var(--k-space-2) var(--k-space-4) var(--k-space-1);
+    border-bottom: 1px solid var(--k-border);
+    font-size: var(--k-font-size-xs);
+    color: var(--k-fg-subtle);
+  }
+
+  .ends {
+    display: flex;
+    justify-content: space-between;
+    padding-left: calc(var(--k-space-4) + 8px);
+    padding-right: 8px;
+  }
+
+  .right {
+    text-align: right;
+  }
+
+  /* Narrow lists: the track goes under the title (TicketRow), the header with it. */
+  @container (width < 560px) {
+    .cols {
+      display: none;
+    }
   }
 
   .head {

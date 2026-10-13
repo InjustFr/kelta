@@ -17,27 +17,36 @@
     you: msg('your move'),
     wait: msg('waiting on others'),
     broken: msg('broken'),
+    done: msg('done'),
   };
   const last = STAGES.length - 1;
   const pct = (i: number): string => `${(i / last) * 100}%`;
   const label = $derived(
-    t('At {stage}, {whose}; furthest stage reached: {reached}', {
-      stage: t(STAGES[stage.at]!),
-      whose: t(WHOSE[stage.mark]),
-      reached: t(STAGES[stage.reached]!),
-    }),
+    stage.unconfirmed
+      ? t('At {stage} per the tracker; no branch or PR found for the stages before', {
+          stage: t(STAGES[stage.at]!),
+        })
+      : t('At {stage}, {whose}; furthest stage reached: {reached}', {
+          stage: t(STAGES[stage.at]!),
+          whose: t(WHOSE[stage.mark]),
+          reached: t(STAGES[stage.reached]!),
+        }),
   );
 </script>
 
 <span class="track" class:named role="img" aria-label={label} title={label} data-mark={stage.mark}>
-  <span class="line" style:width={pct(stage.reached)}></span>
-  {#each STAGES as _, i (i)}<i class:past={i <= stage.reached} style:left={pct(i)}></i>{/each}
+  <span class="line" class:unconfirmed={stage.unconfirmed} style:width={pct(stage.reached)}></span>
+  {#each STAGES as _, i (i)}<i class:past={!stage.unconfirmed && i <= stage.reached} style:left={pct(i)}
+    ></i>{/each}
   <span class="mark {stage.mark}" style:left={pct(stage.at)}></span>
   {#if named}<span
       class="here"
       class:first={stage.at === 0}
       class:last={stage.at === last}
-      style:left={pct(stage.at)}>{t(STAGES[stage.at]!)}</span
+      style:left={pct(stage.at)}
+      >{stage.unconfirmed
+        ? t('{stage}, per the tracker', { stage: t(STAGES[stage.at]!) })
+        : t(STAGES[stage.at]!)}</span
     >{/if}
 </span>
 
@@ -72,6 +81,15 @@
     margin-top: -1px;
     border-radius: 1px;
     background: var(--k-fg-subtle);
+  }
+
+  /* Stages Kelta did not see (#400): dotted, not drawn. */
+  .line.unconfirmed {
+    height: 0;
+    margin-top: -1px;
+    border-top: 2px dotted var(--k-fg-subtle);
+    border-radius: 0;
+    background: none;
   }
 
   i {
@@ -115,6 +133,13 @@
     rotate: 45deg;
     background: var(--k-danger);
     box-shadow: 0 0 0 3px var(--halo);
+  }
+
+  .done {
+    width: 8px;
+    height: 8px;
+    margin: -4px 0 0 -4px;
+    background: var(--k-fg-subtle);
   }
 
   .here {
