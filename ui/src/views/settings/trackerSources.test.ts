@@ -9,7 +9,6 @@ import type { JsonValue, SourceRoute, TrackerBinding, TrackerView } from '$lib/g
 import * as ipc from '$lib/ipc/commands';
 import { createMockTransport, lastSettingsValue, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { activeTab, allPanes, findContent } from '$lib/layout';
 import { layout, projects, settings, ui } from '$lib/stores';
 
 import { confirms } from '../../shell/confirm.svelte';
@@ -354,31 +353,19 @@ describe('settings.open toml', () => {
     expect(takeTomlRequest()).toBeNull();
   });
 
-  it('focuses the open Settings tab and retargets its section instead of opening another (#340)', async () => {
+  it('shows Settings over the window without a tab; ⌘, again closes it, a deep link retargets (#410)', async () => {
     await import('./actions');
+    ui.settings = null;
     layout.byProject = {};
-    const current = () => layout.get(projects.activeId ?? 'home')!;
-    const settingsPanes = () =>
-      current()
-        .tabs.flatMap((t) => allPanes(t.root))
-        .filter((p) => p.content.kind === 'settings');
     await dispatch('settings.open');
-    expect(settingsPanes()).toHaveLength(1);
-    const at = findContent(current(), (c) => c.kind === 'settings')!;
-    layout.open(projects.activeId ?? 'home', {
-      content: { kind: 'inbox' },
-      placement: 'new_tab',
-      focus: true,
-      tab_title: null,
-      work_item_id: null,
-    });
-    await dispatch('settings.open');
-    expect(settingsPanes()).toHaveLength(1);
-    expect(activeTab(current())?.id).toBe(at.tabId);
-    expect(settingsPanes()[0]?.content).toEqual({ kind: 'settings', section: null });
+    expect(ui.settings).toEqual({ section: null });
+    expect(layout.byProject).toEqual({});
+    const first = ui.settings;
     await dispatch('settings.open', { section: 'accounts' });
-    expect(settingsPanes()).toHaveLength(1);
-    expect(settingsPanes()[0]?.content).toEqual({ kind: 'settings', section: 'accounts' });
+    expect(ui.settings).toEqual({ section: 'accounts' });
+    expect(ui.settings).not.toBe(first);
+    await dispatch('settings.open');
+    expect(ui.settings).toBeNull();
   });
 
   it('an open Settings pane follows a retargeted section and TOML request', async () => {
