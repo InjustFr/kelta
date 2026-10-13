@@ -88,7 +88,7 @@
   import { waitingChip } from '../reviews/nudge';
   import FilterBar from '../filters/FilterBar.svelte';
   import { clearAll, commonFilters, noMatch } from '../filters/filters';
-  import { loopDone, loopShipped, rememberShipped } from '../onboarding/firstRun';
+  import { loopDone, loopShipped } from '../onboarding/firstRun';
   import YourLoop from '../onboarding/YourLoop.svelte';
 
   let { focused }: PaneProps<'inbox'> = $props();
@@ -108,9 +108,6 @@
   const loop = $derived(loopDone(projects.list, settings.hasSources(), work.all));
   // Steps 3-5 (start, review, ship) are part of the loop: it stays until a first item has shipped.
   const showLoop = $derived(!loop.ship && !loopShipped());
-  $effect(() => {
-    if (loop.ship) rememberShipped();
-  });
 
   function refresh(): void {
     void refreshNow(true);

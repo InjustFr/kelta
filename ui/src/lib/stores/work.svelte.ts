@@ -12,6 +12,7 @@ import type {
 } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 
+import { rememberShipped } from '../../views/onboarding/firstRun';
 import { toKeltaError } from './loadable';
 import { reduceWork, type WorkMap } from './reducers';
 
@@ -86,6 +87,8 @@ export class WorkStore {
 
   apply(ev: UiEvent): void {
     const prev = ev.type === 'work.updated' ? this.byId[ev.work.id] : undefined;
+    // Before reduceWork drops a finished item: a first PR opened is what ends the first-run loop (#422).
+    if (ev.type === 'work.updated' && ev.work.kind !== 'review' && ev.work.pr_url) rememberShipped();
     const next = reduceWork(this.byId, ev);
     if (next !== this.byId) this.byId = next;
     // A Claude stop/prompt or a state change moves git (commits, diffstat): re-read it for Now and
@@ -114,6 +117,7 @@ export class WorkStore {
         ? Object.fromEntries(Object.entries(this.byId).filter(([, w]) => w.project_id !== projectId))
         : {};
       for (const w of list) next[w.id] = w;
+      if (list.some((w) => w.kind !== 'review' && w.pr_url)) rememberShipped();
       this.byId = next;
       this.error = null;
       this.loaded = true;

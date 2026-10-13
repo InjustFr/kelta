@@ -17,6 +17,7 @@ import { TicketsStore, ticketListKey } from './tickets.svelte';
 import { ToastsStore } from './toasts.svelte';
 import { idle } from './loadable';
 import { UiStore } from './ui.svelte';
+import { LOOP_SHIPPED } from '../../views/onboarding/firstRun';
 import { WorkStore } from './work.svelte';
 
 let mock: MockControls;
@@ -483,6 +484,26 @@ describe('WorkStore', () => {
     store.apply({ type: 'work.updated', work: { ...w, review_due: !w.review_due } });
     await flush();
     expect(reads()).toBe(1);
+  });
+});
+
+describe('WorkStore first-run shipped flag', () => {
+  it('records the first PR even when the item finishes before any view mounts', async () => {
+    localStorage.clear();
+    const store = new WorkStore();
+    await store.load();
+    const w = store.all.find((x) => x.kind !== 'review')!;
+    localStorage.clear();
+    store.apply({
+      type: 'work.updated',
+      work: { ...w, kind: 'review', pr_url: 'https://example.test/pr/9' },
+    });
+    expect(localStorage.getItem(LOOP_SHIPPED)).toBeNull();
+    store.apply({
+      type: 'work.updated',
+      work: { ...w, pr_url: 'https://example.test/pr/1', state: { kind: 'finished' } },
+    });
+    expect(localStorage.getItem(LOOP_SHIPPED)).toBe('1');
   });
 });
 
