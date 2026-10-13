@@ -1,25 +1,15 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 
 import { dispatch } from '$lib/actions';
 import type { ToolScope } from '$lib/gen';
 import { createMockTransport } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { activeTab, allPanes } from '$lib/layout';
+import { activeTab, allPanes, findSession, paneSession } from '$lib/layout';
 import { GLOBAL, layout, projects, sessions, tools, ui } from '$lib/stores';
 
-import { jumplist, noteFocus } from '../../shell/jumplist';
-import NewSessionSheet from '../../shell/NewSessionSheet.svelte';
-import {
-  activateProject,
-  currentTab,
-  focusedPane,
-  focusPaneById,
-  isToolTab,
-  railRows,
-  selectTab,
-  toolSubLines,
-} from '../../shell/nav';
+import { noteFocus } from '../../shell/jumplist';
+import { activateProject, currentTab, focusedPane, focusPaneById, selectTab } from '../../shell/nav';
 import './actions';
 import ToolPicker from './ToolPicker.svelte';
 
@@ -78,24 +68,63 @@ describe('tools.open', () => {
     tab!.work_item_id = workItemId;
     await Promise.all([layout.ensure('shop'), tools.load('shop')]);
     const id = m.state.tools.find((t) => t.kind === 'pty')!.id;
+    // The layout edits stay local: saved, never reloaded over (a reload would drop the zoom).
     const open = async (ctx?: object) => {
       await dispatch('tools.open', { tool_id: id, ...(ctx ? { ctx } : {}) });
-      await Promise.all([sessions.load(), layout.load('shop')]);
+      await Promise.all([sessions.load(), layout.flush()]);
     };
     const opens = () => m.calls.filter((c) => c.cmd === 'tool_open');
     return { m, id, open, opens };
   }
 
-  it('sends the tab work item and the tool placement, then refocuses within the same work item', async () => {
+  /** The focused pane's session, when it is a tool's. */
+  const frontTool = () => {
+    const sid = focusedPane() ? paneSession(focusedPane()!) : null;
+    return sid && sessions.get(sid)?.kind.type === 'tool' ? sid : null;
+  };
+
+  it('opens zoomed in the current tab with its work item (the worktree cwd); the key hides it and brings it back', async () => {
+    const { open, opens } = await inTab('W1');
+    const tab = currentTab()!;
+    const before = allPanes(tab.root).map((p) => p.id);
+    await open();
+    expect(opens()).toHaveLength(1);
+    expect(opens()[0].args).toMatchObject({
+      project_id: 'shop',
+      ctx: { work_item_id: 'W1' },
+      placement: 'split_right',
+    });
+    const sid = frontTool()!;
+    expect(sid).toBeTruthy();
+    expect(currentTab()!.id).toBe(tab.id);
+    expect(currentTab()!.zoomed_pane).toBe(focusedPane()!.id);
+
+    // Pressed again in front: back to the previous layout, the session keeps running.
+    await open();
+    expect(allPanes(currentTab()!.root).map((p) => p.id)).toEqual(before);
+    expect([currentTab()!.zoomed_pane, frontTool()]).toEqual([null, null]);
+    expect(sessions.get(sid)?.lifecycle).toBe('live');
+
+    // Again: the same session comes back zoomed, no second open.
+    await open();
+    expect(opens()).toHaveLength(1);
+    expect(frontTool()).toBe(sid);
+    expect(currentTab()!.zoomed_pane).toBe(focusedPane()!.id);
+
+    // Esc Esc (`tools.hide`) hides it too.
+    await dispatch('tools.hide');
+    expect(frontTool()).toBeNull();
+  });
+
+  it('opens a terminal tool in the current tab whatever its placement; another work item gets its own', async () => {
     const { m, open, opens } = await inTab('W1');
     m.state.tools.find((t) => t.kind === 'pty')!.placement = 'new_tab';
     await tools.load('shop');
+    const tab = currentTab()!.id;
     await open();
-    expect(opens()).toHaveLength(1);
-    expect(opens()[0].args).toMatchObject({ ctx: { work_item_id: 'W1' }, placement: 'new_tab' });
-    await open();
-    expect(opens()).toHaveLength(1);
-    // Another work item gets its own instance.
+    expect(opens()[0].args).toMatchObject({ placement: 'split_right' });
+    expect(currentTab()!.id).toBe(tab);
+    await open(); // hides it
     await open({ work_item_id: 'W2' });
     expect(opens()).toHaveLength(2);
   });
@@ -103,11 +132,11 @@ describe('tools.open', () => {
   it('with no work item matches only no-work-item instances', async () => {
     const { open, opens } = await inTab(null);
     await open({ work_item_id: 'W1' });
+    const other = allPanes(currentTab()!.root).find((p) => p.id !== focusedPane()!.id)!;
+    focusPaneById('shop', currentTab()!.id, other.id);
     await open();
     expect(opens()).toHaveLength(2);
     expect(opens()[1].args).toMatchObject({ ctx: { work_item_id: null }, placement: 'split_right' });
-    await open();
-    expect(opens()).toHaveLength(2);
   });
 
   it('picker sends the tab work item and refocuses like tools.open', async () => {
@@ -120,13 +149,14 @@ describe('tools.open', () => {
       await vi.waitFor(() => expect(onclose).toHaveBeenCalled());
       unmount();
       onclose.mockClear();
-      await Promise.all([sessions.load(), layout.load('shop')]);
+      await Promise.all([sessions.load(), layout.flush()]);
     };
     await pick();
     expect(opens()).toHaveLength(1);
     expect(opens()[0].args).toMatchObject({ ctx: { work_item_id: 'W1' } });
     await pick();
     expect(opens()).toHaveLength(1);
+    expect(frontTool()).toBeTruthy();
   });
 
   it('from a global view opens a no-project tool in Home, with no work item', async () => {
@@ -208,52 +238,13 @@ describe('tools.open', () => {
     expect(opens()[0].args).toMatchObject({ project_id: 'shop', ctx: { work_item_id: null } });
   });
 
-  it('pressed again in front, a tool with no project argument goes back, here to Now', async () => {
-    const { id, opens } = await inTab(null);
-    ui.view = 'now';
-    noteFocus({ project: GLOBAL, tab: 'now', pane: 'now' }); // what the shell records
-    await dispatch('tools.open', { tool_id: id });
-    await Promise.all([sessions.load(), layout.load('home')]);
-    expect([ui.view, projects.activeId]).toEqual([null, 'home']);
-    const pane = focusedPane()!;
-    expect(toolSubLines().get(pane.id)?.tool).toBe(id);
-    noteFocus({ project: 'home', tab: currentTab()!.id, pane: pane.id });
-    await dispatch('tools.open', { tool_id: id });
-    expect(opens()).toHaveLength(1);
-    expect(ui.view).toBe('now');
-  });
-
-  it('a focus-only open (the rail click) on the tool in front stays there', async () => {
-    const { id } = await inTab(null);
-    ui.view = 'now';
-    noteFocus({ project: GLOBAL, tab: 'now', pane: 'now' });
-    await dispatch('tools.open', { tool_id: id });
-    await Promise.all([sessions.load(), layout.load('home')]);
-    const pane = focusedPane()!;
-    noteFocus({ project: 'home', tab: currentTab()!.id, pane: pane.id });
-    await dispatch('tools.open', { tool_id: id, focus_only: true });
-    expect(ui.view).toBeNull();
-    expect(focusedPane()?.id).toBe(pane.id);
-  });
-
-  it('a focus-only open (the rail click) on a project tool in front stays there, no picker', async () => {
-    const { open, id, opens } = await needsProject();
+  it('pressed again in front, a terminal tool that takes a project hides, no picker', async () => {
+    const { open, opens } = await needsProject();
     await open();
-    await dispatch('tools.open', { tool_id: id, focus_only: true });
-    expect(ui.pick).toBeNull();
-    expect(opens()).toHaveLength(1);
-  });
-
-  it('pressed again in front, a tool that takes a project asks for another project', async () => {
-    const { open, id, opens } = await needsProject();
+    expect(frontTool()).toBeTruthy();
     await open();
-    expect(toolSubLines().get(focusedPane()!.id)?.tool).toBe(id);
-    const done = dispatch('tools.open', { tool_id: id });
-    await vi.waitFor(() => expect(ui.pick).not.toBeNull());
-    ui.resolvePick('billing');
-    await done;
-    expect(opens()).toHaveLength(2);
-    expect(opens()[1].args).toMatchObject({ project_id: 'billing', ctx: { work_item_id: null } });
+    expect([ui.pick, frontTool()]).toEqual([null, null]);
+    expect(opens()).toHaveLength(1);
   });
 });
 
@@ -272,88 +263,52 @@ describe('tool scope', () => {
     c.state.tools.find((t) => t.id === id)!.scope = scope;
     await projects.load();
     await sessions.load();
-    await Promise.all([layout.ensure('shop'), layout.ensure('home'), tools.load('shop')]);
+    await Promise.all([
+      layout.ensure('shop'),
+      layout.ensure('home'),
+      layout.ensure('billing'),
+      tools.load('shop'),
+    ]);
     const open = async (args: object = {}) => {
       await dispatch('tools.open', { tool_id: id, ...args });
-      await Promise.all([
-        sessions.load(),
-        layout.load('shop'),
-        layout.load('home'),
-        layout.ensure('billing'),
-      ]);
+      await Promise.all([sessions.load(), layout.flush()]);
     };
     const opens = () => c.calls.filter((x) => x.cmd === 'tool_open');
     return { c, id, open, opens };
   }
 
-  it('user: one Home tab from a project, a work item or a global view; another open only focuses it', async () => {
+  it('user: a terminal tool opens in the current tab of the project shown, with no work item', async () => {
     const { open, opens } = await scoped('user');
+    const tab = currentTab()!.id;
     await open();
-    expect(opens()).toHaveLength(1);
     expect(opens()[0].args).toMatchObject({
-      project_id: 'home',
-      placement: 'new_tab',
+      project_id: 'shop',
+      placement: 'split_right',
       ctx: { work_item_id: null },
     });
-    expect(projects.activeId).toBe('home');
-    const tab = currentTab()!;
-    expect(isToolTab(tab)).toBe(true);
-
-    await activateProject('shop');
-    await open();
-    ui.view = 'now';
-    await open();
-    expect(opens()).toHaveLength(1);
-    expect([ui.view, projects.activeId, currentTab()!.id]).toEqual([null, 'home', tab.id]);
+    expect([projects.activeId, currentTab()!.id]).toEqual(['shop', tab]);
   });
 
-  it('a Home tool tab makes New session default to the project last shown, not Home', async () => {
-    const { open } = await scoped('user');
-    jumplist.list = [{ project: 'shop', tab: 'shop-t1', pane: 'shop-p1' }];
-    jumplist.at = 0;
-    await open();
-    render(NewSessionSheet, { onclose: () => {} });
-    expect((screen.getByLabelText('Project') as HTMLSelectElement).value).toBe('shop');
-  });
-
-  it('project: one instance per project as its own tab, whatever the work item', async () => {
+  it('project: one instance per project, whatever the work item; the key moves it to the current tab', async () => {
     const { open, opens } = await scoped('project');
     await open();
     expect(opens()[0].args).toMatchObject({
       project_id: 'shop',
-      placement: 'new_tab',
+      placement: 'split_right',
       ctx: { work_item_id: null },
     });
-    selectTab('shop', 'shop-t1');
+    const sid = paneSession(focusedPane()!)!;
+    const other = layout.get('shop')!.tabs.find((t) => t.id !== currentTab()!.id)!;
+    selectTab('shop', other.id);
     await open({ ctx: { work_item_id: 'W2' } });
     expect(opens()).toHaveLength(1);
-    expect(isToolTab(currentTab()!)).toBe(true);
+    expect(findSession(layout.get('shop')!, sid)?.tabId).toBe(other.id);
+    expect(currentTab()!.zoomed_pane).toBe(focusedPane()!.id);
 
     await activateProject('billing');
     await open();
     expect(opens()).toHaveLength(2);
     expect(opens()[1].args).toMatchObject({ project_id: 'billing' });
-  });
-
-  it('a live instance in no pane does not mask a shown one: the second open focuses, no third session', async () => {
-    const { c, open, opens } = await scoped('project');
-    await open();
-    // Hide the first instance: its tab closes, its session keeps running.
-    c.state.layouts.shop.tabs = c.state.layouts.shop.tabs.filter((t) => !isToolTab(t));
-    await layout.load('shop');
-    await open();
-    await open();
-    expect(opens()).toHaveLength(2);
-  });
-
-  it('a tool the config no longer knows leaves its tab a closable row in its band', async () => {
-    const { c, open } = await scoped('project');
-    await open();
-    const tab = currentTab()!;
-    expect(isToolTab(tab)).toBe(true);
-    c.state.tools = [];
-    await tools.load('shop');
-    expect(isToolTab(tab)).toBe(false);
   });
 
   it('project: from Home or a global view it asks which project', async () => {
@@ -363,45 +318,24 @@ describe('tool scope', () => {
     await vi.waitFor(() => expect(ui.pick).not.toBeNull());
     ui.resolvePick('billing');
     await done;
-    expect(opens()[0].args).toMatchObject({ project_id: 'billing', placement: 'new_tab' });
+    expect(opens()[0].args).toMatchObject({ project_id: 'billing', placement: 'split_right' });
   });
 
-  /** Where the rail shows a tab: under Tools (a sub-line or a `user` tool's row) and/or in its band. */
-  function places(tabId: string): string[] {
-    const lines = toolSubLines();
-    return [
-      ...([...lines.values()].some((x) => x.tab.id === tabId) ? ['tools'] : []),
-      ...(railRows(lines).some((r) => r.tab.id === tabId) ? ['band'] : []),
-    ];
-  }
-
-  it('a user tool in Home, a dead session, an unknown tool and a web instance each show in one place', async () => {
-    const { c, id, open } = await scoped('user');
-    await open();
-    const userTab = currentTab()!.id;
-    expect(places(userTab)).toEqual(['tools']);
-
-    // A project-scoped web tool opens as its own tab: a Tools sub-line, no band row.
-    c.state.tools.find((t) => t.id === 'sl-web')!.scope = 'project';
+  it('a user web tool keeps its own tab in Home; pressed again in front it goes back, here to Now', async () => {
+    const { c, opens } = await scoped('work');
+    const web = c.state.tools.find((t) => t.id === 'sl-web')!;
+    Object.assign(web, { scope: 'user', needs_project: false });
     await tools.load('shop');
-    await activateProject('shop');
+    ui.view = 'now';
+    noteFocus({ project: GLOBAL, tab: 'now', pane: 'now' }); // what the shell records
     await dispatch('tools.open', { tool_id: 'sl-web' });
-    await layout.load('shop');
-    const webPane = focusedPane()!;
-    const webTab = currentTab()!.id;
-    expect(webPane.content.kind).toBe('web');
-    expect(toolSubLines().get(webPane.id)?.tool).toBe('sl-web');
-    expect(places(webTab)).toEqual(['tools']);
-
-    // Dead session: the Home tab falls back to a band row.
-    c.state.sessions.find((s) => s.kind.type === 'tool' && s.kind.tool_id === id)!.lifecycle = 'exited';
-    await sessions.load();
-    expect(places(userTab)).toEqual(['band']);
-
-    // Unknown tool: the web tab falls back to a band row.
-    c.state.tools = c.state.tools.filter((t) => t.id !== 'sl-web');
-    await tools.load('shop');
-    expect(places(webTab)).toEqual(['band']);
+    await layout.load('home');
+    expect(opens()[0].args).toMatchObject({ project_id: 'home', placement: 'new_tab' });
+    expect([ui.view, projects.activeId, focusedPane()?.content.kind]).toEqual([null, 'home', 'web']);
+    noteFocus({ project: 'home', tab: currentTab()!.id, pane: focusedPane()!.id });
+    await dispatch('tools.open', { tool_id: 'sl-web' });
+    expect(opens()).toHaveLength(1);
+    expect(ui.view).toBe('now');
   });
 
   it('a web tool instance gets focus from the tool key, no second open', async () => {
