@@ -11,7 +11,7 @@ The four flows this design serves, in Louis's words:
 3. **Ticket-free**: explore a feature or fix a bug in a session that will probably end in a PR, without a ticket.
 4. **Rebase** my work.
 
-And the two questions behind them, asked many times a day with many things in flight: _what do I have to review, from other people and from Claude?_ and _where am I in my own work?_
+And the two questions behind them, asked many times a day with many things in flight: *what do I have to review, from other people and from Claude?* and *where am I in my own work?*
 
 ---
 
@@ -32,11 +32,11 @@ And the two questions behind them, asked many times a day with many things in fl
 
 ### 2.1 Kinds
 
-| Kind                         | Created by                                      | Branch                                                                               | Title                                | Claude prompt                        |
-| ---------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------ | ------------------------------------ |
-| Ticket                       | Start work on a ticket                          | `worktree.branch_template`                                                           | ticket title                         | `claude.prompt_templates.ticket`     |
+| Kind | Created by | Branch | Title | Claude prompt |
+|---|---|---|---|---|
+| Ticket | Start work on a ticket | `worktree.branch_template` | ticket title | `claude.prompt_templates.ticket` |
 | Scratch (`WorkKind::Branch`) | New work item (`⇧⌘N`), `kelta-ctl start --task` | `work.scratch_branch_template`, default `wip/{slug}` (slug of the task's first line) | first line of the task, 72 chars max | `standalone`, default now `"{task}"` |
-| Review                       | Review locally on someone else's PR             | `kelta/pr-<n>`                                                                       | PR title                             | `review`                             |
+| Review | Review locally on someone else's PR | `kelta/pr-<n>` | PR title | `review` |
 
 A scratch item behaves like a ticket item in every way except tracker side effects. It can be linked to a ticket later (§4.3).
 
@@ -57,35 +57,34 @@ The first matching row wins. "Claude" below means the item's Claude session `sta
 
 ![Work bar in each phase](images/flow/f5-work-bar-states.png)
 
-| #   | Condition                                                                                                                                                                                       | Label (detail)                                                                                                                                                                                                                                                      | Lamp                                                                    | Primary action                                                                           | Now section                                      |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| 0   | an open MCP `ask` question (#356) on the item's Claude, or on its run's session                                                                                                                 | the question                                                                                                                                                                                                                                                        | needs input                                                             | Go to Claude                                                                             | Claude needs you                                 |
-| 0a  | a background run holds the item (`WorkItem.run`, #235) and is not done                                                                                                                          | {workflow} {phase} (the run's note)                                                                                                                                                                                                                                 | working; blocked amber (error); failed red (needs input); orphaned none | none                                                                                     | In flight (blocked and failed: Claude needs you) |
-| 1   | `state = failed`                                                                                                                                                                                | Failed at {step} ({message})                                                                                                                                                                                                                                        | error                                                                   | Retry {step} (Skip step beside it)                                                       | Fix                                              |
-| 1a  | `state = queued`: past `claude.max_live` live Claudes (#141)                                                                                                                                    | Queued (waiting for a Claude slot)                                                                                                                                                                                                                                  | none                                                                    | Start now (over cap); Move to front on right-click                                       | In flight                                        |
-| 2   | `state = starting`                                                                                                                                                                              | Starting (step n of m)                                                                                                                                                                                                                                              | working                                                                 | none                                                                                     | In flight                                        |
-| 2a  | the worktree is gone (`git.missing`)                                                                                                                                                            | Worktree missing ({path})                                                                                                                                                                                                                                           | error                                                                   | Recreate                                                                                 | In flight                                        |
-| 3   | `rebase.conflicts` non-empty                                                                                                                                                                    | Rebase stopped (n conflicted files)                                                                                                                                                                                                                                 | error                                                                   | Ask Claude to resolve                                                                    | Fix                                              |
-| 4   | Claude `status = NeedsInput` (permission, elicitation, agent needs input)                                                                                                                       | Claude needs you (Claude's question)                                                                                                                                                                                                                                | needs input                                                             | Go to Claude                                                                             | Claude needs you                                 |
-| 5   | Claude `status = Working`                                                                                                                                                                       | Claude working (for 4m)                                                                                                                                                                                                                                             | working                                                                 | none                                                                                     | In flight                                        |
-| 6   | `state = merged`                                                                                                                                                                                | Merged (#n, ticket moved to Done, or "choose Done status")                                                                                                                                                                                                          | none                                                                    | Finish…                                                                                  | Ship and clean up                                |
-| 7   | PR closed unmerged                                                                                                                                                                              | PR closed (#n)                                                                                                                                                                                                                                                      | none                                                                    | Finish…                                                                                  | Ship and clean up                                |
-| 8   | `review_due`                                                                                                                                                                                    | To review (the delta chip)                                                                                                                                                                                                                                          | done                                                                    | Review changes                                                                           | Ready for review                                 |
-| 9   | `claude_replied`                                                                                                                                                                                | Claude replied (`ClaudeMeta.preview`)                                                                                                                                                                                                                               | needs input                                                             | Go to Claude                                                                             | Claude needs you                                 |
-| 10  | PR exists, `git.remote_new > 0`                                                                                                                                                                 | Remote has new commits (n)                                                                                                                                                                                                                                          | error                                                                   | Rebase onto {remote}/{branch}                                                            | Fix                                              |
-| 11  | PR `decision = changes_requested` or `ci = failure` on the PR head, **and** the local HEAD is the PR head (`unpushed = 0`, not dirty)                                                           | Changes requested (#n) / Checks failed (#n and the failed check names: the first 3, then `+n`). CI and review are separate axes (#369): the label names the other one too, `Checks failed · review required` (or `· approved`), `Changes requested · checks failed` | error                                                                   | Fix with Claude / Send failures to Claude (`fix_checks`)                                 | Fix                                              |
-| 11a | PR `last_comment_at` newer than the item's `feedback_at` (or `feedback_at` unset): an unresolved thread whose last comment is not mine. No local-HEAD condition: unpushed work does not hide it | New comments (n unresolved threads)                                                                                                                                                                                                                                 | error                                                                   | Fix with Claude                                                                          | Fix                                              |
-| 12  | PR `mergeable = false`                                                                                                                                                                          | Conflicts with {base} (n behind)                                                                                                                                                                                                                                    | error                                                                   | Rebase                                                                                   | Fix                                              |
-| 13  | `git.diverged` (§4.4: own rewrite, PR exists)                                                                                                                                                   | Rebased (push rewrites #n)                                                                                                                                                                                                                                          | none                                                                    | Force push…                                                                              | Ship and clean up                                |
-| 14  | PR exists, `unpushed`                                                                                                                                                                           | Unpushed (n commits)                                                                                                                                                                                                                                                | none                                                                    | Push                                                                                     | Ship and clean up                                |
-| 15  | no PR, `ahead > 0`                                                                                                                                                                              | Ready to ship (n commits)                                                                                                                                                                                                                                           | none                                                                    | Ship                                                                                     | Ship and clean up                                |
-| 15a | PR is a draft (pushed: rows 13-14 come first; row 16 comes after)                                                                                                                               | Draft (#n, and `checks failure` when red)                                                                                                                                                                                                                           | none                                                                    | Mark ready… (`d`, asks first; `review_set_draft`, #353), or Open PR while checks are red | Ship and clean up (In flight when red)           |
-| 16  | PR approved, checks pass                                                                                                                                                                        | Approved (#n)                                                                                                                                                                                                                                                       | none                                                                    | Open PR (merge there)                                                                    | Ship and clean up                                |
-| 17  | PR open otherwise                                                                                                                                                                               | In review (#n, checks, review state: `#n checks pending · review required`)                                                                                                                                                                                         | none                                                                    | Open PR                                                                                  | In flight                                        |
-| 18  | no PR, `ahead = 0`                                                                                                                                                                              | No changes yet                                                                                                                                                                                                                                                      | none                                                                    | Go to Claude                                                                             | In flight                                        |
+| # | Condition | Label (detail) | Lamp | Primary action | Now section |
+|---|---|---|---|---|---|
+| 0 | an open MCP `ask` question (#356) on the item's Claude, or on its run's session | the question | needs input | Go to Claude | Claude needs you |
+| 0a | a background run holds the item (`WorkItem.run`, #235) and is not done | {workflow} {phase} (the run's note) | working; blocked amber (error); failed red (needs input); orphaned none | none | In flight (blocked and failed: Claude needs you) |
+| 1 | `state = failed` | Failed at {step} ({message}) | error | Retry {step} (Skip step beside it) | Fix |
+| 1a | `state = queued`: past `claude.max_live` live Claudes (#141) | Queued (waiting for a Claude slot) | none | Start now (over cap); Move to front on right-click | In flight |
+| 2 | `state = starting` | Starting (step n of m) | working | none | In flight |
+| 2a | the worktree is gone (`git.missing`) | Worktree missing ({path}) | error | Recreate | In flight |
+| 3 | `rebase.conflicts` non-empty | Rebase stopped (n conflicted files) | error | Ask Claude to resolve | Fix |
+| 4 | Claude `status = NeedsInput` (permission, elicitation, agent needs input) | Claude needs you (Claude's question) | needs input | Go to Claude | Claude needs you |
+| 5 | Claude `status = Working` | Claude working (for 4m) | working | none | In flight |
+| 6 | `state = merged` | Merged (#n, ticket moved to Done, or "choose Done status") | none | Finish… | Ship and clean up |
+| 7 | PR closed unmerged | PR closed (#n) | none | Finish… | Ship and clean up |
+| 8 | `review_due` | To review (the delta chip) | done | Review changes | Ready for review |
+| 9 | `claude_replied` | Claude replied (`ClaudeMeta.preview`) | needs input | Go to Claude | Claude needs you |
+| 10 | PR exists, `git.remote_new > 0` | Remote has new commits (n) | error | Rebase onto {remote}/{branch} | Fix |
+| 11 | PR `decision = changes_requested` or `ci = failure` on the PR head, **and** the local HEAD is the PR head (`unpushed = 0`, not dirty) | Changes requested (#n) / Checks failed (#n and the failed check names: the first 3, then `+n`). CI and review are separate axes (#369): the label names the other one too, `Checks failed · review required` (or `· approved`), `Changes requested · checks failed` | error | Fix with Claude / Send failures to Claude (`fix_checks`) | Fix |
+| 11a | PR `last_comment_at` newer than the item's `feedback_at` (or `feedback_at` unset): an unresolved thread whose last comment is not mine. No local-HEAD condition: unpushed work does not hide it | New comments (n unresolved threads) | error | Fix with Claude | Fix |
+| 12 | PR `mergeable = false` | Conflicts with {base} (n behind) | error | Rebase | Fix |
+| 13 | `git.diverged` (§4.4: own rewrite, PR exists) | Rebased (push rewrites #n) | none | Force push… | Ship and clean up |
+| 14 | PR exists, `unpushed` | Unpushed (n commits) | none | Push | Ship and clean up |
+| 15 | no PR, `ahead > 0` | Ready to ship (n commits) | none | Ship | Ship and clean up |
+| 15a | PR is a draft (pushed: rows 13-14 come first; row 16 comes after) | Draft (#n, and `checks failure` when red) | none | Mark ready… (`d`, asks first; `review_set_draft`, #353), or Open PR while checks are red | Ship and clean up (In flight when red) |
+| 16 | PR approved, checks pass | Approved (#n) | none | Open PR (merge there) | Ship and clean up |
+| 17 | PR open otherwise | In review (#n, checks, review state: `#n checks pending · review required`) | none | Open PR | In flight |
+| 18 | no PR, `ahead = 0` | No changes yet | none | Go to Claude | In flight |
 
 Notes:
-
 - **Flow 2 ordering** (row 8 above row 11, and row 11's local-HEAD condition): after Claude fixes review feedback and stops, the PR head has not moved yet. The item must read To review, then Unpushed → Push, never "Changes requested" again. `phase.ts` tests cover: `changes_requested` + `review_due` + unpushed → To review; same after Mark reviewed → Unpushed (Push); after push with the decisive review on an older commit → In review.
 - "On the PR head" (row 11): a changes-requested review left on an older commit means Louis already pushed a fix; the item waits for re-review (row 17). Needs `Review.decision_head` (§8).
 - **Parked** (#142, `P` in the work menu, `claude.auto_park_after_mins`): Park stops the item's Claude and nvim and keeps the conversation; showing the item resumes it. A parked item keeps its phase, but a quiet lamp (none, activity, done) turns into a quiet hollow ring. Never offered while Claude works.
@@ -102,7 +101,6 @@ Two flags on `WorkItem`, owned by kelta-work, both set only from a real `Stop` h
 - **`claude_replied`**: set when the Stop finds no changes. Claude ended its turn in prose (an answer, "approach A or B?"). This is what keeps a parallel slot from quietly dying as "No changes yet".
 
 Clearing:
-
 - Both are cleared by a `UserPromptSubmit` in that session (Louis answered Claude, so he looked).
 - `review_due` is also cleared by a **UI** Ship or Push, Finish, and Mark reviewed (`R`, which also stamps `reviewed`). A Ship or push Claude does itself through MCP leaves it set: LLM work is not reviewed until Louis looks. Opening the diff does not clear it: Louis may stop halfway.
 - `claude_replied` is also cleared by Finish.
@@ -115,7 +113,7 @@ Heuristic sessions (hooks inactive) never set either: a 3 s quiet guess would fl
 
 **Others' PRs.** Approving in Kelta stamps the approved head next to `seen_reviews` (`reviewed_sha`); hosts that report no `reviewed_head` (GitLab, Bitbucket, Gitea) read it back, so "Updated since your review" works there too.
 
-`WaitingUser` (the `idle_prompt` notification) means _idle_, not _needs you_. It never puts an item in Claude needs you and never blocks sending to Claude. Only `status = NeedsInput` does.
+`WaitingUser` (the `idle_prompt` notification) means *idle*, not *needs you*. It never puts an item in Claude needs you and never blocks sending to Claude. Only `status = NeedsInput` does.
 
 The `done` lamp on a work item's tab and its project tile comes from `review_due`, not from the session's `seen` flag. Plain sessions keep today's seen semantics.
 
@@ -123,13 +121,13 @@ Writes are field-level (§8): the hook listener never overwrites `pr_url` or `st
 
 ### 2.4 Where a work item shows, always
 
-| Place                                                                                         | What it shows                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Tab                                                                                           | `[phase lamp] KEY title` (scratch: `wip title`). Mono key, lamp slot per DESIGN §6.3.                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Place | What it shows |
+|---|---|
+| Tab | `[phase lamp] KEY title` (scratch: `wip title`). Mono key, lamp slot per DESIGN §6.3. |
 | Context bar, the work segment (above the rail and all panes, survives pane zoom; DESIGN §6.3) | after the breadcrumb (`project › KEY title`): ticket status chip (opens the status picker), phase chip (lamp + label + detail), PR chip (`PR #482` + CI lamp, opens the PR), `↑a ↓b`, cost, `⎇` (branch, worktree, ports, armed, `+ins −del`, uncommitted changes in its tooltip; a dot when armed or dirty), primary button, **Work ⌘.** menu. Clicking the phase chip opens the existing `WorkItemPane` (saga steps, sessions) as a split down. The return strip sits directly under the bar. |
-| Rail row                                                                                      | a work tab's lamp (DESIGN §6.2) folds in `review_due`, `claude_replied` and work-item errors, not just sessions.                                                                                                                                                                                                                                                                                                                                                                                |
-| Now                                                                                           | one row (§3).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Palette                                                                                       | Work items group (§3.5).                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Rail row | a work tab's lamp (DESIGN §6.2) folds in `review_due`, `claude_replied` and work-item errors, not just sessions. |
+| Now | one row (§3). |
+| Palette | Work items group (§3.5). |
 
 No status strip segment and no header row in the tab: the context bar is always visible above the focused tab's panes and says the same thing. `views/work/WorkContext.svelte` is its work segment, `views/work/ReturnBrief.svelte` the return strip; `WorkItemPane` has no header of its own.
 
@@ -139,28 +137,28 @@ No status strip segment and no header row in the tab: the context bar is always 
 
 `work.menu` opens a menu anchored to the work bar of the focused tab's work item, from any pane including terminals (it is a Mod chord, like `⌘K`). Single letters run actions; `Enter` runs the primary. Unavailable actions are listed but disabled with their reason in the tooltip, so the letters never move.
 
-| Key       | Action                                      | Notes                                                                                                                                      |
-| --------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Enter`   | primary action of the phase                 |                                                                                                                                            |
-| `v`       | Review changes since last look              | `DiffviewOpen <reviewed>..<last>` (`{range}`); a review item: since the PR head I reviewed, `git range-diff` in a shell after a force push |
-| `V`       | Review the whole diff in nvim               | §4.1                                                                                                                                       |
-| `p`       | Ship (push + PR) / Push / Force push…       | one letter, wording follows the phase                                                                                                      |
-| `R`       | Mark reviewed                               | only with `review_due`                                                                                                                     |
-| `b`       | Edit the `next:` note                       | Louis's own reminder, shown on the row and the return strip                                                                                |
-| `f`       | Fix with Claude                             | needs a PR                                                                                                                                 |
-| `r`       | Rebase onto {base}                          |                                                                                                                                            |
-| `c`       | Continue rebase                             | only in Rebase stopped                                                                                                                     |
-| `a`       | Abort rebase                                | only in Rebase stopped                                                                                                                     |
-| `n`       | Open conflicts in nvim                      | only in Rebase stopped                                                                                                                     |
-| `s`       | Skip step                                   | only in Failed                                                                                                                             |
-| `g`       | Go to Claude                                | focuses the Claude pane; resumes it if dormant                                                                                             |
-| `d`       | Mark ready for review… / Convert to draft   | own open PR; asks before Mark ready (#353)                                                                                                 |
-| `M`       | Merge when ready… / Disarm merge when ready | own open PR (§4.6)                                                                                                                         |
-| `P`       | Park                                        | something must run; not while Claude works                                                                                                 |
-| `l`       | Link to ticket…                             | scratch items only                                                                                                                         |
-| `⇧T`      | Create ticket…                              | scratch items only                                                                                                                         |
-| `t` / `o` | Open ticket / Open PR on the host           |                                                                                                                                            |
-| `⇧F`      | Finish…                                     | always confirmed                                                                                                                           |
+| Key | Action | Notes |
+|---|---|---|
+| `Enter` | primary action of the phase | |
+| `v` | Review changes since last look | `DiffviewOpen <reviewed>..<last>` (`{range}`); a review item: since the PR head I reviewed, `git range-diff` in a shell after a force push |
+| `V` | Review the whole diff in nvim | §4.1 |
+| `p` | Ship (push + PR) / Push / Force push… | one letter, wording follows the phase |
+| `R` | Mark reviewed | only with `review_due` |
+| `b` | Edit the `next:` note | Louis's own reminder, shown on the row and the return strip |
+| `f` | Fix with Claude | needs a PR |
+| `r` | Rebase onto {base} | |
+| `c` | Continue rebase | only in Rebase stopped |
+| `a` | Abort rebase | only in Rebase stopped |
+| `n` | Open conflicts in nvim | only in Rebase stopped |
+| `s` | Skip step | only in Failed |
+| `g` | Go to Claude | focuses the Claude pane; resumes it if dormant |
+| `d` | Mark ready for review… / Convert to draft | own open PR; asks before Mark ready (#353) |
+| `M` | Merge when ready… / Disarm merge when ready | own open PR (§4.6) |
+| `P` | Park | something must run; not while Claude works |
+| `l` | Link to ticket… | scratch items only |
+| `⇧T` | Create ticket… | scratch items only |
+| `t` / `o` | Open ticket / Open PR on the host | |
+| `⇧F` | Finish… | always confirmed |
 
 **Review-kind items**: `p`, `r`, `f` and `l` are disabled with "Review checkout: read-only". A `kelta/pr-<n>` branch is never pushed or rebased.
 
@@ -173,7 +171,6 @@ A session template can run its Claude outside Kelta: `claude_host = "terminal"` 
 Still works, because it needs only the hooks or the process: status and every phase built on it (Claude working, needs you, To review, Claude replied, `ask` questions), notifications, Go to Claude (focuses the window), Resume in the same host, Park, Mark reviewed, the diff, Ship, Push and Rebase (they wait for the turn to end as usual) and Finish.
 
 Does not work, because Kelta cannot type into that Claude:
-
 - Typing in the Kelta pane. The wrapper never reads it.
 - Anything Kelta sends to a live external Claude (Fix with Claude, Send failures to Claude, Ask Claude to resolve, Ask Claude to commit, the `fix_checks` trigger): the brief is written and the prompt is **copied** ("This Claude isn't connected to Kelta: the feedback is copied, paste it when Claude is ready."), also while Claude works. A dormant one is resumed with the prompt as usual.
 - Review notes from nvim and Send selection: refused with "Claude runs outside Kelta: it cannot receive prompts from here."
@@ -188,22 +185,22 @@ Now replaces the Inbox. It keeps the Inbox's plumbing (`⌘0`, action id `inbox.
 
 ### 3.1 Sections
 
-Each row is one _thing_: a work item, a session that is not part of a work item, a PR from someone else, or a ticket. A work item appears **once**, in the section of its phase (§2.2), never twice. A PR is matched to a work item by `pr_url`, or by `(repo, source_branch == item.branch)` when Claude opened it with `gh pr create` or the web UI; a branch match backfills `pr_url` and `state = PrOpen` through `work.updated` (and runs `on_pr`), so the PR never shows as a second row. Sections with no rows are not rendered. Order is the order to work in:
+Each row is one *thing*: a work item, a session that is not part of a work item, a PR from someone else, or a ticket. A work item appears **once**, in the section of its phase (§2.2), never twice. A PR is matched to a work item by `pr_url`, or by `(repo, source_branch == item.branch)` when Claude opened it with `gh pr create` or the web UI; a branch match backfills `pr_url` and `state = PrOpen` through `work.updated` (and runs `on_pr`), so the PR never shows as a second row. Sections with no rows are not rendered. Order is the order to work in:
 
-| Section           | Lamp                                          | Rows                                                                                                                                                                                                                                                                                                                                                                              | Order within                                                                                                            | Row `Enter`                                             |
-| ----------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Claude needs you  | needs input                                   | sessions with `status = NeedsInput` or an open `ask` question (work items and plain sessions); outside sessions that need input (below); work items with `claude_replied`; blocked or failed background runs                                                                                                                                                                      | longest waiting first                                                                                                   | Go to Claude                                            |
-| Ready for review  | done                                          | work items with `review_due` (an empty delta never lands here)                                                                                                                                                                                                                                                                                                                    | oldest wait first, so nothing rots; the smaller delta first on ties                                                     | Review changes                                          |
-| Next up           | none                                          | my Next up list (#145): tickets I ordered myself, not Done, with no unfinished work item                                                                                                                                                                                                                                                                                          | my order                                                                                                                | Start work (`S` starts the top ones, `J` / `K` reorder) |
-| New for you       | none                                          | tickets assigned to me that I have not looked at yet                                                                                                                                                                                                                                                                                                                              | tracker order                                                                                                           | Start work                                              |
-| Fix               | error                                         | my work items in phase rows 1, 3, 10, 11, 11a, 12; my PRs without a work item that have changes requested or failing checks                                                                                                                                                                                                                                                       | changes requested and new comments, checks failed, remote commits, conflicts, failed steps                              | Fix with Claude / Rebase / Retry                        |
-| Review requests   | none (row lamp = local review Claude, if any) | PRs requesting my review with `my_state` pending, or a new head since my review                                                                                                                                                                                                                                                                                                   | blocking first (I am the last required reviewer), then oldest request first                                             | Open review                                             |
-| Ship and clean up | none                                          | phases 6, 7, 13-16, and reviewed review items                                                                                                                                                                                                                                                                                                                                     | approved, unpushed, ready to ship, merged                                                                               | per phase                                               |
-| In flight         | working ring when Claude works                | everything else that is mine and unfinished                                                                                                                                                                                                                                                                                                                                       | Claude working first, then waiting on others (In review), then idle (No changes yet); latest activity first within each | Go to work tab                                          |
-| Elsewhere         | none                                          | Claude sessions Kelta did not start (#345), dimmed, with their status; they need Kelta's hook relay in Claude Code's user settings (Settings → Claude, or the startup offer, `claude.hooks_offer`)                                                                                                                                                                                | latest first                                                                                                            | jump to their terminal window or tmux pane (#346)       |
-| Blocked           | none                                          | tickets carrying their source's blocked marker (#348) that would be in Next up, New for you or Up next, and work items on a blocked ticket unless they are in Claude needs you, Ready for review or Fix (#390); rows wear the Blocked chip, and clearing the marker moves them back on the next refresh (Next up keeps their place)                                               | work items in phase order, then tickets in Next up then tracker order                                                   | per row                                                 |
-| Up next           | none                                          | tickets assigned to me, not Done nor in their source's `waiting_statuses`, not blocked, with no unfinished work item and not in Next up; in-progress first, then tracker order; 10 max, then "Show all" (the Tickets view on Mine)                                                                                                                                                |                                                                                                                         | Start work                                              |
-| Waiting to deploy | none                                          | collapsed until its header opens it (#391): tickets assigned to me (or in Next up) in their source's `waiting_statuses` and not Done, and the work items of such tickets unless they are in Claude needs you or Fix; rows show the status name (`A MEPP`, `A MEP`), a work row also its phase, whose actions (Ship and clean up) stay on the row. Not in the badge nor the header | work items, then Next up and tracker order                                                                              | per row                                                 |
+| Section | Lamp | Rows | Order within | Row `Enter` |
+|---|---|---|---|---|
+| Claude needs you | needs input | sessions with `status = NeedsInput` or an open `ask` question (work items and plain sessions); outside sessions that need input (below); work items with `claude_replied`; blocked or failed background runs | longest waiting first | Go to Claude |
+| Ready for review | done | work items with `review_due` (an empty delta never lands here) | oldest wait first, so nothing rots; the smaller delta first on ties | Review changes |
+| Next up | none | my Next up list (#145): tickets I ordered myself, not Done, with no unfinished work item | my order | Start work (`S` starts the top ones, `J` / `K` reorder) |
+| New for you | none | tickets assigned to me that I have not looked at yet | tracker order | Start work |
+| Fix | error | my work items in phase rows 1, 3, 10, 11, 11a, 12; my PRs without a work item that have changes requested or failing checks | changes requested and new comments, checks failed, remote commits, conflicts, failed steps | Fix with Claude / Rebase / Retry |
+| Review requests | none (row lamp = local review Claude, if any) | PRs requesting my review with `my_state` pending, or a new head since my review | blocking first (I am the last required reviewer), then oldest request first | Open review |
+| Ship and clean up | none | phases 6, 7, 13-16, and reviewed review items | approved, unpushed, ready to ship, merged | per phase |
+| In flight | working ring when Claude works | everything else that is mine and unfinished | Claude working first, then waiting on others (In review), then idle (No changes yet); latest activity first within each | Go to work tab |
+| Elsewhere | none | Claude sessions Kelta did not start (#345), dimmed, with their status; they need Kelta's hook relay in Claude Code's user settings (Settings → Claude, or the startup offer, `claude.hooks_offer`) | latest first | jump to their terminal window or tmux pane (#346) |
+| Blocked | none | tickets carrying their source's blocked marker (#348) that would be in Next up, New for you or Up next, and work items on a blocked ticket unless they are in Claude needs you, Ready for review or Fix (#390); rows wear the Blocked chip, and clearing the marker moves them back on the next refresh (Next up keeps their place) | work items in phase order, then tickets in Next up then tracker order | per row |
+| Up next | none | tickets assigned to me, not Done nor in their source's `waiting_statuses`, not blocked, with no unfinished work item and not in Next up; in-progress first, then tracker order; 10 max, then "Show all" (the Tickets view on Mine) | | Start work |
+| Waiting to deploy | none | collapsed until its header opens it (#391): tickets assigned to me (or in Next up) in their source's `waiting_statuses` and not Done, and the work items of such tickets unless they are in Claude needs you or Fix; rows show the status name (`A MEPP`, `A MEP`), a work row also its phase, whose actions (Ship and clean up) stay on the row. Not in the badge nor the header | work items, then Next up and tracker order | per row |
 
 Sections run in the order of the table above. The header is a row of chips in that same order, each a bold count then a word (#386):
 
@@ -215,7 +212,7 @@ Sections run in the order of the table above. The header is a row of chips in th
 
 DESIGN §6.8 row (`lamp | id | title | meta`) plus a 3px project-hue bar at the left edge (the raw project colour, as on rail tiles), so rows from many projects stay legible without grouping by project. The project name follows the title in 11px `--k-fg-subtle`. Scratch items show `wip` as their id.
 
-Meta, right-aligned, tabular: the _reason_ in `--k-fg` 12px (the one thing to read: "Changes requested, 3 threads", "Allow `pnpm test:int`?"), then diffstat (with a `dirty` tag when part of it is uncommitted) or PR number, `↓n {base}` when behind, age.
+Meta, right-aligned, tabular: the *reason* in `--k-fg` 12px (the one thing to read: "Changes requested, 3 threads", "Allow `pnpm test:int`?"), then diffstat (with a `dirty` tag when part of it is uncommitted) or PR number, `↓n {base}` when behind, age.
 
 A **waiting chip** (`waiting on Anna · 26h`, `waiting on Anna +2`, `waiting on you`; hover lists each person with the reason: review requested, changes requested so the author acts, assigned; an unmatched person adds "Not matched to a tracker / code host user") sits in Tickets rows next to the PR chip, in Reviews rows on every tab, and in Now: a ticket row's detail line says `waiting on Anna (review) · 26h` instead of the bare assignee, and my PRs carry the Reviews chip.
 
@@ -223,22 +220,22 @@ The **selected row expands** to a second line: Claude's last message for Claude 
 
 ### 3.3 Keys in Now
 
-| Key             | Action                                                                                                       |
-| --------------- | ------------------------------------------------------------------------------------------------------------ |
-| `j` / `k`       | move                                                                                                         |
-| `Enter`         | the row's next action (table above)                                                                          |
-| `g`             | go to the row's place without acting: work tab, session pane, review detail                                  |
-| `p`             | Ship / Push on a work item row                                                                               |
-| `v` / `V`       | Review changes since last look / the whole diff (work item rows)                                             |
-| `R`             | Mark reviewed on a Ready for review row (elsewhere: Refresh)                                                 |
-| `b`             | Edit the `next:` note                                                                                        |
-| `m`             | Unfold Claude's full message (Ready for review rows)                                                         |
-| `f`             | Fix with Claude (Fix rows; on a PR without a work item, it first adopts the PR, §2.1)                        |
-| `r`             | Rebase                                                                                                       |
-| `c` / `a` / `n` | Continue / Abort rebase, open conflicts in nvim (Rebase stopped rows)                                        |
-| `s`             | Start work (ticket rows, Next up included) / Review locally (Review requests rows) / Skip step (Failed rows) |
-| `S` / `J` / `K` | Next up rows: start the top ones / move the row down / up                                                    |
-| `o`             | open on the host (PR) or tracker (ticket)                                                                    |
+| Key | Action |
+|---|---|
+| `j` / `k` | move |
+| `Enter` | the row's next action (table above) |
+| `g` | go to the row's place without acting: work tab, session pane, review detail |
+| `p` | Ship / Push on a work item row |
+| `v` / `V` | Review changes since last look / the whole diff (work item rows) |
+| `R` | Mark reviewed on a Ready for review row (elsewhere: Refresh) |
+| `b` | Edit the `next:` note |
+| `m` | Unfold Claude's full message (Ready for review rows) |
+| `f` | Fix with Claude (Fix rows; on a PR without a work item, it first adopts the PR, §2.1) |
+| `r` | Rebase |
+| `c` / `a` / `n` | Continue / Abort rebase, open conflicts in nvim (Rebase stopped rows) |
+| `s` | Start work (ticket rows, Next up included) / Review locally (Review requests rows) / Skip step (Failed rows) |
+| `S` / `J` / `K` | Next up rows: start the top ones / move the row down / up |
+| `o` | open on the host (PR) or tracker (ticket) |
 
 In the Tickets list (not Now; the rail's Tickets view, in the scope of §3; the board toggle shows once one source is in effect): `1` `2` `3` Mine / Unassigned / Team, `v` choose sources (all by default, "Add source…" at the end), `Shift+g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, Parent, None), `f` `s` current sprint only, `x` mark the ticket, `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `w` run a workflow (§4.8), `t` put a local tag on the ticket or take it off, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it, `Enter` moves the keys into it (`y` copies the branch there, `b` blocks or unblocks the ticket, `r` refines the ticket with Claude, `u` assigns to anyone the tracker offers, `!` changes the priority; with the column hidden, `Enter` on a ticket with work runs its phase's next action, as in Now, and `g` opens the detail), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
 
@@ -252,7 +249,7 @@ Gating is the work menu's (§2.5): disabled keys on review items do nothing and 
 
 ### 3.4 Next waiting, without opening Now
 
-`attention.next` (`⌘J`, `⇧⌘J` back) is renamed "Next waiting" and walks the waiting rows of Now in priority bands (SPEC §4), _going_ to each row's place (like `g`), cycling on repeat. The bands, most urgent first: needs input (including outside sessions), error (a broken item, or a Claude stopped by an API error), ready for review, feedback and red CI on my PRs, review requests (blocking first). From there `⌘.` `Enter` runs the action. So the whole day can be driven as: `⌘J`, look, `⌘.` `Enter`, repeat.
+`attention.next` (`⌘J`, `⇧⌘J` back) is renamed "Next waiting" and walks the waiting rows of Now in priority bands (SPEC §4), *going* to each row's place (like `g`), cycling on repeat. The bands, most urgent first: needs input (including outside sessions), error (a broken item, or a Claude stopped by an API error), ready for review, feedback and red CI on my PRs, review requests (blocking first). From there `⌘.` `Enter` runs the action. So the whole day can be driven as: `⌘J`, look, `⌘.` `Enter`, repeat.
 
 ### 3.5 Palette
 
@@ -289,12 +286,12 @@ Keystroke counts use macOS chords. Typing free text (a prompt, a search) counts 
    - **On GitHub**: `p` (Ship, §4.5) with Draft on. The PR opens in the browser with `⇧⌘O` (last toast action) or `o` in Now. There is no "compare page without a PR": reviewing on GitHub means a (draft) PR.
 6. Not happy: type into Claude (`g` then type). The prompt submit clears `review_due`; the next Stop sets it again. Happy: Ship. A UI Ship clears it.
 
-|                     | Before                                                                                              | After                                                              |
-| ------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Start               | `⌘0`, `j`×N, `s`, click Start: 3+N                                                                  | `⌘0`, `j`×N, `s`, `⌘↵`: 3+N, no mouse                              |
-| Know Claude is done | green dot on a rail tile, cleared by any glance                                                     | durable To review row + header count                               |
-| Open the diff       | `⌘N` project, `⇧⌘]`×k, `⌥⌘→`, type `:DiffviewOpen origin/main...HEAD`: 4+k, misses uncommitted work | `⌘0` `Enter`, or `⌘J` `⌘.` `Enter`: 2-3, includes uncommitted work |
-| Ship and open PR    | Create PR, Create, Open PR: 3 clicks                                                                | `⌘.` `p` `⌘↵` `⇧⌘O`: 4 keys                                        |
+| | Before | After |
+|---|---|---|
+| Start | `⌘0`, `j`×N, `s`, click Start: 3+N | `⌘0`, `j`×N, `s`, `⌘↵`: 3+N, no mouse |
+| Know Claude is done | green dot on a rail tile, cleared by any glance | durable To review row + header count |
+| Open the diff | `⌘N` project, `⇧⌘]`×k, `⌥⌘→`, type `:DiffviewOpen origin/main...HEAD`: 4+k, misses uncommitted work | `⌘0` `Enter`, or `⌘J` `⌘.` `Enter`: 2-3, includes uncommitted work |
+| Ship and open PR | Create PR, Create, Open PR: 3 clicks | `⌘.` `p` `⌘↵` `⇧⌘O`: 4 keys |
 
 ### 4.2 Flow 2: feedback into the previous Claude conversation
 
@@ -313,7 +310,7 @@ New comments: the authored poll reports per PR its unresolved threads and `last_
    - Claude `Working` or `NeedsInput` (hooks): `⌘↵` stays enabled and the footer reads "Claude is working: it gets this when it stops."; the prompt is held and pasted at Claude's next `Stop` ("Claude is working: it gets your message when it stops."), a second send is appended to it. Kelta never types into a permission prompt.
    - Claude live but hooks inactive (status is a guess): never refused; the brief is written and the prompt is copied to the clipboard: "This Claude isn't connected to Kelta: the feedback is copied, paste it when Claude is ready." The sheet's button reads **Copy for Claude** and it still offers [Fix hooks] [Copy prompt].
    - Every `work_send` caller (the sheet, `fix_checks`, Ask Claude to resolve, Ask Claude to commit) works this way; the sent thread ids are stored at send time, also when held.
-     ![Fix with Claude sheet](images/flow/f3-fix-sheet.png)
+   ![Fix with Claude sheet](images/flow/f3-fix-sheet.png)
 
 4. Claude fixes and stops: `review_due` → To review (row 8 wins over row 11, §2.2). Review, then `⌘.` `Enter` = Push (row 14, no confirmation for a plain push). The push toast offers **Re-request review from {reviewers}** (one CodeHost call) and **Resolve sent threads** (the ids remembered in step 3); `⇧⌘O` runs the first. The item moves to In flight ("In review") until the reviewer reacts.
 
@@ -325,13 +322,13 @@ Claude can also pull feedback itself: MCP tool `get_review_feedback` returns the
 
 Own PRs in the PR detail pane no longer offer Approve / Request changes; they offer **Fix with Claude** and **Go to work item**.
 
-|                                    | Before                                                                                                                                         | After                                           |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| Read the feedback                  | `⌘0`, `j`×N, `o`, read on GitHub                                                                                                               | in the sheet                                    |
-| Get back to the right Claude       | `⌘K`, type key, `Enter`, `s`, click Resume: 5, and possibly the wrong conversation after `/clear`; `s` on the PR row made a duplicate worktree | part of the same action                         |
-| Hand over the feedback             | copy-paste each comment: 2 per comment                                                                                                         | 0                                               |
-| Re-request review, resolve threads | on GitHub: 2 + 1 per thread                                                                                                                    | `⇧⌘O` on the push toast, palette for the second |
-| Total                              | 8+N plus 2 per comment, plus the host                                                                                                          | `⌘0`, `j`×N, `Enter`, `⌘↵`: 3+N                 |
+| | Before | After |
+|---|---|---|
+| Read the feedback | `⌘0`, `j`×N, `o`, read on GitHub | in the sheet |
+| Get back to the right Claude | `⌘K`, type key, `Enter`, `s`, click Resume: 5, and possibly the wrong conversation after `/clear`; `s` on the PR row made a duplicate worktree | part of the same action |
+| Hand over the feedback | copy-paste each comment: 2 per comment | 0 |
+| Re-request review, resolve threads | on GitHub: 2 + 1 per thread | `⇧⌘O` on the push toast, palette for the second |
+| Total | 8+N plus 2 per comment, plus the host | `⌘0`, `j`×N, `Enter`, `⌘↵`: 3+N |
 
 ### 4.3 Flow 3: ticket-free (scratch) work
 
@@ -340,7 +337,7 @@ Own PRs in the PR detail pane no longer offer Approve / Request changes; they of
    - Project (active one), repo (only shown when the project has several), base, layout: prefilled, editable.
    - Branch: `wip/{slug}` from the first line, updated live while typing, editable. Validated with `git check-ref-format`.
    - Ticket: optional picker, default none.
-     ![New work item sheet](images/flow/f4-new-work.png)
+   ![New work item sheet](images/flow/f4-new-work.png)
 
 2. `⌘↵`: same saga as ticket work minus tracker steps (`WorkSource::Branch{name, task}`). The work tab opens focused, Claude starts on the task.
 3. From here it is a normal work item: To review, Ship (PR title = item title, body includes the task text), Fix, Rebase, Finish.
@@ -349,10 +346,10 @@ Own PRs in the PR detail pane no longer offer Approve / Request changes; they of
 
 `⌘T` (New session) stays the way to open a plain session with no branch. Its sheet gets one line: "Want a branch and a PR? New work item ⇧⌘N". Promoting a running plain session into a work item is not offered (§11.2).
 
-|                      | Before                                                                                                     | After                                         |
-| -------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| | Before | After |
+|---|---|---|
 | Start an exploration | `⌘T`, template, project, directory, `Enter`: 5, in the main checkout, colliding with any other exploration | `⇧⌘N`, type, `⌘↵`: 3, own worktree and branch |
-| Turn it into a PR    | shell: `git switch -c`, `git push -u`, `gh pr create`: 3 typed commands                                    | `⌘.` `p` `⌘↵`: 3                              |
+| Turn it into a PR | shell: `git switch -c`, `git push -u`, `gh pr create`: 3 typed commands | `⌘.` `p` `⌘↵`: 3 |
 
 ### 4.4 Flow 4: rebase
 
@@ -367,7 +364,7 @@ Own PRs in the PR detail pane no longer offer Approve / Request changes; they of
    - **Ask Claude to resolve** (`Enter`, primary): `work_send` with `claude.prompt_templates.conflicts` (files, onto, step), brief written to `conflicts.md` in the private run dir like `feedback.md`. Claude edits, `git add`s, runs `GIT_EDITOR=true git rebase --continue` until done, and is told not to push.
    - **Open conflicts in nvim** (`n`): opens the conflicted files in the item's nvim over RPC (`:args` the list, first file shown).
    - **Continue** (`c`, after resolving by hand) and **Abort rebase** (`a`).
-     Kelta re-reads the rebase state on Claude Stop for that item, on window focus and after Continue/Abort.
+   Kelta re-reads the rebase state on Claude Stop for that item, on window focus and after Continue/Abort.
 5. **Force push…**, only for an own rewrite. `git.diverged` is defined as: the remote branch tip (`remote_sha`) is an ancestor of `pre_head` (`git merge-base --is-ancestor`) and not of HEAD. Then the dialog, always confirmed: "Rewrites `feat/4555-refund-export` on origin (PR #74). The lease checks origin is still at `a1b2c3d`." [Cancel] [Force push] (danger style). Runs `git push --force-with-lease=<branch>:<remote_sha> --force-if-includes <remote> <branch>` in a visible transient pane (same as today's push).
    If the remote tip is **not** contained in `pre_head` (GitHub "Update branch", a reviewer's "Commit suggestion", a teammate), Force push is never offered. `git.remote_new` counts those commits and the phase is row 10 **Remote has new commits (n)**, primary **Rebase onto {remote}/{branch}** (`work_rebase{op: start, onto: remote_branch}`), after which the normal rebase onto base follows.
 
@@ -375,11 +372,11 @@ Own PRs in the PR detail pane no longer offer Approve / Request changes; they of
 
 Rebase is single-item. No bulk update and no merge strategy (§11.2).
 
-|                                 | Before                                                                                                                           | After                                                                              |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Know a rebase is needed         | `↓n` on the focused tab only, wrong after first push                                                                             | `↓n` on every row and bar; Fix row when the PR conflicts                           |
+| | Before | After |
+|---|---|---|
+| Know a rebase is needed | `↓n` on the focused tab only, wrong after first push | `↓n` on every row and bar; Fix row when the PR conflicts |
 | Rebase, no conflicts, PR exists | `⌘D`, type `git fetch && git rebase origin/main`, type `git push --force-with-lease`: 3, can drop a reviewer's suggestion commit | `⌘.` `r`, `⌘.` `Enter`, `Enter`: 5 keys, no typing, refuses to drop remote commits |
-| Conflicts                       | by hand, or explain them to Claude by hand                                                                                       | `⌘.` `Enter`; or `⌘.` `n`, edit, `⌘.` `c`                                          |
+| Conflicts | by hand, or explain them to Claude by hand | `⌘.` `Enter`; or `⌘.` `n`, edit, `⌘.` `c` |
 
 ### 4.5 Ship
 
@@ -402,10 +399,10 @@ Rebase is single-item. No bulk update and no merge strategy (§11.2).
 - "Finish all merged" (palette) shows one dialog listing the merged items with clean worktrees and finishes them on one confirmation. Dirty ones are listed as skipped. This is the only bulk destructive action, and it touches only work whose PR is merged.
 - Review items finish the same way once I have reviewed (`my_state` not pending) or the PR is merged or closed.
 
-|                  | Before                                    | After                                                                                            |
-| ---------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| | Before | After |
+|---|---|---|
 | Notice the merge | on GitHub; the item stays PR open forever | Merged row in Now, also for merges while Kelta was closed; ticket already moved when unambiguous |
-| Clean up         | `⌘N`, `⇧⌘]`×k, click Finish, confirm: 3+k | `⌘0`, `j`×N, `Enter`, `⌘↵`: 3+N                                                                  |
+| Clean up | `⌘N`, `⇧⌘]`×k, click Finish, confirm: 3+k | `⌘0`, `j`×N, `Enter`, `⌘↵`: 3+N |
 
 ### 4.7 Reviewing other people's PRs
 
@@ -422,7 +419,6 @@ Rebase is single-item. No bulk update and no merge strategy (§11.2).
 ### 4.8 Workflows
 
 A workflow is a prompt Claude runs in a background tab. Two kinds: saved `*.js` workflows (`.claude/workflows/` of the repo or home, #233) and `[[workflows]]` entries in the config (#355), which are a prompt or a slash command (SETTINGS §2). `on` says where an entry is offered:
-
 - `ticket` (default): Run workflow (`w`) on a ticket row, in its detail, or the palette's "Run workflow on KEY…". The run **claims** the ticket as a background run (`WorkItem.run`, #235): the ticket shows the run's name, phase and state (phase row 0a), and a second `w` on a ticket whose run is live opens that session. A ticket held by a real work item cannot be claimed.
 - `pr`: `w` on a Reviews row or in the review detail. It runs in the worktree of the PR's unfinished work item, else the repo bound to the PR's code host, in a tab named `<label> · <repo>#<n>`. It claims nothing; one run per PR is kept, and a second `w` opens the live one.
 - `global`: "Run <label>" in the palette, with no ticket and no PR.
@@ -433,21 +429,21 @@ A running workflow can stop and ask: MCP `ask` (§2.2 row 0) shows its question 
 
 ## 5. Automatic or confirmed
 
-| Action                                                                                    | Mode                                                                                                           | Why                                                                                                                             |
-| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Fetch base and PR branches, compute ahead/behind/diffstat/remote_new                      | automatic, on Now open and window focus, 5 min floor per repo                                                  | read only                                                                                                                       |
-| Set and clear `review_due` / `claude_replied`, phase changes, `pr_url` backfill by branch | automatic                                                                                                      | state                                                                                                                           |
-| Update `claude_uuid` from hooks                                                           | automatic                                                                                                      | state                                                                                                                           |
-| Move ticket on start, on PR                                                               | automatic, per existing `work.on_*` settings                                                                   | reversible, user-configured                                                                                                     |
-| Move ticket on merge                                                                      | automatic only when the target is unambiguous and needs no fields; else chosen at Finish                       | reversible, but a wrong "Won't Do" misreports work                                                                              |
-| Start work, new work item                                                                 | confirmed by the sheet (`⌘↵`); `work.plan_preview = false` skips it for tickets, but not the finish-first list | creates branch and worktree                                                                                                     |
-| Send feedback / conflicts to Claude                                                       | confirmed by the sheet or button                                                                               | Louis sees exactly what Claude receives                                                                                         |
-| Plain push, Ship                                                                          | one key, Ship has a dialog for title and draft; refused while Claude works                                     | non-destructive                                                                                                                 |
-| Re-request review, resolve sent threads                                                   | one key on the push toast                                                                                      | visible to others, so never automatic                                                                                           |
-| Rebase                                                                                    | one key, refused when unsafe                                                                                   | local, `git rebase --abort` undoes it                                                                                           |
-| Merge when ready, then Finish                                                             | a dialog to arm; the Finish after the merge is automatic                                                       | the host only merges once approvals and checks pass; Finish keeps its dirty and unpushed refusal and disarms instead of forcing |
-| Force push                                                                                | always a dialog, never bulk, only over own commits                                                             | rewrites shared history                                                                                                         |
-| Finish                                                                                    | always a dialog; bulk only for merged + clean                                                                  | deletes a worktree                                                                                                              |
+| Action | Mode | Why |
+|---|---|---|
+| Fetch base and PR branches, compute ahead/behind/diffstat/remote_new | automatic, on Now open and window focus, 5 min floor per repo | read only |
+| Set and clear `review_due` / `claude_replied`, phase changes, `pr_url` backfill by branch | automatic | state |
+| Update `claude_uuid` from hooks | automatic | state |
+| Move ticket on start, on PR | automatic, per existing `work.on_*` settings | reversible, user-configured |
+| Move ticket on merge | automatic only when the target is unambiguous and needs no fields; else chosen at Finish | reversible, but a wrong "Won't Do" misreports work |
+| Start work, new work item | confirmed by the sheet (`⌘↵`); `work.plan_preview = false` skips it for tickets, but not the finish-first list | creates branch and worktree |
+| Send feedback / conflicts to Claude | confirmed by the sheet or button | Louis sees exactly what Claude receives |
+| Plain push, Ship | one key, Ship has a dialog for title and draft; refused while Claude works | non-destructive |
+| Re-request review, resolve sent threads | one key on the push toast | visible to others, so never automatic |
+| Rebase | one key, refused when unsafe | local, `git rebase --abort` undoes it |
+| Merge when ready, then Finish | a dialog to arm; the Finish after the merge is automatic | the host only merges once approvals and checks pass; Finish keeps its dirty and unpushed refusal and disarms instead of forcing |
+| Force push | always a dialog, never bulk, only over own commits | rewrites shared history |
+| Finish | always a dialog; bulk only for merged + clean | deletes a worktree |
 
 ---
 
@@ -455,41 +451,41 @@ A running workflow can stop and ask: MCP `ask` (§2.2 row 0) shows its question 
 
 All follow DESIGN §6.13: one sentence saying what happened, one or two actions. Every action has a key (§7.1).
 
-| Situation                                           | Where                                            | Message and actions                                                                                                                                                                               |
-| --------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Start step failed                                   | work bar, Fix row                                | "Failed at tracker side effects: Redmine has no transition to In Progress." [Retry `Enter`] [Skip step `s`]                                                                                       |
-| Status hooks inactive                               | work bar                                         | existing "status hooks inactive · Fix"; no To review / Claude replied signal for that item, a send to its live Claude is copied to the clipboard                                                  |
-| Claude busy when sending feedback or conflicts      | toast                                            | "Claude is working: it gets your message when it stops." (held until its `Stop`)                                                                                                                  |
-| Claude busy on Ship / Push / Rebase                 | toast                                            | "Claude is working in this worktree. {Action} when it stops."                                                                                                                                     |
-| No free Claude slot (`claude.max_live`, #141)       | Queued row, status strip "Claude 4/4 · 1 queued" | the item waits with its worktree ready and starts, oldest first, when a Claude exits. [Start now (over cap)] [Move to front]                                                                      |
-| Prompt for a Claude that runs outside Kelta (#347)  | toast                                            | "This Claude isn't connected to Kelta: the feedback is copied, paste it when Claude is ready." Review notes and Send selection: "Claude runs outside Kelta: it cannot receive prompts from here." |
-| Claude's MCP ship in progress                       | toast                                            | "Claude is shipping this item."                                                                                                                                                                   |
-| Previous conversation gone (`--resume` exits fast)  | toast                                            | existing fallback to `--continue`, now with the same prompt, then: "Previous conversation not found; Claude continued the latest one in this worktree with your prompt."                          |
-| Feedback fetch failed (token scope, offline)        | Fix sheet                                        | "GitHub refused the review threads (403: token lacks `pull_requests:read`)." [Open account settings] [Send without feedback]                                                                      |
-| Code host needs auth / offline                      | Now header                                       | existing account banner; PR-based phases fall back to local phases and the header says "as of 14:02"                                                                                              |
-| Rebase refused: dirty or Claude busy                | toast with actions                               | §4.4 step 1                                                                                                                                                                                       |
-| Rebase fetch failed                                 | dialog                                           | "Could not fetch origin/main (offline)." [Rebase onto last fetched main] [Cancel]                                                                                                                 |
-| Remote branch has commits not in my pre-rebase work | phase row 10                                     | "origin/feat/x has 2 commits you don't have (suggestions or Update branch)." [Rebase onto origin/feat/x] — Force push not offered                                                                 |
-| Lease rejected on force push                        | push pane + toast                                | "origin/feat/x moved since your last fetch. Someone else pushed." [Fetch and show] — no retry, no plain `--force`; after the fetch the item shows row 10, not Force push                          |
-| Plain push rejected (non-fast-forward)              | toast                                            | "origin has commits you do not have." [Rebase]                                                                                                                                                    |
-| Merge transition ambiguous                          | phase detail, Finish dialog                      | "Merged. Choose Done status: Done / Won't Do."                                                                                                                                                    |
-| Ship with nothing to ship                           | Ship disabled                                    | "No commits ahead of main."                                                                                                                                                                       |
-| Worktree deleted outside Kelta                      | work bar, In flight row                          | "Worktree missing at ~/…/SHOP-142." [Recreate] (re-enters the saga) [Finish] (drops the record)                                                                                                   |
-| PR closed without merge                             | Ship and clean up                                | "PR #13 closed without merge." [Finish…] [Open PR]                                                                                                                                                |
+| Situation | Where | Message and actions |
+|---|---|---|
+| Start step failed | work bar, Fix row | "Failed at tracker side effects: Redmine has no transition to In Progress." [Retry `Enter`] [Skip step `s`] |
+| Status hooks inactive | work bar | existing "status hooks inactive · Fix"; no To review / Claude replied signal for that item, a send to its live Claude is copied to the clipboard |
+| Claude busy when sending feedback or conflicts | toast | "Claude is working: it gets your message when it stops." (held until its `Stop`) |
+| Claude busy on Ship / Push / Rebase | toast | "Claude is working in this worktree. {Action} when it stops." |
+| No free Claude slot (`claude.max_live`, #141) | Queued row, status strip "Claude 4/4 · 1 queued" | the item waits with its worktree ready and starts, oldest first, when a Claude exits. [Start now (over cap)] [Move to front] |
+| Prompt for a Claude that runs outside Kelta (#347) | toast | "This Claude isn't connected to Kelta: the feedback is copied, paste it when Claude is ready." Review notes and Send selection: "Claude runs outside Kelta: it cannot receive prompts from here." |
+| Claude's MCP ship in progress | toast | "Claude is shipping this item." |
+| Previous conversation gone (`--resume` exits fast) | toast | existing fallback to `--continue`, now with the same prompt, then: "Previous conversation not found; Claude continued the latest one in this worktree with your prompt." |
+| Feedback fetch failed (token scope, offline) | Fix sheet | "GitHub refused the review threads (403: token lacks `pull_requests:read`)." [Open account settings] [Send without feedback] |
+| Code host needs auth / offline | Now header | existing account banner; PR-based phases fall back to local phases and the header says "as of 14:02" |
+| Rebase refused: dirty or Claude busy | toast with actions | §4.4 step 1 |
+| Rebase fetch failed | dialog | "Could not fetch origin/main (offline)." [Rebase onto last fetched main] [Cancel] |
+| Remote branch has commits not in my pre-rebase work | phase row 10 | "origin/feat/x has 2 commits you don't have (suggestions or Update branch)." [Rebase onto origin/feat/x] — Force push not offered |
+| Lease rejected on force push | push pane + toast | "origin/feat/x moved since your last fetch. Someone else pushed." [Fetch and show] — no retry, no plain `--force`; after the fetch the item shows row 10, not Force push |
+| Plain push rejected (non-fast-forward) | toast | "origin has commits you do not have." [Rebase] |
+| Merge transition ambiguous | phase detail, Finish dialog | "Merged. Choose Done status: Done / Won't Do." |
+| Ship with nothing to ship | Ship disabled | "No commits ahead of main." |
+| Worktree deleted outside Kelta | work bar, In flight row | "Worktree missing at ~/…/SHOP-142." [Recreate] (re-enters the saga) [Finish] (drops the record) |
+| PR closed without merge | Ship and clean up | "PR #13 closed without merge." [Finish…] [Open PR] |
 
 ---
 
 ## 7. Keyboard map (new and changed)
 
-| Action id                                        | macOS | Linux          | Prefix | Context                                                              |
-| ------------------------------------------------ | ----- | -------------- | ------ | -------------------------------------------------------------------- |
-| `inbox.open` (label "Open Now")                  | `⌘0`  | `Ctrl+0`       | `0`    | global, unchanged chord                                              |
-| `attention.next` (label "Next waiting")          | `⌘J`  | `Ctrl+J`       | `u`    | global, walks the Now queue (§3.4)                                   |
-| `attention.peek` (label "Peek waiting session")  | `⇧⌘Y` | `Ctrl+Shift+Y` | `y`    | global, peek & reply without switching (#139)                        |
-| `work.new`                                       | `⇧⌘N` | `Ctrl+Shift+N` | `w`    | global                                                               |
-| `work.menu`                                      | `⌘.`  | `Ctrl+.`       | `.`    | global, needs a focused work tab                                     |
-| `toast.run_last` (label "Run last toast action") | `⇧⌘O` | `Ctrl+Shift+O` | `o`    | global, runs the primary action of the most recent toast still shown |
-| `work.start`                                     | `⌘↵`  | `Ctrl+Enter`   | `s`    | unchanged; also submits every work sheet and dialog                  |
+| Action id | macOS | Linux | Prefix | Context |
+|---|---|---|---|---|
+| `inbox.open` (label "Open Now") | `⌘0` | `Ctrl+0` | `0` | global, unchanged chord |
+| `attention.next` (label "Next waiting") | `⌘J` | `Ctrl+J` | `u` | global, walks the Now queue (§3.4) |
+| `attention.peek` (label "Peek waiting session") | `⇧⌘Y` | `Ctrl+Shift+Y` | `y` | global, peek & reply without switching (#139) |
+| `work.new` | `⇧⌘N` | `Ctrl+Shift+N` | `w` | global |
+| `work.menu` | `⌘.` | `Ctrl+.` | `.` | global, needs a focused work tab |
+| `toast.run_last` (label "Run last toast action") | `⇧⌘O` | `Ctrl+Shift+O` | `o` | global, runs the primary action of the most recent toast still shown |
+| `work.start` | `⌘↵` | `Ctrl+Enter` | `s` | unchanged; also submits every work sheet and dialog |
 
 Now's single keys are in §3.3, the work menu's in §2.5. If `⌘.` turns out to be swallowed by macOS cancel handling in the webview, rebind it; the prefix key `.` always works. Check this first when implementing, and check `⇧⌘O` against existing defaults.
 
@@ -507,7 +503,6 @@ Now's single keys are in §3.3, the work menu's in §2.5. If `⌘.` turns out to
 The list as designed; all of it is built. Later commands and events are in ARCHITECTURE §6.
 
 Model (`kelta-proto`):
-
 - `WorkItem`: `title: Option<String>`, `review_due: bool`, `claude_replied: bool`, `sent_threads: Vec<String>`, `rebase: Option<RebaseState{onto, pre_head, remote_sha: Option<String>, conflicts: Vec<PathBuf>, step: u32, total: u32}>`.
 - `WorkState::Merged`.
 - `WorkSource::Branch{name, task: Option<String>}` (`name` may be empty: slug from task).
@@ -517,7 +512,6 @@ Model (`kelta-proto`):
 - `LaunchMode::Resume{uuid, prompt: Option<String>}` and `LaunchMode::Continue{prompt: Option<String>}`; `argv()` appends the positional prompt for both, behind the existing `--` guard. `watch_resume` carries the prompt to the `--continue` fallback; `claude_restore_request` takes an optional prompt.
 
 Commands (`work_*`, all in `commands/work.rs`):
-
 - `work_status_all{}` → `Map<WorkItemId, GitStatus>` (fetch once per repo, 5 min floor).
 - `work_diff{id}` → opens the diff editor pane in the item's tab (merge base to working tree).
 - `work_mark_reviewed{id}`.
@@ -533,21 +527,18 @@ Commands (`work_*`, all in `commands/work.rs`):
 Store writes: `review_due`, `claude_replied`, `claude_uuid`, `sent_threads`, `pr_url` backfill go through field-level updates (`work_store.update(id, |item| …)` re-loading under a blocking lock held only around load-modify-save). Long operations (`create_pr`, `finish`, `rebase`, `push`) re-load before their final save and write only the fields they own. Test: a Stop hook arriving during a push survives the push's save.
 
 CodeHost trait:
-
 - `feedback(&ReviewRef) -> Feedback` (GitHub: GraphQL `reviewThreads(isResolved:false)`, latest reviews, failed check runs + job log tail; GitLab: unresolved resolvable discussions, failed pipeline jobs + trace tail).
 - `state` (open/merged/closed) on `ReviewDetail`, used by the startup/Now-open check.
 - GitLab `decision = ChangesRequested` from `blocking_discussions_resolved = false`, `detailed_merge_status = discussions_not_resolved`, or a reviewer in `requested_changes` state (GitLab 17+).
 - `rerequest_review`, `resolve_threads(ids)`, `add_pending_comment{path, line, body}`, and submit of the pending review with the decision.
 
 Feeds (`kelta-core/src/feeds.rs`):
-
 - Authored query ignores `include_drafts` (always includes drafts); ReviewRequested keeps it.
 - `resubscribe` wants Authored for every account bound to a project with an unfinished work item that has `pr_url`.
 - GitHub ReviewRequested subscription adds `is:pr is:open reviewed-by:@me` to see new heads after my review.
 - Authored reviews are joined to work items by `pr_url`, else `(repo, source_branch == item.branch)` with a `pr_url` backfill.
 
 Events and listeners:
-
 - Publish `pr.merged` (already declared) and new `pr.closed` when an authored PR leaves the open list, and from the startup/Now-open `get` check.
 - kelta-work listener on `claude.hook`: set/clear `review_due` and `claude_replied` (§2.3), update `claude_uuid` (B3). On `pr.merged` (idempotent per item): `state = merged` + the guarded `on_merge` transition (§4.6).
 - No new `UiEvent`: everything travels in `work.updated`.
@@ -562,16 +553,16 @@ Settings: `claude.prompt_templates.feedback`, `claude.prompt_templates.conflicts
 
 ## 9. Bugs fixed on the way
 
-| Id  | Bug                                                                                                                                                                                              | Fix                                                                                                                    |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| B1  | `Enter` in the Inbox (and on "Needs input" rows) never leaves the Inbox; the pane opens hidden as a split inside an unrelated tab ([b06](images/flow-audit/b06-inbox-enter-landed-as-split.png)) | §3.3: leave Now, `new_tab` with reuse                                                                                  |
-| B2  | Review locally on my own PR creates a duplicate `kelta/pr-N` worktree and a fresh Claude ([b05](images/flow-audit/b05-s-on-own-pr-with-work-item.png))                                           | `existing_for` matches Review sources on `pr_url` and on repo + head branch; adoption of PRs made outside Kelta (§2.1) |
-| B3  | `WorkItem.claude_uuid` goes stale after `/clear` or in-Claude `/resume`, so resume picks the wrong conversation                                                                                  | listener updates it from hooks                                                                                         |
-| B4  | `behind` compares with the branch's upstream after the first push                                                                                                                                | compare with `<remote>/<base>`                                                                                         |
-| B5  | Mock: `work_start` tab has no `work_item_id` and the wrong cwd, no `ui.open{focus}`; `work_plan` shows the planned branch instead of the existing item's                                         | fix the mock so every phase in §2.2 can be shown and E2E-tested                                                        |
-| B6  | Draft PRs are invisible to the authored poll (`include_drafts` defaults to false and applies to Authored)                                                                                        | Authored always includes drafts                                                                                        |
-| B7  | Authored poll only runs while an Inbox/Reviews pane is visible or some notifications are on                                                                                                      | subscribe for accounts with open work-item PRs                                                                         |
-| B8  | Resuming Claude drops any prompt (`LaunchMode::Resume`/`Continue` have none)                                                                                                                     | prompt on both, carried to the fallback                                                                                |
+| Id | Bug | Fix |
+|---|---|---|
+| B1 | `Enter` in the Inbox (and on "Needs input" rows) never leaves the Inbox; the pane opens hidden as a split inside an unrelated tab ([b06](images/flow-audit/b06-inbox-enter-landed-as-split.png)) | §3.3: leave Now, `new_tab` with reuse |
+| B2 | Review locally on my own PR creates a duplicate `kelta/pr-N` worktree and a fresh Claude ([b05](images/flow-audit/b05-s-on-own-pr-with-work-item.png)) | `existing_for` matches Review sources on `pr_url` and on repo + head branch; adoption of PRs made outside Kelta (§2.1) |
+| B3 | `WorkItem.claude_uuid` goes stale after `/clear` or in-Claude `/resume`, so resume picks the wrong conversation | listener updates it from hooks |
+| B4 | `behind` compares with the branch's upstream after the first push | compare with `<remote>/<base>` |
+| B5 | Mock: `work_start` tab has no `work_item_id` and the wrong cwd, no `ui.open{focus}`; `work_plan` shows the planned branch instead of the existing item's | fix the mock so every phase in §2.2 can be shown and E2E-tested |
+| B6 | Draft PRs are invisible to the authored poll (`include_drafts` defaults to false and applies to Authored) | Authored always includes drafts |
+| B7 | Authored poll only runs while an Inbox/Reviews pane is visible or some notifications are on | subscribe for accounts with open work-item PRs |
+| B8 | Resuming Claude drops any prompt (`LaunchMode::Resume`/`Continue` have none) | prompt on both, carried to the fallback |
 
 ---
 
@@ -618,34 +609,34 @@ All nine are built. Each ticket shipped with mock support for its states and an 
 
 All 28 issues were checked against the code at `316bc1d` (`github.rs:377` draft filter, `feeds.rs:715` and `:825` silent prime, `feeds.rs:1070-1102` subscription, `claude.rs:97-127` launch modes, `status.rs:83-88` WaitingUser attention, `gitlab.rs:170,345` decisions, `saga.rs:465` / `ops.rs:37` `try_lock`, `github.rs:378` `user-review-requested`). All are accepted; none rejected.
 
-| Issue                                               | Resolution                                                                                                                 |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Phase order vs Flow 2 (raised twice)                | §2.2: `review_due` is row 8, above Changes requested, which also requires local HEAD = PR head; phase.ts test cases listed |
-| Drafts missing from authored poll                   | §3.6, §8 Feeds, B6, ticket 8                                                                                               |
-| Merges while Kelta is closed                        | §3.6 startup/Now-open `get` check, idempotent `pr.merged` listener                                                         |
-| `.kelta/feedback.md` in the worktree (raised twice) | §4.2 step 3, §4.4 conflicts brief, §11: private run dir                                                                    |
-| Force push drops others' commits                    | §4.4 step 5: `pre_head`/`remote_sha`, ancestor check, `--force-if-includes`, row 10 Remote has new commits                 |
-| Resume has no prompt                                | §8 `LaunchMode`, B8, §6 fallback message                                                                                   |
-| needs_input meaning                                 | §2.2 row 4, §2.3, §3.1, §4.2: `status = NeedsInput`; WaitingUser is idle; paste only with hook status                      |
-| Authored poll not always running                    | §3.6, §8 Feeds, B7                                                                                                         |
-| PR not matched when Claude opens it                 | §3.1, §8 Feeds: join by branch, backfill `pr_url`                                                                          |
-| Ship/Push races Claude; MCP ship clears review      | §4.5, §8 `work_push`, `work_create_pr{origin}`                                                                             |
-| Hook listener lost updates                          | §2.3, §8 Store writes + race test                                                                                          |
-| GitLab never "changes requested"                    | §2.2 notes, §8 CodeHost                                                                                                    |
-| Review requests can't come back / my_state stale    | §3.6, §4.7: `get` refresh on Now open/focus, `reviewed-by:@me`                                                             |
-| Sapling out of scope                                | removed from §4.4, §6, §8, ticket 7; §11.2                                                                                 |
-| Auto on_merge picks wrong status                    | §4.6, §5, §6                                                                                                               |
-| Work menu not gated for review items                | §2.5                                                                                                                       |
-| Review diff hides uncommitted work                  | §4.1 step 5, `dirty` tag in §2.4, §3.2                                                                                     |
-| Claude ends with a question, slot dies              | `claude_replied`, §2.2 row 9, §2.3, §3.1                                                                                   |
-| Header doesn't answer the question                  | §3.1 split header and badge tooltip                                                                                        |
-| Rebase not keyboard-complete                        | §2.5 `c` `a` `n` `s`, §3.3, §4.4                                                                                           |
-| Sheets/dialogs/toasts keyboard                      | §7.1, `toast.run_last`                                                                                                     |
-| Re-request review / resolve threads on host         | §4.2 step 4, §8; "Not doing" bullet dropped                                                                                |
-| No line comments for others' PRs                    | §4.7, MCP `add_review_comment`                                                                                             |
-| In flight mixes three states                        | §3.1 sub-order, plus `claude_replied` takes most idle items out                                                            |
-| Overbuilt: Sapling, merge strategy, bulk rebase     | cut, §11.2                                                                                                                 |
-| Six places per item                                 | status strip segment dropped (§2.4, ticket 2)                                                                              |
+| Issue | Resolution |
+|---|---|
+| Phase order vs Flow 2 (raised twice) | §2.2: `review_due` is row 8, above Changes requested, which also requires local HEAD = PR head; phase.ts test cases listed |
+| Drafts missing from authored poll | §3.6, §8 Feeds, B6, ticket 8 |
+| Merges while Kelta is closed | §3.6 startup/Now-open `get` check, idempotent `pr.merged` listener |
+| `.kelta/feedback.md` in the worktree (raised twice) | §4.2 step 3, §4.4 conflicts brief, §11: private run dir |
+| Force push drops others' commits | §4.4 step 5: `pre_head`/`remote_sha`, ancestor check, `--force-if-includes`, row 10 Remote has new commits |
+| Resume has no prompt | §8 `LaunchMode`, B8, §6 fallback message |
+| needs_input meaning | §2.2 row 4, §2.3, §3.1, §4.2: `status = NeedsInput`; WaitingUser is idle; paste only with hook status |
+| Authored poll not always running | §3.6, §8 Feeds, B7 |
+| PR not matched when Claude opens it | §3.1, §8 Feeds: join by branch, backfill `pr_url` |
+| Ship/Push races Claude; MCP ship clears review | §4.5, §8 `work_push`, `work_create_pr{origin}` |
+| Hook listener lost updates | §2.3, §8 Store writes + race test |
+| GitLab never "changes requested" | §2.2 notes, §8 CodeHost |
+| Review requests can't come back / my_state stale | §3.6, §4.7: `get` refresh on Now open/focus, `reviewed-by:@me` |
+| Sapling out of scope | removed from §4.4, §6, §8, ticket 7; §11.2 |
+| Auto on_merge picks wrong status | §4.6, §5, §6 |
+| Work menu not gated for review items | §2.5 |
+| Review diff hides uncommitted work | §4.1 step 5, `dirty` tag in §2.4, §3.2 |
+| Claude ends with a question, slot dies | `claude_replied`, §2.2 row 9, §2.3, §3.1 |
+| Header doesn't answer the question | §3.1 split header and badge tooltip |
+| Rebase not keyboard-complete | §2.5 `c` `a` `n` `s`, §3.3, §4.4 |
+| Sheets/dialogs/toasts keyboard | §7.1, `toast.run_last` |
+| Re-request review / resolve threads on host | §4.2 step 4, §8; "Not doing" bullet dropped |
+| No line comments for others' PRs | §4.7, MCP `add_review_comment` |
+| In flight mixes three states | §3.1 sub-order, plus `claude_replied` takes most idle items out |
+| Overbuilt: Sapling, merge strategy, bulk rebase | cut, §11.2 |
+| Six places per item | status strip segment dropped (§2.4, ticket 2) |
 
 ### 11.2 Not doing (and why)
 
