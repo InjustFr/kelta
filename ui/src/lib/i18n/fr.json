@@ -2487,6 +2487,7 @@
     "one": "{checked} critère sur {n} coché",
     "other": "{checked} critères sur {n} cochés"
   },
+  "Ship pushes the branch and opens a draft PR.": "Livrer pousse la branche et ouvre une PR en brouillon.",
   "Open the Story panel": "Ouvrir le panneau Récit",
   "{whose}: {what}": "{whose} : {what}"
 }
