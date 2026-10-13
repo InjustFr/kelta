@@ -2491,5 +2491,13 @@
   "{checked} of {n} criteria checked": {
     "one": "{checked} von {n} Kriterium erfüllt",
     "other": "{checked} von {n} Kriterien erfüllt"
+  },
+  "Changes so far": "Bisherige Änderungen",
+  "Review changes at this file": "Änderungen dieser Datei prüfen",
+  "test": "Test",
+  "Note to Claude": "Notiz an Claude",
+  "{n} lockfiles or generated files": {
+    "one": "{n} Lock- oder generierte Datei",
+    "other": "{n} Lock- oder generierte Dateien"
   }
 }

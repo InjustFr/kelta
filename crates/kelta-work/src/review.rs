@@ -259,18 +259,16 @@ mod tests {
     async fn delta_files_reads_renames_binaries_and_untracked_files() {
         let tmp = tempfile::tempdir().unwrap();
         let wt = tmp.path();
-        let sh = |args: &[&str]| {
-            let out = std::process::Command::new("git").args(args).current_dir(wt).output().unwrap();
-            assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
-            String::from_utf8(out.stdout).unwrap().trim().to_owned()
+        let sh = async |args: &[&str]| {
+            git::run_ok(wt, args, LOCAL_TIMEOUT).await.unwrap().stdout.trim().to_owned()
         };
-        sh(&["init", "-q", "-b", "main"]);
+        sh(&["init", "-q", "-b", "main"]).await;
         let body: String = (0..20).map(|i| format!("line {i}\n")).collect();
         std::fs::write(wt.join("old.rs"), &body).unwrap();
         std::fs::write(wt.join("keep.rs"), "a\n").unwrap();
-        sh(&["add", "-A"]);
-        sh(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base"]);
-        let base = sh(&["rev-parse", "HEAD"]);
+        sh(&["add", "-A"]).await;
+        sh(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base"]).await;
+        let base = sh(&["rev-parse", "HEAD"]).await;
         // A rename with one edit, a binary file, an untracked test and lockfile: only the snapshot has them.
         std::fs::rename(wt.join("old.rs"), wt.join("new.rs")).unwrap();
         std::fs::write(wt.join("new.rs"), format!("{body}line 20\n")).unwrap();

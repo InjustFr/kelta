@@ -2491,5 +2491,13 @@
   "{checked} of {n} criteria checked": {
     "one": "{checked} critère sur {n} coché",
     "other": "{checked} critères sur {n} cochés"
+  },
+  "Changes so far": "Modifications en cours",
+  "Review changes at this file": "Relire les modifications de ce fichier",
+  "test": "test",
+  "Note to Claude": "Note pour Claude",
+  "{n} lockfiles or generated files": {
+    "one": "{n} fichier de verrouillage ou généré",
+    "other": "{n} fichiers de verrouillage ou générés"
   }
 }

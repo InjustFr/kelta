@@ -46,8 +46,8 @@ use kelta_proto::events::{BusEvent, bus};
 use kelta_proto::ext::BlockingOutcome;
 use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{
-    DeltaFile, EditorTarget, FinishMergedReport, FinishOpts, GitStatus, RebaseOp, SendFile, SessionInfo, ShipOrigin,
-    StartWorkPlan, StepStatus, WORK_STEPS, WorkItem, WorkSource, WorkStepStatus,
+    DeltaFile, EditorTarget, FinishMergedReport, FinishOpts, GitStatus, RebaseOp, SendFile, SessionInfo,
+    ShipOrigin, StartWorkPlan, StepStatus, WORK_STEPS, WorkItem, WorkSource, WorkStepStatus,
 };
 use kelta_proto::tracker::TicketRef;
 use parking_lot::{Mutex, RwLock};

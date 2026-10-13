@@ -38,6 +38,7 @@ describe('Story › Changes', () => {
     expect(diff.delta).toBe(true);
 
     // `]f` from the focused row opens the next file, `[f` the previous one.
+    within(list).getByText('src/api/orders.ts').closest('button')!.focus();
     await fireEvent.keyDown(document.activeElement!, { key: ']' });
     await fireEvent.keyDown(document.activeElement!, { key: 'f' });
     await waitFor(() => expect(diffPaths()).toEqual(['src/api/orders.ts', 'src/api/http.ts']));

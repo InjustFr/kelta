@@ -78,7 +78,8 @@
     const rows = [...(fileList?.querySelectorAll<HTMLButtonElement>('button[data-path]') ?? [])];
     if (rows.length === 0) return;
     const at = rows.indexOf(document.activeElement as HTMLButtonElement);
-    const row = rows[at < 0 ? (dir > 0 ? 0 : rows.length - 1) : Math.min(rows.length - 1, Math.max(0, at + dir))]!;
+    const row =
+      rows[at < 0 ? (dir > 0 ? 0 : rows.length - 1) : Math.min(rows.length - 1, Math.max(0, at + dir))]!;
     row.focus();
     openFile(row.dataset.path!);
   }
@@ -161,7 +162,9 @@
         {/each}
         {#if generated}
           <li class="muted">
-            <span class="path">{tn('{n} lockfile or generated file', '{n} lockfiles or generated files', generated.n)}</span>
+            <span class="path"
+              >{tn('{n} lockfile or generated file', '{n} lockfiles or generated files', generated.n)}</span
+            >
             <span class="num">+{generated.insertions} −{generated.deletions}</span>
           </li>
         {/if}
@@ -216,7 +219,9 @@
         {/each}
       </ul>
       <p class="muted">
-        {t("Touched / untouched is a heuristic: a change within 5 lines of the note after Claude's next stop.")}
+        {t(
+          "Touched / untouched is a heuristic: a change within 5 lines of the note after Claude's next stop.",
+        )}
         {t('Keys:')} <kbd>s</kbd>
         {t('send')}, <kbd>x</kbd>
         {t('resolve')}, <kbd>e</kbd>
