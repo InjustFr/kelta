@@ -10,7 +10,7 @@
 
   import { dispatch } from '$lib/actions';
   import { appInfo } from '$lib/ipc';
-  import { GLOBAL, layout, projects, sessions, toasts, tools, ui, work, type GlobalView } from '$lib/stores';
+  import { GLOBAL, layout, projects, sessions, toasts, ui, work, type GlobalView } from '$lib/stores';
   import { resolveProjectColor } from '$lib/theme';
   import { Button, currentPlatform, Icon, IconButton, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
 
@@ -25,11 +25,8 @@
     currentTab,
     focusedPane,
     focusedSession,
-    isToolTab,
     openRuns,
     rowLabel,
-    selectRow,
-    toolSubLines,
     VIEW_NAMES,
   } from './nav';
   import ScopeSelect from './ScopeSelect.svelte';
@@ -63,12 +60,7 @@
   const tab = $derived(project ? currentTab(project.id) : null);
   const pane = $derived(project && tab ? focusedPane(project.id) : null);
   const session = $derived(project && tab ? focusedSession(project.id) : null);
-  const isHome = $derived(!!project && project.id === projects.home?.id);
-  const lines = $derived(toolSubLines());
-  const toolId = $derived(tab && pane && isToolTab(tab, lines) ? (lines.get(pane.id)?.tool ?? null) : null);
-  const tool = $derived(toolId ? tools.find(toolId) : null);
   const item = $derived(tab?.work_item_id ? work.get(tab.work_item_id) : null);
-  const ownerItem = $derived(session?.work_item_id ? work.get(session.work_item_id) : null);
   const projectColor = $derived(resolveProjectColor(project?.color) ?? 'var(--k-border-strong)');
 
   /** The row part of the breadcrumb for a plain tab: the focused session, else the tab title. */
@@ -101,7 +93,6 @@
     if (ui.settings) return t('Settings');
     if (view) return VIEW_NAMES[view];
     if (!project) return 'Kelta';
-    if (tool) return `${t('Tools')} › ${tool.label}`;
     if (item) return `${project.name} › ${workKey(item)} ${workTitle(item)}`;
     return row ? `${project.name} › ${row.text}` : project.name;
   });
@@ -124,18 +115,6 @@
   $effect(() => {
     if (session?.kind.type === 'claude') void sessions.loadRuns(session.id);
   });
-
-  // ---- actions ---------------------------------------------------------------------------------
-
-  /** A tool's context chip: the tab of its work item, else the project's first row. */
-  function goOwner(): void {
-    if (!project) return;
-    const tabs = layout.get(project.id)?.tabs ?? [];
-    const tb =
-      (ownerItem && tabs.find((x) => x.work_item_id === ownerItem.id)) ??
-      tabs.find((x) => !isToolTab(x, lines));
-    if (tb) selectRow(project.id, tb.id);
-  }
 
   // ---- Claude sessions waiting on me, wherever they run (#372): Now's "Claude needs you" ----------
 
@@ -210,10 +189,6 @@
         <span class="here" data-tauri-drag-region
           ><Icon name={VIEW_ICONS[view]} size={14} /> {VIEW_NAMES[view]}</span
         >
-      {:else if tool}
-        <span class="parent" data-tauri-drag-region>{t('Tools')}</span>
-        <span class="sep" aria-hidden="true">›</span>
-        <span class="here" data-tauri-drag-region><span aria-hidden="true">⚒</span>{tool.label}</span>
       {:else if project}
         <span class="project" style:--project-color={projectColor} data-tauri-drag-region>{project.name}</span
         >
@@ -227,24 +202,6 @@
     </span>
   {/if}
 
-  {#if tool && project}
-    {#if isHome}
-      <span class="muted" data-tauri-drag-region>{t('for you')}</span>
-    {:else}
-      <Button
-        size="sm"
-        variant="ghost"
-        class="chip owner"
-        title={t('Go to {name}', { name: project.name })}
-        data-testid="context-owner"
-        onclick={goOwner}
-        ><span class="project" style:--project-color={projectColor}>{project.name}</span>{#if ownerItem}<span
-            class="sep">›</span
-          ><span class="key">{workKey(ownerItem)}</span>{/if}</Button
-      >
-      {#if cwd}<span class="meta" title={session?.cwd} data-tauri-drag-region>{cwd}</span>{/if}
-    {/if}
-  {/if}
   <span class="spacer" data-tauri-drag-region></span>
   <button
     type="button"
@@ -268,19 +225,6 @@
       onclick={() => void activateProject(project.id)}
       >‹ {project.name}{tab ? ` › ${rowLabel(tab)}` : ''}</Button
     >
-  {:else if tool}
-    {#if back}
-      <Button
-        size="sm"
-        variant="ghost"
-        class="chip"
-        title={t('Back to {place}', { place: placeLabel(back) })}
-        data-testid="context-return"
-        onclick={() => void dispatch('nav.back')}
-        >↩ {placeLabel(back)}{#if tool.keybinding}
-          <Kbd chord={tool.keybinding} />{/if}</Button
-      >
-    {/if}
   {:else if cwd && !item}
     <span class="meta" title={session?.cwd} data-testid="context-meta" data-tauri-drag-region
       >{cwd}{#if model}<span class="sep">·</span>{model}{/if}</span
@@ -413,19 +357,8 @@
     font-weight: var(--k-weight-medium);
   }
 
-  .parent {
-    flex: none;
-    color: var(--k-fg-muted);
-  }
-
   .sep {
     color: var(--k-fg-subtle);
-  }
-
-  .key {
-    flex: none;
-    color: var(--k-fg-muted);
-    font-family: var(--k-font-mono);
   }
 
   .here {
@@ -439,8 +372,7 @@
     font-weight: var(--k-weight-strong);
   }
 
-  .meta,
-  .muted {
+  .meta {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -449,14 +381,6 @@
 
   .meta .sep {
     margin: 0 var(--k-space-2);
-  }
-
-  :global(.owner) .project {
-    padding-left: var(--k-space-2);
-  }
-
-  :global(.owner) .sep {
-    margin: 0 var(--k-space-1);
   }
 
   .spacer {

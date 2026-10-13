@@ -87,8 +87,6 @@
   "Could not open the view": "Impossible d’ouvrir la vue",
   "Back to {place}": "Retour à {place}",
   "Back": "Retour",
-  "for you": "pour vous",
-  "Go to {name}": "Aller à {name}",
   "Leave {view} for what is underneath": "Quitter {view} pour revenir à ce qu’il y a dessous",
   "Workflow runs": "Exécutions de workflow",
   "Workflow runs of this session": "Exécutions de workflow de cette session",
@@ -183,7 +181,6 @@
   "Remove project": "Supprimer le projet",
   "Project action failed": "L’action sur le projet a échoué",
   "Reordering projects failed": "Échec du réordonnancement des projets",
-  "{tool}: not installed": "{tool} : non installé",
   "Menu for {name}": "Menu de {name}",
   "Search or run a command": "Rechercher ou lancer une commande",
   "Search or run…": "Rechercher ou lancer…",
@@ -204,7 +201,6 @@
   "{name}: running in the background, click to show it": "{name} : tourne en arrière-plan, cliquez pour l’afficher",
   "background": "arrière-plan",
   "No projects yet": "Aucun projet pour l’instant",
-  "{tool} in {place}": "{tool} dans {place}",
   "Row actions": "Actions de la ligne",
   "Project actions": "Actions du projet",
   "{n} running sessions will be terminated.": {
@@ -2521,5 +2517,17 @@
   "{done} of {n} tasks": {
     "one": "{done} tâche sur {n}",
     "other": "{done} tâches sur {n}"
-  }
+  },
+  "Health": "Santé",
+  "Kelta's hooks are not installed in Claude Code: sessions started in another terminal do not show in the Queue": "Les hooks de Kelta ne sont pas installés dans Claude Code : les sessions lancées dans un autre terminal n’apparaissent pas dans la file",
+  "Kelta's ticket tools are not installed in Claude Code": "Les outils de tickets de Kelta ne sont pas installés dans Claude Code",
+  "Install hooks": "Installer les hooks",
+  "Install MCP": "Installer le MCP",
+  "Reconnect account": "Reconnecter le compte",
+  "Open account": "Ouvrir le compte",
+  "Open source": "Ouvrir la source",
+  "Open theme": "Ouvrir le thème",
+  "Showing cached tickets: the last refresh failed": "Tickets en cache affichés : la dernière actualisation a échoué",
+  "Everything works.": "Tout fonctionne.",
+  "Fixing failed": "La correction a échoué"
 }

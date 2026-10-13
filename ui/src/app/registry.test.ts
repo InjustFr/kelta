@@ -62,6 +62,7 @@ describe('registries', { timeout: 30_000 }, () => {
     const ids = settingsSections.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).toEqual([
+      'health',
       'general',
       'window',
       'keys',

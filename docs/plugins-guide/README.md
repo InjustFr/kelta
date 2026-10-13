@@ -35,8 +35,8 @@ command = "btop"
 ```
 
 Load it while developing: add the folder to `plugins.dev_paths` in your global `config.toml`, restart, then grant
-the permissions Kelta lists in Settings > Plugins. Tools appear in the rail's Tools section and in the palette as
-"Open Kubernetes"; their id is namespaced, `tools-pack/k9s`.
+the permissions Kelta lists in Settings > Plugins. Tools appear in the palette as "Open Kubernetes" and on
+`Cmd+Alt+1..9`; their id is namespaced, `tools-pack/k9s`.
 
 To install it like a user would: `kelta-ctl plugin install ~/code/tools-pack` (a directory, a git URL with an
 optional tag, or a `.tar.gz`). Kelta shows the permissions in plain language and the manifest SHA-256 first.

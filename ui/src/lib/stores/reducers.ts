@@ -241,12 +241,17 @@ export function reduceAttention(state: AttentionState, ev: UiEvent): AttentionSt
 export interface AccountState {
   status: AccountStatus;
   detail: string | null;
+  /** `Date.now()` when the account entered this status. */
+  since: number;
 }
 
 export function reduceAccounts(
   map: Record<AccountId, AccountState>,
   ev: UiEvent,
+  now: number = Date.now(),
 ): Record<AccountId, AccountState> {
   if (ev.type !== 'account.status') return map;
-  return { ...map, [ev.account_id]: { status: ev.status, detail: ev.detail } };
+  const prev = map[ev.account_id];
+  const since = prev?.status === ev.status ? prev.since : now;
+  return { ...map, [ev.account_id]: { status: ev.status, detail: ev.detail, since } };
 }
