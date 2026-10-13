@@ -2307,6 +2307,7 @@
           "work.new": "w",
           "work.start": "s"
         },
+        "prefix_hint_ms": 400,
         "prefix_timeout_ms": 1000
       },
       "properties": {
@@ -2395,6 +2396,14 @@
           },
           "description": "ActionId → single key after the prefix.",
           "type": "object"
+        },
+        "prefix_hint_ms": {
+          "default": 400,
+          "description": "Pause after the prefix before a panel lists the next keys; `0` turns the panel off.",
+          "format": "uint32",
+          "maximum": 5000,
+          "minimum": 0,
+          "type": "integer"
         },
         "prefix_timeout_ms": {
           "default": 1000,
