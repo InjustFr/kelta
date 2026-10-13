@@ -216,7 +216,7 @@ impl Core {
             command: command.into(),
             args: None,
         };
-        let mut t = Toast::info("Show the Claude sessions you start outside Kelta in Now?");
+        let mut t = Toast::info("Show the Claude sessions you start outside Kelta in the Queue?");
         t.action = Some(action("Install", INSTALL_ACTION));
         t.secondary = Some(action("Never", NEVER_ACTION));
         self.toast(t);

@@ -161,7 +161,7 @@ test.describe('now', () => {
         content: { kind: 'inbox' },
         placement: 'new_tab',
         focus: true,
-        tab_title: 'Now',
+        tab_title: 'Queue',
         work_item_id: null,
       }),
     );

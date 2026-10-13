@@ -128,7 +128,7 @@ export const ACTIONS: readonly ActionMeta[] = [
   { id: "tool.goto.7", label: "Open tool 7", mac: ["cmd+alt+7"], linux: ["ctrl+alt+7"], prefix: null, context: "global" },
   { id: "tool.goto.8", label: "Open tool 8", mac: ["cmd+alt+8"], linux: ["ctrl+alt+8"], prefix: null, context: "global" },
   { id: "tool.goto.9", label: "Open tool 9", mac: ["cmd+alt+9"], linux: ["ctrl+alt+9"], prefix: null, context: "global" },
-  { id: "inbox.open", label: "Open Now", mac: ["cmd+0"], linux: ["ctrl+0"], prefix: "0", context: "global" },
+  { id: "inbox.open", label: "Open Queue", mac: ["cmd+0"], linux: ["ctrl+0"], prefix: "0", context: "global" },
   { id: "project.next", label: "Next project", mac: ["cmd+ctrl+]"], linux: ["ctrl+shift+pagedown"], prefix: ")", context: "global" },
   { id: "project.prev", label: "Previous project", mac: ["cmd+ctrl+["], linux: ["ctrl+shift+pageup"], prefix: "(", context: "global" },
   { id: "tab.next", label: "Next tab", mac: ["cmd+shift+]"], linux: ["ctrl+shift+]"], prefix: "n", context: "global" },

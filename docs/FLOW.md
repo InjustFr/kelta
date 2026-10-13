@@ -177,11 +177,11 @@ Does not work, because Kelta cannot type into that Claude:
 
 ---
 
-## 3. Now: the overview
+## 3. Queue: where all work waits
 
-![Now](images/flow/f1-now.png)
+![Queue](images/flow/f1-now.png)
 
-Now replaces the Inbox. It keeps the Inbox's plumbing (`⌘0`, action id `inbox.open`), so settings and keybindings do not break; only the label and contents change. On the rail it sits between the two other global views, in the order of the loop: **Tickets** (`⌘⇧B`, pick a ticket from any source), **Now**, **Reviews** (`⌘⇧R`, review PRs). All three render in `GlobalHost` outside any project, live in the built-in `global` layout (one tab per view, its active tab the view shown: polled like a visible pane, restored on relaunch), and follow the "leaves Now" rule of §3.3. They share one project scope (#409, DESIGN §6.8): `All projects ▾` in each toolbar narrows all three to one project, switching view keeps it, and it is restored on relaunch. A project's Board, Reviews or Inbox is that global view scoped to it, never a tab: the commands that opened such a tab open the view instead, and saved tabs of these lists close on load, their project applied once as the scope.
+The Queue (named Now until #413) replaces the Inbox. It keeps the Inbox's plumbing (`⌘0`, action id `inbox.open`), so settings and keybindings do not break; only the label and contents change. "Now" named a moment; the Queue names the place where all work waits. On the rail it sits between the two other global views, in the order of the loop: **Tickets** (`⌘⇧B`, pick a ticket from any source), **Queue**, **Reviews** (`⌘⇧R`, review PRs). All three render in `GlobalHost` outside any project, live in the built-in `global` layout (one tab per view, its active tab the view shown: polled like a visible pane, restored on relaunch), and follow the "leaves the Queue" rule of §3.3. They share one project scope (#409, DESIGN §6.8): `All projects ▾` in each toolbar narrows all three to one project, switching view keeps it, and it is restored on relaunch. A project's Board, Reviews or Inbox is that global view scoped to it, never a tab: the commands that opened such a tab open the view instead, and saved tabs of these lists close on load, their project applied once as the scope.
 
 ### 3.1 Sections
 
@@ -196,17 +196,22 @@ Each row is one *thing*: a work item, a session that is not part of a work item,
 | Fix | error | my work items in phase rows 1, 3, 10, 11, 11a, 12; my PRs without a work item that have changes requested or failing checks | changes requested and new comments, checks failed, remote commits, conflicts, failed steps | Fix with Claude / Rebase / Retry |
 | Review requests | none (row lamp = local review Claude, if any) | PRs requesting my review with `my_state` pending, or a new head since my review | blocking first (I am the last required reviewer), then oldest request first | Open review |
 | Ship and clean up | none | phases 6, 7, 13-16, and reviewed review items | approved, unpushed, ready to ship, merged | per phase |
-| In flight | working ring when Claude works | everything else that is mine and unfinished | Claude working first, then waiting on others (In review), then idle (No changes yet); latest activity first within each | Go to work tab |
+| Claude working | working | work items that would be In flight whose Claude is `Working` or starting, and background runs in flight (#235, #413) | latest activity first | Go to work tab |
+| In flight | none | everything else that is mine and unfinished: queued for a Claude slot, in review, idle | queued, then waiting on others (In review), then idle (No changes yet); latest activity first within each | Go to work tab |
 | Elsewhere | none | Claude sessions Kelta did not start (#345), dimmed, with their status; they need Kelta's hook relay in Claude Code's user settings (Settings → Claude, or the startup offer, `claude.hooks_offer`) | latest first | jump to their terminal window or tmux pane (#346) |
 | Blocked | none | tickets carrying their source's blocked marker (#348) that would be in Next up, New for you or Up next, and work items on a blocked ticket unless they are in Claude needs you, Ready for review or Fix (#390); rows wear the Blocked chip, and clearing the marker moves them back on the next refresh (Next up keeps their place) | work items in phase order, then tickets in Next up then tracker order | per row |
 | Up next | none | tickets assigned to me, not Done nor in their source's `waiting_statuses`, not blocked, with no unfinished work item and not in Next up; in-progress first, then tracker order; 10 max, then "Show all" (the Tickets view on Mine) | | Start work |
 | Waiting to deploy | none | collapsed until its header opens it (#391): tickets assigned to me (or in Next up) in their source's `waiting_statuses` and not Done, and the work items of such tickets unless they are in Claude needs you or Fix; rows show the status name (`A MEPP`, `A MEP`), a work row also its phase, whose actions (Ship and clean up) stay on the row. Not in the badge nor the header | work items, then Next up and tracker order | per row |
 
-Sections run in the order of the table above. The header is a row of chips in that same order, each a bold count then a word (#386):
+Sections run in the order of the table above, grouped in three zones by whose move it is (#399, #413). Each zone has a sticky header with its count and a one-line hint (`.k-group-hint`):
 
-`1 needs you · 3 LLM diffs · 2 to fix · 2 PRs waiting · 1 working · 4 up next`
+| Zone | Sections | Hint |
+|---|---|---|
+| Your move | Claude needs you, Ready for review, Next up, New for you, Fix, Review requests, Ship and clean up, Up next | Answer, review, fix, ship or start: it waits on you. |
+| Claude working | Claude working | Your parallel capacity: back in minutes. |
+| Waiting on others | In flight, Elsewhere, Blocked, Waiting to deploy | Reviewers, checks, deploys and blockers: hours or days. |
 
-"needs you" = Claude needs you, "LLM diffs" = Ready for review, "to fix" = Fix, "PRs waiting" = Review requests, "working" = Claude sessions in `Working` (the parallel capacity in use; the chip goes to In flight). Zero chips are dropped. A chip scrolls to its section and selects its first row. Only the chips of sections that need you (Claude needs you, Fix) take their lamp colour; the others stay muted. The rail's Now tile badge shows the sum of the first four sections; its line shows only the most urgent chip (`1 needs you`, else `2 to fix`, else the first one), never the whole list. "needs you" is the same wording in the rail, the header, the top-bar chip (#372) and the status strip. The dock badge stays "sessions needing input" (interrupt level only).
+Claude working is split from Waiting on others because a Claude at work is my parallel capacity, back in minutes, while reviewers, checks and deploys take hours or days. The header is one summary line, the zone counts in the scope (#409): `9 your move, 2 Claude working, 2 waiting on others`. The rail's Queue tile reads `9 your move`; its badge shows the sum of the first four sections. "needs you" is the same wording in the rail, the top-bar chip (#372) and the status strip. The dock badge stays "sessions needing input" (interrupt level only).
 
 ### 3.2 Row grammar
 
@@ -214,11 +219,11 @@ DESIGN §6.8 row (`lamp | id | title | meta`) plus a 3px project-hue bar at the 
 
 Meta, right-aligned, tabular: the *reason* in `--k-fg` 12px (the one thing to read: "Changes requested, 3 threads", "Allow `pnpm test:int`?"), then diffstat (with a `dirty` tag when part of it is uncommitted) or PR number, `↓n {base}` when behind, age.
 
-A **waiting chip** (`waiting on Anna · 26h`, `waiting on Anna +2`, `waiting on you`; hover lists each person with the reason: review requested, changes requested so the author acts, assigned; an unmatched person adds "Not matched to a tracker / code host user") sits in Tickets rows next to the PR chip, in Reviews rows on every tab, and in Now: a ticket row's detail line says `waiting on Anna (review) · 26h` instead of the bare assignee, and my PRs carry the Reviews chip.
+A **waiting chip** (`waiting on Anna · 26h`, `waiting on Anna +2`, `waiting on you`; hover lists each person with the reason: review requested, changes requested so the author acts, assigned; an unmatched person adds "Not matched to a tracker / code host user") sits in Tickets rows next to the PR chip, in Reviews rows on every tab, and in the Queue: a ticket row's detail line says `waiting on Anna (review) · 26h` instead of the bare assignee, and my PRs carry the Reviews chip.
 
 The **selected row expands** to a second line: Claude's last message for Claude needs you (`ClaudeMeta.preview`), the `next:` note and the first line of Claude's full final message for Ready for review (`m` unfolds the whole message line by line; the row's meta is the delta chip `212 lines · 9 files · tests: none · +1.8k generated`, `tests: none` in amber when source changed, and the age is the wait since Claude stopped), the first unresolved thread for Changes requested, failing check names for Checks failed, and the row's actions as buttons with their key (#397: they run on a click; Next up rows also reorder by dragging). Nothing else ever expands; rows stay 26px in `VirtualList`.
 
-### 3.3 Keys in Now
+### 3.3 Keys in the Queue
 
 | Key | Action |
 |---|---|
@@ -237,7 +242,7 @@ The **selected row expands** to a second line: Claude's last message for Claude 
 | `S` / `J` / `K` | Next up rows: start the top ones / move the row down / up |
 | `o` | open on the host (PR) or tracker (ticket) |
 
-In the Tickets list (not Now; the rail's Tickets view, in the scope of §3; the board toggle shows once one source is in effect): `1` `2` `3` Mine / Unassigned / Team, `v` choose sources (all by default, "Add source…" at the end), `Shift+g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, Parent, None), `f` `s` current sprint only, `x` mark the ticket, `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `w` run a workflow (§4.8), `t` put a local tag on the ticket or take it off, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it, `Enter` moves the keys into it (`y` copies the branch there, `b` blocks or unblocks the ticket, `r` refines the ticket with Claude, `u` assigns to anyone the tracker offers, `!` changes the priority; with the column hidden, `Enter` on a ticket with work runs its phase's next action, as in Now, and `g` opens the detail), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
+In the Tickets list (not the Queue; the rail's Tickets view, in the scope of §3; the board toggle shows once one source is in effect): `1` `2` `3` Mine / Unassigned / Team, `v` choose sources (all by default, "Add source…" at the end), `Shift+g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, Parent, None), `f` `s` current sprint only, `x` mark the ticket, `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `w` run a workflow (§4.8), `t` put a local tag on the ticket or take it off, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it, `Enter` moves the keys into it (`y` copies the branch there, `b` blocks or unblocks the ticket, `r` refines the ticket with Claude, `u` assigns to anyone the tracker offers, `!` changes the priority; with the column hidden, `Enter` on a ticket with work runs its phase's next action, as in the Queue, and `g` opens the detail), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
 
 A ticket the source marks **blocked** (`b`; a flag, a label, a relation or a status, SETTINGS §2) shows a Blocked chip, sorts last in its group and lands in the **Waiting** flow group of the Tickets list (so does a ticket whose status reads blocked, on hold, waiting or impediment). Blocked tickets still count as unfinished work in the start sheet's finish-first list (§4.1).
 | `N` | New work item |
@@ -245,11 +250,11 @@ A ticket the source marks **blocked** (`b`; a flag, a label, a relation or a sta
 | `/` | filter on id, title, project, branch |
 | `R` | refresh |
 
-Gating is the work menu's (§2.5): disabled keys on review items do nothing and flash the reason. Every action that leaves Now (or the Tickets and Reviews views) **closes it and focuses the target in its project** (`ui.view = null` through `activateProject`, focus tab and pane: the target's rail row is selected); the project is the item's first, else the active one, never the `GLOBAL` sentinel. Panes opened from Now use `new_tab` placement with reuse (one tab per target), never a split inside whatever tab happened to be active. This fixes bug B1.
+Gating is the work menu's (§2.5): disabled keys on review items do nothing and flash the reason. Every action that leaves the Queue (or the Tickets and Reviews views) **closes it and focuses the target in its project** (`ui.view = null` through `activateProject`, focus tab and pane: the target's rail row is selected); the project is the item's first, else the active one, never the `GLOBAL` sentinel. Panes opened from the Queue use `new_tab` placement with reuse (one tab per target), never a split inside whatever tab happened to be active. This fixes bug B1.
 
-### 3.4 Next waiting, without opening Now
+### 3.4 Next waiting, without opening the Queue
 
-`attention.next` (`⌘J`, `⇧⌘J` back) is renamed "Next waiting" and walks the waiting rows of Now in priority bands (SPEC §4), *going* to each row's place (like `g`), cycling on repeat. The bands, most urgent first: needs input (including outside sessions), error (a broken item, or a Claude stopped by an API error), ready for review, feedback and red CI on my PRs, review requests (blocking first). From there `⌘.` `Enter` runs the action. So the whole day can be driven as: `⌘J`, look, `⌘.` `Enter`, repeat.
+`attention.next` (`⌘J`, `⇧⌘J` back) is renamed "Next waiting" and walks the waiting rows of the Queue in priority bands (SPEC §4), *going* to each row's place (like `g`), cycling on repeat. The bands, most urgent first: needs input (including outside sessions), error (a broken item, or a Claude stopped by an API error), ready for review, feedback and red CI on my PRs, review requests (blocking first). From there `⌘.` `Enter` runs the action. So the whole day can be driven as: `⌘J`, look, `⌘.` `Enter`, repeat.
 
 ### 3.5 Palette
 
@@ -259,12 +264,12 @@ Gating is the work menu's (§2.5): disabled keys on review items do nothing and 
 
 ### 3.6 Freshness
 
-- Opening Now and window focus call `work_status_all`: one `git fetch <remote>` per repo for the bases and the branches of items with a PR (not per item), at most every 5 minutes, then ahead/behind/dirty/diffstat/remote_new for every unfinished item in one call. This replaces per-tab `work_status` on focus.
+- Opening the Queue and window focus call `work_status_all`: one `git fetch <remote>` per repo for the bases and the branches of items with a PR (not per item), at most every 5 minutes, then ahead/behind/dirty/diffstat/remote_new for every unfinished item in one call. This replaces per-tab `work_status` on focus.
 - PR state comes from the existing authored and requested review polls, with three changes:
   - **Authored always includes drafts.** `reviews.include_drafts` only filters ReviewRequested. Reviewing on GitHub means a draft PR (§4.1), so drafts must be seen; a draft turned ready is the same `ref` and is never "new".
   - **Authored is always subscribed** for every code-host account bound to a project that has an unfinished work item with `pr_url`, whatever panes are visible and whatever notifications are on (`resubscribe`, existing scheduler, no new poll).
-  - **Missed transitions are caught on startup and on Now open**: every unfinished item with `pr_url` that is not in the authored open list gets one `CodeHost::get` (new `state` field). That check publishes `pr.merged` / `pr.closed` exactly like a live diff; the listener is idempotent per item. A PR merged overnight lands as Merged on the next launch.
-- **Review items** (and Review requests rows) refresh `my_state` and head through `CodeHost::get` on Now open and window focus, event-driven. A GitHub `is:open reviewed-by:@me` query added to the ReviewRequested subscription detects "new head since my review", because `user-review-requested:@me` drops a PR once I submit a review.
+  - **Missed transitions are caught on startup and on Queue open**: every unfinished item with `pr_url` that is not in the authored open list gets one `CodeHost::get` (new `state` field). That check publishes `pr.merged` / `pr.closed` exactly like a live diff; the listener is idempotent per item. A PR merged overnight lands as Merged on the next launch.
+- **Review items** (and Review requests rows) refresh `my_state` and head through `CodeHost::get` on Queue open and window focus, event-driven. A GitHub `is:open reviewed-by:@me` query added to the ReviewRequested subscription detects "new head since my review", because `user-review-requested:@me` drops a PR once I submit a review.
 - The header shows "as of 14:02" when any source is stale or offline, per existing `stale` flags.
 
 ---

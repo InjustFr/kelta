@@ -24,6 +24,8 @@ export type NowSection =
   | 'fix'
   | 'requests'
   | 'ship'
+  /** Not a phase's own section: the Queue routes in-flight work whose Claude is working here (#413). */
+  | 'claude'
   | 'in_flight'
   | 'elsewhere'
   | 'blocked'

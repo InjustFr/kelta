@@ -65,6 +65,11 @@ const ticket = (key: string, category: TicketItem['ticket']['status']['category'
   waiting: [],
 });
 
+const blockedTicket = (key: string, category: TicketItem['ticket']['status']['category']): TicketItem => {
+  const t = ticket(key, category);
+  return { ...t, ticket: { ...t.ticket, blocked: true } };
+};
+
 const empty: NowInput = { work: [], sessions: [], requested: [], authored: [], tickets: [] };
 
 describe('nowSections', () => {
@@ -317,11 +322,6 @@ describe('nowSections', () => {
     expect([zoneCount(sections, 'yours'), zoneCount(sections, 'waiting')]).toEqual([3, 4]);
   });
 
-  const blockedTicket = (key: string, category: TicketItem['ticket']['status']['category']): TicketItem => {
-    const t = ticket(key, category);
-    return { ...t, ticket: { ...t.ticket, blocked: true } };
-  };
-
   it('Blocked tickets leave Up next, Next up and New for Blocked, and come back in place once cleared (#390)', () => {
     const input = (b: typeof ticket): NowInput => ({
       ...empty,
@@ -398,6 +398,7 @@ describe('zones and badge (#399)', () => {
     expect((['in_flight', 'elsewhere', 'blocked', 'waiting'] as const).map(zoneOf)).toEqual(
       Array(4).fill('waiting'),
     );
+    expect(zoneOf('claude')).toBe('claude');
     const sections = nowSections({
       ...empty,
       work: [
@@ -414,6 +415,35 @@ describe('zones and badge (#399)', () => {
     // The badge counts what needs me now, not the tickets still to start.
     expect(waitingCount(sections)).toBe(7);
     expect(zoneCount(nowSections(empty), 'yours')).toBe(0);
+  });
+
+  it('Claude working (#413): in-flight work whose Claude works, background runs in flight included', () => {
+    const working = (id: PhaseId, patch: Partial<WorkItem> = {}) => {
+      const e = entry(id, 'in_flight', patch);
+      return { ...e, phase: { ...e.phase, lamp: 'working' as const } };
+    };
+    const claude = working('working');
+    const starting = working('starting');
+    const run = working('run');
+    const queued = entry('queued', 'in_flight');
+    const inReview = entry('in_review', 'in_flight');
+    const onBlocked = working('working', { ticket: { account: 'jira', key: 'B-1', id: 'B-1' } });
+    const stuckRun = entry('run', 'needs_you');
+    const sections = nowSections({
+      ...empty,
+      work: [claude, starting, run, queued, inReview, onBlocked, stuckRun],
+      tickets: [blockedTicket('B-1', 'in_progress')],
+    });
+    const ids = (id: string) => sections.find((s) => s.id === id)?.rows.map((r) => r.id);
+    expect(ids('claude')?.sort()).toEqual([claude, starting, run].map((e) => `w:${e.item.id}`).sort());
+    // Waiting for a Claude slot is not Claude working yet.
+    expect(ids('in_flight')).toEqual([`w:${queued.item.id}`, `w:${inReview.item.id}`]);
+    expect(ids('blocked')).toEqual([`w:${onBlocked.item.id}`]);
+    expect(ids('needs_you')).toEqual([`w:${stuckRun.item.id}`]);
+    expect(sections.find((s) => s.id === 'claude')!.label).toBe('Claude working');
+    expect([zoneCount(sections, 'yours'), zoneCount(sections, 'claude'), zoneCount(sections, 'waiting')]).toEqual(
+      [1, 3, 3],
+    );
   });
 });
 

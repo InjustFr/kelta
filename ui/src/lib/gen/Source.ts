@@ -33,7 +33,7 @@ blocked?: BlockedMarker,
  */
 fields?: Array<SourceField>, 
 /**
- * Status names (as the tracker spells them) that count as done for Now: my part is over, the
+ * Status names (as the tracker spells them) that count as done for the Queue: my part is over, the
  * ticket waits on something else (a deployment). Left out of Up next, Next up and New for you;
  * Tickets still lists them.
  */
