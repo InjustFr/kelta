@@ -1,7 +1,7 @@
 <script lang="ts">
   // Settings → Sources → Board: the account and the views of one source (`[sources.tracker]`).
-  // Whose tickets, current iteration, a Jira view's board and statuses, removal, the status colours and
-  // the ticket fields save at once to the global `[[sources]]`.
+  // Whose tickets, current iteration, a Jira view's board and statuses, removal, the status colours, the
+  // waiting statuses and the ticket fields save at once to the global `[[sources]]`.
   import { msg, t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
@@ -100,6 +100,16 @@
     editSource(sourceId, (s) => {
       const rest = Object.fromEntries(Object.entries(s.status_colors).filter(([k]) => k !== name));
       return { ...s, status_colors: color ? { ...rest, [name]: color } : rest };
+    });
+
+  // Waiting statuses (#391): the board's statuses, plus the listed ones it no longer has (so they can be cleared).
+  const waitingNames = $derived([
+    ...new Set([...columns.flatMap((c) => c.match_names), ...(source?.waiting_statuses ?? [])]),
+  ]);
+  const toggleWaiting = (name: string, on: boolean) =>
+    editSource(sourceId, (s) => {
+      const rest = (s.waiting_statuses ?? []).filter((n) => n !== name);
+      return { ...s, waiting_statuses: on ? [...rest, name] : rest };
     });
 
   // Ticket fields (#351): the tracker's own list where it has one (`null`: it has none, an id is typed).
@@ -247,6 +257,23 @@
           </li>
         {/each}
       </ul>
+    </SettingsGroup>
+  {/if}
+  {#if waitingNames.length > 0}
+    <SettingsGroup heading={t('Waiting to deploy')} data-testid="waiting-statuses">
+      <p class="empty">
+        {t('Tickets in these statuses leave Up next and wait in the Waiting to deploy section of Now.')}
+      </p>
+      <fieldset>
+        <legend class="k-visually-hidden">{t('Waiting to deploy')}</legend>
+        {#each waitingNames as name (name)}
+          <Toggle
+            label={name}
+            checked={source.waiting_statuses?.includes(name) ?? false}
+            onchange={(on) => void toggleWaiting(name, on)}
+          />
+        {/each}
+      </fieldset>
     </SettingsGroup>
   {/if}
   <SettingsGroup heading={t('Ticket fields')} data-testid="source-fields">

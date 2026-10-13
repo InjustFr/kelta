@@ -255,28 +255,47 @@ describe('nowSections', () => {
     expect(ids('up_next')).toEqual(['t:jira:T-1']);
   });
 
-  it("a source's waiting statuses count as done: out of Up next, New and Next up", () => {
-    const shipping = (key: string, source: string): TicketItem => {
+  it("a source's waiting statuses: Waiting to deploy, last and folded, nowhere else, not in the badge", () => {
+    const shipping = (key: string, source: string, name = 'A MEPP'): TicketItem => {
       const t = ticket(key, 'in_progress');
-      return {
-        ...t,
-        ticket: { ...t.ticket, status: { ...t.ticket.status, name: 'A MEPP' } },
-        source_ids: [source],
-      };
+      return { ...t, ticket: { ...t.ticket, status: { ...t.ticket.status, name } }, source_ids: [source] };
     };
+    const done = ticket('T-5', 'done');
+    const merged = entry('merged', 'ship', { ticket: { account: 'jira', key: 'T-6', id: '6' } });
+    const fixing = entry('checks_failed', 'fix', { ticket: { account: 'jira', key: 'T-7', id: '7' } });
     const sections = nowSections({
       ...empty,
+      work: [merged, fixing],
       tickets: [
         shipping('T-1', 'mine'),
-        shipping('T-2', 'mine'),
+        shipping('T-2', 'mine', 'A MEP'),
         shipping('T-3', 'other'),
         ticket('T-4', 'todo'),
+        // A waiting status whose category is done has left Now.
+        {
+          ...done,
+          ticket: { ...done.ticket, status: { ...done.ticket.status, name: 'A MEP' } },
+          source_ids: ['mine'],
+        },
+        shipping('T-6', 'mine'),
+        shipping('T-7', 'mine'),
       ],
       nextUp: [shipping('N-1', 'mine')],
       fresh: new Set(['jira:T-2']),
       waiting: new Map([['mine', ['A MEPP', 'A MEP']]]),
     });
-    expect(sections.flatMap((s) => s.rows.map((r) => r.id))).toEqual(['t:jira:T-3', 't:jira:T-4']);
+    expect(sections.map((s) => [s.id, s.rows.map((r) => r.id)])).toEqual([
+      ['fix', [`w:${fixing.item.id}`]],
+      ['up_next', ['t:jira:T-3', 't:jira:T-4']],
+      ['waiting', [`w:${merged.item.id}`, 't:jira:N-1', 't:jira:T-1', 't:jira:T-2']],
+    ]);
+    const waiting = sections.at(-1)!;
+    expect(waiting.folded).toBe(true);
+    // The work row carries its ticket's status name; Ship and clean up stays its phase.
+    const row = waiting.rows[0]!;
+    expect(row.type === 'work' && [row.status, row.phase.section]).toEqual(['A MEPP', 'ship']);
+    expect(waitingCount(sections)).toBe(1);
+    expect(headerChips(sections, 0).map((c) => c.section)).toEqual(['fix', 'up_next']);
   });
 
   const blockedTicket = (key: string, category: TicketItem['ticket']['status']['category']): TicketItem => {

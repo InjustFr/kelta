@@ -27,7 +27,8 @@ export type NowSection =
   | 'in_flight'
   | 'elsewhere'
   | 'blocked'
-  | 'up_next';
+  | 'up_next'
+  | 'waiting';
 
 /** Ids of the work action registry (`actions.ts`). */
 export type WorkActionId =
