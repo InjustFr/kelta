@@ -18,7 +18,7 @@ You can do all of it by hand: see [getting started](getting-started.md#first-lau
 
 ## Status on every pane
 
-Kelta starts Claude with hooks that report its state: working, needs you, done. The state shows on the pane, its
+Kelta starts Claude with hooks that report its state: working, needs you, done. The state shows on the pane, its tab,
 its row in the sidebar and in the Queue. If Kelta cannot tell (the hooks are not installed in that session), the
 pane shows **Live status off** with a **Fix** button that opens Diagnostics.
 

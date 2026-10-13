@@ -89,7 +89,7 @@ Each view can be limited to the current iteration (Settings > Sources, or `curre
 
 ## Keys
 
-A letter means the same in the Tickets list, the Queue and Reviews: `Enter` the next step, `s` work on it, `v` view
+A letter means the same in the Tickets list, the Queue and Pull requests: `Enter` the next step, `s` work on it, `v` view
 changes, `o` open on the host, `m` move the ticket, `c` comment, `/` filter, `?` every key, `Cmd+Shift+R` refresh.
 
 | Key | Action |
@@ -121,7 +121,7 @@ changes, `o` open on the host, `m` move the ticket, `c` comment, `/` filter, `?`
 | `w` | run a workflow on the ticket, in the background ([workflows](claude-code.md#workflows)) |
 | `y` | copy the branch name (in the detail) |
 | `o` | open in the tracker |
-| `Cmd+Shift+R` (`Ctrl+Shift+R` on Linux) | refresh (outside a list or detail, it opens Reviews) |
+| `Cmd+Shift+R` (`Ctrl+Shift+R` on Linux) | refresh (outside a list or detail, it opens Pull requests) |
 | `Cmd+.` (`Ctrl+.` on Linux) | the selected ticket's actions in a menu, its next step first (`Enter` runs it); in the detail, its More menu |
 
 ## Grouping and sorting

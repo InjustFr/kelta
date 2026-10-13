@@ -59,7 +59,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `prefix_bindings` | map<ActionId, str> | SPEC §4 | single key after prefix |
 | `list_keys` | bool | `true` | single-key shortcuts of lists and boards. `false`: plain printable keys (letters, digits, `?`, `/`, with or without Shift, no Ctrl/Cmd/Alt) no longer reach the panes, `j`/`k` included; arrows, `Enter`, `Escape`, `Space`, `Home`/`End`, `Tab` and every Ctrl/Cmd/Alt chord still work, as do text fields, terminals, dialogs, menus and a Kelta action you bound to a plain key. Applies at once |
 | `linux_terminal` | enum(terminal_first\|kelta_first) | `terminal_first` | Linux, focused terminal: `terminal_first` leaves a plain `ctrl+<letter>` bound in Kelta (`ctrl+k`, `ctrl+d`, `ctrl+w`, a `mod+g` tool key…) to the terminal, the default actions keep their `ctrl+shift+<letter>` twin; `kelta_first` runs Kelta's binding. `ctrl+c` / `ctrl+v` stay the terminal's either way (copy / paste are `ctrl+shift+c` / `ctrl+shift+v`) |
-| `hints` | bool | `true` | the key hint line under Tickets, Reviews and Now (five keys and `?`, DESIGN §6.8). `false` hides it; `?` still opens the full key list. Applies at once |
+| `hints` | bool | `true` | the key hint line under Tickets, Pull requests and the Queue (five keys and `?`, DESIGN §6.8). `false` hides it; `?` still opens the full key list. Applies at once |
 
 Every action id, label and default chord per platform is in the ActionId catalog (`crates/kelta-proto/src/actions.rs`, generated to `ui/src/lib/gen/actions.ts`); SPEC §4 lists them. Settings → Keys records a chord, flags conflicts and unbinds. `window.toggle` has no in-app chord: bind `kelta-ctl toggle` in your compositor. Work-flow actions (FLOW §7), rebindable through `bindings` / `prefix_bindings` like any ActionId:
 
@@ -143,7 +143,7 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | `mcp` | bool | `true` | Kelta MCP server for Claude sessions |
 | `mcp_board_writes` | bool | `true` | board-wide MCP writes (`transition_ticket_by_key`, `comment_ticket_by_key`, `update_ticket_body`, `close_ticket`); off = read-only board tools. Also needs `mcp` |
 | `mcp_offer` | bool | `true` | at startup, offer to register Kelta's MCP in Claude Code (user scope) when it is found and not registered; the toast's Never sets it to `false`. Global |
-| `hooks_offer` | bool | `true` | at startup, offer to register Kelta's hook relay (`kelta-ctl hook --outside`) in Claude Code's user settings when it is found and not registered, so Claude sessions Kelta did not start show in Now; the toast's Never sets it to `false`. Global. Settings → Claude has Install / Remove buttons for both registrations |
+| `hooks_offer` | bool | `true` | at startup, offer to register Kelta's hook relay (`kelta-ctl hook --outside`) in Claude Code's user settings when it is found and not registered, so Claude sessions Kelta did not start show in the Queue; the toast's Never sets it to `false`. Global. Settings → Claude has Install / Remove buttons for both registrations |
 | `allowed_tools` | list<str> | `["mcp__kelta__*"]` | passed via `--allowedTools` |
 | `append_system_prompt` | str (x-kelta-exec) | `""` | appended to generated `context.md` |
 | `extra_args` | list<str> | `[]` | appended before the prompt |
@@ -336,7 +336,7 @@ blocked = { label = "blocked" }    # how this tracker marks a ticket blocked (be
 status_colors = { "In QA" = "theme:magenta", "Ready for release" = "#2f8c86" }
 # tracker fields shown on the tickets (below)
 fields = [{ id = "customfield_10042", label = "Verified" }, { id = "customfield_10051", label = "" }]
-# statuses that count as done for Now (below)
+# statuses that count as done for the Queue (below)
 waiting_statuses = ["A MEPP", "A MEP"]
 
 [sources.tracker]                  # the §3 tracker binding without repo_rules
@@ -356,7 +356,7 @@ options = [{ label = "Auto", values = ["--auto"] }, { label = "Mode", values = [
 
 `fields` shows tracker fields Kelta has no column for (a Jira custom field, a GitHub Projects v2 field) on the source's tickets: each field with a value is a `label: value` chip on the row (the value alone when `label` is empty) and a line of the detail's meta grid. `id` is the Jira field id or the GitHub project field name (any case); Settings → Sources lists the tracker's fields to pick from (Jira, GitHub project views) and takes a typed id elsewhere. The values come with the list call; other trackers show none yet. An id the tracker does not have shows nothing and is flagged *Unknown field* in the settings, never a list error.
 
-`waiting_statuses` names statuses (as the tracker spells them, exact match) where your part is over and the ticket waits on something else, such as a deployment. Now moves a ticket of this source in one of them, and its work item unless Claude needs you or it needs a fix, to the collapsed **Waiting to deploy** section, after Up next: it leaves Up next, New for you and Next up, even when another view (a follow-up view with `who = "anyone"`) lists it, and a ticket leaves Now once its status is Done (its work item goes back to its phase section, Ship and clean up for a merged one). Settings → Sources sets them per source (**Waiting to deploy**, one switch per status of the source's columns). Tickets and the views that ask for these statuses still show it.
+`waiting_statuses` names statuses (as the tracker spells them, exact match) where your part is over and the ticket waits on something else, such as a deployment. The Queue moves a ticket of this source in one of them, and its work item unless Claude needs you or it needs a fix, to the collapsed **Waiting to deploy** section, after Up next: it leaves Up next, New for you and Next up, even when another view (a follow-up view with `who = "anyone"`) lists it, and a ticket leaves the Queue once its status is Done (its work item goes back to its phase section, Ship and clean up for a merged one). Settings → Sources sets them per source (**Waiting to deploy**, one switch per status of the source's columns). Tickets and the views that ask for these statuses still show it.
 
 A route is the first one in order whose `match` fits the ticket; an empty `match` never fits. `component` is compared with the ticket's labels (tickets carry no component field), `label` with its labels, `type` with its issue type. `options` are the route's Start options (see `[[session_templates]]`).
 
