@@ -441,9 +441,11 @@ describe('zones and badge (#399)', () => {
     expect(ids('blocked')).toEqual([`w:${onBlocked.item.id}`]);
     expect(ids('needs_you')).toEqual([`w:${stuckRun.item.id}`]);
     expect(sections.find((s) => s.id === 'claude')!.label).toBe('Claude working');
-    expect([zoneCount(sections, 'yours'), zoneCount(sections, 'claude'), zoneCount(sections, 'waiting')]).toEqual(
-      [1, 3, 3],
-    );
+    expect([
+      zoneCount(sections, 'yours'),
+      zoneCount(sections, 'claude'),
+      zoneCount(sections, 'waiting'),
+    ]).toEqual([1, 3, 3]);
   });
 });
 

@@ -71,8 +71,8 @@ export function nowSummary(): NowSummary {
       : claude
         ? t('{n} Claude working', { n: claude })
         : others
-        ? t('{n} waiting on others', { n: others })
-        : t('Nothing waiting'),
+          ? t('{n} waiting on others', { n: others })
+          : t('Nothing waiting'),
     waiting: waitingCount(sections),
   };
 }
