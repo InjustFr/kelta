@@ -4,7 +4,7 @@
 // IPC), and narrow windows drop items in the stated order.
 import { expect, test, type Page } from '@playwright/test';
 
-import { boot, unfold } from './helpers';
+import { boot, dispatch, unfold } from './helpers';
 
 const bar = (page: Page) => page.getByTestId('contextbar');
 
@@ -42,6 +42,38 @@ test('‹ › walk the jumplist; + New offers a work item and a session', async 
 
   await bar(page).getByTestId('tab-plus').click();
   await expect(page.getByRole('menuitem')).toHaveText([/New work item/, /New session/]);
+});
+
+test('⌘0 ⌘0 comes back to the focused pane; Esc on the Queue clears its filter, then goes back (#415)', async ({
+  page,
+}) => {
+  await boot(page);
+  const pane = page.locator('[data-testid="workspace"] [data-testid="pane"]').nth(1);
+  const filter = page.getByLabel('Filter Queue');
+  const backHere = async () => {
+    await expect(page).toHaveTitle(/^Shop › SHOP-142/);
+    await expect(pane).toHaveAttribute('data-focused', 'true');
+    await expect(pane.locator('.xterm-helper-textarea')).toBeFocused();
+  };
+  await dispatch(page, 'pane.focus_right');
+  await expect(pane).toHaveAttribute('data-focused', 'true');
+
+  await page.keyboard.press('Control+0');
+  await expect(page).toHaveTitle('Queue');
+  await expect(bar(page).getByTestId('context-back')).toHaveAttribute('aria-label', /^Back to Shop › /);
+  await page.keyboard.press('Control+0');
+  await backHere();
+
+  await page.keyboard.press('Control+0');
+  await page.getByTestId('inbox-pane').focus();
+  await page.keyboard.press('/');
+  await filter.fill('zzz');
+  await filter.press('Enter');
+  await page.keyboard.press('Escape');
+  await expect(filter).toHaveValue('');
+  await expect(page).toHaveTitle('Queue');
+  await page.keyboard.press('Escape');
+  await backHere();
 });
 
 test('a work tab has its header above the panes, and keeps it over a zoomed pane', async ({ page }) => {

@@ -1,6 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GLOBAL, ui } from '$lib/stores';
+import { createMockTransport } from '$lib/ipc/mock';
+import { setTransport } from '$lib/ipc/transport';
+import { allPanes } from '$lib/layout';
+import { GLOBAL, layout, projects, sessions, ui, work } from '$lib/stores';
 
 import {
   backTarget,
@@ -11,7 +14,9 @@ import {
   navStep,
   noteFocus,
   SETTLE_MS,
+  toggleNow,
 } from './jumplist';
+import { currentTab, focusedPane, focusPaneById } from './nav';
 
 const loc = (n: number) => ({ project: 'p', tab: 't', pane: `pane${n}` });
 const view = (v: 'now' | 'reviews') => ({ project: GLOBAL, tab: v, pane: v });
@@ -105,5 +110,42 @@ describe('Jumplist', () => {
     expect(jumplist.at).toBe(2);
     jumplist.at = 0;
     expect(backTarget(view('reviews'))).toBeNull();
+  });
+});
+
+describe('toggleNow (#415)', () => {
+  beforeEach(async () => {
+    setTransport(createMockTransport().transport);
+    layout.byProject = {};
+    ui.view = null;
+    ui.settings = null;
+    await Promise.all([projects.load(), sessions.load(), work.load()]);
+    await layout.ensure('shop');
+  });
+
+  it('opens the Queue, and on the Queue goes back to the pane focused before', () => {
+    const tab = currentTab('shop')!;
+    const pane = allPanes(tab.root).at(-1)!;
+    focusPaneById('shop', tab.id, pane.id);
+    const here = { project: 'shop', tab: tab.id, pane: pane.id };
+    jumplist.list = [];
+    jumplist.at = -1;
+    noteFocus(here);
+    toggleNow();
+    expect(ui.view).toBe('now');
+    noteFocus(view('now')); // the shell notes the Queue at once; ⌘0 again before it settles
+    expect(backTarget(view('now'))).toEqual(here); // the `‹` tooltip names the way back
+    toggleNow();
+    expect(ui.view).toBeNull();
+    expect(projects.activeId).toBe('shop');
+    expect(focusedPane('shop')?.id).toBe(pane.id);
+    expect(jumplist.list).toEqual([here, view('now')]);
+  });
+
+  it('opens the Queue under Settings instead of leaving it', () => {
+    ui.view = 'now';
+    ui.settings = { section: null };
+    toggleNow();
+    expect([ui.view, ui.settings]).toEqual(['now', null]);
   });
 });

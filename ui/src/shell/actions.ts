@@ -22,13 +22,12 @@ import {
   focusedSessionId,
   gotoRailRow,
   liveSessionsOfTab,
-  openView,
   revealSession,
   splitFocused,
   toggleFocusedPaneWindow,
   toggleZoomFocused,
 } from './nav';
-import { navStep } from './jumplist';
+import { navStep, toggleNow } from './jumplist';
 import { peek, peekWaiting } from './peek.svelte';
 import './scope.svelte'; // wires the layout migration's scope (#409) before any layout loads
 import { sidebar } from './sidebar.svelte';
@@ -147,7 +146,7 @@ registerAction('project.open', () => ui.toggleOverlay('reopen'));
 // Toast action of a start refused for want of a project with a repository (SPEC §3.1).
 registerAction('project.new', () => ui.openSheet('project_new'));
 for (let n = 1; n <= 9; n += 1) registerAction(`project.goto.${n}`, () => gotoRailRow(n));
-registerAction('inbox.open', () => openView('now'));
+registerAction('inbox.open', () => toggleNow());
 registerAction('rail.toggle', () => sidebar.toggle());
 registerAction('toast.run_last', async () => {
   const last = toasts.lastActionable;
