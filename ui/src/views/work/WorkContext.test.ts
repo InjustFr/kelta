@@ -9,6 +9,7 @@ import { findContent } from '$lib/layout';
 import { layout, plugins, projects, reviews, sessions, tickets, toasts, ui, work } from '$lib/stores';
 import { idle } from '$lib/stores/loadable';
 
+import { story } from './story/panel.svelte';
 import { workUi } from './ui.svelte';
 import WorkContext from './WorkContext.svelte';
 
@@ -114,12 +115,14 @@ describe('context bar: work item segment', () => {
     await waitFor(() => expect(work.get(w.id)?.review_due).toBe(false));
   });
 
-  it('opens WorkItemPane as a split down from the phase label', async () => {
+  it('the phase chip opens the Story panel of its tab, and no pane', async () => {
     const w = item(0);
     await layout.ensure('shop');
+    story.setOpen('shop-t1', false);
     mountHeader(w);
     await fireEvent.click(await screen.findByTestId('work-phase'));
-    await waitFor(() => expect(findContent(layout.get('shop')!, (c) => c.kind === 'work_item')).toBeTruthy());
+    expect(story.isOpen('shop-t1')).toBe(true);
+    expect(findContent(layout.get('shop')!, (c) => c.kind === 'work_item')).toBeNull();
   });
 
   it('the PR chip shows the number and CI, and opens the PR (⌘. o)', async () => {

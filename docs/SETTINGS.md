@@ -215,7 +215,7 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 | `pr.merge_method` | `"squash"` \| `"merge"` \| `"rebase"` | `"squash"` | default of the Merge when ready picker (`M`); GitLab takes squash or merge |
 | `pr.body_template` | Template | `"{ticket.url}\n\n{closes}"` | `{closes}` = `Closes #n` for GitHub issues |
 | `pr.draft` | bool | `false` | default of the Ship dialog's Draft switch (and of MCP `create_pr` without `draft`) |
-| `return_brief_after_mins` | int | `20` | refocusing a work item after this long away shows the return strip (`next:` note, Claude's last message, `+N/−M since you reviewed`); never while Claude is working; `0` = off |
+| `return_brief_after_mins` | int | `20` | refocusing a work item after this long away shows the return brief in the Story panel (`next:` note, Claude's last message, `+N/−M since you reviewed`); never while Claude is working; `0` = off |
 
 ### [tickets]
 | Key | Type | Default | Notes |

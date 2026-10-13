@@ -1,12 +1,12 @@
 <script lang="ts">
   // The context bar's work item segment (#248): ticket status, phase, PR, git, cost, ⎇ details, the
-  // primary action and the ⌘. work menu. The breadcrumb (key, title) and the return strip live elsewhere.
+  // primary action and the ⌘. work menu. The breadcrumb (key, title) and the Story panel live elsewhere.
   import { t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
   import type { TabHeaderProps } from '$app/registry';
   import { effectiveChords } from '$lib/keys/manager';
-  import { sessions, settings, tickets, work } from '$lib/stores';
+  import { layout, sessions, settings, tickets, work } from '$lib/stores';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import { terminalPool } from '$lib/terminal';
   import { Button, currentPlatform, Icon, Lamp, Menu, type MenuItem } from '$lib/ui';
@@ -19,7 +19,7 @@
   import { blockedReason, runPrimary, runWorkAction, WORK_ACTIONS } from './actions';
   import { ciGlyph } from './common';
   import { phaseNow, prOf } from './live';
-  import { openContent } from './nav';
+  import { story } from './story/panel.svelte';
   import { workUi } from './ui.svelte';
 
   let { projectId, workItemId }: TabHeaderProps = $props();
@@ -31,6 +31,7 @@
   const pr = $derived(item ? prOf(item) : null);
   const ci = $derived(pr ? ciGlyph(pr.ci) : null);
   const git = $derived(work.git[workItemId] ?? null);
+  const tabId = $derived(layout.get(projectId)?.tabs.find((t) => t.work_item_id === workItemId)?.id);
   const spent = $derived(item ? itemCost(item, sessions.all) : 0);
   const over = $derived(overBudget(spent, settings.value(projectId)?.claude.budget_usd));
   const primaryBlocked = $derived(item && phase?.primary ? blockedReason(phase.primary, item, phase) : null);
@@ -152,12 +153,11 @@
       size="sm"
       variant="secondary"
       class="phase"
-      title={t('{phase} (steps and sessions)', {
+      title={t('{phase} (story)', {
         phase: `${phase.label}${phase.detail ? `: ${phase.detail}` : ''}`,
       })}
       data-testid="work-phase"
-      onclick={() =>
-        void openContent(projectId, { kind: 'work_item', id: item.id }, { placement: 'split_down' })}
+      onclick={() => tabId && story.setOpen(tabId, true)}
     >
       <Lamp level={phase.lamp} title={phase.label} />
       <span class="phase-label" class:lampless={phase.lamp === 'none'}
