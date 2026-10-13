@@ -43,6 +43,7 @@
   import { fileRoots, openFileLink } from './actions';
   import { activateProject, currentTab, focusedPane, focusedSessionId, openView } from './nav';
   import ProjectRail from './ProjectRail.svelte';
+  import { sidebar } from './sidebar.svelte';
   import SheetHost from './SheetHost.svelte';
   import StatusBar from './StatusBar.svelte';
   import ToastHost from './ToastHost.svelte';
@@ -187,6 +188,9 @@
     }
     if (saved !== view) layout.update(GLOBAL, (l) => ({ ...l, active_tab: view }));
   });
+
+  // The Queue lists the same work as the rail: the rail folds to its lamps while it is shown (#431).
+  $effect(() => sidebar.fold(ui.view === 'now'));
 
   // ---- keys ------------------------------------------------------------------------------------
 

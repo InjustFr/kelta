@@ -106,6 +106,28 @@ test.describe('sidebar', () => {
     await expect.poll(() => railWidth(page)).toBe(416);
   });
 
+  test('the Queue folds the sidebar to its lamps; Tickets and Reviews keep it open; ⌘B wins', async ({
+    page,
+  }) => {
+    await boot(page);
+    expect(await railWidth(page)).toBe(288);
+    await dispatch(page, 'inbox.open');
+    await expect.poll(() => railWidth(page)).toBe(64);
+    await dispatch(page, 'tickets.open');
+    await expect.poll(() => railWidth(page)).toBe(288);
+
+    // Expanded by hand on the Queue: it stays open there.
+    await dispatch(page, 'inbox.open');
+    await expect.poll(() => railWidth(page)).toBe(64);
+    await dispatch(page, 'rail.toggle');
+    await expect.poll(() => railWidth(page)).toBe(288);
+
+    // Collapsed by hand: Tickets keeps it collapsed.
+    await dispatch(page, 'rail.toggle');
+    await dispatch(page, 'tickets.open');
+    await expect.poll(() => railWidth(page)).toBe(64);
+  });
+
   test('a narrow window starts with the icon column; the button opens it in full', async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 600 });
     await boot(page);
