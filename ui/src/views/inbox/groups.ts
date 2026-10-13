@@ -13,7 +13,8 @@ export interface WorkEntry {
 }
 
 export type NowRow =
-  | { type: 'work'; id: string; item: WorkItem; phase: Phase }
+  /** `blocked`: its ticket is blocked, so it sits in Blocked whatever its phase (#390). */
+  | { type: 'work'; id: string; item: WorkItem; phase: Phase; blocked?: boolean }
   | { type: 'session'; id: string; session: SessionInfo }
   /** A Claude session Kelta did not start (#345). */
   | { type: 'outside'; id: string; session: OutsideSession }
@@ -65,6 +66,7 @@ export const SECTIONS: readonly { id: NowSection; label: string; lamp: Lamp }[] 
   { id: 'ship', label: msg('Ship and clean up'), lamp: 'none' },
   { id: 'in_flight', label: msg('In flight'), lamp: 'working' },
   { id: 'elsewhere', label: msg('Elsewhere'), lamp: 'none' },
+  { id: 'blocked', label: msg('Blocked'), lamp: 'none' },
   { id: 'up_next', label: msg('Up next'), lamp: 'none' },
 ];
 
@@ -72,6 +74,9 @@ export const SECTIONS: readonly { id: NowSection; label: string; lamp: Lamp }[] 
 export const WAITING: readonly NowSection[] = ['needs_you', 'to_review', 'fix', 'requests'];
 
 export const UP_NEXT_MAX = 10;
+
+/** Sections a work item keeps even when its ticket is blocked (#390). */
+const NEEDS_ME = new Set<NowSection>(['needs_you', 'fix', 'to_review']);
 
 // Order within a section: phases listed first come first.
 const PHASE_ORDER: Partial<Record<PhaseId, number>> = {
@@ -112,15 +117,24 @@ export function nowSections(input: NowInput): Section[] {
   const add = (section: NowSection, row: NowRow, rank: number, at: string, size = 0) =>
     by.get(section)!.push({ row, rank, at, size });
 
+  // A blocked ticket's work waits in Blocked unless it needs me now (a question, red CI, a diff).
+  const blocked = new Set(
+    [...input.tickets, ...(input.nextUp ?? [])].filter((t) => t.ticket.blocked).map(ticketKey),
+  );
   const itemIds = new Set(input.work.map((w) => w.item.id));
-  for (const { item, phase } of input.work)
+  for (const { item, phase } of input.work) {
+    const held =
+      !!item.ticket &&
+      blocked.has(`${item.ticket.account}:${item.ticket.key}`) &&
+      !NEEDS_ME.has(phase.section);
     add(
-      phase.section,
-      { type: 'work', id: `w:${item.id}`, item, phase },
+      held ? 'blocked' : phase.section,
+      { type: 'work', id: `w:${item.id}`, item, phase, ...(held ? { blocked: true } : {}) },
       PHASE_ORDER[phase.id] ?? 0,
       item.claude_at ?? item.created_at,
       item.delta ? item.delta.lines + item.delta.generated : 0,
     );
+  }
 
   // Plain sessions asking (WaitingUser is idle, never "needs you"), or with an `ask` question (#356);
   // a listed item's run session shows its question on that item's row (a permission prompt stays a row here).
@@ -194,8 +208,17 @@ export function nowSections(input: NowInput): Section[] {
   const started = new Set(
     input.work.flatMap(({ item }) => (item.ticket ? [`${item.ticket.account}:${item.ticket.key}`] : [])),
   );
-  const open = (t: TicketItem): boolean =>
+  const todo = (t: TicketItem): boolean =>
     t.ticket.status.category !== 'done' && !waits(t, input.waiting) && !started.has(ticketKey(t));
+  // Blocked tickets leave Next up, New for you and Up next; Next up keeps their place for when they clear.
+  const open = (t: TicketItem): boolean => todo(t) && !t.ticket.blocked;
+  const held = new Map<string, TicketItem>();
+  for (const t of [...(input.nextUp ?? []), ...input.tickets.filter((t) => !input.parked?.has(ticketKey(t)))])
+    if (todo(t) && t.ticket.blocked && !held.has(ticketKey(t))) held.set(ticketKey(t), t);
+  // After the blocked work items (their ranks stop at 4), in Next up then tracker order.
+  [...held.values()].forEach((t, i) =>
+    add('blocked', { type: 'ticket', id: `t:${ticketKey(t)}`, ticket: t }, 9, String(i).padStart(6, '0')),
+  );
   (input.nextUp ?? [])
     .filter(open)
     .forEach((t, i) =>

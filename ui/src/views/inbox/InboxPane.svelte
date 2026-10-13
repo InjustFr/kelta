@@ -171,7 +171,7 @@
         const { item, phase } = row;
         const git = work.git[item.id];
         const pr = prOf(item);
-        const meta: string[] = [];
+        const meta: string[] = row.blocked ? [t('Blocked')] : [];
         const delta = phase.section === 'to_review' ? item.delta : null;
         if (delta) meta.push(...deltaParts(delta));
         else if (git && (git.insertions || git.deletions))
@@ -229,7 +229,7 @@
                   over: overBudget(spent, settings.value(item.project_id)?.claude.budget_usd),
                 }
               : null,
-          warn: delta && testsMissing(delta) ? t('tests: none') : undefined,
+          warn: delta && testsMissing(delta) ? t('tests: none') : row.blocked ? t('Blocked') : undefined,
           // Ready for review: how long it has waited since Claude stopped.
           age: age(delta ? (item.claude_at ?? item.created_at) : item.created_at),
           more,
@@ -318,10 +318,12 @@
           reason: tk.status.name,
           tagged: { kind: 'tickets', key: ticketKey(tk.ref) },
           meta: [
+            ...(tk.blocked ? [t('Blocked')] : []),
             ...(nextUp.isNew(tk.ref) ? [t('New')] : []),
             ...(batch.has(tk.ref) ? [t('marked')] : []),
             ...(tk.priority ? [tk.priority] : []),
           ],
+          warn: tk.blocked ? t('Blocked') : undefined,
           age: age(tk.updated_at),
           more: waitChip(row.ticket.waiting, { withWhy: true })?.label ?? '',
           actions: [

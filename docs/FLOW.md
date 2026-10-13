@@ -198,7 +198,8 @@ Each row is one *thing*: a work item, a session that is not part of a work item,
 | Ship and clean up | none | phases 6, 7, 13-16, and reviewed review items | approved, unpushed, ready to ship, merged | per phase |
 | In flight | working ring when Claude works | everything else that is mine and unfinished | Claude working first, then waiting on others (In review), then idle (No changes yet); latest activity first within each | Go to work tab |
 | Elsewhere | none | Claude sessions Kelta did not start (#345), dimmed, with their status; they need Kelta's hook relay in Claude Code's user settings (Settings → Claude, or the startup offer, `claude.hooks_offer`) | latest first | jump to their terminal window or tmux pane (#346) |
-| Up next | none | tickets assigned to me, not Done nor in their source's `waiting_statuses`, with no unfinished work item and not in Next up; in-progress first, then tracker order; 10 max, then "Show all" (the Tickets view on Mine) | | Start work |
+| Blocked | none | tickets carrying their source's blocked marker (#348) that would be in Next up, New for you or Up next, and work items on a blocked ticket unless they are in Claude needs you, Ready for review or Fix (#390); rows wear the Blocked chip, and clearing the marker moves them back on the next refresh (Next up keeps their place) | work items in phase order, then tickets in Next up then tracker order | per row |
+| Up next | none | tickets assigned to me, not Done nor in their source's `waiting_statuses`, not blocked, with no unfinished work item and not in Next up; in-progress first, then tracker order; 10 max, then "Show all" (the Tickets view on Mine) | | Start work |
 
 Sections run in the order of the table above. The header is a row of chips in that same order, each a bold count then a word (#386):
 
