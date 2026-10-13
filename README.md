@@ -56,7 +56,7 @@ Svelte 5 and Rust. The [user guide](docs/user/README.md) covers everything below
 **Claude integration**
 
 - Claude's state (working, needs you, done) on every pane, tab and project, from Claude Code hooks:
-  [next step](docs/user/tickets.md#next-step).
+  [status on every pane](docs/user/claude-code.md#status-on-every-pane).
 - Kelta's MCP ticket tools in any Claude session, not only the ones Kelta starts:
   [tickets from any Claude session](docs/user/tickets.md#tickets-from-any-claude-session).
 - Refine a ticket with Claude (`r`): acceptance criteria, open questions and sub-tasks to post or keep:

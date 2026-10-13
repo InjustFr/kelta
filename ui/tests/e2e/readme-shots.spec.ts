@@ -138,6 +138,10 @@ test('reviews: the Pull requests view with a pull request detail', async ({ page
   await page.getByTestId('rail-reviews').click();
   const host = page.getByTestId('global-host');
   await host.locator('.row .ttl', { hasText: 'SHOP-150: cache product images' }).click();
-  await expect(host.getByTestId('review-brief').getByRole('heading', { level: 3 })).toBeVisible();
+  await expect(
+    host
+      .getByTestId('review-brief')
+      .getByRole('heading', { level: 3, name: 'SHOP-150: cache product images' }),
+  ).toBeVisible();
   await shoot(page, 'reviews');
 });
