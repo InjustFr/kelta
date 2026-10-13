@@ -4,6 +4,7 @@
   import { t } from '$lib/i18n/index.svelte';
   import { paneComponent, type AnyComponent } from '$app/registry';
   import type { PaneContent } from '$lib/gen';
+  import { isEditable } from '$lib/keys/manager';
   import { GLOBAL, projects, ui, type GlobalView } from '$lib/stores';
   import { ErrorState, Spinner } from '$lib/ui';
 
@@ -29,7 +30,10 @@
 
   function onkeydown(e: KeyboardEvent): void {
     // Sheets, dialogs, menus and the chord recorder keep their own Esc.
-    if (view === 'settings' && e.key === 'Escape' && !e.defaultPrevented) ui.settings = null;
+    if (view !== 'settings' || e.key !== 'Escape' || e.defaultPrevented) return;
+    // In a field, Esc first leaves it (committing what was typed); the next one closes Settings.
+    if (isEditable(e.target)) (e.target as HTMLElement).blur();
+    else ui.settings = null;
   }
 
   $effect(() => {

@@ -326,7 +326,11 @@
   <div class="main">
     {#if detached}
       <!-- A detached window (#342): its tab alone, under the native title bar. -->
-      <Workspace projectId={detached.project_id} tabId={detached.tab_id} />
+      {#if ui.settings}
+        <GlobalHost view="settings" />
+      {:else}
+        <Workspace projectId={detached.project_id} tabId={detached.tab_id} />
+      {/if}
     {:else}
       <UpdateBanner />
       {#if ui.settings}

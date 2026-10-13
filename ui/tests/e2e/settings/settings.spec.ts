@@ -143,6 +143,10 @@ test.describe('settings over the window (#410)', () => {
     // A banner's action dispatches the same deep link, with Settings already showing.
     await dispatch(page, 'settings.open', { section: 'projects' });
     await expect(current).toHaveAttribute('data-section', 'projects');
+    // Esc in a field leaves the field first, then closes Settings.
+    await page.getByRole('searchbox', { name: 'Search settings' }).focus();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('settings-pane')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('workspace')).toBeVisible();
   });
