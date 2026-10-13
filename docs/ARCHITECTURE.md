@@ -640,6 +640,7 @@ Every command below is listed in `apps/desktop/src-tauri/src/commands/names.rs` 
 | `work_left` | `{id}` | `WorkItem` (`left_at` = now; the return strip's clock) | |
 | `work_start_now` | `{id}` | `WorkItem` | a `Queued` item starts now, over `claude.max_live` (#141) |
 | `work_queue_front` | `{id}` | `WorkItem` | the `Queued` item starts next |
+| `work_start_claude` | `{id}` | `WorkItem` | a Claude for an item with none alive: resumes its conversation (else a fresh one), split into its work tab |
 | `work_notes` | `{id}` | `ReviewNotes{worktree, notes: Vec<ReviewNote>, since: Option<ReviewDelta>}` | review notes of the item (#133, SQLite `notes`), with `+N/−M since feedback` |
 | `work_note_resolve` | `{id, note: i64}` | `ReviewNotes` | |
 | `work_notes_send` | `{id}` | `ReviewNotes` | the open notes in one message to the item's Claude (held while it works, as `work_send`) |

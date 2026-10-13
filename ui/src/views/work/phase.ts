@@ -57,6 +57,7 @@ export type WorkActionId =
   | 'set_draft'
   | 'start_now'
   | 'queue_front'
+  | 'start_claude'
   | 'park'
   | 'finish';
 

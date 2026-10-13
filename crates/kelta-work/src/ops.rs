@@ -67,6 +67,69 @@ impl WorkService {
         }
     }
 
+    /// Give the item a Claude when it has none alive (its Claude was closed or lost, or its template
+    /// had no Claude): resumes the item's conversation when it had one, else starts a fresh one,
+    /// then splits it into the work tab. A Claude already alive is only focused.
+    pub(crate) async fn start_claude_item(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
+        let lock = self.item_lock(id);
+        let _guard = lock.try_lock().map_err(|_| self.busy(id))?;
+        let mut item = self.load(id).await?;
+        if !matches!(
+            item.state,
+            WorkState::Active | WorkState::PrOpen | WorkState::Merged { .. } | WorkState::PrClosed
+        ) {
+            return Err(KeltaError::conflict("work item is not started"));
+        }
+        let env = self.env(&item.project_id, &item.repo_id)?;
+        let mut j = self.load_journal(&item.id);
+        let alive =
+            |sid: &SessionId| env.core.session_get(sid).is_some_and(|s| s.lifecycle != Lifecycle::Exited);
+        let title = Self::tab_title(&item, &j);
+        if let Some(sid) = j.claude_session.clone().filter(|s| alive(s)) {
+            let content = PaneContent::Terminal { session_id: sid };
+            self.open_pane(&env, &mut item, &title, content, Placement::Focused, true).await?;
+            self.save(&mut item).await?;
+            return Ok(item);
+        }
+        // The other sessions of the item anchor the split: their pane brings the work tab to the front.
+        let anchor = item
+            .session_ids
+            .iter()
+            .find(|s| env.core.session_get(s).is_some_and(|i| i.lifecycle != Lifecycle::Exited))
+            .cloned();
+        let had = j.claude_session.take();
+        if let Some(old) = &had {
+            item.session_ids.retain(|s| s != old);
+        }
+        let rx = env.core.subscribe();
+        // A conversation exists once a Claude ran for the item; `--resume` falls back to `--continue`.
+        let resume = had.and(item.claude_uuid.clone());
+        let mode = match resume.clone() {
+            Some(uuid) => LaunchMode::Resume { uuid, prompt: None },
+            None => LaunchMode::New {
+                uuid: item.claude_uuid.get_or_insert_with(|| uuid::Uuid::new_v4().to_string()).clone(),
+                prompt: String::new(),
+            },
+        };
+        let sid = self.spawn_claude(&env, &mut item, &mut j, mode).await?;
+        if resume.is_some() {
+            self.watch_resume(rx, item.id.clone(), sid.clone(), None);
+        }
+        let placement = match anchor {
+            Some(a) => {
+                let content = PaneContent::Terminal { session_id: a };
+                self.open_pane(&env, &mut item, &title, content, Placement::Focused, true).await?;
+                Placement::SplitRight
+            }
+            None => Placement::NewTab,
+        };
+        let content = PaneContent::Terminal { session_id: sid };
+        self.open_pane(&env, &mut item, &title, content, placement, true).await?;
+        self.save_journal_fresh(&item.id, &mut j)?;
+        self.save(&mut item).await?;
+        Ok(item)
+    }
+
     /// Focus the work item's tab, respawning sessions that are gone and recreating the tab if needed.
     async fn reopen(&self, item: &mut WorkItem, mut prompt: Option<String>) -> Result<(), KeltaError> {
         let env = self.env(&item.project_id, &item.repo_id)?;

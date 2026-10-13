@@ -144,6 +144,7 @@
     "allow-work-left",
     "allow-work-start-now",
     "allow-work-queue-front",
+    "allow-work-start-claude",
     "allow-work-park",
     "allow-work-notes",
     "allow-work-note-resolve",

@@ -1862,6 +1862,23 @@ export function createMockTransport(options: MockOptions = {}): {
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
     },
+    work_start_claude: ({ id }) => {
+      const w = work(id);
+      if (w.session_ids.some((sid) => liveSession(sid)?.kind.type === 'claude')) return clone(w);
+      const s = spawn(w.project_id, { type: 'claude' }, null, w.worktree);
+      updateSession(session(s.id), { work_item_id: w.id });
+      w.session_ids = [...w.session_ids.filter((sid) => liveSession(sid)), s.id];
+      const l = openPane(layoutOf(w.project_id), {
+        content: { kind: 'terminal', session_id: s.id },
+        placement: 'split_right',
+        focus: true,
+        tab_title: null,
+        work_item_id: w.id,
+      }).layout;
+      backendLayoutChange(w.project_id, l);
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
     work_queue_front: ({ id }) => {
       const w = work(id);
       if (w.state.kind !== 'queued') throw err('conflict', 'work item is not queued');

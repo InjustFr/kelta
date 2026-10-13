@@ -186,6 +186,7 @@
     n: 'conflicts',
     s: 'skip_step',
     P: 'park',
+    C: 'start_claude',
   };
 
   function view(row: NowRow): View {
@@ -632,7 +633,7 @@
         if (cur && isNextUp(cur)) reorder(cur, e.key === 'J' ? 1 : -1);
         break;
       default:
-        if (!cur || !'vVbpfrcansoP'.includes(e.key) || e.key.length !== 1) return;
+        if (!cur || !'vVbpfrcansoPC'.includes(e.key) || e.key.length !== 1) return;
         letter(cur, e.key);
     }
     e.preventDefault();

@@ -351,6 +351,8 @@ export interface Commands {
   work_start_now: { args: { id: WorkItemId }; result: WorkItem };
   /** The queued item starts next. */
   work_queue_front: { args: { id: WorkItemId }; result: WorkItem };
+  /** A Claude for an item that has none alive, split into its work tab (resumes its conversation). */
+  work_start_claude: { args: { id: WorkItemId }; result: WorkItem };
   /** Park (#142): stop the item's Claude (and nvim without unsaved buffers); showing it resumes. */
   work_park: { args: { id: WorkItemId }; result: WorkItem };
   /** Review notes (#133) with `+N/−M since feedback`. */
@@ -531,6 +533,7 @@ export const COMMAND_NAMES = [
   'work_left',
   'work_start_now',
   'work_queue_front',
+  'work_start_claude',
   'work_park',
   'work_notes',
   'work_note_resolve',
@@ -778,6 +781,7 @@ export const workSetNote = wrap('work_set_note');
 export const workLeft = wrap('work_left');
 export const workStartNow = wrap('work_start_now');
 export const workQueueFront = wrap('work_queue_front');
+export const workStartClaude = wrap('work_start_claude');
 export const workPark = wrap('work_park');
 export const workNotes = wrap('work_notes');
 export const workNoteResolve = wrap('work_note_resolve');
