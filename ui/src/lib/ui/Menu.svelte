@@ -178,7 +178,9 @@
           >{#if item.icon}<Icon name={item.icon} size={16} />{/if}</span
         >{/if}
       {#if item.reason}
-        <span class="text"><span class="label">{item.label}</span><span class="reason">{item.reason}</span></span>
+        <span class="text"
+          ><span class="label">{item.label}</span><span class="reason">{item.reason}</span></span
+        >
       {:else}
         <span class="label">{item.label}</span>
       {/if}

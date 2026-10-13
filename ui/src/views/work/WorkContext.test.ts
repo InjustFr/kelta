@@ -152,7 +152,8 @@ describe('work tab header', () => {
     const group = within(menu).getByText('Not available now (5)');
     const off = entries.filter((e) => e.getAttribute('aria-disabled') === 'true');
     expect(off).toHaveLength(5);
-    for (const e of off) expect(group.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    for (const e of off)
+      expect(group.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(off[0]!.querySelector('.reason')?.textContent).toBe('Nothing to review');
     // A letter not listed still answers with its reason, and the menu stays.
     await fireEvent.keyDown(menu, { key: 'c' });
@@ -214,7 +215,8 @@ describe('work tab header', () => {
     const labels = within(menu)
       .getAllByRole('menuitem')
       .map((e) => e.querySelector('.label')?.textContent?.split(' ')[0]);
-    for (const l of ['Ship', 'Push', 'Fix', 'Rebase', 'Link', 'Create', 'Merge']) expect(labels).not.toContain(l);
+    for (const l of ['Ship', 'Push', 'Fix', 'Rebase', 'Link', 'Create', 'Merge'])
+      expect(labels).not.toContain(l);
     await fireEvent.keyDown(menu, { key: 'r' });
     expect(toasts.list.at(-1)?.toast.text).toBe('Rebase onto main: Review checkout: read-only');
   });

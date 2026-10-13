@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { dispatch } from '$lib/actions';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import type { SessionStatus, WorkItem } from '$lib/gen';
+import type { RunClaim, SessionStatus, WorkItem } from '$lib/gen';
 import { layout, projects, reviews, sessions, toasts, ui } from '$lib/stores';
 import { menuView, type MenuItem } from '$lib/ui/Menu.svelte';
 
@@ -155,19 +155,44 @@ describe('work menu: what can run now, then Not available now (#405)', () => {
     ticket: null,
     review: { account: 'github-acme', repo: 'acme/shop-api', number: 311 },
   };
-  const run = { id: 'r', name: 'pass', phase: null, state: 'running', note: null, session_id: null };
-  const rebase = { onto: 'origin/main', pre_head: 'a', remote_sha: null, conflicts: ['a.rs'], step: 1, total: 3 };
+  const run: RunClaim = {
+    name: 'pass',
+    run_id: 'r',
+    session_id: null,
+    phase: null,
+    state: 'running',
+    note: null,
+    sha: null,
+  };
+  const rebase = {
+    onto: 'origin/main',
+    pre_head: 'a',
+    remote_sha: null,
+    conflicts: ['a.rs'],
+    step: 1,
+    total: 3,
+  };
   const CASES: Record<PhaseId, [Patch, SessionStatus | null, WorkActionId | null, string]> = {
     asking: [{}, 'needs_input', 'go_claude', '⏎ | v V b P F | t | p r / R C f o M'],
-    run: [{ run } as Patch, null, null, 'v V b g C F | t | p r / R P f o M'],
-    failed: [{ state: { kind: 'failed', step: 'setup', message: '1' } }, null, 'retry', '⏎ | v V s b g F | t | p r / R C P f o'],
+    run: [{ run }, null, null, 'v V b g C F | t | p r / R P f o M'],
+    failed: [
+      { state: { kind: 'failed', step: 'setup', message: '1' } },
+      null,
+      'retry',
+      '⏎ | v V s b g F | t | p r / R C P f o',
+    ],
     starting: [{ state: { kind: 'starting' } }, null, null, 'v V b g F | t | p r / R C P f o'],
     queued: [{ state: { kind: 'queued', pos: 1 } }, null, 'start_now', '⏎ | v V b g F | t | p r / R C P f o'],
     missing: [{}, null, 'recreate', '⏎ | b g C F | t | p r / v V R P f'],
     rebase_stopped: [{ rebase } as Patch, 'done', 'resolve', '⏎ | v V b g P F | t | p r c a n / R C f o M'],
     needs_you: [{}, 'needs_input', 'go_claude', '⏎ | v V b P F | t | p r / R C f o M'],
     working: [{}, 'working', null, 'v V b g F | t | p r / R C P f o'],
-    merged: [{ state: { kind: 'merged', detail: null } }, null, 'finish', '⏎ | v V b g C | t | p r / f o M d R'],
+    merged: [
+      { state: { kind: 'merged', detail: null } },
+      null,
+      'finish',
+      '⏎ | v V b g C | t | p r / f o M d R',
+    ],
     closed: [{ state: { kind: 'pr_closed' } }, null, 'finish', '⏎ | v V b g C | t | p r / f o M d R'],
     to_review: [{ review_due: true }, 'done', 'review_delta', '⏎ | V R b g P F | t | p r / C f o M d'],
     replied: [{ claude_replied: true }, 'done', 'go_claude', '⏎ | v V b P F | t | p r / R C f o M'],
@@ -202,7 +227,15 @@ describe('work menu: what can run now, then Not available now (#405)', () => {
         ...patch,
       };
       sessions.upsert({ ...sessionInfo, status: status ?? 'done', lifecycle: status ? 'live' : 'exited' });
-      const phase: Phase = { id: id as PhaseId, label: '', detail: '', lamp: 'none', section: 'in_flight', primary, primaryLabel: `${primary}` };
+      const phase: Phase = {
+        id: id as PhaseId,
+        label: '',
+        detail: '',
+        lamp: 'none',
+        section: 'in_flight',
+        primary,
+        primaryLabel: `${primary}`,
+      };
       const { now, off } = menuView(workMenu(item, phase));
       expect(`${letters(now)} / ${off.map((e) => e.key).join(' ')}`, id).toBe(want);
       expect(off.every((e) => e.reason)).toBe(true);

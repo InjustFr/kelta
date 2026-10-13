@@ -183,7 +183,8 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'rebase_continue',
-    group: 'branch', situational: true,
+    group: 'branch',
+    situational: true,
     key: 'c',
     label: () => t('Continue rebase'),
     blocked: stopped,
@@ -191,7 +192,8 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'rebase_abort',
-    group: 'branch', situational: true,
+    group: 'branch',
+    situational: true,
     key: 'a',
     label: () => t('Abort rebase'),
     blocked: stopped,
@@ -199,7 +201,8 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'conflicts',
-    group: 'branch', situational: true,
+    group: 'branch',
+    situational: true,
     key: 'n',
     label: () => t('Open conflicts in nvim'),
     blocked: (c) => (c.item.rebase?.conflicts.length ? null : t('No conflicted files')),
@@ -207,7 +210,8 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'skip_step',
-    group: 'work', situational: true,
+    group: 'work',
+    situational: true,
     key: 's',
     label: (c) =>
       c.item.state.kind === 'failed' ? t('Skip {step}', { step: c.item.state.step }) : t('Skip step'),
@@ -250,7 +254,8 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'link',
-    group: 'ticket', situational: true,
+    group: 'ticket',
+    situational: true,
     key: 'l',
     label: () => t('Link to ticket…'),
     blocked: (c) => (c.item.kind !== 'branch' ? t('Already linked to a ticket') : null),
@@ -258,7 +263,8 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'create_ticket',
-    group: 'ticket', situational: true,
+    group: 'ticket',
+    situational: true,
     key: 'T',
     label: () => t('Create ticket…'),
     blocked: (c) => (c.item.kind !== 'branch' ? t('Already linked to a ticket') : null),
@@ -266,7 +272,8 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'open_ticket',
-    group: 'ticket', situational: true,
+    group: 'ticket',
+    situational: true,
     key: 't',
     label: () => t('Open ticket'),
     blocked: (c) => (c.item.ticket ? null : t('No ticket')),
@@ -448,7 +455,13 @@ export function workMenu(item: WorkItem, phase: Phase = phaseNow(item)): MenuIte
   if (primary) {
     // Its letter, if it has one, runs it from here: the lettered entry is not listed twice.
     const reason = blockedReason(primary.id, item, phase);
-    now.push({ id: 'primary', label: phase.primaryLabel, kbd: 'enter', key: primary.key ?? undefined, reason });
+    now.push({
+      id: 'primary',
+      label: phase.primaryLabel,
+      kbd: 'enter',
+      key: primary.key ?? undefined,
+      reason,
+    });
   }
   const off: MenuItem[] = [];
   for (const g of ['work', 'ticket', 'branch'] as const) {
