@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkItem } from '$lib/gen';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
@@ -18,6 +18,8 @@ beforeEach(async () => {
   work.byId = {};
   await Promise.all([work.load(), sessions.load(), projects.load(), settings.load()]);
 });
+
+afterEach(() => vi.useRealTimers());
 
 const item = (i: number): WorkItem => mock.state.work[i] as WorkItem;
 const mount = (w: WorkItem) => render(Claude, { props: { item: w, open: true } });
@@ -54,5 +56,13 @@ describe('Story Claude section', () => {
     await fireEvent.keyDown(screen.getByRole('group', { name: 'Claude' }), { key: 'e' });
     await waitFor(() => expect(msg.classList.contains('clamped')).toBe(false));
     expect(screen.getByRole('button', { name: 'Park' })).toBeTruthy();
+  });
+
+  it('the working age keeps advancing without any other change', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    mount(item(0));
+    expect(screen.getByTestId('claude-status').textContent).toBe('Working 1 min');
+    await vi.advanceTimersByTimeAsync(4 * 60_000);
+    expect(screen.getByTestId('claude-status').textContent).toBe('Working 4 min');
   });
 });

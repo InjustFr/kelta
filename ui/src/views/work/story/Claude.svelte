@@ -28,7 +28,8 @@
   const canPark = $derived(blockedReason('park', item) === null);
 
   // The session has no "working since": the age counts from the moment this window saw it start.
-  // shortcut: a panel opened mid-work shows no age, until a status-change time reaches SessionInfo.
+  // shortcut: a panel opened mid-work counts from the last stop (claude_at), a rough bound, until a
+  // status-change time reaches SessionInfo.
   let workingSince = $state<{ id: string; at: number } | null>(null);
   $effect(() => {
     const id = claude?.id;
@@ -38,15 +39,25 @@
     });
   });
 
+  // Ticks so the ages ("Working 4 min", "Done 38 min ago") keep advancing.
+  let now = $state(Date.now());
+  // Re-armed one-shot (no intervals, ARCHITECTURE §13): each tick re-runs the effect.
+  $effect(() => {
+    void now;
+    const timer = setTimeout(() => (now = Date.now()), 30_000);
+    return () => clearTimeout(timer);
+  });
+
   const status = $derived.by(() => {
     if (!claude) return t('Not started');
     if (questionOf(claude)) return t('Asks you');
     const label = statusLabel(claude.status);
     if (claude.status === 'working') {
-      const mins = workingSince ? Math.max(1, Math.round((Date.now() - workingSince.at) / 60_000)) : 0;
-      return workingSince ? `${label} ${t('{n} min', { n: mins })}` : label;
+      const from = workingSince?.at ?? (item.claude_at ? Date.parse(item.claude_at) : NaN);
+      if (Number.isNaN(from)) return label;
+      return `${label} ${t('{n} min', { n: Math.max(1, Math.round((now - from) / 60_000)) })}`;
     }
-    return [label, item.claude_at ? relativeTime(Date.parse(item.claude_at)) : null]
+    return [label, item.claude_at ? relativeTime(Date.parse(item.claude_at), now) : null]
       .filter(Boolean)
       .join(' ');
   });
