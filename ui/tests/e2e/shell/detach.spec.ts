@@ -2,7 +2,7 @@
 // check the layout side (detached flag, main window placeholder, window_detach) and the detached page.
 import { expect, test, type Page } from '@playwright/test';
 
-import { boot, callsOf, waitForAttached } from './helpers';
+import { boot, callsOf, unfold, waitForAttached } from './helpers';
 
 const panes = (page: Page) => page.locator('[data-testid="workspace"] [data-testid="pane"]');
 
@@ -34,6 +34,7 @@ test.describe('detached windows', () => {
     await expect.poll(async () => (await savedTabs(page)).find((t) => t.id === tabId)?.detached).toBe(true);
 
     // Its rail row shows the placeholder in the main window; "Move back here" brings it back.
+    await unfold(page, 'shop');
     await page.locator(`[data-testid="rail-row"][data-tab-id="${tabId}"]`).click();
     await expect(page.getByText('This tab is in its own window')).toBeVisible();
     await page.getByRole('button', { name: 'Move back here' }).click();

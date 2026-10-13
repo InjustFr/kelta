@@ -67,13 +67,30 @@ export interface RailRow {
   tab: Tab;
 }
 
-/** The rail's rows: every non-tool tab of every open project, in rail order then tab order. */
+/**
+ * A band's tabs (#430): its work tabs by start time, so a phase change never moves a row, then every
+ * other tab (shells, boards, lists), folded under "n more". Tool tabs are under Tools.
+ */
+export function bandTabs(projectId: ProjectId, lines = toolSubLines()): { work: Tab[]; more: Tab[] } {
+  const tabs = (layout.get(projectId)?.tabs ?? []).filter((tab) => !isToolTab(tab, lines));
+  const started = (tab: Tab) => workItemOfTab(tab)?.created_at ?? '';
+  return {
+    work: tabs.filter((tab) => tab.work_item_id).sort((a, b) => started(a).localeCompare(started(b))),
+    more: tabs.filter((tab) => !tab.work_item_id),
+  };
+}
+
+/** The rail's rows in rail order: each band's work rows, then its folded ones. */
 export function railRows(lines = toolSubLines()): RailRow[] {
-  return railProjects().flatMap((p) =>
-    (layout.get(p.id)?.tabs ?? [])
-      .filter((tab) => !isToolTab(tab, lines))
-      .map((tab) => ({ project: p.id, tab })),
-  );
+  return railProjects().flatMap((p) => {
+    const { work, more } = bandTabs(p.id, lines);
+    return [...work, ...more].map((tab) => ({ project: p.id, tab }));
+  });
+}
+
+/** The work rows `project.goto.N` jumps to, across bands. */
+export function workRows(lines = toolSubLines()): RailRow[] {
+  return railRows(lines).filter((r) => r.tab.work_item_id);
 }
 
 // shortcut: the active project's tool list (Home's in a global view) until #237 slice 6 makes the
@@ -195,9 +212,9 @@ export async function activateProject(id: ProjectId): Promise<void> {
   await pending.catch(() => {});
 }
 
-/** `project.goto.N`: rail row N, counted across bands (tool tabs and background rows excluded). */
+/** `project.goto.N`: work row N, counted across bands. */
 export function gotoRailRow(n: number): void {
-  const row = railRows()[n - 1];
+  const row = workRows()[n - 1];
   if (row) selectRow(row.project, row.tab.id);
 }
 
