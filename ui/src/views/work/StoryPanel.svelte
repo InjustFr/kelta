@@ -118,7 +118,7 @@
       <ReturnBrief {projectId} workItemId={id} {tabId} />
       <Ticket {item} open={at === TICKET} />
       <Claude {item} open={at === CLAUDE} />
-      <Changes {item} open={false} />
+      <Changes {item} open={item.review_due} />
       <PullRequest {item} open={at >= PR} />
       <Log {item} />
     </div>

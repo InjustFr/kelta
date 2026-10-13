@@ -8,7 +8,7 @@ use std::path::Path;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::WorkItemId;
-use kelta_proto::model::{ReviewDelta, WorkItem};
+use kelta_proto::model::{DeltaFile, ReviewDelta, WorkItem};
 
 use crate::WorkService;
 use crate::git::{self, LOCAL_TIMEOUT};
@@ -104,6 +104,29 @@ async fn generated_paths(
     Ok(out)
 }
 
+/// Per-file numstat of `from..to`, lockfiles and generated files flagged by the chip's rules.
+pub(crate) async fn delta_files(
+    wt: &Path,
+    from: &str,
+    to: &str,
+    ignore: &[String],
+) -> Result<Vec<DeltaFile>, KeltaError> {
+    let out = git::run_ok(wt, &["diff", "--numstat", "-M", "-z", from, to], LOCAL_TIMEOUT).await?;
+    let entries = numstat(&out.stdout);
+    let paths: Vec<&str> = entries.iter().map(|e| e.2).collect();
+    let generated = generated_paths(wt, &paths, ignore).await?;
+    Ok(entries
+        .iter()
+        .map(|&(insertions, deletions, path)| DeltaFile {
+            path: path.to_owned(),
+            insertions,
+            deletions,
+            test: is_test(path),
+            generated: generated.contains(path),
+        })
+        .collect())
+}
+
 /// Deletes the `last` / `reviewed` refs of `id` (Finish), so their objects can be collected.
 pub(crate) async fn delete_refs(repo: &Path, id: &WorkItemId) {
     for name in ["last", "reviewed", "notes"] {
@@ -180,6 +203,20 @@ impl WorkService {
         Ok(Some(shape(&entries, |p| generated.contains(p))))
     }
 
+    /// `work_delta_files`: the files of `reviewed..last`, from the refs `Stop` writes; empty before
+    /// Claude's first `Stop` or with the worktree gone.
+    pub(crate) async fn delta_files_impl(&self, id: &WorkItemId) -> Result<Vec<DeltaFile>, KeltaError> {
+        let item = self.load(id).await?;
+        let wt = &item.worktree;
+        if !wt.is_dir() {
+            return Ok(Vec::new());
+        }
+        let Some(last) = git::rev(wt, &wi_ref(id, "last")).await? else { return Ok(Vec::new()) };
+        let env = self.env(&item.project_id, &item.repo_id)?;
+        let from = self.reviewed_base(&env, &item).await?;
+        delta_files(wt, &from, &last, &env.settings.reviews.ignore_globs).await
+    }
+
     /// Mark reviewed: `reviewed` = `last` (a fresh snapshot when Claude never stopped yet).
     pub(crate) async fn stamp_reviewed(&self, item: &WorkItem) -> Result<(), KeltaError> {
         let wt = &item.worktree;
@@ -215,6 +252,50 @@ mod tests {
         assert_eq!(
             d,
             ReviewDelta { lines: 212, files: 4, tests: 1, generated: 1810, insertions: 2007, deletions: 15 }
+        );
+    }
+
+    #[tokio::test]
+    async fn delta_files_reads_renames_binaries_and_untracked_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let wt = tmp.path();
+        let sh = |args: &[&str]| {
+            let out = std::process::Command::new("git").args(args).current_dir(wt).output().unwrap();
+            assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+            String::from_utf8(out.stdout).unwrap().trim().to_owned()
+        };
+        sh(&["init", "-q", "-b", "main"]);
+        let body: String = (0..20).map(|i| format!("line {i}\n")).collect();
+        std::fs::write(wt.join("old.rs"), &body).unwrap();
+        std::fs::write(wt.join("keep.rs"), "a\n").unwrap();
+        sh(&["add", "-A"]);
+        sh(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base"]);
+        let base = sh(&["rev-parse", "HEAD"]);
+        // A rename with one edit, a binary file, an untracked test and lockfile: only the snapshot has them.
+        std::fs::rename(wt.join("old.rs"), wt.join("new.rs")).unwrap();
+        std::fs::write(wt.join("new.rs"), format!("{body}line 20\n")).unwrap();
+        std::fs::write(wt.join("logo.png"), [0u8, 159, 146, 150, 0, 1]).unwrap();
+        std::fs::create_dir(wt.join("tests")).unwrap();
+        std::fs::write(wt.join("tests/a.rs"), "#[test]\nfn t() {}\n").unwrap();
+        std::fs::write(wt.join("Cargo.lock"), "x\n").unwrap();
+        let last = git::snapshot(wt, "refs/kelta/wi/x/last").await.unwrap();
+        let mut files = delta_files(wt, &base, &last, &["*.lock".into()]).await.unwrap();
+        files.sort_by(|a, b| a.path.cmp(&b.path));
+        let f = |path: &str, insertions, deletions, test, generated| DeltaFile {
+            path: path.into(),
+            insertions,
+            deletions,
+            test,
+            generated,
+        };
+        assert_eq!(
+            files,
+            vec![
+                f("Cargo.lock", 1, 0, false, true),
+                f("logo.png", 0, 0, false, false),
+                f("new.rs", 1, 0, false, false),
+                f("tests/a.rs", 2, 0, true, false),
+            ]
         );
     }
 

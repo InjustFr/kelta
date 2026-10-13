@@ -839,6 +839,17 @@ pub struct ReviewDelta {
     pub deletions: u32,
 }
 
+/// `work_delta_files`: one file of `reviewed..last` (renames keep their new path; a binary file
+/// counts 0 lines). `generated`: a lockfile or generated file, folded into one row by the UI.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct DeltaFile {
+    pub path: String,
+    pub insertions: u32,
+    pub deletions: u32,
+    pub test: bool,
+    pub generated: bool,
+}
+
 /// Lifecycle of a review note: `sent` with the next message to Claude, then `touched` /
 /// `untouched` after its next `Stop` (a heuristic: a change within 5 lines of the anchor).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
