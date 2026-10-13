@@ -92,11 +92,7 @@ impl WorkService {
             return Ok(item);
         }
         // The other sessions of the item anchor the split: their pane brings the work tab to the front.
-        let anchor = item
-            .session_ids
-            .iter()
-            .find(|s| env.core.session_get(s).is_some_and(|i| i.lifecycle != Lifecycle::Exited))
-            .cloned();
+        let anchor = item.session_ids.iter().find(|s| alive(s)).cloned();
         let had = j.claude_session.take();
         if let Some(old) = &had {
             item.session_ids.retain(|s| s != old);

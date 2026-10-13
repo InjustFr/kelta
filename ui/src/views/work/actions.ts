@@ -203,9 +203,11 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     blocked: ({ item }) =>
       claudeOf(item)?.lifecycle === 'live' || claudeOf(item)?.lifecycle === 'dormant'
         ? t('Claude is already running')
-        : ['planned', 'starting', 'queued', 'failed'].includes(item.state.kind)
-          ? t('Still starting')
-          : null,
+        : item.state.kind === 'failed'
+          ? t('Retry the failed step first')
+          : ['planned', 'starting', 'queued'].includes(item.state.kind)
+            ? t('Still starting')
+            : null,
     run: async ({ item }) => {
       await goToWork(item);
       work.upsert(await workStartClaude({ id: item.id }));

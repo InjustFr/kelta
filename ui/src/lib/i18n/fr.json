@@ -1568,6 +1568,7 @@
   "Edit next: note…": "Modifier la note « ensuite »…",
   "Add next: note…": "Ajouter une note « ensuite »…",
   "Claude is already running": "Claude tourne déjà",
+  "Retry the failed step first": "Relancez d’abord l’étape en échec",
   "Still starting": "Démarrage en cours",
   "Work: Start Claude": "Travail : démarrer Claude",
   "Go to Claude": "Aller à Claude",
