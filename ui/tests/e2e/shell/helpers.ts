@@ -16,6 +16,12 @@ export async function boot(page: Page, platform: Platform = 'linux'): Promise<vo
   await waitForAttached(page, 2);
 }
 
+/** Opens a rail band's "n more" row (#430): the project's tabs besides its work rows. */
+export async function unfold(page: Page, project: string): Promise<void> {
+  const more = page.locator(`[data-testid="rail-more"][data-project-id="${project}"]`);
+  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+}
+
 /** Waits until `n` terminal panes in the DOM are attached to their sessions. */
 export async function waitForAttached(page: Page, n: number): Promise<void> {
   await expect(page.locator('[data-testid="terminal-pane"][data-attached="true"]')).toHaveCount(n);

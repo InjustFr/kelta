@@ -8,6 +8,8 @@ import { allPanes } from '$lib/layout';
 import { layout, projects, sessions, tools, ui, work } from '$lib/stores';
 
 import '../views/tools/actions';
+import { maxLamp } from '../views/work/phase';
+import { tabAttention } from './nav';
 import ProjectRail from './ProjectRail.svelte';
 
 const SHOP_SHELL = '0199a6b2-0000-7000-8000-000000000003';
@@ -39,17 +41,22 @@ async function setup(toolTab = false, webInstance?: string) {
   return render(ProjectRail);
 }
 
+const band = (r: { container: HTMLElement }, project: string) =>
+  r.container.querySelector(`[data-testid="rail-band"][data-project-id="${project}"]`) as HTMLElement;
 const bandRows = (r: { container: HTMLElement }, project: string) =>
-  within(r.container.querySelector(`[data-testid="rail-band"][data-project-id="${project}"]`) as HTMLElement)
+  within(band(r, project))
     .queryAllByTestId('rail-row')
     .map((e) => e.dataset.tabId);
+/** Opens a band's "n more" row. */
+const unfold = (r: { container: HTMLElement }, project: string) =>
+  fireEvent.click(within(band(r, project)).getByTestId('rail-more'));
 
 describe('ProjectRail', () => {
   beforeEach(() => {
     projects.list = [];
   });
 
-  it('one band per open project in rail order, one row per tab in tab order, with lamps and a lit row', async () => {
+  it('one band per open project in rail order: its work rows, the other tabs folded, lamps and a lit row', async () => {
     const r = await setup();
     expect(r.getAllByTestId('rail-band').map((e) => e.dataset.projectId)).toEqual([
       'shop',
@@ -57,7 +64,22 @@ describe('ProjectRail', () => {
       'kelta-tools',
       'home',
     ]);
+    expect(bandRows(r, 'shop')).toEqual(['shop-t1']);
+    expect(bandRows(r, 'home')).toEqual([]);
+    // Key, title without the key, stage word and ⌘N digit.
+    const work = r.container.querySelector('[data-tab-id="shop-t1"]') as HTMLElement;
+    expect(work.querySelector('.key')?.textContent).toBe('SHOP-142');
+    expect(work.querySelector('.name')?.textContent).toBe('Rate-limit login');
+    expect(work.querySelector('[data-testid="rail-stage"]')?.textContent).toBe('Claude');
+    expect(r.container.querySelector('[data-tab-id="kt-t1"] .index')?.textContent).toBe('3');
+    const more = within(band(r, 'shop')).getByTestId('rail-more');
+    expect(more.textContent).toContain('2 more');
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+    await unfold(r, 'shop');
     expect(bandRows(r, 'shop')).toEqual(['shop-t1', 'shop-t2', 'shop-t3']);
+    expect(more.getAttribute('aria-expanded')).toBe('true');
+    expect(r.container.querySelector('[data-tab-id="shop-t2"] .index')).toBeNull();
+    await unfold(r, 'home');
     expect(bandRows(r, 'home')).toEqual(['home-t1', 'home-t2']);
     const billing = r.container.querySelector('[data-tab-id="billing-t1"]') as HTMLElement;
     expect(billing.dataset.attention).toBe('needs_input');
@@ -70,6 +92,7 @@ describe('ProjectRail', () => {
   it('a row click shows that tab of another project, also from a global view', async () => {
     const r = await setup();
     ui.view = 'now';
+    await unfold(r, 'billing');
     await fireEvent.click(r.container.querySelector('[data-tab-id="billing-t2"]')!);
     expect(ui.view).toBeNull();
     expect(projects.activeId).toBe('billing');
@@ -78,6 +101,7 @@ describe('ProjectRail', () => {
 
   it('a tool-only tab sits under Tools; a session in no pane is a dim row that reveals it', async () => {
     const r = await setup(true);
+    await unfold(r, 'shop');
     expect(bandRows(r, 'shop')).toEqual(['shop-t1', 'shop-t3']);
     const tools = within(r.getByTestId('rail-tools'));
     expect(tools.getAllByTestId('rail-tool').map((e) => e.dataset.toolId)).toEqual(
@@ -96,6 +120,7 @@ describe('ProjectRail', () => {
 
   it('an exited tool session is no tool instance: its tab is a closable row in its band', async () => {
     const r = await setup(true);
+    await unfold(r, 'shop');
     sessions.apply({
       type: 'session.updated',
       session: { ...sessions.get(LAZYDOCKER)!, lifecycle: 'exited' },
@@ -106,6 +131,7 @@ describe('ProjectRail', () => {
 
   it('a web tab whose instance is unknown (Kelta restarted) is a closable row, not a tool', async () => {
     const r = await setup(true, 'gone');
+    await unfold(r, 'shop');
     expect(bandRows(r, 'shop')).toEqual(['shop-t1', 'shop-t2', 'shop-t3']);
     expect(within(r.getByTestId('rail-tools')).queryAllByTestId('rail-tool-instance')).toHaveLength(0);
   });
@@ -196,6 +222,38 @@ describe('ProjectRail', () => {
     await fireEvent.click(shop());
     await expect.poll(() => layout.get('shop')!.active_tab).toBe('shop-t1');
     expect(runsPanes()).toHaveLength(1);
+  });
+
+  it('views: Now, Tickets, Reviews, each with one count on its sub line and no red badge', async () => {
+    const r = await setup();
+    expect(r.getAllByTestId(/^rail-(inbox|tickets|reviews)$/).map((e) => e.dataset.testid)).toEqual([
+      'rail-inbox',
+      'rail-tickets',
+      'rail-reviews',
+    ]);
+    await expect
+      .poll(() => r.getByTestId('rail-reviews').title)
+      .toMatch(/^Reviews: \d+ asks? for your review$/);
+    expect(r.getByTestId('rail-inbox').title).toMatch(/^Now: \d+ your move$/);
+    expect(r.getByTestId('rail-tickets').title).toMatch(/^Tickets: \d+ assigned to you$/);
+  });
+
+  it('n more: a folded tab in front marks it selected; its lamp is the highest of the folded tabs', async () => {
+    const r = await setup();
+    const more = () => within(band(r, 'billing')).getByTestId('rail-more');
+    await fireEvent.click(r.container.querySelector('[data-tab-id="billing-t1"]')!);
+    expect(more().classList).not.toContain('active');
+    layout.update('billing', (l) => ({ ...l, active_tab: 'billing-t2' }));
+    await expect.poll(() => more().classList.contains('active')).toBe(true);
+    await unfold(r, 'billing');
+    expect(more().classList).not.toContain('active'); // the row itself wears it once shown
+    expect(r.container.querySelector('[data-tab-id="billing-t2"]')!.getAttribute('aria-current')).toBe(
+      'page',
+    );
+    const shop = layout.get('shop')!.tabs.filter((t) => t.id !== 'shop-t1');
+    expect(within(band(r, 'shop')).getByTestId('rail-more').dataset.attention).toBe(
+      maxLamp(shop.map((t) => tabAttention(t))),
+    );
   });
 
   it('tools: a tool without a Lucide icon shows a well-known icon, its 1-2 characters, else a monogram', async () => {

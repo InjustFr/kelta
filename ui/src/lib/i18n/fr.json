@@ -190,9 +190,13 @@
   "Collapse sidebar": "Réduire la barre latérale",
   "Expand sidebar": "Déplier la barre latérale",
   "Sidebar width": "Largeur de la barre latérale",
-  "{n} mine": "{n} à moi",
+  "{n} assigned to you": "{n} assignés à vous",
   "Nothing waiting": "Rien en attente",
-  "{n} to review": "{n} à relire",
+  "{n} ask for your review": {
+    "one": "{n} demande votre relecture",
+    "other": "{n} demandent votre relecture"
+  },
+  "{n} more": "{n} de plus",
   "Open or create a project": "Ouvrir ou créer un projet",
   "Add project": "Ajouter un projet",
   "Close {name}": "Fermer {name}",
@@ -2275,6 +2279,7 @@
   "A Linear blocked-by relation to an open issue.": "Une relation Linear « bloqué par » vers un ticket ouvert.",
   "This label (case-insensitive).": "Ce label (sans tenir compte de la casse).",
   "Elsewhere": "Ailleurs",
+  "Other Claude sessions": "Autres sessions Claude",
   "Claude needs you, outside Kelta": "Claude a besoin de vous, hors de Kelta",
   "Claude working outside Kelta": "Claude travaille hors de Kelta",
   "Claude stopped on an error, outside Kelta": "Claude s’est arrêté sur une erreur, hors de Kelta",
