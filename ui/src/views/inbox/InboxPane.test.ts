@@ -25,7 +25,7 @@ import {
 
 import { prompts } from '../../shell/confirm.svelte';
 import '../work/actions';
-import { askFocused, REFRESH_EVENT } from '../work/ui.svelte';
+import { ACTIONS_EVENT, askFocused, REFRESH_EVENT } from '../work/ui.svelte';
 import { batch, claudeSlots, startsNow } from '../work/batch.svelte';
 import InboxPane from './InboxPane.svelte';
 import { focusedSessionId } from '../../shell/nav';
@@ -337,6 +337,14 @@ describe('Now', () => {
     const calls = mock.calls.length;
     expect(askFocused(REFRESH_EVENT)).toBe(true);
     await waitFor(() => expect(mock.calls.slice(calls).some((c) => c.cmd === 'review_list')).toBe(true));
+    // `⌘.` on a work row is the work menu, where Continue rebase keeps its `c` (it flashes why here).
+    expect(askFocused(ACTIONS_EVENT)).toBe(true);
+    const menu = await screen.findByRole('menu', { name: 'Work' });
+    await fireEvent.keyDown(menu, { key: 'c' });
+    await waitFor(() =>
+      expect(toastTexts().join()).toMatch(/Continue rebase: Only while a rebase is stopped/),
+    );
+    await fireEvent.keyDown(menu, { key: 'Escape' });
     // `s` goes to the work item's tab: it leaves the Queue.
     await fireEvent.keyDown(pane, { key: 's' });
     await waitFor(() => expect(ui.view).toBeNull());
