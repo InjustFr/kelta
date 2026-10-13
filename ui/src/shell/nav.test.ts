@@ -292,6 +292,16 @@ describe('panes and tabs', () => {
     expect(calls('session_kill').map((c) => (c.args as { id: string }).id)).toEqual([SHOP_CLAUDE]);
   });
 
+  it('the close key leaves Settings and touches no hidden pane', async () => {
+    const pane = currentTab()!.focused_pane;
+    ui.settings = { section: null };
+    await closeFocusedPane();
+    expect(ui.settings).toBeNull();
+    expect(confirms.current).toBeNull();
+    expect(currentTab()!.focused_pane).toBe(pane);
+    expect(layout.get('shop')!.tabs).toHaveLength(3);
+  });
+
   it('closing a pane whose session exited does not ask', async () => {
     sessions.upsert({ ...sessions.get(SHOP_CLAUDE)!, lifecycle: 'exited' });
     await closeFocusedPane();

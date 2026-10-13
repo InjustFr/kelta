@@ -66,14 +66,13 @@
       },
       {
         "id": "shop-t3",
-        "title": "Settings",
+        "title": "Diagnostics",
         "work_item_id": null,
         "root": {
           "type": "pane",
           "id": "shop-p5",
           "content": {
-            "kind": "settings",
-            "section": null
+            "kind": "diagnostics"
           }
         },
         "focused_pane": "shop-p5",
@@ -206,14 +205,13 @@
       },
       {
         "id": "home-t2",
-        "title": "Settings",
+        "title": "Welcome",
         "work_item_id": null,
         "root": {
           "type": "pane",
           "id": "home-p2",
           "content": {
-            "kind": "settings",
-            "section": null
+            "kind": "welcome"
           }
         },
         "focused_pane": "home-p2",

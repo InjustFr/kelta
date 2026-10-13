@@ -90,6 +90,7 @@
 
   /** The breadcrumb as text: the window title in native mode. */
   const title = $derived.by(() => {
+    if (ui.settings) return t('Settings');
     if (view) return VIEW_NAMES[view];
     if (!project) return 'Kelta';
     if (item) return `${project.name} › ${workKey(item)} ${workTitle(item)}`;
@@ -180,9 +181,11 @@
     onclick={() => void dispatch('nav.forward')}
   />
 
-  {#if view || !item}
+  {#if ui.settings || view || !item}
     <span class="crumb" data-tauri-drag-region data-testid="context-crumb">
-      {#if view}
+      {#if ui.settings}
+        <span class="here" data-tauri-drag-region><Icon name="settings" size={14} /> {t('Settings')}</span>
+      {:else if view}
         <span class="here" data-tauri-drag-region
           ><Icon name={VIEW_ICONS[view]} size={14} /> {VIEW_NAMES[view]}</span
         >
@@ -211,7 +214,7 @@
     {#if searchChord}<span aria-hidden="true"><Kbd chord={searchChord} /></span>{/if}
   </button>
   <span class="spacer" data-tauri-drag-region></span>
-  {#if view && project}
+  {#if view && project && !ui.settings}
     <Button
       size="sm"
       variant="ghost"

@@ -144,6 +144,7 @@ export function visibleSessions(projectId: ProjectId): SessionId[] {
 export async function activateProject(id: ProjectId): Promise<void> {
   const target = projects.byId(id);
   if (!target) return;
+  ui.settings = null;
   const alreadyActive = projects.activeId === id && ui.view === null;
   if (alreadyActive) return;
   if (typeof performance !== 'undefined') performance.mark('kelta.switch.start');
@@ -195,6 +196,7 @@ export const VIEW_NAMES: Record<GlobalView, string> = {
  * key the view lands on (a cross link between Tickets and Reviews). */
 export function openView(view: GlobalView, select?: string): void {
   ui.select = select ? { view, key: select } : null;
+  ui.settings = null;
   ui.view = view;
   // Merges / closes missed while Kelta was closed or the poll was off (FLOW §3.6).
   if (view === 'now') workCheckPrs({}).catch((err) => console.warn('[kelta] work PR check failed', err));
@@ -251,6 +253,7 @@ export function focusPaneById(projectId: ProjectId, tabId: TabId, paneId: PaneId
 }
 
 export function focusDirection(direction: Direction): void {
+  if (ui.settings) return; // the workspace under the overlay is hidden
   const projectId = here();
   const tab = currentTab();
   const from = focusedPane();
@@ -388,6 +391,7 @@ export async function splitFocused(dir: SplitDir): Promise<void> {
 }
 
 export function toggleZoomFocused(): void {
+  if (ui.settings) return;
   const projectId = here();
   const tab = currentTab();
   if (!projectId || !tab) return;
@@ -427,6 +431,10 @@ export async function requestClosePane(projectId: ProjectId, tabId: TabId, paneI
 }
 
 export async function closeFocusedPane(): Promise<void> {
+  if (ui.settings) {
+    ui.settings = null;
+    return;
+  }
   const projectId = here();
   const tab = currentTab();
   const p = focusedPane();
@@ -486,6 +494,7 @@ export async function attachTab(projectId: ProjectId, tabId: TabId): Promise<voi
 /** `pane.detach`: the focused pane to a new window; in a detached window, its tab back to the main one. */
 export async function toggleFocusedPaneWindow(): Promise<void> {
   if (detached) return attachTab(detached.project_id, detached.tab_id);
+  if (ui.settings) return;
   const projectId = here();
   const tab = currentTab();
   const p = focusedPane();
