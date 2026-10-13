@@ -330,6 +330,9 @@ pub struct ClaudeMeta {
     pub preview: Option<String>,
     pub files_touched: Vec<PathBuf>,
     pub hooks_active: bool,
+    /// Claude's task list, from its `TodoWrite` / `TaskCreate` / `TaskUpdate` hooks (#406).
+    #[serde(default)]
+    pub tasks: Vec<ClaudeTask>,
     /// Last statusline snapshot (in memory only); `None` until Claude first refreshes it.
     #[serde(default)]
     #[ts(optional = nullable)]
@@ -343,6 +346,23 @@ pub struct ClaudeMeta {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub host: Option<ClaudeHost>,
+}
+
+/// One entry of Claude's task list (#406).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ClaudeTask {
+    /// `TaskCreate`'s id, which `TaskUpdate` names; `None` for `TodoWrite` items.
+    pub id: Option<String>,
+    pub title: String,
+    pub state: ClaudeTaskState,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum ClaudeTaskState {
+    Pending,
+    InProgress,
+    Completed,
 }
 
 /// MCP `ask` (#356): a question with one button per option, answered by typing the option.

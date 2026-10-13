@@ -431,7 +431,7 @@
     "base": "main",
     "claude_uuid": "8d0f1c1e-5c43-4a43-9e57-0b7f3c1a0012",
     "nvim_socket": null,
-    "session_ids": [],
+    "session_ids": ["0199a6b2-0000-7000-8000-000000000012"],
     "tab_id": null,
     "pr_url": null,
     "state": {

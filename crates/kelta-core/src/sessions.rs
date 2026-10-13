@@ -125,6 +125,10 @@ impl SessionEntry {
             cwd: self.info.cwd.clone(),
             lifecycle: lifecycle.to_owned(),
             text_tail: self.text_tail.clone(),
+            tasks_json: match self.info.claude.as_ref().map(|c| &c.tasks) {
+                Some(t) if !t.is_empty() => Some(serde_json::to_string(t)?),
+                _ => None,
+            },
             updated_at: kelta_proto::now_rfc3339(),
         })
     }
@@ -318,6 +322,7 @@ impl Core {
                     spec.template_id.as_deref(),
                 ))
                 .filter(|h| *h != ClaudeHost::Builtin),
+                tasks: row.tasks_json.as_deref().and_then(|j| serde_json::from_str(j).ok()).unwrap_or_default(),
                 ..ClaudeMeta::default()
             });
             let editor = match &kind {
@@ -765,7 +770,7 @@ impl Core {
             ClaudeHost::Builtin
         };
 
-        let info = SessionInfo {
+        let mut info = SessionInfo {
             id: id.clone(),
             project_id: spec.project_id.clone(),
             kind: spec.kind.clone(),
@@ -853,6 +858,10 @@ impl Core {
                 self.release_http_ref(http_ref);
                 self.server.ide_close(&id);
                 return Err(KeltaError::not_found(format!("session {id}")));
+            }
+            // A restored or restarted Claude keeps its task list (#406).
+            if let (Some(c), Some(prev)) = (info.claude.as_mut(), s.get(&id).and_then(|e| e.info.claude.as_ref())) {
+                c.tasks = prev.tasks.clone();
             }
             let entry = SessionEntry {
                 info: info.clone(),
@@ -1479,6 +1488,24 @@ impl Core {
         }
         self.apply_decision(id, d, StatusSource::Hook, change.preview.clone());
         Ok(())
+    }
+
+    /// Claude's task list from a hook (#406): published with the session and persisted.
+    pub(crate) fn apply_tasks(&self, id: &SessionId, p: &kelta_proto::hooks::HookPayload) {
+        if matches!(p.tool_name.as_deref(), Some("TodoWrite" | "TaskCreate" | "TaskUpdate")) {
+            tracing::debug!(session = %id, input = ?p.tool_input, response = ?p.extra.get("tool_response"), "claude task hook");
+        }
+        let info = {
+            let mut s = self.sessions.lock();
+            let Some(e) = s.get_mut(id) else { return };
+            let Some(c) = e.info.claude.as_mut() else { return };
+            if !status::apply_tasks(&mut c.tasks, p) {
+                return;
+            }
+            e.info.clone()
+        };
+        self.emit(UiEvent::SessionUpdated { session: info });
+        self.persist_session(id);
     }
 
     /// Keep the last statusline snapshot; the growth of its cost since the previous one is unsaved spend.

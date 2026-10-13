@@ -245,6 +245,10 @@ pub fn session_info() -> SessionInfo {
             preview: Some("I need permission to run `cargo test`.".into()),
             files_touched: vec![PathBuf::from("src/login.rs")],
             hooks_active: true,
+            tasks: vec![
+                ClaudeTask { id: Some("1".into()), title: "Fix the login redirect".into(), state: ClaudeTaskState::Completed },
+                ClaudeTask { id: Some("2".into()), title: "Run the tests".into(), state: ClaudeTaskState::InProgress },
+            ],
             usage: statusline(true).usage().map(|u| ClaudeUsage { unsaved_usd: u.cost_usd, ..u }),
             question: None,
             host: None,

@@ -228,8 +228,13 @@ ALTER TABLE work_items ADD COLUMN feedback_at TEXT;
 /// ticket's account (two or more stay unknown). No SQL: `migrate` runs `backfill_ticket_sources`.
 const V17: &str = "";
 
+/// v18: Claude's task list of a session (#406, `ClaudeMeta.tasks`).
+const V18: &str = r#"
+ALTER TABLE sessions ADD COLUMN tasks_json TEXT;
+"#;
+
 /// Ordered migrations; `MIGRATIONS.len()` == `kelta_proto::store::SCHEMA_VERSION`.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18];
 
 fn backfill_ticket_sources(c: &Connection, sources: &[Source]) -> rusqlite::Result<()> {
     let rows: Vec<(String, String)> = c

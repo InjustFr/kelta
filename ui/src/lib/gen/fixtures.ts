@@ -350,6 +350,18 @@ export const sessionInfo: SessionInfo = {
     "preview": "I need permission to run `cargo test`.",
     "question": null,
     "session_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+    "tasks": [
+      {
+        "id": "1",
+        "state": "completed",
+        "title": "Fix the login redirect"
+      },
+      {
+        "id": "2",
+        "state": "in_progress",
+        "title": "Run the tests"
+      }
+    ],
     "usage": {
       "context_pct": 72.0,
       "cost_usd": 1.8412,
@@ -3454,6 +3466,18 @@ export const uiEventSessionUpdated: UiEvent = {
       "preview": "I need permission to run `cargo test`.",
       "question": null,
       "session_uuid": "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b",
+      "tasks": [
+        {
+          "id": "1",
+          "state": "completed",
+          "title": "Fix the login redirect"
+        },
+        {
+          "id": "2",
+          "state": "in_progress",
+          "title": "Run the tests"
+        }
+      ],
       "usage": {
         "context_pct": 72.0,
         "cost_usd": 1.8412,
