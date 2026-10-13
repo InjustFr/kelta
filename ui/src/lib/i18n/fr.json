@@ -221,9 +221,6 @@
   "Switch project": "Changer de projet",
   "Commands": "Commandes",
   "Split": "Diviser",
-  "need you": "vous attendent",
-  "in error": "en erreur",
-  "working": "au travail",
   "done": "terminées",
   "Top sessions by spend": "Sessions les plus coûteuses",
   "none yet": "aucune pour l’instant",
@@ -235,19 +232,6 @@
   "{n} queued": "{n} en file",
   "5h": "5 h",
   "7d": "7 j",
-  "{n} {state}: go to the next one": "{n} {state} : aller au suivant",
-  "{n} ready to review": {
-    "one": "{n} prête à relire",
-    "other": "{n} prêtes à relire"
-  },
-  "{n} in error": {
-    "one": "{n} en erreur",
-    "other": "{n} en erreur"
-  },
-  "{n} working": {
-    "one": "{n} au travail",
-    "other": "{n} au travail"
-  },
   "Kelta {version} is installed. Restart to use it.": "Kelta {version} est installé. Redémarrez pour l’utiliser.",
   "Restart": "Redémarrer",
   "Later": "Plus tard",

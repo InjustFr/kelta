@@ -327,7 +327,7 @@ The cursor is neutral, not project-hued and not acid-green. ANSI red/green/yello
 
 ### 6.1 Lamps (`$lib/ui/Lamp.svelte`, shown by `shell/AttentionDot.svelte`)
 
-One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs, status strip, Now, palette, board cards. Nothing pulses or blinks.
+One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs, Now, palette, board cards. Nothing pulses or blinks.
 
 | State | Shape | Size | Token |
 |---|---|---|---|
@@ -339,7 +339,7 @@ One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs,
 | `parked` (#142) | hollow ring like `working`, quiet | 10px | `--k-fg-muted` |
 | `none` | renders nothing (the slot keeps its width in tabs) | | |
 
-- `working` and `parked` are not Attention levels: `working` is derived from `sessions[].status === 'working'` in the store, `parked` from a parked work item (FLOW §2.2). Precedence on an aggregate (project, status strip): needs_input > error > working > done > activity.
+- `working` and `parked` are not Attention levels: `working` is derived from `sessions[].status === 'working'` in the store, `parked` from a parked work item (FLOW §2.2). Precedence on an aggregate (project): needs_input > error > working > done > activity.
 - `aria-label` stays as today; lamps are never the only accessible name.
 - Lamps in the rail sit in a 10px socket so the diamond stays sharp on 1x screens.
 
@@ -371,7 +371,7 @@ One bar across the top of the window, above the rail and the panes: `--k-context
 - Tool tab: `Tools › ⚒ tool`; in Home a muted "for you", else a context chip `▌project › KEY` (goes to that tab) and the cwd; on the right the return chip `↩ <back target> <tool key>` (`nav.back`, what pressing the tool's key again does).
 - Global view: its name, and on the right the "underneath" chip `‹ project › row` that leaves the view. The view's own 40px `.k-toolbar` (filters) stays under the bar.
 - A detached window (§6.4) has no context bar; the native title bar sits above its tab.
-- Never in the bar: session status, ctx % and session cost (pane header); rate limits, Claude slots, the lamp meter, restart, prefix (status strip); row lamps and peek (rail).
+- Never in the bar: session status, ctx % and session cost (pane header); rate limits, Claude slots, restart, prefix (status strip); row lamps and peek (rail).
 - Narrow bars (container queries) drop, in order: `⎇` and the cwd/model, the cost unless over budget, `↑↓`, the PR chip's `PR` word, the ticket chip, the title (the key stays), the phase label (its lamp stays), the `Work` label (its icon stays). `‹`, the key, the primary button and `+` never drop.
 - Window chrome: native decorations keep the system title bar, whose title follows the breadcrumb. macOS custom chrome draws the traffic lights over a 72px leading inset of the bar (overlay title bar); Linux custom chrome adds minimize, maximize and close after `+` and the edge resize handles. Empty bar area is `data-tauri-drag-region`. Hyprland/Sway: no title bar, the context bar is the top edge.
 
@@ -389,7 +389,7 @@ One bar across the top of the window, above the rail and the panes: `--k-context
 
 - 28px (`--k-statusbar-height`), `--k-bezel-raised`, 12px, tabular-nums, segments spaced 12px, no dots.
 - No key hints (#385): the list views carry their own line (§6.8), and the global chords live in their `?` dialog and the palette.
-- Right, exceptions only: prefix armed, "Restart needed", Claude slots (`Claude 3/4 · 1 queued`), the 5h and 7d rate windows, then the **lamp meter** *(from Faceplate)*: one ghost button per non-zero state, lamp plus a count in words (`● 2 need input`, `● 1 ready to review`, `● 1 in error`, `● 3 working`); clicking focuses the next session in that state. Zero counts render nothing.
+- Right, exceptions only: prefix armed, "Restart needed", Claude slots (`Claude 3/4 · 1 queued`), the 5h and 7d rate windows. No lamp meter (#407): the waiting count already shows in the Now header and the context bar's "needs you" chip, which with `⌘J` stays the one call signal.
 
 ### 6.6 Command palette
 

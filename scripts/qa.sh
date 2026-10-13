@@ -19,9 +19,11 @@ qa_failed=0
 # Runs one QA command. On failure it exits, or with QA_KEEP_GOING=1 notes the failure and carries on.
 step() {
   "$@" && return 0
-  local rc=$?
-  [ "${QA_KEEP_GOING:-0}" = 1 ] || exit "$rc"
-  printf '\n==> FAILED (exit %s): %s\n' "$rc" "$*"
+  fail $? "$*"
+}
+fail() { # fail <exit code> <command>
+  [ "${QA_KEEP_GOING:-0}" = 1 ] || exit "$1"
+  printf '\n==> FAILED (exit %s): %s\n' "$1" "$2"
   qa_failed=1
 }
 
@@ -32,15 +34,24 @@ step pnpm install --frozen-lockfile
 section "pnpm --filter @kelta/ui run build"
 step pnpm --filter @kelta/ui run build
 
+# check, lint and test are independent: run them at once, wait for all three, then print each log in order.
 ui_checks() {
-  section "pnpm -r --if-present run check"
-  step pnpm -r --if-present run check
-
-  section "pnpm -r --if-present run lint"
-  step pnpm -r --if-present run lint
-
-  section "pnpm -r --if-present run test"
-  step pnpm -r --if-present run test
+  local d i cmds=(check lint test) pids=() rcs=()
+  d="$(mktemp -d "${TMPDIR:-/tmp}/kelta-qa-ui-checks.XXXXXX")"
+  trap "rm -rf '$d'" EXIT  # ui_checks runs in a subshell (all) or in a shell with no EXIT trap (ui)
+  for i in 0 1 2; do
+    pnpm -r --if-present run "${cmds[$i]}" >"$d/$i.log" 2>&1 &
+    pids[$i]=$!
+  done
+  for i in 0 1 2; do
+    rcs[$i]=0
+    wait "${pids[$i]}" || rcs[$i]=$?
+  done
+  for i in 0 1 2; do
+    section "pnpm -r --if-present run ${cmds[$i]}"
+    cat "$d/$i.log"
+    [ "${rcs[$i]}" = 0 ] || fail "${rcs[$i]}" "pnpm -r --if-present run ${cmds[$i]}"
+  done
 }
 ui_pid=
 # Prints the log of the UI checks running alongside the Rust steps once they end; fails when they failed.
