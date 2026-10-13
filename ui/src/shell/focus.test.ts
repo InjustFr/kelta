@@ -21,11 +21,27 @@ describe('focus mode (#421)', () => {
       ...base,
       invoke: <T>(cmd: string, args?: Record<string, unknown> | Uint8Array) => {
         if (cmd !== 'notify_focus') return base.invoke<T>(cmd, args);
-        calls.push(args);
-        // The backend held one desktop notification.
-        return Promise.resolve((args as { on: boolean }).on ? [] : ['PR approved']) as Promise<T>;
+        // The backend held one desktop notification; `calls` is the order it handled them in, and
+        // turning it on is the slower one.
+        const on = (args as { on: boolean }).on;
+        return new Promise((r) =>
+          setTimeout(
+            () => {
+              calls.push(args);
+              r((on ? [] : ['PR approved']) as T);
+            },
+            on ? 5 : 0,
+          ),
+        );
       },
     });
+  });
+
+  it('a quick on-off reaches the backend in order', async () => {
+    const entering = focus.toggle();
+    await focus.toggle();
+    await entering;
+    expect(calls).toEqual([{ on: true }, { on: false }]);
   });
 
   it('sums up what was held, counting repeats and capping the list', () => {
