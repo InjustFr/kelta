@@ -22,7 +22,7 @@ test('start work from Now: the row, its Start work button, the sheet', async ({ 
   await sheet.getByRole('button', { name: 'Start', exact: true }).click();
   await expect(sheet).toBeHidden();
   await expect.poll(() => activeProject(page)).toBe('shop');
-  await expect(page.getByTestId('context-key')).toHaveText('SHOP-151');
+  await expect(page.getByTestId('work-header-key')).toHaveText('SHOP-151');
 });
 
 test("start work from Tickets: the reading pane's Start work opens the sheet", async ({ page }) => {

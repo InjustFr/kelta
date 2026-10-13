@@ -36,7 +36,7 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
   await expect(now(page)).toBeHidden();
   await expect.poll(() => activeProject(page)).toBe('shop');
   const header = page.getByTestId('work-header');
-  await expect(page.getByTestId('context-key')).toHaveText('SHOP-151');
+  await expect(page.getByTestId('work-header-key')).toHaveText('SHOP-151');
 
   // Claude stops with changes: review_due (the backend's Stop hook) and a fresh diffstat.
   await page.evaluate(() => {

@@ -9,9 +9,11 @@ import { addTab, pane, updateTab } from '$lib/layout';
 import { GLOBAL, layout, projects, sessions, tickets, tools, ui, work } from '$lib/stores';
 
 import './actions';
+import '../views/work/actions';
 import ContextBar from './ContextBar.svelte';
 import { jumplist } from './jumplist';
 import { activateProject, selectTab } from './nav';
+import { listScope } from './scope.svelte';
 
 // The native title call (core:window:allow-set-title); jsdom has no Tauri window.
 const setTitle = vi.hoisted(() => vi.fn());
@@ -53,12 +55,12 @@ function toolTab(projectId: string): void {
 }
 
 describe('context bar', () => {
-  it('work item: the key and title, no work segment (the header above the panes has it), no cwd', async () => {
+  it('work item: no breadcrumb and no work segment (the header above the panes names it), no cwd', async () => {
     // The work tab's header loads the ticket detail the title comes from.
     await tickets.loadDetail(work.all.find((w) => w.ticket?.key === 'SHOP-142')!.ticket!);
     render(ContextBar);
-    await waitFor(() => expect(crumb()).toBe('Shop › SHOP-142 Rate-limit login attempts'));
-    for (const id of ['work-header', 'work-status', 'work-phase', 'work-primary', 'work-menu-button'])
+    await waitFor(() => expect(document.title).toBe('Shop › SHOP-142 Rate-limit login attempts'));
+    for (const id of ['context-crumb', 'work-header', 'work-status', 'work-phase', 'work-primary', 'work-menu-button'])
       expect(screen.queryByTestId(id)).toBeNull();
     expect(screen.queryByTestId('context-meta')).toBeNull();
     expect(bar().textContent).not.toMatch(/Live status off|ctx|Claude \d/);
@@ -151,6 +153,45 @@ describe('context bar', () => {
     );
     expect(screen.getByTestId('tab-plus')).toBeTruthy();
   });
+
+  it('› goes forward on the jumplist', async () => {
+    jumplist.list = [
+      { project: 'shop', tab: 'shop-t1', pane: layout.get('shop')!.tabs[0]!.focused_pane },
+      { project: GLOBAL, tab: 'reviews', pane: 'reviews' },
+    ];
+    jumplist.at = 0;
+    render(ContextBar);
+    await fireEvent.click(screen.getByTestId('context-forward'));
+    await waitFor(() => expect(ui.view).toBe('reviews'));
+  });
+
+  it('the search field opens the palette (#429)', async () => {
+    ui.overlay = null;
+    render(ContextBar);
+    await fireEvent.click(screen.getByTestId('context-search'));
+    expect(ui.overlay).toBe('palette');
+  });
+
+  it('the scope control sets the one scope of the global lists (#429)', async () => {
+    listScope.set(null);
+    render(ContextBar);
+    const select = screen.getByTestId('list-scope').querySelector('select')!;
+    await fireEvent.change(select, { target: { value: 'shop' } });
+    expect(listScope.project).toBe('shop');
+    listScope.set(null);
+  });
+
+  it('+ New: New work item and New session', async () => {
+    render(ContextBar);
+    await fireEvent.click(screen.getByTestId('tab-plus'));
+    const items = await screen.findAllByRole('menuitem');
+    expect(items.map((x) => x.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+      expect.stringContaining('New work item'),
+      expect.stringContaining('New session…'),
+    ]);
+    await fireEvent.click(items[0]!);
+    await waitFor(() => expect(ui.sheet?.key).toBe('work_new'));
+  });
 });
 
 describe('context bar as the title bar (custom decorations)', () => {
@@ -175,6 +216,7 @@ describe('context bar as the title bar (custom decorations)', () => {
 
   it('macOS: one bar with the traffic-light inset and a drag region, no Kelta window buttons', async () => {
     customChrome('MacIntel');
+    selectTab('shop', 'shop-t2');
     render(ContextBar);
     await waitFor(() => expect(bar().dataset.custom).toBe('true'));
     expect(bar().classList.contains('inset')).toBe(true);
@@ -206,7 +248,7 @@ describe('context bar: Claude sessions waiting on me (#372)', () => {
     // The mock's work item Claude replied on, in Billing.
     await waitFor(() => expect(chip()?.textContent?.trim()).toBe('1 needs you'));
     await fireEvent.click(chip()!);
-    await waitFor(() => expect(crumb()).toMatch(/^Billing › /));
+    await waitFor(() => expect(projects.activeId).toBe('billing'));
     expect(screen.queryByRole('menu')).toBeNull();
 
     sessions.byId = { ...sessions.byId, [ZSH]: { ...sessions.byId[ZSH]!, status: 'needs_input' } };

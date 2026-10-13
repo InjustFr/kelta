@@ -475,19 +475,6 @@
   style:--k-rail-width="{sidebar.width}px"
   bind:this={nav}
 >
-  <button
-    type="button"
-    class="search"
-    title={tip(t('Search or run a command'), 'palette.open')}
-    onclick={() => void dispatch('palette.open')}
-    data-testid="rail-search"
-  >
-    <span class="lead"
-      ><Icon name="search" size={16} /><span class="search-text">{t('Search or run…')}</span></span
-    >
-    {@render chord('palette.open')}
-  </button>
-
   {@render place('now', 'inbox', 'inbox', t('{n} your move', { n: now.yours }), now.yours)}
   {@render place('tickets', 'ticket', 'tickets', t('{n} assigned to you', { n: mine }), mine)}
   {@render place(
@@ -819,7 +806,6 @@
   }
 
   /* The label never gives way to its chord badge: the badge wraps onto a hidden second line (#362). */
-  .search,
   .settings {
     flex-wrap: wrap;
     align-content: flex-start;
@@ -835,36 +821,7 @@
     height: 100%;
   }
 
-  .search {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-3);
-    flex: none;
-    height: var(--k-control-height);
-    padding: 0 var(--k-space-2) 0 var(--k-space-3);
-    border: 1px solid var(--k-border);
-    border-radius: var(--k-radius);
-    background: var(--k-well);
-    color: var(--k-fg-muted);
-    cursor: pointer;
-    text-align: left;
-  }
-
-  .search:hover {
-    border-color: var(--k-border-strong);
-    color: var(--k-fg);
-  }
-
-  .search-text {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    font-size: var(--k-font-size-sm);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  /* Search and Settings: the chord shows on hover and focus only (the tooltip names it too). */
+  /* Settings: the chord shows on hover and focus only (the tooltip names it too). */
   .kbd {
     display: inline-flex;
     align-items: center;
@@ -902,7 +859,6 @@
   }
 
   .item:focus-visible,
-  .search:focus-visible,
   .caption:focus-visible {
     outline: 2px solid var(--k-focus);
     outline-offset: -2px;
@@ -1249,13 +1205,6 @@
     width: var(--k-rail-width-compact);
   }
 
-  .compact .search {
-    align-self: center;
-    justify-content: center;
-    width: 40px;
-    padding: 0;
-  }
-
   .compact .item {
     justify-content: center;
     padding: 0;
@@ -1287,7 +1236,6 @@
   }
 
   .compact .text,
-  .compact .search-text,
   .compact .kbd,
   .compact h2,
   .compact .caption .name,
