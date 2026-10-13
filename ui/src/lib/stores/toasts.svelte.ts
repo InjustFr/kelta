@@ -10,7 +10,7 @@ export interface ToastEntry {
   id: number;
   toast: Toast;
   createdAt: number;
-  /** The view it was raised in (`ViewKey`); `null` = background work, tied to no view. */
+  /** The view it was raised in (`viewKey()`); `null` = background work, tied to no view. */
   view: string | null;
 }
 
