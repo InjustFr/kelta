@@ -443,6 +443,8 @@
   "Ship and clean up": "Livrer et nettoyer",
   "In flight": "En cours",
   "Up next": "Ensuite",
+  "Waiting to deploy": "En attente de déploiement",
+  "Tickets in these statuses leave Up next and wait in the Waiting to deploy section of Now.": "Les tickets dans ces statuts quittent Ensuite et attendent dans la section En attente de déploiement de Maintenant.",
   "Blocking: you're the last reviewer": "Bloquant : vous êtes le dernier relecteur",
   "Updated since your review": "Mis à jour depuis votre revue",
   "Review requested": "Revue demandée",

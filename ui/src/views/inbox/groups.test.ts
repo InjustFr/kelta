@@ -255,28 +255,65 @@ describe('nowSections', () => {
     expect(ids('up_next')).toEqual(['t:jira:T-1']);
   });
 
-  it("a source's waiting statuses count as done: out of Up next, New and Next up", () => {
-    const shipping = (key: string, source: string): TicketItem => {
-      const t = ticket(key, 'in_progress');
-      return {
-        ...t,
-        ticket: { ...t.ticket, status: { ...t.ticket.status, name: 'A MEPP' } },
-        source_ids: [source],
-      };
-    };
+  it('a work item whose waiting ticket is done goes back to its phase section', () => {
+    const t = ticket('T-6', 'done');
+    const merged = entry('merged', 'ship', { ticket: { account: 'jira', key: 'T-6', id: '6' } });
     const sections = nowSections({
       ...empty,
+      work: [merged],
+      tickets: [
+        {
+          ...t,
+          ticket: { ...t.ticket, status: { ...t.ticket.status, name: 'A MEP' } },
+          source_ids: ['mine'],
+        },
+      ],
+      waiting: new Map([['mine', ['A MEP']]]),
+    });
+    expect(sections.map((s) => [s.id, s.rows.map((r) => r.id)])).toEqual([['ship', [`w:${merged.item.id}`]]]);
+  });
+
+  it("a source's waiting statuses: Waiting to deploy, last and folded, nowhere else, not in the badge", () => {
+    const shipping = (key: string, source: string, name = 'A MEPP'): TicketItem => {
+      const t = ticket(key, 'in_progress');
+      return { ...t, ticket: { ...t.ticket, status: { ...t.ticket.status, name } }, source_ids: [source] };
+    };
+    const done = ticket('T-5', 'done');
+    const merged = entry('merged', 'ship', { ticket: { account: 'jira', key: 'T-6', id: '6' } });
+    const fixing = entry('checks_failed', 'fix', { ticket: { account: 'jira', key: 'T-7', id: '7' } });
+    const sections = nowSections({
+      ...empty,
+      work: [merged, fixing],
       tickets: [
         shipping('T-1', 'mine'),
-        shipping('T-2', 'mine'),
+        shipping('T-2', 'mine', 'A MEP'),
         shipping('T-3', 'other'),
         ticket('T-4', 'todo'),
+        // A waiting status whose category is done has left Now.
+        {
+          ...done,
+          ticket: { ...done.ticket, status: { ...done.ticket.status, name: 'A MEP' } },
+          source_ids: ['mine'],
+        },
+        shipping('T-6', 'mine'),
+        shipping('T-7', 'mine'),
       ],
       nextUp: [shipping('N-1', 'mine')],
       fresh: new Set(['jira:T-2']),
       waiting: new Map([['mine', ['A MEPP', 'A MEP']]]),
     });
-    expect(sections.flatMap((s) => s.rows.map((r) => r.id))).toEqual(['t:jira:T-3', 't:jira:T-4']);
+    expect(sections.map((s) => [s.id, s.rows.map((r) => r.id)])).toEqual([
+      ['fix', [`w:${fixing.item.id}`]],
+      ['up_next', ['t:jira:T-3', 't:jira:T-4']],
+      ['waiting', [`w:${merged.item.id}`, 't:jira:N-1', 't:jira:T-1', 't:jira:T-2']],
+    ]);
+    const waiting = sections.at(-1)!;
+    expect(waiting.folded).toBe(true);
+    // The work row carries its ticket's status name; Ship and clean up stays its phase.
+    const row = waiting.rows[0]!;
+    expect(row.type === 'work' && [row.status, row.phase.section]).toEqual(['A MEPP', 'ship']);
+    expect(waitingCount(sections)).toBe(1);
+    expect(headerChips(sections, 0).map((c) => c.section)).toEqual(['fix', 'up_next']);
   });
 
   const blockedTicket = (key: string, category: TicketItem['ticket']['status']['category']): TicketItem => {
@@ -326,6 +363,27 @@ describe('nowSections', () => {
     ]);
     expect(rows('in_flight').map((r) => r.type === 'work' && r.item.ticket?.key)).toEqual(['T-1']);
     expect(rows('fix').map((r) => r.type === 'work' && r.blocked)).toEqual([undefined]);
+  });
+
+  it('a blocked ticket in a waiting status: Waiting to deploy wins, for the ticket and its work', () => {
+    const t = blockedTicket('W-1', 'in_progress');
+    const both = {
+      ...t,
+      ticket: { ...t.ticket, status: { ...t.ticket.status, name: 'A MEP' } },
+      source_ids: ['s'],
+    };
+    const merged = entry('merged', 'ship', { ticket: { account: 'jira', key: 'W-1', id: 'W-1' } });
+    const sections = nowSections({
+      ...empty,
+      work: [merged],
+      tickets: [both],
+      waiting: new Map([['s', ['A MEP']]]),
+    });
+    expect(sections.map((s) => [s.id, s.rows.map((r) => r.id)])).toEqual([
+      ['waiting', [`w:${merged.item.id}`]],
+    ]);
+    const row = sections[0]!.rows[0]!;
+    expect(row.type === 'work' && [row.status, row.blocked]).toEqual(['A MEP', undefined]);
   });
 });
 

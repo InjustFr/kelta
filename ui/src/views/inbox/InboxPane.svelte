@@ -28,6 +28,7 @@
     Button,
     EmptyState,
     ErrorState,
+    Icon,
     Kbd,
     Lamp,
     Menu,
@@ -216,7 +217,11 @@
           title: workTitle(item),
           project: p.name,
           color: p.color,
-          reason: phase.section === 'needs_you' && phase.detail ? phase.detail : phase.label,
+          reason: row.status
+            ? `${row.status} · ${phase.label}`
+            : phase.section === 'needs_you' && phase.detail
+              ? phase.detail
+              : phase.label,
           meta,
           ctx:
             u && u.context_pct !== null
@@ -351,7 +356,7 @@
   }
 
   type Line =
-    | { type: 'section'; id: string; section: Section; count: number }
+    | { type: 'section'; id: string; section: Section; count: number; open: boolean }
     | { type: 'row'; id: string; row: NowRow }
     | { type: 'detail'; id: string; row: NowRow }
     /** The option buttons of the row's question (#356). */
@@ -362,6 +367,12 @@
   let selId = $state<string | null>(null);
   /** Row whose full Claude message is unfolded under its detail line (`m`). */
   let expanded = $state<string | null>(null);
+  /** Folded sections (Waiting to deploy) opened by their header. */
+  let unfolded = $state<string[]>([]);
+  const isOpen = (s: Section): boolean => !s.folded || unfolded.includes(s.id);
+  const toggleSection = (s: Section): void => {
+    unfolded = isOpen(s) ? unfolded.filter((id) => id !== s.id) : [...unfolded, s.id];
+  };
 
   const visible = $derived(
     summary.sections
@@ -369,13 +380,15 @@
       .filter((s) => s.rows.length > 0 || s.more > 0),
   );
   const activeFilters = $derived(commonFilters(filter, () => (filter = '')));
-  const selectable = $derived(visible.flatMap((s) => s.rows));
+  const selectable = $derived(visible.filter(isOpen).flatMap((s) => s.rows));
   const cur = $derived(selectable.find((r) => r.id === selId) ?? selectable[0] ?? null);
 
   const lines = $derived.by((): Line[] => {
     const out: Line[] = [];
     for (const s of visible) {
-      out.push({ type: 'section', id: `s:${s.id}`, section: s, count: s.rows.length + s.more });
+      const open = isOpen(s);
+      out.push({ type: 'section', id: `s:${s.id}`, section: s, count: s.rows.length + s.more, open });
+      if (!open) continue;
       for (const row of s.rows) {
         out.push({ type: 'row', id: row.id, row });
         const asker = rowAsker(row);
@@ -476,6 +489,8 @@
   ];
 
   function onkeydown(e: KeyboardEvent): void {
+    // A section header keeps its own keys (Enter, Space); they must not act on the selected row.
+    if (e.target instanceof HTMLButtonElement && e.target.classList.contains('fold')) return;
     const ticket =
       cur?.type === 'ticket'
         ? { ref: cur.ticket.ticket.ref, projectId: cur.ticket.project_ids[0] ?? null }
@@ -683,9 +698,20 @@
           {#snippet row(l)}
             {#if l.type === 'section'}
               <div class="section" role="heading" aria-level="2" data-section={l.section.id}>
-                <span class="slot"><Lamp level={l.section.lamp} title="" /></span>
-                {t(l.section.label)}
-                <span class="count">{l.count}</span>
+                {#if l.section.folded}
+                  {@const s = l.section}
+                  <button type="button" class="fold" aria-expanded={l.open} onclick={() => toggleSection(s)}>
+                    <span class="slot"
+                      ><Icon name={l.open ? 'chevron-down' : 'chevron-right'} size={12} /></span
+                    >
+                    {t(s.label)}
+                    <span class="count">{l.count}</span>
+                  </button>
+                {:else}
+                  <span class="slot"><Lamp level={l.section.lamp} title="" /></span>
+                  {t(l.section.label)}
+                  <span class="count">{l.count}</span>
+                {/if}
               </div>
             {:else if l.type === 'ask'}
               <div class="row askline"><AskBar session={l.session} /></div>
@@ -879,6 +905,20 @@
     color: var(--k-fg-muted);
     background: var(--k-bezel-raised);
     box-shadow: inset 0 -1px 0 var(--k-border);
+  }
+
+  .fold {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--k-space-2);
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
   }
 
   .count {

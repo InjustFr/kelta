@@ -283,6 +283,37 @@ describe('Now', () => {
     expect(await screen.findByText(/waiting on Anna \(review\) · \d+h/)).toBeTruthy();
   });
 
+  it('Waiting to deploy: last, folded until its header opens it, rows show the status (#391)', async () => {
+    const base = mock.state.tickets.find((t) => t.ticket.assignee?.id === 'u-ada');
+    if (!base) throw new Error('fixture missing');
+    const status = { ...base.ticket.status, name: 'A MEPP', category: 'in_progress' as const };
+    const ticket = { ...base.ticket, ref: { ...base.ticket.ref, key: 'DEPLOY-1', id: 'd1' }, status };
+    mock.state.tickets.push({ ...base, ticket });
+    const value = mock.state.settings.value as unknown as Settings;
+    value.sources = value.sources.map((s) => ({ ...s, waiting_statuses: ['A MEPP'] }));
+    settings.effective = {};
+    await settings.load();
+    const { container } = mountNow();
+    await waitFor(() => expect(sectionIds(container).at(-1)).toBe('waiting'));
+    expect(screen.queryByText('DEPLOY-1')).toBeNull();
+    const header = within(container.querySelector<HTMLElement>('[data-section="waiting"]')!).getByRole(
+      'button',
+      { name: /Waiting to deploy/ },
+    );
+    expect(header.getAttribute('aria-expanded')).toBe('false');
+    // Keys typed on the header must not bubble into row actions (Enter would start the selected ticket).
+    const calls = mock.calls.length;
+    await fireEvent.keyDown(header, { key: 'Enter' });
+    await fireEvent.keyDown(header, { key: 'R' });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mock.calls.length).toBe(calls);
+    await fireEvent.click(header);
+    // The list is virtual: End selects the last row and scrolls to it.
+    await fireEvent.keyDown(screen.getByTestId('inbox-pane'), { key: 'End' });
+    const row = (await screen.findByText('DEPLOY-1')).closest<HTMLElement>('button.row')!;
+    expect(within(row).getByText('A MEPP')).toBeTruthy();
+  });
+
   it('with no ticket source: a notice above the list, the empty state when Now is empty', async () => {
     (mock.state.settings.value as unknown as Settings).sources = [];
     settings.effective = {};

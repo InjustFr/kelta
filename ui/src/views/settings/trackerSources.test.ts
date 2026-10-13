@@ -41,6 +41,7 @@ type SourceList = {
   tracker: TrackerBinding;
   status_colors: Record<string, string>;
   fields?: { id: string; label: string }[];
+  waiting_statuses?: string[];
 }[];
 /** The last `sources` list written to the global settings. */
 const lastSources = () => lastSettingsValue<SourceList>(mock);
@@ -200,6 +201,18 @@ describe('Board block of a source', () => {
 
     await fireEvent.click(within(picker).getByRole('button', { name: 'Green' }));
     await waitFor(() => expect(shop()?.status_colors).toEqual({}));
+  });
+
+  it('marks a status as waiting to deploy, picked from the tracker statuses (#391)', async () => {
+    await shopColumns();
+    render(TrackerSources, { sourceId: 'shop' });
+    const group = await screen.findByTestId('waiting-statuses');
+    const review = await within(group).findByRole('switch', { name: 'Code Review' });
+    expect(within(group).getByRole('switch', { name: 'Resolved' })).toBeTruthy();
+    await fireEvent.click(review);
+    await waitFor(() => expect(shop()?.waiting_statuses).toEqual(['Code Review']));
+    await fireEvent.click(review);
+    await waitFor(() => expect(shop()?.waiting_statuses).toEqual([]));
   });
 });
 
