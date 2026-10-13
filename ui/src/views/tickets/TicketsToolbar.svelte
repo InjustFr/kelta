@@ -84,6 +84,7 @@
   }: Props = $props();
 
   const GROUP_LABELS: Record<GroupBy, string> = $derived({
+    to_start: t('To start'),
     flow: t('By flow'),
     status: t('By status'),
     priority: t('By priority'),

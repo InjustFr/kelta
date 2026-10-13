@@ -13,6 +13,7 @@ import { activateProject } from '../../shell/nav';
 import { globalContent, loadGlobalLayout } from '../work/nav';
 import type * as workActions from '../work/actions';
 import { runPrimary } from '../work/actions';
+import { nextUp } from '../inbox/nextUp.svelte';
 import { batch } from '../work/batch.svelte';
 import { selection } from '../work/selection.svelte';
 import { askFocused, REFRESH_EVENT } from '../work/ui.svelte';
@@ -447,6 +448,12 @@ describe('TicketsPane workbench', () => {
     expect(container.querySelector('[data-group="ready"] .k-group-hint')?.textContent).toBe(
       'To do, ready to start',
     );
+    await press('G');
+    expect(container.querySelector('[data-group="ready"] .k-group-hint')?.textContent).toBe(
+      'No work yet, ready to start',
+    );
+    await press('G');
+    expect(groupNames(container)).toEqual(['To Do 2', 'In Progress 1', 'In Review 1', 'Blocked 1']);
   });
 
   it('one IPC per list load: the person filter reads the pages, no second call', async () => {
@@ -627,6 +634,27 @@ function inLayout(): void {
 }
 
 describe('TicketsPane list: group, sort, age, sprint, person', () => {
+  it('Mine opens on To start (#418): started rows dimmed with their track; Shift+g goes on to Status', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 2000 });
+    onTestFinished(() => void delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight);
+    await work.load();
+    const ref = { account: 'jira-acme', key: 'SHOP-151', id: '10151' };
+    nextUp.entries = {
+      'jira-acme:SHOP-151': { project_id: 'shop', ticket: ref, rank: 1, snoozed_until: null },
+    };
+    nextUp.loaded = true;
+    onTestFinished(() => void (nextUp.entries = {}));
+    const { container } = mountBoard('list', 'shop', { who: 'mine' });
+    await waitFor(() => expect(row(container, 'SHOP-142')).not.toBeNull());
+    expect(groupNames(container)).toEqual(['Up next 1', 'In the queue 1', 'Blocked 1']);
+    expect(row(container, 'SHOP-142').classList.contains('dim')).toBe(true);
+    expect(row(container, 'SHOP-142').querySelector('.c-stage [role="img"]')).not.toBeNull();
+    expect(row(container, 'SHOP-151').classList.contains('dim')).toBe(false);
+    await press('G');
+    await waitFor(() => expect(groupNames(container)).toEqual(['To Do 1', 'In Progress 1', 'Blocked 1']));
+    expect(row(container, 'SHOP-142').classList.contains('dim')).toBe(false);
+  });
+
   it('persists the grouping and the sort with the pane', async () => {
     inLayout();
     const { container } = mountBoard('list');

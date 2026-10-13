@@ -3,7 +3,16 @@ import { describe, expect, it } from 'vitest';
 import type { PrLink, Sprint, StatusCategory, Ticket, TicketItem, WorkItem } from '$lib/gen';
 import * as samples from '$lib/gen/fixtures';
 
-import { ageLevel, flowOf, flowOrder, groupTickets, sortTickets, type FlowSignals } from './group';
+import {
+  ageLevel,
+  flowOf,
+  flowOrder,
+  GROUP_BYS,
+  groupTickets,
+  sortTickets,
+  toStartOf,
+  type FlowSignals,
+} from './group';
 
 const item = (
   key: string,
@@ -197,6 +206,62 @@ describe('flowOf', () => {
       ['Done in the last 7 days', ['B']],
     ]);
     expect(groups.at(-1)?.category).toBe('done');
+  });
+});
+
+describe('toStartOf', () => {
+  const at = (i: TicketItem, work: WorkItem | null = null, rank: number | null = null) =>
+    toStartOf(i, { work, rank }, NOW);
+
+  it('sorts a ticket into Up next, Ready, In the queue, Blocked, Backlog or Done', () => {
+    expect(at(item('A', ['To Do', 'todo']), null, 1)).toBe('up_next');
+    expect(at(item('A', ['To Do', 'todo']))).toBe('ready');
+    // In progress on the tracker but no work in Kelta: still to start.
+    expect(at(item('A', ['In Progress', 'in_progress']))).toBe('ready');
+    expect(at(item('A', ['To Do', 'todo']), workIn('pr_open'), 1)).toBe('queue');
+    expect(at(item('A', ['To Do', 'todo']), { state: { kind: 'finished' } } as WorkItem)).toBe('ready');
+    expect(at(item('A', ['To Do', 'todo'], null, [], { blocked: true }), null, 1)).toBe('blocked');
+    expect(at(item('A', ['On hold', 'todo']))).toBe('blocked');
+    expect(at(item('A', ['Backlog', 'todo']))).toBe('backlog');
+    expect(at(item('A', ['Done', 'done'], null, [], { status_since: daysAgo(2) }), workIn('active'))).toBe(
+      'done',
+    );
+    expect(at(item('A', ['Done', 'done'], null, [], { status_since: daysAgo(9) }))).toBeNull();
+  });
+
+  it('groups in To start order, Up next in my order, Done folded; Shift+G goes on to Status', () => {
+    const ago = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
+    const ranks: Record<string, number> = { C: 2, D: 0.5 };
+    const groups = groupTickets(
+      [
+        item('A', ['Done', 'done'], null, [], { status_since: ago(1) }),
+        item('B', ['Backlog', 'todo']),
+        item('C', ['To Do', 'todo']),
+        item('D', ['To Do', 'todo']),
+        item('E', ['In Progress', 'in_progress']),
+        item('F', ['To Do', 'todo'], null, [], { blocked: true }),
+        item('G', ['Done', 'done'], null, [], { status_since: ago(30) }),
+        item('H', ['To Do', 'todo']),
+      ],
+      'to_start',
+      [],
+      undefined,
+      [],
+      (i) => ({
+        work: i.ticket.ref.key === 'E' ? workIn('active') : null,
+        rank: ranks[i.ticket.ref.key] ?? null,
+      }),
+    );
+    expect(summary(groups)).toEqual([
+      ['Up next', ['D', 'C']],
+      ['Ready to start', ['H']],
+      ['In the queue', ['E']],
+      ['Blocked', ['F']],
+      ['Backlog', ['B']],
+      ['Done in the last 7 days', ['A']],
+    ]);
+    expect(groups.at(-1)?.category).toBe('done');
+    expect(GROUP_BYS[GROUP_BYS.indexOf('to_start') + 1]).toBe('status');
   });
 });
 

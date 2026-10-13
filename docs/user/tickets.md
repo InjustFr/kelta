@@ -1,7 +1,8 @@
 # Working with tickets
 
-The Tickets pane is a list, not a board: one row per ticket, grouped by the tracker's status (what the rest of the
-team sees), with the keyboard doing most of the work. Each row carries the Queue's stage track, from Ticket to Deploy. A
+The Tickets pane is a list, not a board: one row per ticket, grouped on Mine by what you can start next
+([To start](#grouping-and-sorting)) and elsewhere by the tracker's status (what the rest of the team sees), with the
+keyboard doing most of the work. Each row carries the Queue's stage track, from Ticket to Deploy. A
 reading pane on the right follows the selection and opens on where the ticket stands. Board mode stays available
 with the list/board toggle.
 
@@ -102,7 +103,7 @@ changes, `o` open on the host, `m` move the ticket, `c` comment, `/` filter, `?`
 | `/` | filter |
 | `1` `2` `3` | Mine, Unassigned, Team |
 | `f` `v` | choose sources |
-| `Shift+g` | cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, Parent, None) |
+| `Shift+g` | cycle the grouping (To start, Status, Flow, Priority, Sprint, Assignee, Source, Parent, None) |
 | `f` `s` | only the current sprint (press again to clear) |
 | `x` | add or remove the ticket from the selection |
 | `Shift+j` `Shift+k` | extend the selection down or up |
@@ -131,7 +132,8 @@ person or the sprint is narrowing the list. `?` lists every key of the pane.
 
 | Group by | Groups |
 |---|---|
-| Status (default) | the tracker's own status names, in the order of the source's board columns, Done collapsed |
+| To start (default on Mine) | **Up next**: the tickets of your Next up list in the Queue, in your order. **Ready to start**: no work in Kelta yet, whatever the tracker status. **In the queue**: started in Kelta; the rows are dimmed but keep their stage track, their next step lives in the Queue. **Blocked**: [blocked](#blocked-tickets), or the status name says blocked or on hold. **Backlog**: backlog, triage or icebox statuses, and statuses Kelta cannot place. **Done in the last 7 days**: collapsed; older ones are left out. |
+| Status (default elsewhere) | the tracker's own status names, in the order of the source's board columns, Done collapsed |
 | Flow | **Doing**: work item active, or an in-progress status. **Waiting**: Claude needs you, a review is requested or required, CI is red, the ticket is [blocked](#blocked-tickets), or the status name says blocked or on hold. **Ready**: to do and not started. **Backlog**: backlog, triage or icebox statuses, and statuses Kelta cannot place. **Done**: finished in the last 7 days (a source with no status filter also fetches its closed tickets for this); older ones are left out. |
 | Priority | the provider's priorities, highest first, then no priority |
 | Sprint | active sprints, other sprints, then no sprint |
@@ -173,7 +175,10 @@ its own pane, which is also what `g` does in a narrow pane. When the filter hide
 is selected, so the pane never shows a hidden row.
 
 From top to bottom: key, epic and title; the status (a button: it opens the status picker), type and points, and one
-line on the situation (*Waiting for a deploy. Nothing for you to do.*); the action bar; the latest comment, then what
+line on the situation (*Waiting for a deploy. Nothing for you to do.*); the action bar, and under it one sentence on
+what Start work will do, from the plan the sheet opens on (*Start work creates branch feat/SHOP-142-rate-limit-login in
+api, moves the ticket to in progress, assigns it to you, then briefs Claude next to Neovim.*), or for a ticket with
+work, its stage and next step (*PR stage. Next: Push.*); the latest comment, then what
 the spec still leaves open (a section headed Open questions, Missing, To clarify, Questions or TBD); the pull
 requests; the description as sections you can fold, one per heading (a raw link to a ticket reads as a chip with its
 key and title, acceptance criteria written Given / When / Then are laid out as such, task lists are shown, not
@@ -287,7 +292,7 @@ for all.
 Statuses are shown as the tracker names them; Kelta only uses the category (to do, in progress, in review, done)
 to order and colour them.
 
-- **Kanban**: Mine, group by Status or Flow. Pull the next ticket with `m`, start it with `s`.
+- **Kanban**: Mine, grouped by To start, or by Status for the stand-up. Pull the next ticket with `m`, start it with `s`.
 - **Scrum / Scrumban**: `f` `s` for the current sprint (or current iteration on the source); Team grouped by Assignee for stand-up, or by Sprint to see the carry-over.
 - **Shape Up**: add the cycle's project or label as the source; custom states (Betting, Building) show as they are.
 - **Support triage**: Unassigned, group by Status; `a` takes a ticket, `m` routes it.

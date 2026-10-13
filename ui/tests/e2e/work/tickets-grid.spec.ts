@@ -44,6 +44,15 @@ async function openRailTickets(page: Page): Promise<void> {
   await seed(page);
   await page.getByTestId('rail-tickets').click();
   await page.getByTestId('tickets-pane').press('Control+Shift+R'); // past the lists loaded at boot
+  // These specs were written for Status; Mine opens on To start (#418), whose first ticket sits below the seeded rows.
+  await page.getByRole('button', { name: /^View/ }).click();
+  await page.getByLabel('Group (Shift+G)').selectOption('status');
+  await page.keyboard.press('Escape');
+  // The selection scrolled the list past the seeded rows: back to the top, on the first ticket under its header.
+  await page.getByTestId('tickets-pane').press('Home');
+  await page.getByTestId('tickets-pane').press('ArrowDown');
+  await expect(rows(page).first()).toHaveAttribute('aria-current', 'true');
+  await expect(rows(page).first().locator('.c-what .text')).toHaveCSS('font-weight', '600'); // past the transition
   await expect(page.locator('[data-key="jira-acme:SHOP-7"]')).toBeVisible();
 }
 
@@ -183,10 +192,17 @@ test('narrow lists drop the source first, then put the stage track under the tit
     for (const s of ['.c-key', '.c-what', '.c-stage', '.c-age'])
       await expect(row.locator(s), `${s} at ${width}px`).toBeVisible();
     await expect(row.locator('.c-source'), `source at ${width}px`).toBeVisible({ visible: list >= 720 });
-    const under = await row.evaluate((r) => {
-      const what = r.querySelector('.c-what')!.getBoundingClientRect();
-      return r.querySelector('.c-stage')!.getBoundingClientRect().top >= what.bottom - 1;
-    });
-    expect(under, `track under the title at ${width}px (list ${list}px)`).toBe(list < 560);
+    // The list width and the row's container query settle a frame apart after a resize.
+    await expect
+      .poll(
+        async () =>
+          (await listWidth()) < 560 ===
+          (await row.evaluate((r) => {
+            const what = r.querySelector('.c-what')!.getBoundingClientRect();
+            return r.querySelector('.c-stage')!.getBoundingClientRect().top >= what.bottom - 1;
+          })),
+        { message: `track under the title at ${width}px (list ${list}px)` },
+      )
+      .toBe(true);
   }
 });

@@ -68,10 +68,12 @@ pub enum Who {
     Anyone,
 }
 
-/// Tickets pane grouping (`PaneContent::Tickets.group`; `None` = flow).
+/// Tickets pane grouping (`PaneContent::Tickets.group`; `None` = To start on Mine, else Status).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum TicketGroupBy {
+    /// Up next / Ready to start / In the queue / Blocked / Backlog / Done (#418).
+    ToStart,
     /// Doing / Waiting / Ready / Backlog / Done.
     Flow,
     Status,
