@@ -125,6 +125,8 @@ export interface Commands {
   clipboard_read: { args: { kind: ClipboardKind }; result: string };
   clipboard_write: { args: { kind: ClipboardKind; text: string }; result: null };
   notify_test: { args: NoArgs; result: null };
+  /** Focus mode (#421); off returns the titles of the notifications it held. */
+  notify_focus: { args: { on: boolean }; result: string[] };
   /** Kelta's MCP registered in Claude Code at user scope; `null` = Claude Code not found. */
   claude_mcp_status: { args: NoArgs; result: boolean | null };
   claude_mcp_install: { args: NoArgs; result: null };
@@ -420,6 +422,7 @@ export const COMMAND_NAMES = [
   'clipboard_read',
   'clipboard_write',
   'notify_test',
+  'notify_focus',
   'claude_mcp_status',
   'claude_mcp_install',
   'claude_setup',
@@ -618,6 +621,7 @@ export const diagnosticsRun = wrap('diagnostics_run');
 export const clipboardRead = wrap('clipboard_read');
 export const clipboardWrite = wrap('clipboard_write');
 export const notifyTest = wrap('notify_test');
+export const notifyFocus = wrap('notify_focus');
 export const claudeMcpStatus = wrap('claude_mcp_status');
 export const claudeMcpInstall = wrap('claude_mcp_install');
 export const claudeSetup = wrap('claude_setup');

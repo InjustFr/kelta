@@ -186,6 +186,8 @@
   "Search or run a command": "Suchen oder Befehl ausführen",
   "Search or run…": "Suchen oder ausführen…",
   "Toggle sidebar": "Seitenleiste ein-/ausblenden",
+  "Focus mode": "Fokusmodus",
+  "While you were focused: {what}": "Während des Fokusmodus: {what}",
   "Collapse sidebar": "Seitenleiste einklappen",
   "Expand sidebar": "Seitenleiste ausklappen",
   "Sidebar width": "Breite der Seitenleiste",
@@ -1906,6 +1908,8 @@
   "PR changes requested": "Änderungen am PR angefordert",
   "Quiet hours": "Ruhezeiten",
   "Or pane hidden.": "Oder Bereich ausgeblendet.",
+  "Focus allow blocked": "Fokus: blockierten Claude durchlassen",
+  "Focus mode still lets a blocked Claude notify.": "Der Fokusmodus lässt einen blockierten Claude trotzdem benachrichtigen.",
   "`\"HH:MM-HH:MM\"` local time, or empty.": "`\"HH:MM-HH:MM\"` Ortszeit oder leer.",
   "Keeps review subscriptions polling in background.": "Hält die Abfrage der Review-Abonnements im Hintergrund aktiv.",
   "Claude needs input, asks a question or replied without changes.": "Claude braucht Eingabe, stellt eine Frage oder hat ohne Änderungen geantwortet.",
@@ -2530,5 +2534,12 @@
   "Open theme": "Design öffnen",
   "Showing cached tickets: the last refresh failed": "Zwischengespeicherte Tickets: die letzte Aktualisierung ist fehlgeschlagen",
   "Everything works.": "Alles funktioniert.",
-  "Fixing failed": "Beheben fehlgeschlagen"
+  "Fixing failed": "Beheben fehlgeschlagen",
+  "Your loop": "Dein Ablauf",
+  "Add a project": "Ein Projekt hinzufügen",
+  "Connect a ticket source": "Eine Ticketquelle verbinden",
+  "Start work on a ticket": "Arbeit an einem Ticket beginnen",
+  "Review what Claude changed": "Prüfen, was Claude geändert hat",
+  "No tickets?": "Keine Tickets?",
+  "starts a branch and a Claude from one sentence.": "startet aus einem Satz einen Branch und einen Claude."
 }

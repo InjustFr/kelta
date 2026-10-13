@@ -2303,6 +2303,7 @@
           "terminal.search": "/",
           "tickets.open": "t",
           "toast.run_last": "o",
+          "view.focus": "f",
           "work.menu": ".",
           "work.new": "w",
           "work.start": "s"
@@ -2390,6 +2391,7 @@
             "terminal.search": "/",
             "tickets.open": "t",
             "toast.run_last": "o",
+            "view.focus": "f",
             "work.menu": ".",
             "work.new": "w",
             "work.start": "s"
@@ -2502,6 +2504,7 @@
         "claude_blocked": true,
         "claude_done": false,
         "enabled": true,
+        "focus_allow_blocked": true,
         "only_when_unfocused": true,
         "pr_approved": true,
         "pr_changes_requested": true,
@@ -2529,6 +2532,11 @@
         },
         "enabled": {
           "default": true,
+          "type": "boolean"
+        },
+        "focus_allow_blocked": {
+          "default": true,
+          "description": "Focus mode still lets a blocked Claude notify.",
           "type": "boolean"
         },
         "only_when_unfocused": {

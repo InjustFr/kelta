@@ -1,4 +1,4 @@
-// Action handlers owned by the shell (BUILD_PLAN §2.4): palette.*, project.*, inbox.open, rail.toggle, tab.*,
+// Action handlers owned by the shell (BUILD_PLAN §2.4): palette.*, project.*, inbox.open, rail.toggle, view.focus, tab.*,
 // session.new, pane.*, attention.*, nav.*, terminal.*, editor.send_selection, editor.quickfix_claude, and the
 // terminal file links, app.restart. Loaded eagerly by main.ts.
 
@@ -29,6 +29,7 @@ import {
   toggleZoomFocused,
 } from './nav';
 import { navStep, toggleNow } from './jumplist';
+import { focus } from './focus.svelte';
 import { peek, peekWaiting } from './peek.svelte';
 import './scope.svelte'; // wires the layout migration's scope (#409) before any layout loads
 import { sidebar } from './sidebar.svelte';
@@ -149,6 +150,7 @@ registerAction('project.new', () => ui.openSheet('project_new'));
 for (let n = 1; n <= 9; n += 1) registerAction(`project.goto.${n}`, () => gotoRailRow(n));
 registerAction('inbox.open', (args) => (args?.chord ? toggleNow() : openView('now')));
 registerAction('rail.toggle', () => sidebar.toggle());
+registerAction('view.focus', () => focus.toggle());
 registerAction('toast.run_last', async () => {
   const last = toasts.lastActionable;
   if (last) await toasts.run(last.id);

@@ -754,6 +754,7 @@ export function createMockTransport(options: MockOptions = {}): {
       emit({ type: 'toast', toast: { level: 'info', text: 'Test notification sent', action: null } });
       return null;
     },
+    notify_focus: () => [],
     claude_mcp_status: () => claudeMcp,
     claude_permission_mode: () => 'auto',
     claude_hooks_status: () => claudeHooks,

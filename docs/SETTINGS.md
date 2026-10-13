@@ -132,6 +132,7 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | `bell_background` | bool | `false` | |
 | `only_when_unfocused` | bool | `true` | or pane hidden |
 | `quiet_hours` | str `"HH:MM-HH:MM"` \| "" | `""` | local time |
+| `focus_allow_blocked` | bool | `true` | focus mode (`view.focus`) holds the other notifications; a blocked Claude still notifies |
 
 ### [claude]  (scope global+project; `append_system_prompt` also repo; `binary`, `extra_args`, `extra_hooks`, `append_system_prompt`, `terminal_command` are x-kelta-exec; `mcp_offer` and `hooks_offer` are global only)
 | Key | Type | Default | Notes |

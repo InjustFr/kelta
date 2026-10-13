@@ -668,3 +668,32 @@ async fn workflow_runs_follow_hooks_and_files() {
     assert!(h.core.claude_run_tail(&s.id, "wf_t1-1", "../a1").is_err());
     assert!(h.core.claude_run_tail(&s.id, "wf_other", "a1").is_err());
 }
+
+/// Ticket #421: focus mode holds notifications but a blocked Claude's (critical) and hands the held
+/// titles back when it ends; `focus_allow_blocked = false` holds those too.
+#[tokio::test]
+async fn focus_mode_holds_notifications_but_blocked_ones() {
+    use kelta_proto::events::Notification;
+    use kelta_proto::ext::Urgency;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut settings = Settings::defaults();
+    settings.notifications.quiet_hours = String::new();
+    settings.notifications.only_when_unfocused = false;
+    let h = start(tmp.path(), settings, vec![project("shop", tmp.path())]);
+    let n = |title: &str, urgency| Notification {
+        title: title.into(),
+        body: None,
+        urgency,
+        project_id: None,
+        session_id: None,
+    };
+    assert!(h.core.notify_focus(true).is_empty());
+    h.core.notify(n("SHOP-1 ready to review", Urgency::Normal)).await.unwrap();
+    h.core.notify(n("SHOP-2: Claude replied", Urgency::Critical)).await.unwrap();
+    assert_eq!(h.ui.notifications().len(), 1);
+    h.cfg.update(|s| s.notifications.focus_allow_blocked = false);
+    h.core.notify(n("SHOP-3: Claude replied", Urgency::Critical)).await.unwrap();
+    assert_eq!(h.core.notify_focus(false), ["SHOP-1 ready to review", "SHOP-3: Claude replied"]);
+    h.core.notify(n("SHOP-4 ready to review", Urgency::Normal)).await.unwrap();
+    assert_eq!(h.ui.notifications().len(), 2);
+}

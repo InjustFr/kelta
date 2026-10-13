@@ -157,6 +157,8 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("terminal.paste", "Paste", ["cmd+v"], linux["ctrl+shift+v"], Some("]"), Terminal),
     a!("settings.open", "Open settings", ["cmd+,"], Some(","), Global),
     a!("rail.toggle", "Toggle sidebar", ["cmd+b"], Some("b"), Global),
+    // Hides the rail and the docked Story panel, holds notifications about other work (#421).
+    a!("view.focus", "Focus mode", ["cmd+shift+f"], Some("f"), Global),
     a!("app.restart", "Restart Kelta", [], None, Global),
     a!("claude.setup", "Set up with Claude", [], None, Global),
     // Work menu and its entries for the focused tab's work item (FLOW §2.5, §3.5).
