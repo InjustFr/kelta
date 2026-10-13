@@ -1804,7 +1804,7 @@ export function createMockTransport(options: MockOptions = {}): {
         const text =
           "This Claude isn't connected to Kelta: the feedback is copied, paste it when Claude is ready.";
         emit({ type: 'toast', toast: { level: 'info', text, action: null } });
-      } else if (live && (claude.status === 'working' || claude.status === 'needs_input')) {
+      } else if (live && !['done', 'waiting_user'].includes(claude.status)) {
         const text = 'Claude is working: it gets your message when it stops.';
         emit({ type: 'toast', toast: { level: 'info', text, action: null } });
       } else if (claude) {
