@@ -26,7 +26,7 @@ Other files: `<config>/kelta/keybindings.toml` (optional; holds the `[keys]` tab
 
 ## 2. Global schema (every key, type, default)
 
-Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `SecretRef` (string, §5), `Chord` (string like `ctrl+shift+k`, `cmd+opt+left`, `mod+t`; `mod` = Cmd on macOS / Ctrl+Shift on Linux), `Template` (string with `{placeholders}`, §6), `Duration` as integer with unit suffix in the key name.
+Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `SecretRef` (string, §5), `Chord` (string like `ctrl+shift+k`, `cmd+opt+left`, `mod+t`; `mod` = Cmd on macOS / Ctrl on Linux), `Template` (string with `{placeholders}`, §6), `Duration` as integer with unit suffix in the key name.
 
 ### [app]
 | Key | Type | Default | Notes |
@@ -56,13 +56,14 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 | `bindings` | map<ActionId, list<Chord>> | `{}` (overrides only; platform defaults per SPEC §4 live in the ActionId catalog, `ui/src/lib/gen/actions.ts`, so the schema is OS-independent) | effective = catalog default ⊕ override; `[]` unbinds |
 | `prefix_bindings` | map<ActionId, str> | SPEC §4 | single key after prefix |
 | `list_keys` | bool | `true` | single-key shortcuts of lists and boards. `false`: plain printable keys (letters, digits, `?`, `/`, with or without Shift, no Ctrl/Cmd/Alt) no longer reach the panes, `j`/`k` included; arrows, `Enter`, `Escape`, `Space`, `Home`/`End`, `Tab` and every Ctrl/Cmd/Alt chord still work, as do text fields, terminals, dialogs, menus and a Kelta action you bound to a plain key. Applies at once |
+| `linux_terminal` | enum(terminal_first\|kelta_first) | `terminal_first` | Linux, focused terminal: `terminal_first` leaves a plain `ctrl+<letter>` bound in Kelta (`ctrl+k`, `ctrl+d`, `ctrl+w`, a `mod+g` tool key…) to the terminal, the default actions keep their `ctrl+shift+<letter>` twin; `kelta_first` runs Kelta's binding. `ctrl+c` / `ctrl+v` stay the terminal's either way (copy / paste are `ctrl+shift+c` / `ctrl+shift+v`) |
 | `hints` | bool | `true` | the key hint line under Tickets, Reviews and Now (five keys and `?`, DESIGN §6.8). `false` hides it; `?` still opens the full key list. Applies at once |
 
 Every action id, label and default chord per platform is in the ActionId catalog (`crates/kelta-proto/src/actions.rs`, generated to `ui/src/lib/gen/actions.ts`); SPEC §4 lists them. Settings → Keys records a chord, flags conflicts and unbinds. `window.toggle` has no in-app chord: bind `kelta-ctl toggle` in your compositor. Work-flow actions (FLOW §7), rebindable through `bindings` / `prefix_bindings` like any ActionId:
 
 | ActionId | macOS | Linux | Prefix | Behaviour |
 |---|---|---|---|---|
-| `toast.run_last` (palette "Run last toast action") | `cmd+shift+o` (⇧⌘O) | `ctrl+shift+a` | `o` | runs the primary action of the most recent toast still shown (e.g. "Opened PR #13" → Open); the chord is printed on that toast's button. Linux is not `Ctrl+Shift+O`: that is `pane.split_down`. |
+| `toast.run_last` (palette "Run last toast action") | `cmd+shift+o` (⇧⌘O) | `ctrl+shift+o` | `o` | runs the primary action of the most recent toast still shown (e.g. "Opened PR #13" → Open); the chord is printed on that toast's button. |
 | `work.ship` (palette "Work: Ship / Push") | none | none | none | Ship dialog for the focused tab's work item (push + PR); with a PR already open it is a plain push. |
 | `work.finish` (palette "Work: Finish") | none | none | none | Finish dialog for the focused tab's work item, prefilled when its PR is merged or closed. |
 | `work.finish_merged` (palette "Finish all merged") | none | none | none | one dialog listing merged items with clean worktrees (dirty ones are listed as skipped); the only bulk destructive action. |

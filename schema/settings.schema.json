@@ -2245,6 +2245,7 @@
       "default": {
         "bindings": {},
         "hints": true,
+        "linux_terminal": "terminal_first",
         "list_keys": true,
         "prefix": "ctrl+shift+space",
         "prefix_bindings": {
@@ -2309,6 +2310,15 @@
           "default": true,
           "description": "The key hint line under lists; `?` still lists every key.",
           "type": "boolean"
+        },
+        "linux_terminal": {
+          "default": "terminal_first",
+          "description": "Linux, focused terminal: who gets a plain `ctrl+<letter>` bound in Kelta.",
+          "enum": [
+            "terminal_first",
+            "kelta_first"
+          ],
+          "type": "string"
         },
         "list_keys": {
           "default": true,

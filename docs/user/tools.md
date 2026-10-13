@@ -40,7 +40,7 @@ id = "lazygit"
 label = "lazygit"
 icon = "git-branch"              # a Lucide icon name or 1-2 characters
 command = "lazygit"
-keybinding = "mod+g"            # Cmd+G on macOS, Ctrl+Shift+G on Linux
+keybinding = "mod+g"            # Cmd+G on macOS, Ctrl+G on Linux (a focused terminal keeps Ctrl+G)
 check = ["lazygit", "--version"]
 install_hint = "brew install lazygit"
 

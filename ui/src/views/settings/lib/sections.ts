@@ -95,7 +95,7 @@ export const SECTION_BLURB: Partial<Record<SettingsSectionId, string>> = {
   general: msg('Theme, updates, session restore and quit behaviour.'),
   window: msg('Window decorations and what closing the window does.'),
   keys: msg(
-    'Matching uses physical keys. On Linux Mod is Ctrl+Shift, on macOS it is Cmd. An app prefix key followed by one key reaches every action.',
+    'Matching uses physical keys. Mod is Cmd on macOS and Ctrl on Linux, where a focused terminal keeps plain Ctrl+letter and Ctrl+Shift+letter still reaches Kelta. An app prefix key followed by one key reaches every action.',
   ),
   terminal: msg('Fonts, scrollback, clipboard and keyboard behaviour of terminal panes.'),
   'linux-graphics': msg(

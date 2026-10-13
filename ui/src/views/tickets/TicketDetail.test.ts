@@ -90,14 +90,13 @@ describe('TicketDetail', () => {
       within(bar)
         .getAllByRole('button')
         .map((b) => b.getAttribute('aria-keyshortcuts')),
-    ).toEqual(['s', 'm', 'p', 'a', 'c', 'Control+Shift+.']);
+    ).toEqual(['s', 'm', 'p', 'a', 'c', 'Control+.']);
     expect(action('Open PRs')).toBeTruthy(); // two PRs
     // the rest under More (Mod+.), each with its key
     await fireEvent.keyDown(screen.getByTestId('ticket-detail'), {
-      key: '>',
+      key: '.',
       code: 'Period',
       ctrlKey: true,
-      shiftKey: true,
     });
     const more = screen.getByRole('menu', { name: 'More actions' });
     expect(

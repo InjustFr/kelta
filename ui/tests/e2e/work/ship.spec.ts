@@ -41,7 +41,7 @@ test.describe('ship', () => {
     // The Run last toast action key is printed on the button.
     const open = page.getByTestId('toasts').getByRole('button', { name: /Open/ });
     await expect(open.locator('kbd').first()).toBeVisible();
-    await page.keyboard.press('Control+Shift+A');
+    await page.keyboard.press('Control+Shift+O');
     await expect.poll(async () => (await callsOf(page, 'open_external')).length).toBe(1);
     expect((await callsOf(page, 'open_external'))[0]?.args).toEqual({
       url: 'https://github.com/acme/mock/pull/100',
