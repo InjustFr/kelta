@@ -37,12 +37,13 @@ use crate::common::{
 const MAX_PAGES: u32 = 5;
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
 
-const PR_FRAGMENT: &str = "fragment Pr on PullRequest { number title url isDraft headRefOid headRefName baseRefName updatedAt additions deletions mergeable reviewDecision \
+const PR_FRAGMENT: &str = "fragment Pr on PullRequest { number title url isDraft headRefOid headRefName baseRefName updatedAt createdAt additions deletions changedFiles mergeable reviewDecision \
+files(first:100){ nodes{ path additions deletions } } \
 author{ login avatarUrl ... on User{ name email } } repository{ nameWithOwner } labels(first:10){ nodes{ name } } \
 commits(last:1){ nodes{ commit{ committedDate statusCheckRollup{ state contexts(first:30){ nodes{ ... on CheckRun{ name conclusion } ... on StatusContext{ context state } } } } } } } \
 reviewRequests(first:20){ nodes{ requestedReviewer{ ... on User{ login } ... on Team{ combinedSlug } } } } \
 latestOpinionatedReviews(first:20){ nodes{ state submittedAt commit{ oid } author{ login } } } \
-latestReviews(first:20){ nodes{ commit{ oid } author{ login } } } \
+latestReviews(first:20){ nodes{ state commit{ oid } author{ login } } } \
 timelineItems(last:20, itemTypes:[REVIEW_REQUESTED_EVENT]){ nodes{ ... on ReviewRequestedEvent{ createdAt requestedReviewer{ ... on User{ login } } } } } }";
 
 /// Review threads, spread into the authored search only (#208). Their last comments cost one
@@ -273,6 +274,22 @@ impl GithubHost {
             author_since,
             unresolved_threads,
             last_comment_at,
+            created_at: s(n, "createdAt").map(str::to_owned),
+            files: n
+                .pointer("/files/nodes")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|f| {
+                    Some(FileChange {
+                        path: s(f, "path")?.to_owned(),
+                        additions: f.get("additions").and_then(Value::as_u64).unwrap_or(0) as u32,
+                        deletions: f.get("deletions").and_then(Value::as_u64).unwrap_or(0) as u32,
+                    })
+                })
+                .collect(),
+            changed_files: n.get("changedFiles").and_then(Value::as_u64).map(|x| x as u32),
+            reviewers: latest_reviewers(n),
             title,
             ..Review::default()
         })
@@ -347,6 +364,8 @@ impl GithubHost {
             linked_tickets: linked_tickets(&[&branch, &title]),
             additions: v.get("additions").and_then(Value::as_u64).map(|x| x as u32),
             deletions: v.get("deletions").and_then(Value::as_u64).map(|x| x as u32),
+            changed_files: v.get("changed_files").and_then(Value::as_u64).map(|x| x as u32),
+            created_at: s(v, "created_at").map(str::to_owned),
             title,
             ..Review::default()
         })
@@ -549,6 +568,28 @@ fn waiting_state(n: &Value, head: &str) -> (Vec<String>, Option<String>) {
     }
     let since = waiting.iter().filter_map(|(_, t)| t.clone()).min();
     (waiting.into_iter().map(|(w, _)| w).collect(), since)
+}
+
+/// Each reviewer's latest opinion, the PR author left out. `latestReviews` holds a user's last
+/// review of any kind, so a later comment would hide an approval: the opinionated list wins and
+/// `latestReviews` only adds reviewers it does not know.
+fn latest_reviewers(n: &Value) -> Vec<Reviewer> {
+    let author = n.pointer("/author/login").and_then(Value::as_str);
+    let mut out: Vec<Reviewer> = Vec::new();
+    for list in ["/latestOpinionatedReviews/nodes", "/latestReviews/nodes"] {
+        for r in n.pointer(list).and_then(Value::as_array).into_iter().flatten() {
+            let Some(login) =
+                r.pointer("/author/login").and_then(Value::as_str).filter(|l| Some(*l) != author)
+            else {
+                continue;
+            };
+            let Some(state) = s(r, "state").and_then(review_state) else { continue };
+            if !out.iter().any(|x| x.user.login.as_deref() == Some(login)) {
+                out.push(Reviewer { user: user(login, None, None), state: Some(state) });
+            }
+        }
+    }
+    out
 }
 
 fn mergeable_from(state: Option<&str>) -> Option<bool> {
@@ -1341,5 +1382,24 @@ mod tests {
             "anna's latest request is the oldest wait"
         );
         assert_eq!(waiting_state(&json!({}), "head"), (vec![], None));
+    }
+
+    #[test]
+    fn a_later_comment_keeps_the_approval() {
+        let n = json!({
+            "author": { "login": "me" },
+            "latestOpinionatedReviews": { "nodes": [ { "state": "APPROVED", "author": { "login": "bob" } } ] },
+            "latestReviews": { "nodes": [
+                { "state": "COMMENTED", "author": { "login": "bob" } },
+                { "state": "COMMENTED", "author": { "login": "dan" } },
+                { "state": "COMMENTED", "author": { "login": "me" } },
+            ] },
+        });
+        let got: Vec<_> =
+            latest_reviewers(&n).into_iter().map(|r| (r.user.login.unwrap_or_default(), r.state)).collect();
+        assert_eq!(
+            got,
+            [("bob".into(), Some(MyReviewState::Approved)), ("dan".into(), Some(MyReviewState::Commented))]
+        );
     }
 }

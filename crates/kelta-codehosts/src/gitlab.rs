@@ -40,13 +40,14 @@ const PER_PAGE: &str = "100";
 /// someone has more MRs or notes.
 const MAX_PAGES: u32 = 5;
 
-/// `(repo, iid, head sha)`.
-type DiffKey = (String, u64, String);
+/// `(kind, repo, iid, head sha)`.
+type DiffKey = (ReviewKind, String, u64, String);
 /// My MR's `(repo, iid)` → `((updated_at, user_notes_count), unresolved threads, last comment at)`.
 type ThreadCache = HashMap<(String, u64), ((String, u64), u32, Option<String>)>;
 
-/// `(kind, repo, iid)` → `(updated_at, read at, waiting_on, requested_at, author_to_act)` from `/reviewers`.
-type WaitingCache = HashMap<(ReviewKind, String, u64), (String, Instant, Vec<String>, Option<String>, bool)>;
+/// `(kind, repo, iid)` → `(updated_at, read at, waiting_on, requested_at, author_to_act, reviewers)` from `/reviewers`.
+type WaitingCache =
+    HashMap<(ReviewKind, String, u64), (String, Instant, Vec<String>, Option<String>, bool, Vec<Reviewer>)>;
 
 /// An approval may not bump the MR's `updated_at`, so a cached `/reviewers` read also expires.
 const WAITING_TTL: Duration = Duration::from_secs(300);
@@ -68,9 +69,9 @@ pub struct GitlabHost {
     /// Major version from `GET /version` (cached; `None` = not fetched or unknown).
     major: Mutex<Option<u32>>,
     gate: Mutex<TodoGate>,
-    /// Requested MRs' `(additions, deletions)` by `(repo, iid, head sha)`: a diff only changes
-    /// with its head, so `/changes` (the full diff) is fetched once per head, not every poll.
-    diff_sizes: Mutex<HashMap<DiffKey, (u32, u32)>>,
+    /// Listed MRs' changed files by `(kind, repo, iid, head sha)`: a diff only changes with its
+    /// head, so `/changes` (the full diff) is fetched once per head, not every poll.
+    diff_sizes: Mutex<HashMap<DiffKey, Vec<FileChange>>>,
     /// My MRs' thread state: `/discussions` is fetched again only when the MR's stamp moves.
     threads: Mutex<ThreadCache>,
     /// Who each MR waits on: `/reviewers` is fetched again only when the MR's `updated_at` moves.
@@ -253,28 +254,20 @@ impl GitlabHost {
                 .unwrap_or_default(),
             kind,
             updated_at: s(v, "updated_at").unwrap_or("").to_owned(),
+            created_at: s(v, "created_at").map(str::to_owned),
             linked_tickets: linked_tickets(&[&branch, &title]),
             title,
             ..Review::default()
         })
     }
 
-    /// Review requests: when I was asked (`/reviewers`), whether mine is the last approval
-    /// missing (`/approvals`: one left and I am an approver) and the diff size (`/changes`, the
-    /// list has none). Best effort, like the detail.
+    /// Review requests: when I was asked (`/reviewers`) and whether mine is the last approval
+    /// missing (`/approvals`: one left and I am an approver). Best effort, like the detail.
     async fn request_state(&self, review: &mut Review, me: &User) {
         let url = self.mr_url(&review.r#ref.repo, &format!("/{}", review.r#ref.number));
-        let key = (review.r#ref.repo.clone(), review.r#ref.number, review.head_sha.clone());
-        let cached = self.diff_sizes.lock().get(&key).copied();
-        let (reviewers, approvals, changes) = tokio::join!(
+        let (reviewers, approvals) = tokio::join!(
             self.json(HttpRequest::get(format!("{url}/reviewers"))),
             self.json(HttpRequest::get(format!("{url}/approvals"))),
-            async {
-                match cached {
-                    Some(_) => None,
-                    None => self.json(HttpRequest::get(format!("{url}/changes"))).await.ok(),
-                }
-            },
         );
         // `approvers` / `approved_by` / `/reviewers` wrap the user, `suggested_approvers` does not.
         let is_me = |x: &Value| {
@@ -291,6 +284,7 @@ impl GitlabHost {
                 .map(str::to_owned);
             (review.waiting_on, review.waiting_since) = pending_reviewers(&r.body);
             review.author_to_act = changes_requested(&r.body);
+            review.reviewers = reviewer_states(&r.body);
         }
         if let Ok(a) = approvals {
             let a = a.body;
@@ -299,22 +293,37 @@ impl GitlabHost {
                 && (list(&a, "approvers").iter().any(is_me)
                     || list(&a, "suggested_approvers").iter().any(is_me));
         }
-        // shortcut: GitLab truncates huge diffs (`overflow`), so a very large MR reads smaller; upgrade via `/diffs` paging if it matters.
-        let size = cached.or_else(|| {
-            let files = changes?.body.get("changes")?.as_array()?.clone();
-            Some(
-                files
-                    .iter()
-                    .map(|c| diff_counts(s(c, "diff").unwrap_or("")))
-                    .fold((0, 0), |x, y| (x.0 + y.0, x.1 + y.1)),
-            )
-        });
-        if let Some((a, d)) = size {
-            if !key.2.is_empty() {
-                self.diff_sizes.lock().insert(key, (a, d));
+    }
+
+    /// The MR's changed files and size (`/changes`, the list has none), once per head. Best effort.
+    // shortcut: GitLab truncates huge diffs (`overflow`), so a very large MR reads smaller; upgrade via `/diffs` paging if it matters.
+    async fn diff_state(&self, review: &mut Review) {
+        let key = (review.kind, review.r#ref.repo.clone(), review.r#ref.number, review.head_sha.clone());
+        let cached = self.diff_sizes.lock().get(&key).cloned();
+        let files = match cached {
+            Some(f) => f,
+            None => {
+                let url = self.mr_url(&key.1, &format!("/{}/changes", key.2));
+                let Ok(c) = self.json(HttpRequest::get(url)).await else { return };
+                let f = diff_files(&c.body);
+                if !key.3.is_empty() {
+                    self.diff_sizes.lock().insert(key, f.clone());
+                }
+                f
             }
-            (review.additions, review.deletions) = (Some(a), Some(d));
-        }
+        };
+        review.additions = Some(files.iter().map(|f| f.additions).sum());
+        review.deletions = Some(files.iter().map(|f| f.deletions).sum());
+        review.changed_files = Some(files.len() as u32);
+        review.files = files;
+    }
+
+    /// Bounded by the current list: closed or re-pushed MRs of `kind` drop out of the diff cache.
+    fn retain_diffs<'a>(&self, kind: ReviewKind, list: impl Iterator<Item = &'a Review> + Clone) {
+        self.diff_sizes.lock().retain(|(k, repo, n, sha), _| {
+            *k != kind
+                || list.clone().any(|r| r.r#ref.repo == *repo && r.r#ref.number == *n && r.head_sha == *sha)
+        });
     }
 
     /// My MR: reviewers who have not reviewed yet (`/reviewers` state) and since when they were
@@ -326,20 +335,27 @@ impl GitlabHost {
         let cached = (self.waiting.lock().get(&key))
             .filter(|c| c.0 == review.updated_at && c.1.elapsed() < WAITING_TTL)
             .cloned();
-        let (_, _, waiting_on, requested_at, author_to_act) = match cached {
+        let (_, _, waiting_on, requested_at, author_to_act, reviewers) = match cached {
             Some(c) => c,
             None => {
                 let url = self.mr_url(&key.1, &format!("/{}/reviewers", key.2));
                 let Ok(r) = self.json(HttpRequest::get(url)).await else { return };
                 let (on, at) = pending_reviewers(&r.body);
-                let c = (review.updated_at.clone(), Instant::now(), on, at, changes_requested(&r.body));
+                let c = (
+                    review.updated_at.clone(),
+                    Instant::now(),
+                    on,
+                    at,
+                    changes_requested(&r.body),
+                    reviewer_states(&r.body),
+                );
                 self.waiting.lock().insert(key, c.clone());
                 c
             }
         };
         review.waiting_since = requested_at.clone();
-        (review.waiting_on, review.requested_at, review.author_to_act) =
-            (waiting_on, requested_at, author_to_act);
+        (review.waiting_on, review.requested_at, review.author_to_act, review.reviewers) =
+            (waiting_on, requested_at, author_to_act, reviewers);
     }
 
     /// Bounded by the current list: closed MRs of `kind` drop out of the waiting cache.
@@ -474,6 +490,24 @@ fn ci_from(status: Option<&str>) -> CiState {
 }
 
 /// `+`/`-` line counts of a unified diff (headers excluded).
+/// `/changes` → each file's `+/-` line counts.
+fn diff_files(changes: &Value) -> Vec<FileChange> {
+    changes
+        .get("changes")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|c| {
+            let (additions, deletions) = diff_counts(s(c, "diff").unwrap_or(""));
+            FileChange {
+                path: s(c, "new_path").or_else(|| s(c, "old_path")).unwrap_or("").to_owned(),
+                additions,
+                deletions,
+            }
+        })
+        .collect()
+}
+
 fn diff_counts(diff: &str) -> (u32, u32) {
     let (mut a, mut d) = (0, 0);
     for l in diff.lines() {
@@ -566,16 +600,17 @@ impl CodeHost for GitlabHost {
             .collect();
         if q.kind == ReviewKind::ReviewRequested {
             let me = self.me().await?;
-            futures::future::join_all(list.iter_mut().map(|(r, _)| self.request_state(r, &me))).await;
-            // Bounded by the current list: closed or re-pushed MRs drop out.
-            self.diff_sizes.lock().retain(|(repo, n, sha), _| {
-                list.iter().any(|(r, _)| r.r#ref.repo == *repo && r.r#ref.number == *n && r.head_sha == *sha)
-            });
+            futures::future::join_all(list.iter_mut().map(|(r, _)| async {
+                self.request_state(r, &me).await;
+                self.diff_state(r).await;
+            }))
+            .await;
         } else {
             let me = self.me().await.ok().and_then(|u| u.login);
             futures::future::join_all(list.iter_mut().map(|(r, n)| async {
                 self.waiting_state(r).await;
                 self.thread_state(r, *n, me.as_deref()).await;
+                self.diff_state(r).await;
                 r.assigned = me.is_some() && r.author.login != me;
             }))
             .await;
@@ -584,6 +619,7 @@ impl CodeHost for GitlabHost {
             });
             self.retain_waiting(ReviewKind::Authored, list.iter().map(|(r, _)| r));
         }
+        self.retain_diffs(q.kind, list.iter().map(|(r, _)| r));
         Ok(list.into_iter().map(|(r, _)| r).collect())
     }
 
@@ -606,8 +642,13 @@ impl CodeHost for GitlabHost {
         .await?;
         let mut list: Vec<Review> =
             lists.into_iter().flatten().filter(|r| include_drafts || !r.draft).collect();
-        futures::future::join_all(list.iter_mut().map(|r| self.waiting_state(r))).await;
+        futures::future::join_all(list.iter_mut().map(|r| async {
+            self.waiting_state(r).await;
+            self.diff_state(r).await;
+        }))
+        .await;
         self.retain_waiting(ReviewKind::Team, list.iter());
+        self.retain_diffs(ReviewKind::Team, list.iter());
         Ok(list)
     }
 
@@ -689,25 +730,9 @@ impl CodeHost for GitlabHost {
             }),
         };
 
-        let (mut total_add, mut total_del) = (0u32, 0u32);
-        let files: Vec<FileChange> = changes
-            .get("changes")
-            .and_then(Value::as_array)
-            .map(|a| {
-                a.iter()
-                    .map(|c| {
-                        let (add, del) = diff_counts(s(c, "diff").unwrap_or(""));
-                        total_add += add;
-                        total_del += del;
-                        FileChange {
-                            path: s(c, "new_path").or_else(|| s(c, "old_path")).unwrap_or("").to_owned(),
-                            additions: add,
-                            deletions: del,
-                        }
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        let files = diff_files(&changes);
+        let total_add: u32 = files.iter().map(|f| f.additions).sum();
+        let total_del: u32 = files.iter().map(|f| f.deletions).sum();
         if changes.is_object() {
             review.additions = Some(total_add);
             review.deletions = Some(total_del);
@@ -1022,6 +1047,23 @@ fn pending_reviewers(body: &Value) -> (Vec<String>, Option<String>) {
         .collect();
     let since = pending.iter().filter_map(|(_, t)| t.clone()).min();
     (pending.into_iter().map(|(u, _)| u).collect(), since)
+}
+
+/// `/reviewers` → those who reviewed and how (GitLab 17+ states; pending ones are `waiting_on`).
+fn reviewer_states(body: &Value) -> Vec<Reviewer> {
+    body.as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|x| {
+            let state = match s(x, "state")? {
+                "approved" => MyReviewState::Approved,
+                "requested_changes" => MyReviewState::ChangesRequested,
+                "reviewed" => MyReviewState::Commented,
+                _ => return None,
+            };
+            Some(Reviewer { user: GitlabHost::user_from(x.get("user")?), state: Some(state) })
+        })
+        .collect()
 }
 
 // shortcut: `/reviewers` has no review time, so `author_since` stays None on GitLab;

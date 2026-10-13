@@ -1209,17 +1209,18 @@ async fn team_lists_open_prs_on_source_fed_repos_only() {
             review("acme/shop-api", 1, ReviewKind::Team),
             review("acme/lab", 2, ReviewKind::Team),
             review("acme/shop-api", 3, ReviewKind::Authored),
+            Review { draft: true, ..review("acme/shop-api", 4, ReviewKind::Team) },
         ],
     );
     let acc = AccountId::new("github-work");
     assert_eq!(e.h.core.team_repos(&Scope::All), vec![(acc, "acme/shop-api".into(), ProjectId::new("shop"))]);
     let all = e.h.core.review_page(Scope::All, ReviewKind::Team, true).await.unwrap();
     let numbers: Vec<u64> = all.items.iter().map(|i| i.review.r#ref.number).collect();
-    assert_eq!(numbers, vec![1], "lab is fed by no source: never in Team");
+    assert_eq!(numbers, vec![1, 4], "lab is fed by no source: never in Team; drafts are (#401)");
     assert_eq!(all.items[0].project_ids, vec![ProjectId::new("shop")]);
     let shop =
         e.h.core.review_page(Scope::Project { id: "shop".into() }, ReviewKind::Team, false).await.unwrap();
-    assert_eq!(shop.items.len(), 1);
+    assert_eq!(shop.items.len(), 2);
     let lab =
         e.h.core.review_page(Scope::Project { id: "lab".into() }, ReviewKind::Team, true).await.unwrap();
     assert!(lab.items.is_empty() && lab.errors.is_empty());
@@ -1229,22 +1230,18 @@ async fn team_lists_open_prs_on_source_fed_repos_only() {
 }
 
 #[tokio::test]
-async fn team_is_polled_only_while_its_tab_is_shown() {
+async fn team_is_polled_only_while_a_reviews_pane_is_shown() {
     use kelta_proto::model::PaneContent;
     let tmp = tempfile::tempdir().unwrap();
     let e = team_env(tmp.path(), vec![]);
     e.h.cfg.update(|s| s.notifications.enabled = false);
     settle().await;
-    let view = |tab| PaneContent::Reviews { scope: Scope::All, tab, density: None };
-    show_global(&e.h.core, Some(view(None)));
+    show_global(&e.h.core, Some(PaneContent::Reviews { scope: Scope::All, tab: None, density: None }));
     settle().await;
-    assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 2, "For me + Mine");
-    show_global(&e.h.core, Some(view(Some(ReviewKind::Team))));
+    assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 3, "asked + mine + team: one list (#401)");
+    show_global(&e.h.core, None);
     settle().await;
-    assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 3, "+ Team");
-    show_global(&e.h.core, Some(view(Some(ReviewKind::Authored))));
-    settle().await;
-    assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 2);
+    assert_eq!(e.h.core.scheduler_snapshot().subscriptions, 0, "no Reviews pane: no team");
 }
 
 #[tokio::test]

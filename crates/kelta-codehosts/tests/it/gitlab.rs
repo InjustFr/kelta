@@ -714,7 +714,15 @@ async fn team_list_reads_each_projects_open_mrs_and_who_they_wait_on() {
     Mock::given(path("/api/v4/projects/grp%2Fother/merge_requests/8/reviewers"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!([
             { "user": { "id": 44, "username": "anna" }, "state": "unreviewed", "created_at": "2026-09-29T10:00:00Z" },
+            { "user": { "id": 45, "username": "bo" }, "state": "approved", "created_at": "2026-09-28T10:00:00Z" },
         ])))
+        .mount(&server)
+        .await;
+    Mock::given(path("/api/v4/projects/grp%2Fother/merge_requests/8/changes"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "changes": [
+            { "new_path": "src/a.rs", "diff": "@@ -1 +1,2 @@\n-x\n+y\n+z\n" },
+            { "new_path": "tests/a.rs", "diff": "@@ -0,0 +1 @@\n+t\n" },
+        ] })))
         .mount(&server)
         .await;
     let repos = ["grp/other".to_owned(), "grp/sub/proj".to_owned()];
@@ -729,6 +737,14 @@ async fn team_list_reads_each_projects_open_mrs_and_who_they_wait_on() {
     assert_eq!(a.r#ref.repo, "grp/other");
     assert_eq!(a.waiting_on, ["anna"]);
     assert_eq!(a.waiting_since.as_deref(), Some("2026-09-29T10:00:00Z"));
+    assert_eq!(a.reviewers.len(), 1);
+    assert_eq!(a.reviewers[0].user.login.as_deref(), Some("bo"));
+    assert_eq!(a.reviewers[0].state, Some(MyReviewState::Approved));
+    assert_eq!(
+        a.files.iter().map(|f| (f.path.as_str(), f.additions, f.deletions)).collect::<Vec<_>>(),
+        [("src/a.rs", 2, 1), ("tests/a.rs", 1, 0)]
+    );
+    assert_eq!((a.additions, a.deletions, a.changed_files), (Some(3), Some(1), Some(2)));
 }
 
 #[tokio::test]

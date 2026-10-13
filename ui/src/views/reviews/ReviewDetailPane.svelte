@@ -8,17 +8,22 @@
   import { isIpcError } from '$lib/ipc/transport';
   import { reviews, toasts } from '$lib/stores';
   import { reviewKey } from '$lib/stores/reducers';
-  import { Badge, Button, EmptyState, ErrorState, HtmlContent, Icon, Lamp, Menu } from '$lib/ui';
+  import { Badge, Button, EmptyState, ErrorState, HtmlContent, Icon, Lamp } from '$lib/ui';
 
   import { reviewCtx } from '../plugins/actions';
   import PluginActions from '../plugins/PluginActions.svelte';
-  import { ciGlyph, decisionInfo, isAuthError, myStateInfo } from '../work/common';
+  import { ciGlyph, isAuthError, myStateInfo } from '../work/common';
+  import Brief, { type BriefAction } from '../work/shared/Brief.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { reviewLocally } from '../work/startWork';
   import { configWorkflows, pickPrWorkflow } from '../tickets/workflow.svelte';
   import { draftBlocked, draftLabel, toggleDraft } from './draft';
+  import { beforeMerging } from './beforeMerging';
+  import ChangeMap from './ChangeMap.svelte';
+  import { AREA_LABEL, changeMap, filesByArea } from './changemap';
   import LinkedTicket from './LinkedTicket.svelte';
+  import { openDays, reviewState } from './sections';
   import ReviewTextDialog from './ReviewTextDialog.svelte';
   import TagChips from '../tags/TagChips.svelte';
   import TagMenu from '../tags/TagMenu.svelte';
@@ -45,32 +50,13 @@
   let dialog = $state<'comment' | 'changes' | null>(null);
   let root = $state<HTMLDivElement>();
   let tagMenu = $state<{ x: number; y: number } | null>(null);
-  let moreMenu = $state<{ x: number; y: number } | null>(null);
-  /** More's wrapper: the Tags and More menus open under it. */
-  let moreBtn = $state<HTMLElement>();
+  /** The brief shows every action (`.`). */
+  let more = $state(false);
 
-  function under(): { x: number; y: number } {
-    const r = moreBtn?.getBoundingClientRect();
-    return { x: r?.left ?? 40, y: (r?.bottom ?? 40) + 2 };
-  }
-
+  /** The Tags menu opens under its button, or the brief's top when it waits behind "more". */
   function openTags(): void {
-    tagMenu = under();
-  }
-
-  /** The quieter actions (#384), each also on its key. */
-  const moreItems = $derived([
-    { id: 'tags', label: t('Tags'), kbd: 't', key: 't' },
-    ...(configWorkflows('pr').length > 0
-      ? [{ id: 'workflow', label: t('Run workflow'), kbd: 'w', key: 'w' }]
-      : []),
-    { id: 'refresh', label: t('Refresh'), kbd: 'shift+r', key: 'R' },
-  ]);
-
-  function runMore(id: string): void {
-    if (id === 'tags') openTags();
-    else if (id === 'workflow') pickPrWorkflow(ref, projectId);
-    else refresh();
+    const r = (root?.querySelector('[data-key="t"]') ?? root)?.getBoundingClientRect();
+    tagMenu = { x: r?.left ?? 40, y: (r?.top ?? 40) + Math.min(r?.height ?? 0, 32) + 2 };
   }
 
   $effect(() => {
@@ -134,6 +120,33 @@
   /** My own PR: fixed through its work item, never approved here (FLOW §4.2). */
   const own = $derived(rv?.kind === 'authored');
 
+  /** After the primary (Review locally, Go to work item on mine), in likely order. */
+  const briefActions = $derived.by((): BriefAction[] => {
+    if (!rv) return [];
+    const r = rv;
+    const tail: BriefAction[] = [
+      { key: 't', label: t('Tags'), run: openTags },
+      ...(configWorkflows('pr').length > 0
+        ? [{ key: 'w', label: t('Run workflow'), run: () => pickPrWorkflow(ref, projectId) }]
+        : []),
+      { key: 'shift+r', label: t('Refresh'), run: refresh },
+    ];
+    if (own)
+      return [
+        { key: 'f', label: t('Fix with Claude'), run: fixWithClaude },
+        ...(draftBlocked(r) ? [] : [{ key: 'd', label: draftLabel(r), run: () => toggleDraft(r) }]),
+        { key: 'o', label: t('Open in browser'), run: browse },
+        ...tail,
+      ];
+    return [
+      { key: 'a', label: t('Approve'), run: approve },
+      { key: 'm', label: t('Comment'), run: () => (dialog = 'comment') },
+      { key: 'c', label: t('Request changes'), run: () => (dialog = 'changes') },
+      { key: 'o', label: t('Open in browser'), run: browse },
+      ...tail,
+    ];
+  });
+
   function fixWithClaude(): void {
     void dispatch('work.fix_pr', { review: ref, project_id: projectId });
   }
@@ -173,6 +186,9 @@
         break;
       case 'w':
         pickPrWorkflow(ref, projectId);
+        break;
+      case '.':
+        more = !more;
         break;
       default:
         return;
@@ -221,7 +237,6 @@
     {/if}
   {:else if detail && rv}
     {@const ci = ciGlyph(rv.ci)}
-    {@const dec = decisionInfo(rv.decision)}
     {@const mine = myStateInfo(rv.my_state)}
     <StateBanner
       stale={slot?.stale ?? false}
@@ -236,147 +251,147 @@
         <Button size="sm" onclick={refresh}>{t('Refresh')}</Button>
       </div>
     {/if}
-    <header class="head">
-      <div class="line">
-        <span class="key">{ref.repo}#{ref.number}</span>
-        {#if rv.draft}<Badge>{t('draft')}</Badge>{/if}
-        <span class="check"><Lamp level={ci.lamp} title={ci.label} />{ci.label}</span>
-        {#if dec}<Badge tone={dec.tone}>{dec.label}</Badge>{/if}
-        {#if mine}<Badge tone={mine.tone}>{mine.label}</Badge>{/if}
-        {#each rv.linked_tickets as key (key)}<LinkedTicket
-            ticketKey={key}
-            {projectId}
-            repo={rv.ref.repo}
-          />{/each}
-        <TagChips kind="prs" itemKey={reviewKey(ref)} />
-      </div>
-      <h1>{rv.title}</h1>
-      <p class="branches"><code>{rv.source_branch}</code> {t('into')} <code>{rv.target_branch}</code></p>
-      <dl class="k-meta">
-        <dt>{t('Author')}</dt>
-        <dd>{rv.author.name}</dd>
-        <dt>{t('Head')}</dt>
-        <dd><code data-testid="head-sha" title={rv.head_sha}>{rv.head_sha.slice(0, 7)}</code></dd>
-        {#if rv.additions !== null || rv.deletions !== null}<dt>{t('Changes')}</dt>
-          <dd class="k-mono k-num">
-            <span class="add">+{rv.additions ?? 0}</span> <span class="del">−{rv.deletions ?? 0}</span>
-          </dd>{/if}
-        {#if rv.mergeable === false}<dt>{t('Merge')}</dt>
-          <dd><Badge tone="warn">{t('conflicts')}</Badge></dd>{/if}
-      </dl>
-      <div class="line actions">
-        {#if own}
-          <Button variant="primary" icon="bot" onclick={fixWithClaude}>{t('Fix with Claude')}</Button>
-          <Button icon="git-branch" onclick={() => void reviewLocally(ref, projectId)}
-            >{t('Go to work item')}</Button
-          >
-          <Button
-            icon={rv.draft ? 'eye' : 'pencil'}
-            disabled={!!draftBlocked(rv)}
-            title={draftBlocked(rv) ?? undefined}
-            onclick={() => void toggleDraft(rv)}>{draftLabel(rv)}</Button
-          >
-          <Button variant="ghost" icon="external-link" onclick={browse}>{t('Open in browser')}</Button>
-        {:else}
-          <Button variant="primary" icon="check" loading={approving} onclick={() => void approve()}
-            >{t('Approve')}</Button
-          >
-          <Button icon="message-square" onclick={() => (dialog = 'comment')}>{t('Comment')}</Button>
-          <Button variant="danger" onclick={() => (dialog = 'changes')}>{t('Request changes')}</Button>
-          {#if detail.pending_comments > 0}
-            <span class="pending" data-testid="pending-comments">
-              {tn('{n} pending comment', '{n} pending comments', detail.pending_comments)}
-            </span>
-          {/if}
-          <Button variant="ghost" icon="git-branch" onclick={() => void reviewLocally(ref, projectId)}>
-            {t('Review locally')}
-          </Button>
-          <Button variant="ghost" icon="external-link" onclick={browse}>{t('Open in browser')}</Button>
-        {/if}
-        <span bind:this={moreBtn}
-          ><Button
-            variant="ghost"
-            icon="ellipsis"
-            aria-haspopup="menu"
-            aria-expanded={moreMenu !== null}
-            title={t('More actions')}
-            onclick={() => (moreMenu = under())}>{t('More')}</Button
-          ></span
-        >
-        <PluginActions kind="review" size="md" ctx={reviewCtx(rv.ref, projectId)} />
-      </div>
-    </header>
-
-    <div class="scroll">
-      <section aria-label={t('Description')}>
-        {#if detail.body_html.trim() === ''}
-          <p class="muted">{t('No description.')}</p>
-        {:else}
-          <HtmlContent html={detail.body_html} onerror={(e) => toasts.error(e, t('Open link'))} />
-        {/if}
-      </section>
-
-      <section aria-label={t('Reviewers')}>
-        <h2 class="k-section-title">{t('Reviewers')}</h2>
-        {#if detail.reviewers.length === 0}
-          <p class="muted">{t('No reviewers.')}</p>
-        {:else}
-          <ul class="plain">
+    {@const status = reviewState({
+      reviewers: detail.reviewers.filter((r) => r.state && r.state !== 'pending'),
+      waiting_on: detail.reviewers.filter((r) => !r.state || r.state === 'pending').map((r) => r.user.name),
+      decision: rv.decision,
+    })}
+    {@const map = changeMap(rv, detail.files)}
+    {@const body = beforeMerging(detail.body_html)}
+    {@const days = openDays(rv)}
+    <Brief
+      id="{ref.repo}#{ref.number}"
+      title={rv.title}
+      where={[
+        rv.author.name,
+        days === 0 ? t('Open since today') : tn('Open {n} day', 'Open {n} days', days),
+        ...(rv.ci === 'none' ? [] : [ci.label]),
+        ...(rv.mergeable === false ? [t('conflicts')] : []),
+      ].join(' · ')}
+      primary={own
+        ? { key: 'g', label: t('Go to work item'), run: () => reviewLocally(ref, projectId) }
+        : { key: 's', label: t('Review locally'), run: () => reviewLocally(ref, projectId) }}
+      actions={briefActions}
+      bind:more
+      testid="review-brief"
+    >
+      {#snippet sub()}
+        <p class="branches">
+          <code>{rv.source_branch}</code> → <code>{rv.target_branch}</code>
+          <code data-testid="head-sha" title={rv.head_sha}>{rv.head_sha.slice(0, 7)}</code>
+          {#if rv.draft}<Badge>{t('draft')}</Badge>{/if}
+          {#each rv.linked_tickets as key (key)}<LinkedTicket
+              ticketKey={key}
+              {projectId}
+              repo={rv.ref.repo}
+            />{/each}
+          <TagChips kind="prs" itemKey={reviewKey(ref)} />
+        </p>
+      {/snippet}
+      <PluginActions kind="review" size="md" ctx={reviewCtx(rv.ref, projectId)} />
+      <section class="callout" aria-label={t('Review status')} data-testid="review-status">
+        <b>{t('Review status')}</b>
+        <p>{status}</p>
+        {#if mine}<p><Badge tone={mine.tone}>{mine.label}</Badge></p>{/if}
+        {#if detail.reviewers.length > 0}
+          <ul class="reviewers">
             {#each detail.reviewers as r, i (i)}
               <li>
-                {r.user.name}
-                {#if r.state}<Badge tone={myStateInfo(r.state)?.tone ?? 'neutral'}
-                    >{t(REVIEWER_STATE[r.state] ?? r.state)}</Badge
-                  >{/if}
+                <span>{r.user.name}</span>
+                <span class="st {r.state ?? 'pending'}"
+                  >{t(REVIEWER_STATE[r.state ?? 'pending'] ?? r.state)}</span
+                >
               </li>
             {/each}
           </ul>
         {/if}
+        {#if detail.pending_comments > 0}
+          <p class="pending" data-testid="pending-comments">
+            {tn('{n} pending comment', '{n} pending comments', detail.pending_comments)}
+          </p>
+        {/if}
       </section>
-
-      <section aria-label={t('Checks')}>
-        <h2 class="k-section-title">{t('Checks')}</h2>
-        {#if detail.checks.length === 0}
-          <p class="muted">{t('No checks reported.')}</p>
-        {:else}
-          <ul class="plain">
-            <!-- Index keys: a host can report two checks with one name (check run + commit status). -->
-            {#each detail.checks as c, i (i)}
-              {@const g = ciGlyph(c.state)}
-              <li>
-                <span class="k-row-lamp"><Lamp level={g.lamp} title={g.label} /></span>
-                {#if c.url}
-                  {@const url = c.url}
-                  <button
-                    type="button"
-                    class="link"
-                    onclick={() => openExternal({ url }).catch((err) => toasts.error(err, t('Open check')))}
-                  >
+      {#if body.before}
+        <section class="callout heads" aria-label={t('Before merging')} data-testid="before-merging">
+          <b>{t('Before merging, from the description')}</b>
+          <HtmlContent html={body.before} onerror={(e) => toasts.error(e, t('Open link'))} />
+        </section>
+      {/if}
+      {#if map}<ChangeMap {map} big />{/if}
+      <section aria-label={t('Description')}>
+        <details open>
+          <summary>{t('Description')}</summary>
+          {#if body.rest.trim() === ''}
+            <p class="muted">{t('No description.')}</p>
+          {:else}
+            <HtmlContent html={body.rest} onerror={(e) => toasts.error(e, t('Open link'))} />
+          {/if}
+        </details>
+      </section>
+      {#if detail.files.length > 0}
+        {@const big = Math.max(...detail.files.map((f) => f.additions + f.deletions), 1)}
+        <section aria-label={t('Files')}>
+          <details open>
+            <summary
+              >{t('Files')}
+              <small>{tn('{n}, biggest first', '{n}, biggest first', detail.files.length)}</small></summary
+            >
+            {#each filesByArea(detail.files) as g (g.area)}
+              <h3 class="area">
+                <i class={g.area}></i>{t(AREA_LABEL[g.area])} <small>{g.files.length}</small>
+              </h3>
+              <ul class="files">
+                {#each g.files as f, i (i)}
+                  {@const cut = f.path.lastIndexOf('/') + 1}
+                  <li>
+                    <span class="path" title={f.path}
+                      ><span><span class="dir">{f.path.slice(0, cut)}</span>{f.path.slice(cut)}</span></span
+                    >
+                    <span class="fbar" aria-hidden="true"
+                      ><i class="a" style:width="{(f.additions / big) * 100}%"></i><i
+                        class="d"
+                        style:width="{(f.deletions / big) * 100}%"
+                      ></i></span
+                    >
+                    <span class="k-mono k-num delta"
+                      ><span class="add">+{f.additions}</span> <span class="del">−{f.deletions}</span></span
+                    >
+                  </li>
+                {/each}
+              </ul>
+            {/each}
+          </details>
+        </section>
+      {/if}
+      {#if detail.checks.length > 0}
+        <section aria-label={t('Checks')}>
+          <details open={rv.ci === 'failure' || rv.ci === 'error'}>
+            <summary>{t('Checks')} <small>{detail.checks.length}</small></summary>
+            <ul class="plain">
+              <!-- Index keys: a host can report two checks with one name (check run + commit status). -->
+              {#each detail.checks as c, i (i)}
+                {@const g = ciGlyph(c.state)}
+                <li>
+                  <span class="k-row-lamp"><Lamp level={g.lamp} title={g.label} /></span>
+                  {#if c.url}
+                    {@const url = c.url}
+                    <button
+                      type="button"
+                      class="link"
+                      onclick={() => openExternal({ url }).catch((err) => toasts.error(err, t('Open check')))}
+                    >
+                      {c.name}
+                    </button>
+                  {:else}
                     {c.name}
-                  </button>
-                {:else}
-                  {c.name}
-                {/if}
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </section>
-
-      <section aria-label={t('Files')}>
-        <h2 class="k-section-title">{t('Files')} <span class="muted k-num">{detail.files.length}</span></h2>
-        <ul class="plain files">
-          {#each detail.files as f, i (i)}
-            <li>
-              <code>{f.path}</code>
-              <span class="k-mono k-num"
-                ><span class="add">+{f.additions}</span> <span class="del">−{f.deletions}</span></span
-              >
-            </li>
-          {/each}
-        </ul>
-      </section>
-    </div>
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+          </details>
+        </section>
+      {/if}
+    </Brief>
   {:else}
     <Loading label={t('Loading review')} />
   {/if}
@@ -408,19 +423,6 @@
     }}
   />
 {/if}
-{#if moreMenu}
-  <Menu
-    items={moreItems}
-    x={moreMenu.x}
-    y={moreMenu.y}
-    label={t('More actions')}
-    onselect={runMore}
-    onclose={() => {
-      moreMenu = null;
-      if (!tagMenu) moreBtn?.querySelector('button')?.focus();
-    }}
-  />
-{/if}
 {#if tagMenu}
   <TagMenu
     kind="prs"
@@ -440,13 +442,16 @@
     flex-direction: column;
     height: 100%;
     min-height: 0;
+    overflow-y: auto;
     outline: none;
-    background: var(--k-well);
+    background: var(--k-bg-elev);
     color: var(--k-fg);
   }
 
-  /* The split view's column paints the surface (base.css .k-split-side). */
+  /* The split view's column paints the surface and scrolls (base.css .k-split-side). */
   .embedded {
+    height: auto;
+    overflow: visible;
     background: none;
   }
 
@@ -455,25 +460,12 @@
     box-shadow: inset 2px 0 0 var(--k-focus);
   }
 
-  .embedded .head {
-    padding: var(--k-space-4) var(--k-space-4) var(--k-space-3);
-  }
-
-  .embedded .scroll {
-    padding: 0 var(--k-space-4) var(--k-space-4);
-  }
-
   .changed {
     display: flex;
     align-items: center;
     gap: var(--k-space-3);
-    padding: var(--k-space-2) var(--k-space-5);
+    padding: var(--k-space-2) var(--k-space-4);
     background: var(--k-bezel-raised);
-    color: var(--k-warn);
-  }
-
-  .pending {
-    font-size: var(--k-font-size-sm);
     color: var(--k-warn);
   }
 
@@ -481,61 +473,191 @@
     flex: 1;
   }
 
-  .head {
-    display: flex;
-    flex-direction: column;
-    gap: var(--k-space-3);
-    padding: var(--k-space-5) var(--k-space-5) var(--k-space-4);
-  }
-
-  h1 {
-    margin: 0;
-    max-width: var(--k-measure);
-    font-size: var(--k-font-size-xl);
-    font-weight: var(--k-weight-strong);
-    line-height: 1.28;
-    color: var(--k-fg-strong);
-  }
-
-  .line {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--k-space-3);
-  }
-
-  .key {
-    font-family: var(--k-font-mono);
-    color: var(--k-fg-muted);
-  }
-
-  .check {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--k-space-2);
-    font-size: var(--k-font-size-sm);
-    color: var(--k-fg-muted);
+  .pending {
+    color: var(--k-warn);
   }
 
   .branches {
-    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--k-space-1) var(--k-space-2);
+    margin: var(--k-space-1) 0 0;
     font-size: var(--k-font-size-sm);
+    color: var(--k-fg-subtle);
+    overflow-wrap: anywhere;
+  }
+
+  .callout {
+    display: flex;
+    flex-direction: column;
+    gap: var(--k-space-1);
+    padding: var(--k-space-2) var(--k-space-3);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-bg);
+    font-size: var(--k-font-size-sm);
+  }
+
+  .callout b {
+    font-size: var(--k-font-size-xs);
+    font-weight: 600;
+    color: var(--k-fg-subtle);
+  }
+
+  .callout p {
+    margin: 0;
+  }
+
+  /* Before merging: the description's deploy steps, on the warning surface so they are not missed. */
+  .heads {
+    background: color-mix(in srgb, var(--k-warn) 14%, var(--k-bg));
+  }
+
+  .heads b {
+    color: var(--k-warn);
+  }
+
+  .reviewers {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .reviewers li {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--k-space-3);
+  }
+
+  .st {
+    color: var(--k-fg-subtle);
+  }
+
+  .st.approved {
+    color: var(--k-ok);
+  }
+
+  .st.changes_requested {
+    color: var(--k-danger);
+  }
+
+  details {
+    border-top: 1px solid var(--k-border);
+  }
+
+  summary {
+    padding: var(--k-space-2) 0;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  summary small,
+  .area small {
+    font-weight: 400;
+    color: var(--k-fg-subtle);
+  }
+
+  .area {
+    display: flex;
+    align-items: center;
+    gap: var(--k-space-1);
+    margin: var(--k-space-2) 0 var(--k-space-1);
+    font-size: var(--k-font-size-xs);
+    font-weight: 600;
     color: var(--k-fg-muted);
   }
 
-  .scroll {
-    flex: 1;
-    min-height: 0;
-    overflow: auto;
-    padding: 0 var(--k-space-5) var(--k-space-5);
+  .area i {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+  }
+
+  .area .code {
+    background: var(--k-fg-muted);
+  }
+
+  .area .tests {
+    background: var(--k-info);
+  }
+
+  .area .config {
+    background: var(--k-warn);
+  }
+
+  .area .other {
+    background: var(--k-border-strong);
+  }
+
+  .files {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--k-font-size-sm);
+  }
+
+  .files li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 56px auto;
+    align-items: center;
+    gap: var(--k-space-2);
+  }
+
+  /* Long paths keep their file name: the directory is cut at its start. */
+  .path {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl;
+    text-align: left;
+  }
+
+  .path > span {
+    direction: ltr;
+    unicode-bidi: plaintext;
+  }
+
+  .dir {
+    color: var(--k-fg-subtle);
+  }
+
+  .fbar {
+    display: flex;
+    gap: 1px;
+    height: 6px;
+  }
+
+  .fbar i {
+    display: block;
+    height: 100%;
+    border-radius: 1px;
+  }
+
+  .fbar .a {
+    background: var(--k-ok);
+  }
+
+  .fbar .d {
+    background: var(--k-danger);
+  }
+
+  .delta {
+    font-size: var(--k-font-size-xs);
+    text-align: right;
   }
 
   .plain {
     display: flex;
     flex-direction: column;
     gap: var(--k-space-2);
-    max-width: var(--k-measure);
-    margin: 0;
+    margin: 0 0 var(--k-space-2);
     padding: 0;
     list-style: none;
   }
@@ -544,10 +666,6 @@
     display: flex;
     align-items: center;
     gap: var(--k-space-3);
-  }
-
-  .files li {
-    justify-content: space-between;
   }
 
   .add {
@@ -560,7 +678,6 @@
 
   .muted {
     color: var(--k-fg-subtle);
-    font-weight: 400;
   }
 
   .link {

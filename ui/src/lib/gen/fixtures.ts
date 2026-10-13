@@ -859,12 +859,26 @@ export const reviewPage: ReviewPage = {
         "author_since": null,
         "author_to_act": false,
         "blocking": false,
+        "changed_files": 2,
         "ci": "success",
+        "created_at": "2026-10-09T12:00:00Z",
         "decision": "review_required",
         "decision_head": null,
         "deletions": 14,
         "draft": false,
         "failed_check_names": [],
+        "files": [
+          {
+            "additions": 100,
+            "deletions": 10,
+            "path": "src/prices/cache.rs"
+          },
+          {
+            "additions": 20,
+            "deletions": 4,
+            "path": "tests/prices.rs"
+          }
+        ],
         "head_sha": "3f2a9c1d8e7b6a5f4e3d2c1b0a998877665544aa",
         "kind": "review_requested",
         "labels": [],
@@ -882,6 +896,7 @@ export const reviewPage: ReviewPage = {
         },
         "requested_at": null,
         "reviewed_head": null,
+        "reviewers": [],
         "source_branch": "feat/SHOP-140-cache-prices",
         "target_branch": "main",
         "title": "SHOP-140: Cache product prices",
@@ -927,12 +942,26 @@ export const reviewDetail: ReviewDetail = {
     "author_since": null,
     "author_to_act": false,
     "blocking": false,
+    "changed_files": 2,
     "ci": "success",
+    "created_at": "2026-10-09T12:00:00Z",
     "decision": "review_required",
     "decision_head": null,
     "deletions": 14,
     "draft": false,
     "failed_check_names": [],
+    "files": [
+      {
+        "additions": 100,
+        "deletions": 10,
+        "path": "src/prices/cache.rs"
+      },
+      {
+        "additions": 20,
+        "deletions": 4,
+        "path": "tests/prices.rs"
+      }
+    ],
     "head_sha": "3f2a9c1d8e7b6a5f4e3d2c1b0a998877665544aa",
     "kind": "review_requested",
     "labels": [],
@@ -950,6 +979,7 @@ export const reviewDetail: ReviewDetail = {
     },
     "requested_at": null,
     "reviewed_head": null,
+    "reviewers": [],
     "source_branch": "feat/SHOP-140-cache-prices",
     "target_branch": "main",
     "title": "SHOP-140: Cache product prices",

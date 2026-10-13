@@ -46,10 +46,8 @@ test('review: Ready for review opens the delta; Reviews opens a PR and approves 
 
   await page.getByTestId('rail-reviews').click();
   const pane = page.getByTestId('reviews-pane');
-  await pane.locator('.k-row').nth(1).click();
-  await pane.locator('.k-row.selected').getByRole('button', { name: 'Open review (Enter)' }).click();
+  await pane.locator('.row').nth(1).click();
   const review = pane.getByTestId('review-detail');
-  await expect(review).toBeFocused();
   await review.getByRole('button', { name: 'Approve' }).click();
   await expect.poll(async () => (await callsOf(page, 'review_approve')).length).toBe(1);
 });

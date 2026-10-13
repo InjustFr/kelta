@@ -51,6 +51,18 @@ async fn one_graphql_request_with_only_the_requested_alias() {
     assert_eq!(a.waiting_since.as_deref(), Some("2026-09-28T08:00:00Z"), "bob's request");
     assert_eq!(a.author_since.as_deref(), Some("2026-09-29T11:00:00Z"), "zed's changes-requested review");
     assert!(a.blocking, "bob approved after his request: I am the last reviewer");
+    assert_eq!(a.created_at.as_deref(), Some("2026-09-01T08:00:00Z"));
+    assert_eq!((a.files.len(), a.changed_files), (2, Some(120)), "the first files, the full count");
+    assert_eq!(a.files[1].path, "tests/limit.rs");
+    assert_eq!(
+        a.reviewers.iter().map(|r| (r.user.login.as_deref().unwrap(), r.state)).collect::<Vec<_>>(),
+        [
+            ("bob", Some(MyReviewState::Approved)),
+            ("zed", Some(MyReviewState::ChangesRequested)),
+            ("dan", Some(MyReviewState::Commented)),
+        ],
+        "opinions first, then comments; the author's own comment and dismissed reviews are left out"
+    );
     let b = &list[1];
     assert!(!b.blocking && b.requested_at.is_none(), "already approved, no timeline");
     assert_eq!(b.my_state, Some(MyReviewState::Approved));

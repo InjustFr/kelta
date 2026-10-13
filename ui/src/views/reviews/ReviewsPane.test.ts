@@ -10,7 +10,7 @@ import { GLOBAL, layout, projects, reviews, settings, tickets, toasts, ui } from
 
 import { openPr } from '../tickets/prs';
 import TicketsPane from '../tickets/TicketsPane.svelte';
-import { globalContent, loadGlobalLayout } from '../work/nav';
+import { globalContent } from '../work/nav';
 import ReviewsPane from './ReviewsPane.svelte';
 import { sheetRegistry } from '$app/registry';
 
@@ -42,28 +42,6 @@ function mountReviews() {
 }
 
 describe('ReviewsPane linked tickets', () => {
-  it('rows are two-line until the Compact switch is on (#383)', async () => {
-    mountReviews();
-    await screen.findAllByRole('button', { name: /^Open SHOP-/ });
-    expect(document.querySelector('.k-row.two')).not.toBeNull();
-    await fireEvent.click(screen.getByRole('switch', { name: 'Compact' }));
-    await waitFor(() => expect(document.querySelector('.k-row.two')).toBeNull());
-    expect(document.querySelector('.k-row')).not.toBeNull();
-  });
-
-  it('a linked ticket badge opens that ticket without opening the review', async () => {
-    mountReviews();
-    await fireEvent.keyDown(await screen.findByTestId('reviews-pane'), { key: '3' }); // Mine
-    const badge = await screen.findByRole('button', { name: 'Open SHOP-120' });
-    await fireEvent.dblClick(badge); // would open the review if it reached the row
-    await fireEvent.click(badge);
-    await waitFor(() => {
-      const l = layout.get('shop')!;
-      expect(findContent(l, (c) => c.kind === 'ticket_detail' && c.ticket.key === 'SHOP-120')).toBeTruthy();
-    });
-    expect(findContent(layout.get('shop')!, (c) => c.kind === 'review_detail')).toBeFalsy();
-  });
-
   it('only an exact key opens: a key no tracker knows says so', async () => {
     mountReviews();
     // SHOP-150 is linked by a review but no ticket has that key (SHOP-15x do not count).
@@ -78,11 +56,11 @@ describe('ReviewsPane row actions (#397)', () => {
   it('the selected row has Open review and a menu of every key; an action that cannot run says why', async () => {
     const { container } = mountReviews();
     const acts = await waitFor(() => {
-      const el = container.querySelector<HTMLElement>('.k-row.selected [data-acts]');
-      if (!el) throw new Error('no row actions yet');
+      const el = container.querySelector<HTMLElement>('.row.selected .acts');
+      if (!el?.firstElementChild) throw new Error('no row actions yet');
       return el;
     });
-    expect(container.querySelectorAll('[data-acts]')).toHaveLength(1);
+    expect(container.querySelectorAll('.acts [role="button"]')).toHaveLength(1);
     await fireEvent.click(within(acts).getByRole('button', { name: 'More actions' }));
     const menu = await screen.findByRole('menu', { name: 'More actions' });
     const entry = (name: string) => within(menu).getByRole('menuitem', { name: new RegExp(`^${name}`) });
@@ -90,9 +68,8 @@ describe('ReviewsPane row actions (#397)', () => {
     // For me lists other people's PRs: Nudge is mine only.
     expect(entry('Nudge reviewers').getAttribute('aria-disabled')).toBe('true');
     expect(entry('Nudge reviewers').title).toBe('Only on your own pull requests');
-    await fireEvent.keyDown(menu, { key: 'Escape' });
-    // A narrow pane has no detail column: Open review opens the PR in its own pane.
-    await fireEvent.click(within(acts).getByRole('button', { name: 'Open review (Enter)' }));
+    // Open in own pane opens the PR in its own pane.
+    await fireEvent.click(entry('Open in own pane'));
     await waitFor(() =>
       expect(findContent(layout.get('shop')!, (c) => c.kind === 'review_detail')).toBeTruthy(),
     );
@@ -102,18 +79,17 @@ describe('ReviewsPane row actions (#397)', () => {
 describe('ReviewsPane filters', () => {
   it('a filter that hides every PR says which filters are on; Clear all brings them back (#370)', async () => {
     const { container } = mountReviews();
-    await waitFor(() => expect(container.querySelectorAll('.k-row').length).toBeGreaterThan(0));
-    await fireEvent.click(screen.getByRole('switch', { name: 'Drafts' }));
+    await waitFor(() => expect(container.querySelectorAll('.row').length).toBeGreaterThan(0));
     await fireEvent.input(screen.getByLabelText('Filter reviews'), { target: { value: 'zzzz' } });
-    expect(await screen.findByText('No match: 2 filters on ("zzzz", No drafts).')).toBeTruthy();
+    expect(await screen.findByText(/^No match: .*"zzzz"/)).toBeTruthy();
     await fireEvent.click(screen.getAllByRole('button', { name: 'Clear all' })[0]!);
-    await waitFor(() => expect(container.querySelectorAll('.k-row').length).toBeGreaterThan(0));
+    await waitFor(() => expect(container.querySelectorAll('.row').length).toBeGreaterThan(0));
     expect(container.querySelector('[data-filter]')).toBeNull();
   });
 });
 
 describe('ReviewsPane in the rail Reviews view', () => {
-  it("Enter opens the review in the PR's project and leaves the view", async () => {
+  it("Shift+Enter opens the review in the PR's project and leaves the view", async () => {
     await projects.load();
     ui.view = 'reviews';
     render(ReviewsPane, {
@@ -126,8 +102,8 @@ describe('ReviewsPane in the rail Reviews view', () => {
         focused: true,
       },
     });
-    await screen.findAllByRole('button', { name: /^Open SHOP-/ });
-    await fireEvent.keyDown(screen.getByTestId('reviews-pane'), { key: 'Enter' });
+    await waitFor(() => expect(document.querySelector('.row.selected')).not.toBeNull());
+    await fireEvent.keyDown(screen.getByTestId('reviews-pane'), { key: 'Enter', shiftKey: true });
     await waitFor(() => expect(ui.view).toBeNull());
     const pid = projects.activeId!;
     expect(pid).not.toBe(GLOBAL);
@@ -150,24 +126,16 @@ const mountGlobal = () =>
   });
 const pane = () => screen.getByTestId('reviews-pane');
 const detail = () => screen.queryByTestId('review-detail');
-const selectedKey = () => document.querySelector('.k-row.selected')?.getAttribute('data-key');
+const selectedKey = () => document.querySelector('.row.selected')?.getAttribute('data-key');
 
-describe('ReviewsPane split view', () => {
-  let width = 1000;
-  beforeEach(() => {
-    width = 1000;
-    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => width });
-    return () => void delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
-  });
+describe('ReviewsPane brief beside the list', () => {
+  const ready = () => waitFor(() => expect(selectedKey()).toBeTruthy());
 
-  it('shows the selected PR; Space toggles it, Enter focuses it, a approves from it, Esc returns', async () => {
+  it('shows the selected PR; Enter focuses it, a approves from it, Esc returns', async () => {
     mountReviews();
-    await screen.findAllByRole('button', { name: /^Open SHOP-/ });
+    await ready();
     const key = selectedKey()!;
     await waitFor(() => expect(detail()?.getAttribute('aria-label')).toBe(`Review ${key.split(':')[1]}`));
-    await fireEvent.keyDown(pane(), { key: ' ' });
-    expect(detail()).toBeNull();
-    await fireEvent.keyDown(pane(), { key: ' ' });
     await fireEvent.keyDown(pane(), { key: 'Enter' });
     await waitFor(() => expect(document.activeElement).toBe(detail()));
     await screen.findByTestId('head-sha');
@@ -182,7 +150,7 @@ describe('ReviewsPane split view', () => {
 
   it('holding j through the list loads the detail of the row it stops on, not every row passed', async () => {
     mountReviews();
-    await screen.findAllByRole('button', { name: /^Open SHOP-/ });
+    await ready();
     const first = selectedKey();
     const gets = () => mock.calls.filter((c) => c.cmd === 'review_get').length;
     const before = gets();
@@ -193,16 +161,11 @@ describe('ReviewsPane split view', () => {
     await screen.findByTestId('head-sha');
   });
 
-  it('Shift+Enter opens the standalone pane; a narrow pane has no column', async () => {
-    const wide = mountReviews();
-    await screen.findAllByRole('button', { name: /^Open SHOP-/ });
+  it('Shift+Enter opens the standalone pane', async () => {
+    mountReviews();
+    await ready();
     await fireEvent.keyDown(pane(), { key: 'Enter', shiftKey: true });
     await waitFor(() => expect(JSON.stringify(layout.get('shop'))).toContain('"review_detail"'));
-    wide.unmount();
-    width = 600;
-    mountReviews();
-    await screen.findAllByRole('button', { name: /^Open SHOP-/ });
-    expect(detail()).toBeNull();
   });
 });
 
@@ -240,6 +203,14 @@ describe('ReviewsPane cross links (rail views)', () => {
     mountGlobal();
     const key = ['SHOP-120', 'SHOP-142', '4567'].find((k) => loaded.includes(k))!;
     expect(key).toBeTruthy();
+    // The selected PR's brief carries its linked tickets.
+    const linked = mock.state.reviews.find((r) => r.review.linked_tickets.includes(key))!.review.ref;
+    const row = await waitFor(() => {
+      const el = document.querySelector<HTMLElement>(`.row[data-key$="${linked.repo}#${linked.number}"]`);
+      if (!el) throw new Error('no row yet');
+      return el;
+    });
+    await fireEvent.click(row);
     await fireEvent.click((await screen.findAllByRole('button', { name: `Open ${key}` }))[0]!);
     expect(ui.view).toBe('tickets');
     const want = ui.select!.key;
@@ -264,109 +235,89 @@ describe('ReviewsPane cross links (rail views)', () => {
   });
 });
 
-describe('ReviewsPane waiting chips (#240)', () => {
-  it('chips every row; amber past the SLA on my PRs only; the nudge menu opens on mine only', async () => {
-    const asked = { why: 'review', since: '2020-01-01T00:00:00Z', matched: true } as const;
-    const authored = mock.state.reviews.find((r) => r.review.kind === 'authored' && r.waiting.length > 0)!;
-    authored.waiting = [{ ...asked, person: 'gh:anna', name: 'Anna' }];
-    const request = mock.state.reviews.find((r) => r.review.kind === 'review_requested')!;
-    request.waiting = [{ ...asked, person: 'gh:bob', name: 'Bob', why: 'author', since: null }];
+describe('ReviewsPane nudge (#240)', () => {
+  it('the nudge menu opens on my PRs only', async () => {
     mountReviews();
-    const theirs = await screen.findByText('waiting on Bob (author)');
-    expect(theirs.className).not.toMatch(/warn/);
-    await fireEvent.click(theirs.closest('.k-row')!);
-    await fireEvent.keyDown(screen.getByTestId('reviews-pane'), { key: 'n' });
+    await waitFor(() => expect(selectedKey()).toBeTruthy());
+    const asked = [...document.querySelectorAll<HTMLElement>('.row')].find((r) =>
+      r.dataset.key?.endsWith('acme/shop-api#311'),
+    )!;
+    await fireEvent.click(asked);
+    await fireEvent.keyDown(pane(), { key: 'n' });
     expect(screen.queryByRole('menu', { name: 'Nudge reviewers' })).toBeNull();
-    await fireEvent.keyDown(screen.getByTestId('reviews-pane'), { key: '3' });
-    const mine = await screen.findByText(/waiting on Anna/);
-    expect(mine.className).toMatch(/warn/);
-    await fireEvent.click(mine.closest('.k-row')!);
-    await fireEvent.keyDown(screen.getByTestId('reviews-pane'), { key: 'n' });
+    const mine = [...document.querySelectorAll<HTMLElement>('.row')].find((r) =>
+      r.dataset.key?.endsWith('acme/shop-api#305'),
+    )!;
+    await fireEvent.click(mine);
+    await fireEvent.keyDown(pane(), { key: 'n' });
     expect(await screen.findByRole('menu', { name: 'Nudge reviewers' })).toBeTruthy();
   });
 });
 
-describe('ReviewsPane tabs and Team (#241)', () => {
+describe('ReviewsPane sections and Team (#241, #401)', () => {
   beforeEach(async () => {
-    localStorage.removeItem('kelta.view.reviews');
     settings.effective = {};
     await Promise.all([projects.load(), settings.load()]);
   });
-  const tabs = () => screen.getAllByRole('tab').map((t) => t.textContent?.trim());
-  const keys = () =>
-    [...document.querySelectorAll('.k-row[data-key]')].map((r) => r.getAttribute('data-key'));
+  const headers = () =>
+    [...document.querySelectorAll('[data-section]')].map((h) => h.textContent?.replace(/\s+/g, ' ').trim());
+  const keys = () => [...document.querySelectorAll('.row[data-key]')].map((r) => r.getAttribute('data-key'));
   const press = (key: string) => fireEvent.keyDown(pane(), { key });
   const keysOf = (kind: ReviewKind) =>
     mock.state.reviews
       .filter((r) => r.review.kind === kind)
       .map((r) => `${r.review.ref.account}:${r.review.ref.repo}#${r.review.ref.number}`);
-  const mountTab = (
-    tab: ReviewKind | null,
-    scope: { kind: 'all' } | { kind: 'project'; id: string } = { kind: 'all' },
-  ) =>
+  const mountScope = (scope: { kind: 'all' } | { kind: 'project'; id: string } = { kind: 'all' }) =>
     render(ReviewsPane, {
       props: {
         projectId: 'shop',
         tabId: 'tab-1',
         paneId: 'p',
-        content: { kind: 'reviews', scope, tab },
+        content: { kind: 'reviews', scope },
         visible: true,
         focused: true,
       },
     });
+  const teamLoaded = () =>
+    mock.calls.some((c) => c.cmd === 'review_list' && (c.args as { kind: string }).kind === 'team');
 
-  it('For me / Team / Mine with counts, switched by 1 2 3; the rail view saves the tab and polls it', async () => {
-    await loadGlobalLayout();
-    ui.view = 'reviews';
+  it("asked of me, the team's ready PRs, its drafts folded, then mine; each PR once", async () => {
     mountGlobal();
-    await waitFor(() => expect(tabs()).toEqual(['For me 5', 'Team', 'Mine 3']));
-    expect(keys().sort()).toEqual(keysOf('review_requested').sort());
-    await press('3');
-    await waitFor(() => expect(keys().sort()).toEqual(keysOf('authored').sort()));
-    expect(
-      mock.calls.some((c) => c.cmd === 'review_list' && (c.args as { kind: string }).kind === 'team'),
-    ).toBe(false);
-    await press('2');
-    await waitFor(() => expect(tabs()).toEqual(['For me 5', 'Team 7', 'Mine 3']));
-    expect(globalContent('reviews')).toMatchObject({ tab: 'team' });
-    await layout.flush(GLOBAL);
-    expect(JSON.stringify(mock.state.layouts[GLOBAL])).toContain('"tab":"team"');
+    await waitFor(() =>
+      expect(headers()).toEqual([
+        `Asked of you ${keysOf('review_requested').length}`,
+        'Team, needs a reviewer 2',
+        'Team drafts 1',
+        `Yours, as reviewers see them ${keysOf('authored').length}`,
+      ]),
+    );
+    expect(teamLoaded()).toBe(true);
+    const k = (n: number) => keys().find((x) => x?.endsWith(`#${n}`));
+    // #322 merges into #320: it follows it, an elbow deeper; the draft #324 waits behind its fold.
+    expect(keys().indexOf(k(322)!)).toBe(keys().indexOf(k(320)!) + 1);
+    expect(document.querySelector(`.row[data-key="${k(322)}"] .elbow`)).not.toBeNull();
+    expect(document.querySelector(`.row[data-key="${k(320)}"]`)?.textContent).toContain(
+      'base of a stack of 2',
+    );
+    expect(k(324)).toBeUndefined();
+    expect(new Set(keys()).size).toBe(keys().length);
+    await fireEvent.click(screen.getByRole('button', { name: /Team drafts/ }));
+    await waitFor(() => expect(k(324)).toBeTruthy());
+    await press('Home');
+    for (let i = 0; i < keys().length + 2; i++) {
+      await press('j');
+      expect(selectedKey()).toBeTruthy();
+    }
   });
 
-  it('a project pane keeps its tab; a project no source feeds has no Team tab', async () => {
-    layout.byProject = {
-      shop: {
-        project_id: 'shop',
-        active_tab: 'tab-1',
-        rev: 0,
-        tabs: [
-          {
-            id: 'tab-1',
-            title: 'Reviews',
-            work_item_id: null,
-            focused_pane: 'p',
-            zoomed_pane: null,
-            root: {
-              type: 'pane',
-              id: 'p',
-              content: { kind: 'reviews', scope: { kind: 'project', id: 'shop' } },
-            },
-          },
-        ],
-      },
-    } as unknown as typeof layout.byProject;
-    const fed = mountTab(null, { kind: 'project', id: 'shop' });
-    await waitFor(() => expect(tabs()[1]).toBe('Team'));
-    await press('2');
-    const root = layout.get('shop')!.tabs[0]!.root;
-    expect(root.type === 'pane' && root.content).toMatchObject({ kind: 'reviews', tab: 'team' });
-    fed.unmount();
+  it('a project no source feeds lists no Team', async () => {
     (mock.state.settings.value as unknown as Settings).sources = [];
     settings.effective = {};
     await settings.load();
-    mountTab('team', { kind: 'project', id: 'shop' });
-    await waitFor(() => expect(tabs().map((t) => t?.split(' ')[0])).toEqual(['For', 'Mine']));
-    expect(screen.getByRole('tab', { selected: true }).textContent?.trim()).toMatch(/^For me/);
+    mountScope({ kind: 'project', id: 'shop' });
+    await waitFor(() => expect(headers()[0]).toMatch(/^Asked of you/));
+    expect(headers().some((h) => h?.startsWith('Team'))).toBe(false);
+    expect(teamLoaded()).toBe(false);
   });
 
   it('sources that omit projects, routes or views still offer Team in the project it feeds (#281)', async () => {
@@ -375,36 +326,14 @@ describe('ReviewsPane tabs and Team (#241)', () => {
       { id: 'fed', label: 'Fed', projects: ['shop'], tracker: { account: 'jira-acme' } },
     ];
     settings.accept(null, await ipc.settingsSet({ layer: 'global', path: 'sources', value }));
-    mountTab(null, { kind: 'project', id: 'shop' });
-    await waitFor(() => expect(tabs()[1]).toBe('Team'));
-  });
-
-  it('Team rows read "you" on my PRs; G groups them by first ticket, No ticket last; j k skip headers', async () => {
-    mountTab('team');
-    await waitFor(() => expect(keys()).toHaveLength(7));
-    const mine = keysOf('authored')[0]!;
-    const row = (k: string) => document.querySelector(`.k-row[data-key="${k}"]`)!;
-    expect(row(mine).textContent).toContain('you');
-    expect(row(keysOf('review_requested')[0]!).textContent).toMatch(/@\S+/);
-    expect(document.querySelector('.k-group')).toBeNull();
-    await press('G');
-    const headers = () => [...document.querySelectorAll('.k-group')].map((h) => h.textContent?.trim() ?? '');
-    await waitFor(() => expect(headers().at(-1)).toMatch(/^No ticket/));
-    expect(headers().find((h) => h.startsWith('SHOP-142'))).toMatch(/2$/);
-    expect(headers()).toContainEqual(expect.stringMatching(/^ada\/kelta-tools#12/));
-    await press('Home');
-    for (let i = 0; i < 8; i++) {
-      await press('j');
-      expect(selectedKey()).toBeTruthy();
-    }
-    await press('G');
-    await waitFor(() => expect(document.querySelector('.k-group')).toBeNull());
+    mountScope({ kind: 'project', id: 'shop' });
+    await waitFor(() => expect(teamLoaded()).toBe(true));
   });
 
   it('p from a ticket lands on Team when the PR is only there', async () => {
     const base = mock.state.reviews.find((r) => r.project_ids.includes('shop'))!;
     const ref = { ...base.review.ref, number: 999 };
-    mock.state.reviews.push({ ...base, review: { ...base.review, ref, kind: 'team' } });
+    mock.state.reviews.push({ ...base, review: { ...base.review, ref, kind: 'team', draft: false } });
     await Promise.all(
       (['review_requested', 'authored', 'team'] as const).map((k) => reviews.load({ kind: 'all' }, k)),
     );
@@ -414,7 +343,6 @@ describe('ReviewsPane tabs and Team (#241)', () => {
     expect(ui.view).toBe('reviews');
     mountGlobal();
     await waitFor(() => expect(selectedKey()).toBe(`${ref.account}:${ref.repo}#999`));
-    expect(screen.getByRole('tab', { selected: true }).textContent?.trim()).toMatch(/^Team/);
   });
 });
 
@@ -422,7 +350,7 @@ describe('ReviewsPane workflows (#355)', () => {
   it('w runs a PR workflow on the row; a second run opens the running one', async () => {
     await settings.load();
     mountReviews();
-    await screen.findAllByRole('button', { name: /^Open SHOP-/ });
+    await waitFor(() => expect(selectedKey()).toBeTruthy());
     await fireEvent.keyDown(screen.getByTestId('reviews-pane'), { key: 'w' });
     await waitFor(() => expect(ui.sheet?.key).toBe('workflow_run'));
     const { review, workflows } = ui.sheet!.props as {

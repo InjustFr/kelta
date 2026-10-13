@@ -543,7 +543,7 @@ pub enum PaneContent {
     },
     Reviews {
         scope: Scope,
-        /// The shown tab (For me / Team / Mine); `None` = For me.
+        /// The tab shown before #401 put every section on one list; kept so saved layouts load.
         #[serde(default)]
         #[ts(optional = nullable)]
         tab: Option<ReviewKind>,

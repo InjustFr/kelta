@@ -1424,8 +1424,9 @@ impl Core {
     async fn fetch_reviews(&self, account: &AccountId, kind: ReviewKind) -> Result<Vec<Review>, KeltaError> {
         let host = self.code_host_of(account)?;
         let rs = &self.accounts_settings().reviews;
-        // Authored always includes drafts: reviewing on GitHub means a draft PR (B6).
-        let include_drafts = kind == ReviewKind::Authored || rs.include_drafts;
+        // Authored always includes drafts: reviewing on GitHub means a draft PR (B6). Team too: Reviews
+        // folds them into Team drafts (#401).
+        let include_drafts = matches!(kind, ReviewKind::Authored | ReviewKind::Team) || rs.include_drafts;
         let query = ReviewQuery { kind, include_team: rs.include_team_requests, include_drafts };
         let r = if kind == ReviewKind::Team {
             let mut repos: Vec<String> = self
@@ -2038,12 +2039,10 @@ impl Core {
                     let (scope, view) = self.list_scope(scope, source_id.as_deref(), view_id.as_deref());
                     tickets(&scope, view.as_deref(), *who, &mut want)
                 }
-                PaneContent::Reviews { scope, tab, .. } => {
+                PaneContent::Reviews { scope, .. } => {
                     reviews(self.review_accounts(scope), &both, &mut want);
-                    // Team only while shown: For me and Mine feed Now, badges and notifications.
-                    if *tab == Some(ReviewKind::Team) {
-                        reviews(self.team_accounts(scope), &[ReviewKind::Team], &mut want);
-                    }
+                    // Team only while a Reviews pane shows it (#401: every section is on one list).
+                    reviews(self.team_accounts(scope), &[ReviewKind::Team], &mut want);
                 }
                 PaneContent::Inbox { .. } => {
                     // Now reads `tracker_list(All, None, Mine)`: poll that cache key

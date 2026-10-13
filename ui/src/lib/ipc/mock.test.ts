@@ -33,7 +33,7 @@ const LIFECYCLE = ['dormant', 'live', 'exited'];
 const KINDS = ['shell', 'claude', 'editor', 'tool', 'setup', 'custom'];
 const CATEGORIES: StatusCategory[] = ['todo', 'in_progress', 'in_review', 'done', 'unknown'];
 const CI: CiState[] = ['success', 'failure', 'pending', 'error', 'none'];
-const REVIEW_KINDS: ReviewKind[] = ['review_requested', 'authored'];
+const REVIEW_KINDS: ReviewKind[] = ['review_requested', 'authored', 'team'];
 const WORK_KINDS: WorkKind[] = ['ticket', 'review', 'branch'];
 const PANE_KINDS = [
   'terminal',

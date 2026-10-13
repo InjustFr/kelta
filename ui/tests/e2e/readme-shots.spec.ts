@@ -137,7 +137,7 @@ test('reviews: the Reviews view with a pull request detail', async ({ page }) =>
   await boot(page, 'macos');
   await page.getByTestId('rail-reviews').click();
   const host = page.getByTestId('global-host');
-  await host.getByText('SHOP-150: cache product images').click();
-  await expect(host.getByTestId('review-detail').getByRole('heading', { level: 1 })).toBeVisible();
+  await host.locator('.row .ttl', { hasText: 'SHOP-150: cache product images' }).click();
+  await expect(host.getByTestId('review-brief').getByRole('heading', { level: 3 })).toBeVisible();
   await shoot(page, 'reviews');
 });
