@@ -5,6 +5,8 @@
   import { layout, projects, toasts, ui } from '$lib/stores';
   import Toast from '$lib/ui/Toast.svelte';
 
+  import GlobalHost from '../../../../src/shell/GlobalHost.svelte';
+
   const projectId = $derived(projects.activeId ?? 'shop');
   const current = $derived(layout.get(projectId));
   const tab = $derived(current ? activeTab(current) : null);
@@ -22,6 +24,9 @@
     {/await}
   {/if}
   <div class="panes">
+    {#if ui.view}
+      <GlobalHost view={ui.view} />
+    {:else}
     {#each panes as p (p.id)}
       {#if p.content.kind !== 'empty'}
         <div class="pane" data-pane={p.content.kind}>
@@ -39,6 +44,7 @@
         </div>
       {/if}
     {/each}
+    {/if}
   </div>
 </main>
 

@@ -295,6 +295,32 @@ const OTHERS = new Set<NowSection>(['in_flight', 'elsewhere', 'blocked', 'waitin
 
 export const zoneOf = (section: NowSection): Zone => (OTHERS.has(section) ? 'waiting' : 'yours');
 
+/** The projects a row belongs to; a Claude session Kelta did not start has none. */
+function rowProjects(row: NowRow): readonly string[] {
+  switch (row.type) {
+    case 'work':
+      return [row.item.project_id];
+    case 'session':
+      return [row.session.project_id];
+    case 'outside':
+      return [];
+    case 'review':
+      return row.review.project_ids;
+    case 'ticket':
+      return row.ticket.project_ids;
+  }
+}
+
+/**
+ * The sections narrowed to one project's rows (#409); `null` = every project.
+ * shortcut: a scoped section drops its "Show all" count (the cap counted every project), the
+ * Tickets view lists the rest.
+ */
+export function scopeSections(sections: readonly Section[], project: string | null): readonly Section[] {
+  if (!project) return sections;
+  return sections.map((s) => ({ ...s, rows: s.rows.filter((r) => rowProjects(r).includes(project)), more: 0 }));
+}
+
 /** Rows in a zone, the ones past a cap included. */
 export const zoneCount = (sections: readonly Section[], zone: Zone): number =>
   sections.reduce((n, s) => (zoneOf(s.id) === zone ? n + s.rows.length + s.more : n), 0);

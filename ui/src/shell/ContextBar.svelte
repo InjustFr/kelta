@@ -173,7 +173,7 @@
   ]);
 
   async function onPlus(id: string): Promise<void> {
-    // The project's own tabs; with no project shown, the bare actions open the rail's cross-project views.
+    // The cross-project views, scoped to the project shown (#409); with none, in their current scope.
     const args = project && !view ? { project_id: project.id } : undefined;
     try {
       if (id === 'session') ui.openSheet('session_new');

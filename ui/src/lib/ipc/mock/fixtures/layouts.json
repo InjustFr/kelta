@@ -11,7 +11,10 @@
         "root": {
           "type": "split",
           "dir": "row",
-          "ratios": [0.5, 0.5],
+          "ratios": [
+            0.5,
+            0.5
+          ],
           "children": [
             {
               "type": "pane",
@@ -41,7 +44,10 @@
         "root": {
           "type": "split",
           "dir": "column",
-          "ratios": [0.6, 0.4],
+          "ratios": [
+            0.6,
+            0.4
+          ],
           "children": [
             {
               "type": "pane",
@@ -66,20 +72,14 @@
       },
       {
         "id": "shop-t3",
-        "title": "Board",
+        "title": "Settings",
         "work_item_id": null,
         "root": {
           "type": "pane",
           "id": "shop-p5",
           "content": {
-            "kind": "tickets",
-            "scope": {
-              "kind": "project",
-              "id": "shop"
-            },
-            "view_id": "mine",
-            "mode": "board",
-            "who": null
+            "kind": "settings",
+            "section": null
           }
         },
         "focused_pane": "shop-p5",
@@ -99,7 +99,10 @@
         "root": {
           "type": "split",
           "dir": "row",
-          "ratios": [0.55, 0.45],
+          "ratios": [
+            0.55,
+            0.45
+          ],
           "children": [
             {
               "type": "pane",
@@ -112,7 +115,10 @@
             {
               "type": "split",
               "dir": "column",
-              "ratios": [0.7, 0.3],
+              "ratios": [
+                0.7,
+                0.3
+              ],
               "children": [
                 {
                   "type": "pane",
@@ -139,17 +145,13 @@
       },
       {
         "id": "billing-t2",
-        "title": "Reviews",
+        "title": "Welcome",
         "work_item_id": null,
         "root": {
           "type": "pane",
           "id": "billing-p4",
           "content": {
-            "kind": "reviews",
-            "scope": {
-              "kind": "project",
-              "id": "billing"
-            }
+            "kind": "welcome"
           }
         },
         "focused_pane": "billing-p4",
@@ -216,13 +218,14 @@
       },
       {
         "id": "home-t2",
-        "title": "Inbox",
+        "title": "Settings",
         "work_item_id": null,
         "root": {
           "type": "pane",
           "id": "home-p2",
           "content": {
-            "kind": "inbox"
+            "kind": "settings",
+            "section": null
           }
         },
         "focused_pane": "home-p2",

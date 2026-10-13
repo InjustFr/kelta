@@ -12,6 +12,7 @@ import {
   closeTab,
   contentEquals,
   detachPane,
+  dropListTabs,
   findPane,
   findSession,
   focusPane,
@@ -221,6 +222,41 @@ describe('tabs', () => {
     expect(l.tabs[0]?.zoomed_pane).toBe('b');
     l = toggleZoom(l, 't1', 'b');
     expect(l.tabs[0]?.zoomed_pane).toBeNull();
+  });
+});
+
+describe('dropListTabs (#409)', () => {
+  const tickets = (mode: 'list' | 'board', id = 'shop'): PaneContent => ({
+    kind: 'tickets',
+    scope: { kind: 'project', id },
+    view_id: null,
+    mode,
+    who: null,
+  });
+
+  it("closes a project's Board, Reviews and Inbox tabs and keeps the last one's scope", () => {
+    let l = layoutOf(p('a'));
+    l = addTab(l, makeTab('Board', pane(tickets('board'), 'b')));
+    l = addTab(l, makeTab('Inbox', pane({ kind: 'inbox' }, 'i')));
+    l = addTab(l, makeTab('Reviews', pane({ kind: 'reviews', scope: { kind: 'project', id: 'billing' } }, 'r')));
+    const { layout, scope } = dropListTabs(l);
+    expect(layout.tabs.map((t) => t.id)).toEqual(['t1']);
+    expect(layout.active_tab).toBe('t1');
+    expect(scope).toEqual({ kind: 'project', id: 'billing' });
+  });
+
+  it('an Inbox tab scopes to all projects', () => {
+    const l = addTab(layoutOf(p('a')), makeTab('Inbox', pane({ kind: 'inbox' }, 'i')));
+    expect(dropListTabs(l).scope).toEqual({ kind: 'all' });
+  });
+
+  it('keeps every other tab: splits holding a list (Overview), detail panes, a source-wide list', () => {
+    let l = layoutOf(splitPane(pane(tickets('list'), 'x'), 'x', 'row', pane({ kind: 'reviews', scope: { kind: 'all' } }, 'y')));
+    l = addTab(l, makeTab('Source', pane({ ...tickets('list'), scope: { kind: 'source', id: 'jira' } }, 's')));
+    l = addTab(l, makeTab('Settings', pane({ kind: 'settings', section: null }, 'g')));
+    const r = dropListTabs(l);
+    expect(r.layout).toBe(l);
+    expect(r.scope).toBeNull();
   });
 });
 

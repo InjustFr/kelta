@@ -42,6 +42,8 @@
   import { chordFor } from '../../shell/labels';
   import { openView } from '../../shell/nav';
   import { peekHover } from '../../shell/peek.svelte';
+  import { listScope } from '../../shell/scope.svelte';
+  import ScopeSelect from '../../shell/ScopeSelect.svelte';
   import { ctxHot, itemCost, overBudget, usd } from '../../shell/usage';
   import { blockedReason, runWorkAction, workAction, WORK_ACTIONS } from '../work/actions';
   import { batch, batchKey } from '../work/batch.svelte';
@@ -67,7 +69,16 @@
   import { selectTicket } from '../work/selection.svelte';
   import { CLAUDE, DEPLOY, PR, REVIEW, STAGES, TICKET, stage, workStage, type Stage } from '../work/stage';
   import RowButton from '../tickets/RowButton.svelte';
-  import { isNextUp, ZONES, zoneOf, type NowRow, type Section, type Zone } from './groups';
+  import {
+    isNextUp,
+    scopeSections,
+    ZONES,
+    zoneCount,
+    zoneOf,
+    type NowRow,
+    type Section,
+    type Zone,
+  } from './groups';
   import { asOf, enterRow, goToRow, nowSummary, refreshNow, reviewRowLocally, startNextUp } from './now';
   import { nextUp } from './nextUp.svelte';
   import { waitChip } from '../people/waiting';
@@ -99,6 +110,10 @@
   let filterEl = $state<HTMLInputElement>();
 
   const summary = $derived(nowSummary());
+  /** The sections in the lists' scope (#409). */
+  const sections = $derived(scopeSections(summary.sections, listScope.project));
+  const yours = $derived(zoneCount(sections, 'yours'));
+  const others = $derived(zoneCount(sections, 'waiting'));
   const stale = $derived(asOf());
   const lists = $derived([
     tickets.list(ALL, null, 'mine'),
@@ -430,7 +445,7 @@
 
   // Sections in zone order (#399): Your move, then Waiting on others, each keeping its section order.
   const visible = $derived(
-    ZONES.flatMap((z) => summary.sections.filter((s) => zoneOf(s.id) === z.id))
+    ZONES.flatMap((z) => sections.filter((s) => zoneOf(s.id) === z.id))
       .map((s) => ({ ...s, rows: s.rows.filter((r) => matches(r, s.id, filter.trim())) }))
       .filter((s) => s.rows.length > 0 || s.more > 0),
   );
@@ -687,10 +702,11 @@
 >
   <header class="bar">
     <span class="title">{t('Now')}</span>
+    <ScopeSelect />
     <!-- One summary line (#399): the zones below carry the rest. -->
     <span class="split" data-testid="now-header">
-      <span>{@render count(t('{n} your move', { n: summary.yours }), summary.yours)}</span>
-      <span>{@render count(t('{n} waiting on others', { n: summary.others }), summary.others)}</span>
+      <span>{@render count(t('{n} your move', { n: yours }), yours)}</span>
+      <span>{@render count(t('{n} waiting on others', { n: others }), others)}</span>
     </span>
     {#if stale}<span class="asof" data-testid="now-asof"
         >{t('Updated {ago}', { ago: relativeTime(stale.ms) })}</span
