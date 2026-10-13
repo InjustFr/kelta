@@ -80,8 +80,9 @@ if [ "$e2e" = 1 ]; then
   # e2e runs on the Vite dev server, not ui/dist: it overlaps qa once the dependencies are installed.
   run pnpm-install pnpm install --frozen-lockfile
   if [ "$failed" = 0 ] || [ "$keep_going" = 1 ]; then
-    e2e_log="${log%.log}-e2e.log" e2e_t0=$SECONDS
-    e2e >"$e2e_log" 2>&1 &
+    e2e_log="${log%.log}-e2e.log"
+    # e2e usually ends before qa: time it in its own shell, not when qa is done and it is waited on.
+    (t0=$SECONDS; trap 'echo $((SECONDS - t0)) >"$e2e_log.secs"' EXIT; e2e) >"$e2e_log" 2>&1 &
     e2e_pid=$!
   fi
 fi
@@ -91,7 +92,9 @@ if [ -n "$e2e_pid" ]; then
   e2e_rc=0
   wait "$e2e_pid" || e2e_rc=$?
   cat "$e2e_log"
-  if [ "$e2e_rc" = 0 ]; then record e2e pass "$((SECONDS - e2e_t0))"; else record e2e FAIL "$((SECONDS - e2e_t0))"; failed=1; fi
+  e2e_secs="$(cat "$e2e_log.secs" 2>/dev/null || echo -)"
+  rm -f "$e2e_log.secs"
+  if [ "$e2e_rc" = 0 ]; then record e2e pass "$e2e_secs"; else record e2e FAIL "$e2e_secs"; failed=1; fi
 elif [ "$e2e" = 1 ]; then
   record e2e "not run" "-"
 else
