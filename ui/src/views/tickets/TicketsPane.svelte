@@ -57,6 +57,7 @@
   import {
     FLOW_HINTS,
     GROUP_BYS,
+    TO_START_HINTS,
     flowOf,
     groupTickets,
     sortTickets,
@@ -70,6 +71,7 @@
   import TicketRow from './TicketRow.svelte';
   import TicketsToolbar from './TicketsToolbar.svelte';
   import { pickWorkflow } from './workflow.svelte';
+  import { isSnoozed, nextUp } from '../inbox/nextUp.svelte';
   import TagChips from '../tags/TagChips.svelte';
   import TagMenu from '../tags/TagMenu.svelte';
   import FilterBar from '../filters/FilterBar.svelte';
@@ -320,10 +322,18 @@
   /** Groups the user opened or closed (`groupBy:id`); Done groups start closed. */
   let toggled = $state<Record<string, boolean>>({});
   const groupBy = $derived.by<GroupBy>(() => {
-    // By tracker status (#400): what the rest of the team sees; Flow repeats Now.
-    const g = groupOverride ?? content.group ?? 'status';
+    // Mine opens on what to start next (#418); the other tabs by tracker status (#400), as the team sees it.
+    const g = groupOverride ?? content.group ?? (whoTab === 'mine' ? 'to_start' : 'status');
     return GROUP_BYS.includes(g) ? g : 'status';
   });
+  // Up next is my Next up order: the Queue loads it, a Tickets pane opened first loads it too.
+  $effect(() => {
+    if (groupBy === 'to_start' && !nextUp.loaded) untrack(() => void nextUp.load());
+  });
+  const rankOf = (item: TicketItem): number | null => {
+    const e = nextUp.entries[keyOf(item)];
+    return e && !isSnoozed(e, Date.now()) ? e.rank : null;
+  };
   const wipLimit = $derived(settings.value(project?.id)?.tickets?.wip_limit ?? 3);
   const sorted = $derived(sortTickets(shown, sort));
   const groups = $derived(
@@ -337,6 +347,7 @@
         return flowOf(item, { work: w, needsYou: phaseFor(item)?.section === 'needs_you' }, Date.now());
       },
       columns,
+      (item) => ({ work: liveWork(item), rank: rankOf(item) }),
     ),
   );
   const ticketRows = (item: TicketItem): Row[] => {
@@ -360,6 +371,11 @@
     }
     return out;
   });
+
+  /** What each group holds, in one line under its header. */
+  const groupHints = $derived(
+    groupBy === 'flow' ? FLOW_HINTS : groupBy === 'to_start' ? TO_START_HINTS : null,
+  );
 
   function toggleGroup(row: Row): void {
     if (row.kind !== 'group') return;
@@ -1119,8 +1135,8 @@
                   {r.group.label}
                   <span class="count k-num">{r.group.items.length}</span>
                   {#if overWip}<span class="wip-note">{t('Above your limit of {n}', { n: wipLimit })}</span
-                    >{:else if groupBy === 'flow' && FLOW_HINTS[r.group.id]}<span class="k-group-hint"
-                      >{t(FLOW_HINTS[r.group.id]!)}</span
+                    >{:else if groupHints?.[r.group.id]}<span class="k-group-hint"
+                      >{t(groupHints[r.group.id]!)}</span
                     >{/if}
                 </button>
               {:else if r.kind === 'ask'}
@@ -1139,6 +1155,7 @@
                   picking={picked.length > 0}
                   standing={standingNow(r.item, assignedToMe(r.item, whoTab === 'mine' ? items : []))}
                   {groupBy}
+                  dim={groupBy === 'to_start' && liveWork(r.item) !== null}
                   source={showSource ? sourceOf(r.item) : null}
                   showAssignee={whoTab !== 'mine'}
                   onselect={(e) => {

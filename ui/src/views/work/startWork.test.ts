@@ -10,7 +10,9 @@ import { ticketItems } from '../../shell/palette/sources';
 import { enterRow } from '../inbox/now';
 import './actions';
 import { selectTicket } from './selection.svelte';
-import { reviewLocally, startWorkOnTicket } from './startWork';
+import * as samples from '$lib/gen/fixtures';
+
+import { reviewLocally, startPreview, startWorkOnTicket } from './startWork';
 
 let mock: MockControls;
 const ticket = { account: 'jira-acme', key: 'SHOP-151', id: '10151' };
@@ -83,5 +85,23 @@ describe('start entry points', () => {
     const t = toasts.list.at(-1)?.toast;
     expect(t?.text).toBe('Add a repository to a project first');
     expect(t?.action).toEqual(action);
+  });
+});
+
+describe('startPreview', () => {
+  const plan = samples.startWorkPlan;
+  it("says what the sheet's plan will do: branch, repo, ticket move, assignment, Claude", () => {
+    expect(startPreview(plan, 'Neovim')).toBe(
+      'Start work creates branch feat/SHOP-142-rate-limit-login in api, moves the ticket to in progress, assigns it to you, then briefs Claude next to Neovim.',
+    );
+    const quiet = { ...plan, side_effects: { ...plan.side_effects, assign_me: false, transition_to: null } };
+    expect(startPreview(quiet, null)).toBe(
+      'Start work creates branch feat/SHOP-142-rate-limit-login in api, then briefs Claude.',
+    );
+    const exists = { ...quiet, branch_exists: { has_worktree: false, choice: 'reuse' as const } };
+    expect(startPreview(exists, null)).toMatch(/^Start work reuses branch feat\/SHOP-142/);
+    expect(startPreview({ ...plan, existing: 'w1' }, null)).toBe(
+      'Start work resumes feat/SHOP-142-rate-limit-login in api.',
+    );
   });
 });

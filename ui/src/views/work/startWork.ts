@@ -1,12 +1,14 @@
 // Entry points of the start-work flow (SPEC §3.1): plan → (sheet | direct start | resume).
 
-import { t } from '$lib/i18n/index.svelte';
+import { msg, t } from '$lib/i18n/index.svelte';
 import type {
   ProjectId,
   ReviewRef,
   StartWorkPlan,
+  StatusCategory,
   TicketRef,
   ToastAction,
+  TransitionTarget,
   WorkItem,
   WorkSource,
 } from '$lib/gen';
@@ -26,6 +28,38 @@ export function needsChoice(plan: StartWorkPlan): boolean {
     plan.repo_choices.length > 1 ||
     (plan.project_guessed && plan.project_choices.length > 1)
   );
+}
+
+const CATEGORY: Record<StatusCategory, string> = {
+  todo: msg('to do'),
+  in_progress: msg('in progress'),
+  in_review: msg('in review'),
+  done: msg('done'),
+  unknown: msg('unknown'),
+};
+
+/** The status a start moves the ticket to, as the sheet names it. */
+export function describeTransition(to: TransitionTarget | null): string {
+  if (!to) return t('next status');
+  return 'category' in to ? t(CATEGORY[to.category]) : to.name;
+}
+
+/** What Start work will do (#418), in one sentence from the plan the sheet opens on. `editor`: the
+ *  default editor's label, Claude's neighbour in the work tab. */
+export function startPreview(plan: StartWorkPlan, editor: string | null): string {
+  const { branch, repo_id: repo } = plan;
+  if (plan.existing) return t('Start work resumes {branch} in {repo}.', { branch, repo });
+  const fx = plan.side_effects;
+  const steps = [
+    plan.branch_exists?.choice === 'reuse'
+      ? t('reuses branch {branch} in {repo}', { branch, repo })
+      : t('creates branch {branch} in {repo}', { branch, repo }),
+    fx.transition_to && t('moves the ticket to {status}', { status: describeTransition(fx.transition_to) }),
+    fx.assign_me && t('assigns it to you'),
+  ].filter(Boolean);
+  return editor
+    ? t('Start work {steps}, then briefs Claude next to {editor}.', { steps: steps.join(', '), editor })
+    : t('Start work {steps}, then briefs Claude.', { steps: steps.join(', ') });
 }
 
 /** Options of a start: `preview` overrides `work.plan_preview` (`false` = start with no sheet);

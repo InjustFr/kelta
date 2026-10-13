@@ -26,6 +26,8 @@
     picking: boolean;
     standing: Standing;
     groupBy: GroupBy;
+    /** Started, under To start (#418): its next step lives in the Queue, the row steps back but keeps its track. */
+    dim?: boolean;
     /** The source label, when the list spans several sources. */
     source: string | null;
     showAssignee: boolean;
@@ -43,6 +45,7 @@
     picking,
     standing,
     groupBy,
+    dim = false,
     source,
     showAssignee,
     onselect,
@@ -82,6 +85,7 @@
   class:selected
   class:picked
   class:picking
+  class:dim
   class:has-source={source !== null}
   class:has-who={showAssignee}
   aria-current={selected ? 'true' : undefined}
@@ -195,6 +199,10 @@
   .c-stage,
   .c-age {
     padding-left: var(--k-space-4);
+  }
+
+  .tk.dim > :not(.c-stage) {
+    opacity: 0.55;
   }
 
   .tk.selected,
