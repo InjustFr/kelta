@@ -56,8 +56,12 @@ async fn one_graphql_request_with_only_the_requested_alias() {
     assert_eq!(a.files[1].path, "tests/limit.rs");
     assert_eq!(
         a.reviewers.iter().map(|r| (r.user.login.as_deref().unwrap(), r.state)).collect::<Vec<_>>(),
-        [("dan", Some(MyReviewState::Commented)), ("bob", Some(MyReviewState::Approved))],
-        "the author's own comment and dismissed reviews are left out"
+        [
+            ("bob", Some(MyReviewState::Approved)),
+            ("zed", Some(MyReviewState::ChangesRequested)),
+            ("dan", Some(MyReviewState::Commented)),
+        ],
+        "opinions first, then comments; the author's own comment and dismissed reviews are left out"
     );
     let b = &list[1];
     assert!(!b.blocking && b.requested_at.is_none(), "already approved, no timeline");

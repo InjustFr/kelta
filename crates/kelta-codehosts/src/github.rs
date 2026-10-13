@@ -570,18 +570,26 @@ fn waiting_state(n: &Value, head: &str) -> (Vec<String>, Option<String>) {
     (waiting.into_iter().map(|(w, _)| w).collect(), since)
 }
 
-/// Each reviewer's latest review with an opinion (comments included), the PR author left out.
+/// Each reviewer's latest opinion, the PR author left out. `latestReviews` holds a user's last
+/// review of any kind, so a later comment would hide an approval: the opinionated list wins and
+/// `latestReviews` only adds reviewers it does not know.
 fn latest_reviewers(n: &Value) -> Vec<Reviewer> {
     let author = n.pointer("/author/login").and_then(Value::as_str);
-    n.pointer("/latestReviews/nodes")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|r| {
-            let login = r.pointer("/author/login").and_then(Value::as_str).filter(|l| Some(*l) != author)?;
-            Some(Reviewer { user: user(login, None, None), state: Some(review_state(s(r, "state")?)?) })
-        })
-        .collect()
+    let mut out: Vec<Reviewer> = Vec::new();
+    for list in ["/latestOpinionatedReviews/nodes", "/latestReviews/nodes"] {
+        for r in n.pointer(list).and_then(Value::as_array).into_iter().flatten() {
+            let Some(login) =
+                r.pointer("/author/login").and_then(Value::as_str).filter(|l| Some(*l) != author)
+            else {
+                continue;
+            };
+            let Some(state) = s(r, "state").and_then(review_state) else { continue };
+            if !out.iter().any(|x| x.user.login.as_deref() == Some(login)) {
+                out.push(Reviewer { user: user(login, None, None), state: Some(state) });
+            }
+        }
+    }
+    out
 }
 
 fn mergeable_from(state: Option<&str>) -> Option<bool> {
@@ -1374,5 +1382,24 @@ mod tests {
             "anna's latest request is the oldest wait"
         );
         assert_eq!(waiting_state(&json!({}), "head"), (vec![], None));
+    }
+
+    #[test]
+    fn a_later_comment_keeps_the_approval() {
+        let n = json!({
+            "author": { "login": "me" },
+            "latestOpinionatedReviews": { "nodes": [ { "state": "APPROVED", "author": { "login": "bob" } } ] },
+            "latestReviews": { "nodes": [
+                { "state": "COMMENTED", "author": { "login": "bob" } },
+                { "state": "COMMENTED", "author": { "login": "dan" } },
+                { "state": "COMMENTED", "author": { "login": "me" } },
+            ] },
+        });
+        let got: Vec<_> =
+            latest_reviewers(&n).into_iter().map(|r| (r.user.login.unwrap_or_default(), r.state)).collect();
+        assert_eq!(
+            got,
+            [("bob".into(), Some(MyReviewState::Approved)), ("dan".into(), Some(MyReviewState::Commented))]
+        );
     }
 }

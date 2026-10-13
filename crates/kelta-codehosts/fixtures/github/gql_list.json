@@ -19,7 +19,7 @@
           "createdAt": "2026-09-01T08:00:00Z",
           "changedFiles": 120,
           "files": { "nodes": [{ "path": "src/limit.rs", "additions": 30, "deletions": 8 }, { "path": "tests/limit.rs", "additions": 10, "deletions": 2 }] },
-          "latestReviews": { "nodes": [{ "state": "COMMENTED", "author": { "login": "dan" } }, { "state": "APPROVED", "author": { "login": "bob" } }, { "state": "COMMENTED", "author": { "login": "carol" } }, { "state": "DISMISSED", "author": { "login": "eve" } }] },
+          "latestReviews": { "nodes": [{ "state": "COMMENTED", "author": { "login": "dan" } }, { "state": "APPROVED", "author": { "login": "bob" } }, { "state": "COMMENTED", "author": { "login": "carol" } }, { "state": "CHANGES_REQUESTED", "author": { "login": "zed" } }, { "state": "DISMISSED", "author": { "login": "eve" } }] },
           "mergeable": "MERGEABLE",
           "reviewDecision": "REVIEW_REQUIRED",
           "author": {
