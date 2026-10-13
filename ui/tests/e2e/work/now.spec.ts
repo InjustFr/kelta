@@ -220,10 +220,10 @@ test('a Claude session Kelta did not start: Elsewhere, Claude needs you, Mod+J, 
 
   await dispatch(page, 'tickets.open', { project_id: 'shop' });
   await page.getByRole('tab', { name: 'List' }).click();
-  await expect(page.locator('[data-key="jira-acme:SHOP-151"] [data-phase="elsewhere"]')).toHaveAttribute(
-    'title',
-    'Claude needs you, outside Kelta',
-  );
+  // The Tickets row puts it with Claude, my move (#400), and says why in its tooltip.
+  const ticket = page.locator('[data-key="jira-acme:SHOP-151"]');
+  await expect(ticket.locator('[data-mark]')).toHaveAttribute('data-mark', 'you');
+  await expect(ticket).toHaveAttribute('title', /Claude needs you, outside Kelta/);
 
   await page.evaluate(() => {
     window.__keltaMock!.state.outside = [];

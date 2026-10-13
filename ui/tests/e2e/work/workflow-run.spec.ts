@@ -30,7 +30,9 @@ test('detail w: the run opens a background tab, the toast opens and peeks its se
   await expect(detail).toBeFocused();
   const tab = page.locator('[data-testid="rail-row"]', { hasText: 'kelta-ticket-pass · SHOP-151' });
   await expect(tab).toHaveCount(1);
-  await expect(row).toContainText('kelta-ticket-pass · Starting');
+  // The row puts the run with Claude and names it in its tooltip (#400); the detail names it too.
+  await expect(row).toHaveAttribute('title', /kelta-ticket-pass · Starting/);
+  await expect(detail.locator('[data-run]')).toContainText('kelta-ticket-pass · Starting');
 
   const sid = await page.evaluate(() => {
     const args = window.__kelta!.stores.toasts.list.at(-1)!.toast.action!.args as { session_id: string };

@@ -1,8 +1,9 @@
 # Working with tickets
 
-The Tickets pane is a list, not a board: one row per ticket, grouped by flow (what you are doing, what waits on
-someone, what is ready), with the keyboard doing most of the work. A detail column on the right follows the
-selection. Board mode stays available with the list/board toggle.
+The Tickets pane is a list, not a board: one row per ticket, grouped by the tracker's status (what the rest of the
+team sees), with the keyboard doing most of the work. Each row carries Now's stage track, from Ticket to Deploy. A
+reading pane on the right follows the selection and opens on where the ticket stands. Board mode stays available
+with the list/board toggle.
 
 **Tickets** on the rail (`Cmd+Shift+B`) shows this list across every source, outside any project: Mine is the
 default, and its tab, source, grouping, sort and person come back after a restart.
@@ -126,58 +127,67 @@ person or the sprint is narrowing the list. `?` lists every key of the pane.
 
 | Group by | Groups |
 |---|---|
-| Flow (default) | **Doing**: work item active, or an in-progress status. **Waiting**: Claude needs you, a review is requested or required, CI is red, the ticket is [blocked](#blocked-tickets), or the status name says blocked or on hold. **Ready**: to do and not started. **Backlog**: backlog, triage or icebox statuses, and statuses Kelta cannot place. **Done**: finished in the last 7 days (a source with no status filter also fetches its closed tickets for this); older ones are left out. |
-| Status | the tracker's own status names, in progress first, Done collapsed |
+| Status (default) | the tracker's own status names, in the order of the source's board columns, Done collapsed |
+| Flow | **Doing**: work item active, or an in-progress status. **Waiting**: Claude needs you, a review is requested or required, CI is red, the ticket is [blocked](#blocked-tickets), or the status name says blocked or on hold. **Ready**: to do and not started. **Backlog**: backlog, triage or icebox statuses, and statuses Kelta cannot place. **Done**: finished in the last 7 days (a source with no status filter also fetches its closed tickets for this); older ones are left out. |
 | Priority | the provider's priorities, highest first, then no priority |
 | Sprint | active sprints, other sprints, then no sprint |
 | Assignee, Source, None | as named |
-| Parent | one group per epic or parent issue (Jira parent, GitHub parent issue, GitLab epic or parent work item, Linear parent issue else project, Redmine parent issue), its key and title as header; tickets without a parent last. Outside this grouping a row shows its parent's key, and the detail shows the parent above the title (`Enter` on it opens it). |
+| Parent | one group per epic or parent issue (Jira parent, GitHub parent issue, GitLab epic or parent work item, Linear parent issue else project, Redmine parent issue), its key and title as header; tickets without a parent last. Outside this grouping a row shows its epic's name under the title, and the detail shows it beside the key (`Enter` on it opens it). |
 
 Within a group the sort is Priority (then most recently updated), Updated, Age in status (longest first) or Key.
 Each ticket carries the provider's priority, how long it has been in its status, its sprint, estimate and due date.
 GitHub and Gitea have no native priority: they rank from `priority:` style labels, and GitHub reads priority, sprint and estimate from Projects v2 fields.
 
-- **Age**: a ticket not done shows `7d`, `14d`, `21d`... in its row after a week in the same status; the text warms
-  at 14 days and turns red at 21. The last-update time is in the row's tooltip. Providers that do not date a status change fall back to the last update.
+- **In status**: the last column says how many days the ticket has been in its status; past 14 days it stands out in
+  the warning colour. `—` when the tracker does not date the status change, or the ticket is done. The last-update
+  time is in the row's tooltip.
 - **WIP limit**: when more tickets are in Doing than `tickets.wip_limit` (default 3, [Settings](../SETTINGS.md)) the
   group header says so in the warning colour. It only warns; nothing is blocked.
 - **Sprint**: the row's tooltip names the sprint unless you group by sprint. `f` then `s` keeps the active sprint only (a quick
   filter, separate from the per-source current iteration below).
 
-## The detail column
+## The row
 
-Wider than about 720px, the pane splits: the list on the left, the selected ticket on the right. `Space` hides
-or shows it, `Enter` moves the keys into it and `Esc` gives them back. `Shift+Enter` opens it in its own pane,
-which is also what `g` does in a narrow pane.
+Key, then the title on up to two lines with the epic's name and the pull request's state under it (`#2291 checks
+failed`, `No PR found`), then the stage track and the days in status. The status is the group's, and the actions
+live in the reading pane: rows carry no buttons.
 
-## Next step
+The stage track is Now's: Ticket, Claude, PR, Review, Merge, Deploy. The line runs to the furthest stage reached,
+the mark sits where the ticket is now and its shape says whose move it is (filled: yours, ring: waiting on others,
+diamond: something broke, a small dot once done). It follows the ticket's work item as Now does, else its linked pull
+request. A ticket in a status its source lists as waiting for a deploy, with no branch or pull request found, gets a
+dotted line labelled "per the tracker": Kelta did not see the stages before. Hover the row for where it stands.
 
-A ticket with work under way shows its lamp and a work icon in its row, followed by a word when the list is wide enough
-(from about 800px, so not beside the detail column): *Needs you*, *Working*, *Your turn* or *Resume* (parked work), and no word
-while the work waits on others. Hover for the phase (Claude working, Claude needs
-you, To review, Changes requested, Checks failed, New comments, In review, Merged...): the state Now shows, from the same signals. Red CI
-never hides the review: a PR still waiting for one reads `Checks failed · review required`. With the
-detail column hidden (or a narrow pane), `Enter` runs the phase's next action, as `Enter` does in Now (the key hints name it); `g` opens
-the detail instead. The selected or hovered row also shows that next action as a labelled button (Rebase, Send failures to Claude,
-Mark ready...).
+With the reading pane hidden (or a narrow pane), `Enter` on a ticket with work under way runs the phase's next
+action, as `Enter` does in Now (the key hints name it); `g` opens the pane instead.
 
-From top to bottom: key, title, status (a button: it opens the status picker), the action bar, a grid with
-assignee, priority, sprint, estimate, due date, labels and last update, the pull requests, the description (task
-lists are shown, not editable) and the last 20 comments with a box to add one (`Cmd+Enter` posts).
+## The reading pane
 
-The action bar shows Start or Resume work `s`, then Move `m`, Open PR `p`, Assign `a` and Comment `c`; More
-(`Cmd+.`, `Ctrl+.` on Linux) holds Unassign `A`, Block ticket `b`, Refine with Claude `r`, Run workflow `w`,
-Copy branch `y`, Open in browser `o` and Tags `t`. Hover a button for its key; every key works without the bar. An action the tracker cannot do (a tracker without assignment
-or comments), or that has nothing to act on (no pull request yet, no branch yet), stays visible but dimmed; hover
-it or press its key to read why. The selected or hovered row shows the same actions in small form (Move, pull
-request, Start work).
+Wider than about 720px (down to a 900px window), the pane splits: the list on the left, the selected ticket on the
+right. `Space` hides or shows it, `Enter` moves the keys into it and `Esc` gives them back. `Shift+Enter` opens it in
+its own pane, which is also what `g` does in a narrow pane. When the filter hides the selected ticket, the first match
+is selected, so the pane never shows a hidden row.
+
+From top to bottom: key, epic and title; the status (a button: it opens the status picker), type and points, and one
+line on the situation (*Waiting for a deploy. Nothing for you to do.*); the action bar; the latest comment, then what
+the spec still leaves open (a section headed Open questions, Missing, To clarify, Questions or TBD); the pull
+requests; the description as sections you can fold, one per heading (a raw link to a ticket reads as a chip with its
+key and title, acceptance criteria written Given / When / Then are laid out as such, task lists are shown, not
+editable); the fields that have a value (assignee, priority, sprint, due date, the source's fields, labels, last
+update); and the last 20 comments with a box to add one (`Cmd+Enter` posts).
+
+The action bar shows Start or Resume work `s`, then Move `m`, Open PR `p`, Assign to me `a` (not on a ticket already
+yours) and Comment `c`; Resume work is the filled button only while there is work to open. More (`Cmd+.`, `Ctrl+.` on
+Linux) holds Unassign `A`, Block ticket `b`, Refine with Claude `r`, Run workflow `w`, Copy branch `y`, Open in
+browser `o` and Tags `t`. Hover a button for its key; every key works without the bar. An action the tracker cannot
+do (a tracker without assignment or comments), or that has nothing to act on (no pull request yet, no branch yet),
+stays visible but dimmed; hover it or press its key to read why.
 
 ## Pull requests
 
-A row shows the pull request linked to the ticket as a pull request icon and a CI lamp: diamond CI failed, ring CI
-running, dot passed. A wide list (from about 800px) shows its number (`#12`, `!12` on GitLab) instead of the icon and,
-from about 1040px, its state in words: Draft, Review required, Approved, Changes requested, Merged or Closed. A draft
-pull request has a dashed outline at every width. Hover it for both states. A ticket links to the pull requests of its work item and to any pull request in your
+A row names the pull request linked to the ticket under its title, with its number (`#12`, `!12` on GitLab) and
+state: draft, review required, approved, changes requested, merged, closed, or checks failed (in the danger colour).
+A ticket links to the pull requests of its work item and to any pull request in your
 review lists whose branch or title carries the ticket key. The detail lists each with its title, state, CI,
 review state and branch. `p` opens it in Kelta's review detail when its repository is bound to a code host
 account, else in the browser; `P` always opens the browser. With several pull requests a small menu asks which.
@@ -223,8 +233,8 @@ transitions it allows, numbered. Type to filter; press a digit to move at once (
 more fields, Kelta asks for them or offers the browser; a refused move shows the tracker's message and Open in
 browser. Only moves the tracker allows are listed.
 
-The same picker opens from the status chip on any row, the status in the detail, the work bar and the command
-palette ("Move SHOP-142 to...").
+The same picker opens from the status in the reading pane, the work bar and the command palette ("Move SHOP-142
+to...").
 
 To move several tickets, `x` marks the current one, `Shift+j` and `Shift+k` extend the selection, then `m`. The
 picker lists only the statuses every selected ticket can reach, matched by status name, and moves them all.

@@ -1,13 +1,13 @@
-// Tickets list on the IPC mock (TICKETS.md T2/T3): the split view following the selection, the one
-// status picker from a row's status chip, and a multi-select move.
+// Tickets list on the IPC mock (TICKETS.md T2/T3): the split view following the selection, the status
+// picker in the reading pane, and a multi-select move.
 import { expect, test, type Page } from '@playwright/test';
 
 import { boot, callsOf, dispatch } from '../shell/helpers';
 
 const row = (page: Page, key: string) => page.locator(`[data-key="jira-acme:${key}"]`);
-const chip = (page: Page, key: string) => row(page, key).locator('[data-status]');
+const group = (page: Page, status: string) => page.locator(`[data-group="${status}"] .count`);
 
-/** Flow order on the mock: SHOP-142, SHOP-155 (Doing), SHOP-160, SHOP-120 (Waiting), SHOP-151 (Ready). */
+/** Status order on the mock (#400): To Do (SHOP-151, SHOP-155), In Progress (SHOP-142), In Review (SHOP-120), Blocked (SHOP-160). */
 async function openTickets(page: Page, select = 'SHOP-142'): Promise<void> {
   await boot(page);
   await dispatch(page, 'tickets.open', { project_id: 'shop' });
@@ -20,8 +20,9 @@ test('split view follows the selection; Space toggles, Enter focuses, Esc return
   await openTickets(page);
   const detail = page.getByTestId('ticket-detail');
   await expect(detail.getByRole('heading', { level: 1 })).toHaveText('Rate-limit login attempts');
+  await page.keyboard.press('j'); // the In Review header
   await page.keyboard.press('j');
-  await expect(detail.getByRole('heading', { level: 1 })).toHaveText('Flaky test in cart service');
+  await expect(detail.getByRole('heading', { level: 1 })).toHaveText('Upgrade payment SDK');
   await page.keyboard.press('Enter');
   await expect(detail).toBeFocused();
   await page.keyboard.press('Escape');
@@ -33,23 +34,26 @@ test('split view follows the selection; Space toggles, Enter focuses, Esc return
   await expect(page.getByTestId('tickets-pane')).toBeVisible();
 });
 
-test('the row status chip opens the status picker; typing filters, Enter moves', async ({ page }) => {
+test('the status picker in the reading pane: typing filters, Enter moves', async ({ page }) => {
   await openTickets(page, 'SHOP-151');
-  await chip(page, 'SHOP-151').getByRole('button').click();
+  const status = page.getByTestId('ticket-detail').getByRole('button', { name: /^Status To Do/ });
+  await status.click();
   const menu = page.getByRole('menu', { name: 'Move SHOP-151' });
   await expect(menu.getByRole('menuitem')).toHaveCount(4);
   await page.keyboard.type('prog');
   await expect(menu.getByRole('menuitem')).toHaveCount(1);
   await page.keyboard.press('Enter');
   await expect(menu).toHaveCount(0);
-  await expect(chip(page, 'SHOP-151')).toContainText('In progress');
+  await expect(
+    page.getByTestId('ticket-detail').getByRole('button', { name: /^Status In progress/ }),
+  ).toBeVisible();
   expect((await callsOf(page, 'tracker_transition')).at(-1)?.args).toMatchObject({
     transition_id: 'to-in_progress',
   });
 });
 
 test('x, Shift+J and m move both tickets through the moves they share', async ({ page }) => {
-  await openTickets(page);
+  await openTickets(page, 'SHOP-151');
   await page.keyboard.press('x');
   await page.keyboard.press('Shift+J');
   await page.keyboard.press('m');
@@ -59,8 +63,7 @@ test('x, Shift+J and m move both tickets through the moves they share', async ({
   await page.keyboard.type('review');
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('toasts')).toContainText('Moved 2 tickets to In review');
-  await expect(chip(page, 'SHOP-142')).toContainText('In review');
-  await expect(chip(page, 'SHOP-155')).toContainText('In review');
+  await expect(group(page, 'In review')).toHaveText('2');
   await expect(page.locator('.k-row.picked')).toHaveCount(0);
 });
 
@@ -91,20 +94,18 @@ test('a background run claim shows on the ticket row and follows report_progress
       },
       [state, phase, note] as const,
     );
-  const meta = row(page, 'SHOP-160').locator('[data-phase="run"]');
-  const lamp = row(page, 'SHOP-160').locator('.k-row-lamp [data-attention]');
+  // The row's stage track (#400): with Claude, waiting while it runs, broken once it is blocked.
+  const mark = row(page, 'SHOP-160').locator('[data-mark]');
+  const run = page.getByTestId('ticket-detail').locator('[data-run]');
 
   await report('running', 'Implement', null);
-  await expect(meta).toHaveText('kelta-ticket-pass · Implement');
-  await expect(lamp).toHaveAttribute('data-attention', 'working');
+  await expect(mark).toHaveAttribute('data-mark', 'wait');
+  await expect(run).toContainText('kelta-ticket-pass · Implement');
 
   await report('blocked', 'Review', '2 unresolved review findings');
-  await expect(meta).toHaveText('kelta-ticket-pass · Review');
-  await expect(meta).toHaveAttribute('title', '2 unresolved review findings');
-  await expect(lamp).toHaveAttribute('data-attention', 'error');
-  await expect(page.getByTestId('ticket-detail').locator('[data-run]')).toContainText(
-    'kelta-ticket-pass · Review',
-  );
+  await expect(mark).toHaveAttribute('data-mark', 'broken');
+  await expect(run).toContainText('kelta-ticket-pass · Review');
+  await expect(run).toHaveAttribute('title', '2 unresolved review findings');
 
   // Now lists the blocked run under Needs you, with its note.
   await page.keyboard.press('Control+0');
@@ -113,15 +114,11 @@ test('a background run claim shows on the ticket row and follows report_progress
   await expect(nowRow.locator('[data-mark]')).toHaveAttribute('data-mark', 'broken');
 });
 
-test('b in the detail blocks the ticket: the row shows Blocked and moves to Waiting; b again unblocks', async ({
-  page,
-}) => {
+test('b in the detail blocks the ticket: the row shows Blocked; b again unblocks', async ({ page }) => {
   await openTickets(page);
   await page.keyboard.press('Enter');
   await page.keyboard.press('b');
   await expect(row(page, 'SHOP-142').locator('[data-blocked]')).toHaveText('Blocked');
-  // Flow: SHOP-160 and SHOP-120 wait; the blocked ticket joins them.
-  await expect(page.locator('[data-group="waiting"] .count')).toHaveText('3');
   await page.keyboard.press('b');
   await expect(row(page, 'SHOP-142').locator('[data-blocked]')).toHaveCount(0);
   expect((await callsOf(page, 'tracker_set_blocked')).map((c) => c.args)).toMatchObject([
@@ -143,7 +140,7 @@ test("a source's chosen tracker fields show as chips on the row and in the detai
   for (const width of [1440, 900]) {
     await page.setViewportSize({ width, height: 900 });
     const out = await row(page, 'SHOP-142')
-      .locator('.c-title')
+      .locator('.c-what')
       .evaluate((cell) => {
         const right = cell.getBoundingClientRect().right;
         return [...cell.querySelectorAll<HTMLElement>('[data-field]')].filter(
