@@ -111,6 +111,7 @@
   "Tool: {tool}": "Werkzeug: {tool}",
   "Project folder": "Projektordner",
   "Branch {branch} (separate folder): {path}": "Branch {branch} (eigener Ordner): {path}",
+  "Recent": "Zuletzt besucht",
   "Recent: {path}": "Zuletzt: {path}",
   "Other folder…": "Anderer Ordner…",
   "Starting the session failed": "Sitzung konnte nicht gestartet werden",
