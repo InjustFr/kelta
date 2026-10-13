@@ -49,10 +49,12 @@
   import ToastHost from './ToastHost.svelte';
   import { startupUnlock } from './unlock';
   import UpdateBanner from './UpdateBanner.svelte';
+  import WhichKey from './WhichKey.svelte';
   import Workspace from './Workspace.svelte';
   import { GLOBAL_VIEWS, loadGlobalLayout } from '../views/work/nav';
 
   let prefixArmed = $state(false);
+  let prefixHint = $state(false);
 
   // ---- theme ---------------------------------------------------------------------------------
 
@@ -234,7 +236,10 @@
 
   onMount(() => {
     const stopKeys = keyManager.start();
-    const offPrefix = keyManager.onPrefixChange((armed) => (prefixArmed = armed));
+    const offPrefix = keyManager.onPrefixChange((armed, hint) => {
+      prefixArmed = armed;
+      prefixHint = hint;
+    });
     const offRemoved = onUiEvent('session.removed', (ev) => terminalPool.release(ev.id));
     const offQuit = onUiEvent('app.quit_requested', (ev) => {
       askQuit(ev).catch((err: unknown) => toasts.error(err, t('Quitting failed')));
@@ -357,6 +362,7 @@
       {:else}
         <div class="grow"></div>
       {/if}
+      {#if prefixHint}<WhichKey />{/if}
       <StatusBar {prefixArmed} />
     {/if}
   </div>

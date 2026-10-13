@@ -170,6 +170,7 @@
   data-pane-id={node.id}
   data-pane-kind={content.kind}
   data-focused={focused}
+  data-zoomed={zoomed}
   onpointerdowncapture={focus}
 >
   <section class="pane" class:focused aria-label={paneTitle(content, session)}>

@@ -1,8 +1,9 @@
 # Tools
 
-A tool is a button that opens a program in Kelta: a terminal program like lazygit in its own pane, or an app
-like Fork beside Kelta. Tools show in the Tools section of the sidebar (`Cmd+Alt+1..9` on macOS opens the
-first nine), in the `+` menu, and in the palette ("Open tool: lazygit").
+A tool opens a program from Kelta: a terminal program like lazygit over the tab you are working in, or an
+app like Fork beside Kelta. Tools are a short trip away from your work, not places in the sidebar: open one
+with its key (`Cmd+Alt+1..9` on macOS opens the first nine, in config order) or from the palette (`Cmd+K`,
+"Open lazygit").
 
 ## Add one in Settings
 
@@ -33,7 +34,7 @@ with a copy of each project file in `projects/.trash/`).
 id = "lazydocker"
 label = "lazydocker"
 command = "lazydocker"
-scope = "user"                  # one for you, as its own tab in Home, wherever you open it
+scope = "project"               # one per project, whatever the work item
 
 [[tools]]
 id = "lazygit"
@@ -68,8 +69,13 @@ placeholders work in `cwd`, `command` and `args`, and `|` picks the first one th
 
 ## Where a tool opens
 
-A tool opens where you are: in the project you are looking at, in the worktree of the focused work item; from
-Home, Tickets, Queue or Reviews, in Home (in `~`). A tool that takes a project, because a field uses
+A terminal tool opens in the tab you are on, as a pane that fills the tab (zoomed), in the tab's worktree
+when it is a work item's tab, else in the project folder. Press its key again, or `Esc` `Esc`, to get back
+to the tab as it was: the tool's pane closes but the program keeps running, and its key brings it back where
+you left it. There is no tool tab and nothing to return from.
+
+It opens where you are: in the project you are looking at, with the focused work item; from Home, Tickets,
+Queue or Reviews, in Home (in `~`). A tool that takes a project, because a field uses
 `{project.*}` or `{repo.*}`, asks which project when there is none. [Sapling ISL](sapling-isl.md) is one:
 its `start` args hold `--cwd {repo.path}`, so it needs a project's repo.
 
@@ -78,17 +84,21 @@ and open ISL there, or press `Esc` to open nothing. Inside `shop` it opens there
 also has "Open Sapling ISL for project…", which always asks, even inside a project. A tool with no project
 placeholder, like lazydocker, never asks.
 
-Other fields: `placement` (`split_right` by default, `split_down`, `new_tab`, `replace_focused`),
-`close_on_exit` (`never`, `on_success`, `always`), `env`, `description`. Web tools (`kind = "web"`) are
+Other fields: `placement` for web tools (`split_right` by default, `split_down`, `new_tab`, `replace_focused`;
+a terminal tool always opens zoomed in the current tab), `close_on_exit` (`never`, `on_success`, `always`),
+`env`, `description`. Web tools (`kind = "web"`) are
 covered in [Sapling ISL](sapling-isl.md).
 
 ## Opening a tool that is already running
 
-`scope` says how many copies a terminal tool has. By default (`work`) it runs once per work item, in a pane
-next to the current one: clicking its row in the sidebar (or pressing its key) while it runs in the current
-work item focuses that pane instead of opening a second copy, and in another work item it opens a new one
-there. `project` runs it once per project, as its own tab. `user` runs it once for you, as its own tab in Home,
-from wherever you open it (Settings > Tools: **One instance**). Each running copy is a line under the tool in
-the sidebar that goes to its pane. Pressing the tool's key again while it is in front takes you back where you
-were, the Queue included; a tool that takes a project asks for another project instead. When the program is not installed, the pane says so with its
-install hint and a **Check again** button; Settings > Tools > **Check** runs the same check.
+`scope` says how many copies a terminal tool has. By default (`work`) it runs once per work item: its key
+in the same work item brings that copy back (wherever it was hidden) instead of starting a second one, and
+in another work item it starts a new one there. `project` and `user` run it once per project (Settings >
+Tools: **One instance**); its key brings that copy into the tab you are on. A web tool keeps its own place:
+`project` as its own tab per project, `user` as one tab in Home; pressing its key again while it is in front
+takes you back where you were, the Queue included, and a web tool that takes a project asks for another
+project instead. When the program is not installed, the pane says so with its install hint and a **Check
+again** button; Settings > Tools > **Check** runs the same check.
+
+A tab made only of tools from an earlier version stays a tab under the project's "n more" row; the tool's
+key moves its program into the tab you are on and the empty tab closes.

@@ -9,8 +9,7 @@
   import { Button, currentPlatform, Kbd, Select, Sheet, TextInput } from '$lib/ui';
 
   import BrowseButton from './BrowseButton.svelte';
-  import { jumplist } from './jumplist';
-  import { activateProject, currentTab, focusedSessionId, isToolTab, railProjects } from './nav';
+  import { activateProject, focusedSessionId, railProjects } from './nav';
 
   let { onclose }: SheetProps = $props();
 
@@ -23,21 +22,7 @@
 
   const rail = railProjects();
   const newWorkChord = effectiveChords('work.new', settings.value()?.keys ?? null, currentPlatform())[0];
-  let projectId = $state<ProjectId>(initialProject());
-
-  /** The active project; in a Home tool tab, the project of the last row shown (Home is no target). */
-  function initialProject(): ProjectId {
-    const active = projects.activeId;
-    const tab = currentTab();
-    if (active && active === projects.home?.id && tab && isToolTab(tab)) {
-      const last = jumplist.list
-        .slice(0, jumplist.at + 1)
-        .reverse()
-        .find((l) => l.project !== active && projects.byId(l.project)?.open);
-      if (last) return last.project;
-    }
-    return active ?? rail[0]?.id ?? 'home';
-  }
+  let projectId = $state<ProjectId>(projects.activeId ?? rail[0]?.id ?? 'home');
   let picked = $state<string | null>(null);
   let placement = $state<Placement>('new_tab');
   let cwdChoice = $state('');

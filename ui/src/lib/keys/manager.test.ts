@@ -11,6 +11,7 @@ function keys(over: Partial<KeysSettings> = {}): KeysSettings {
   return {
     prefix: 'ctrl+shift+space',
     prefix_timeout_ms: 1000,
+    prefix_hint_ms: 0,
     bindings: {},
     prefix_bindings: {},
     list_keys: true,
@@ -465,5 +466,150 @@ describe('keys.list_keys', () => {
 
   it('on (default): letters reach the list', () => {
     expect(reached(true, { code: 'KeyA', key: 'a' })).toEqual(['a']);
+  });
+});
+
+describe('Esc Esc in a tool terminal (#412)', () => {
+  const TOOL: KeyContext = { ...TERMINAL, kind: 'tool' };
+  const esc = () => press({ code: 'Escape', key: 'Escape' });
+
+  it('passes the first Esc to the program and hides the tool on the second', () => {
+    const { manager, ids } = setup({ ctx: TOOL });
+    expect(manager.handleKeyDown(esc())).toBe('pass');
+    expect(manager.handleKeyDown(esc())).toBe('consumed');
+    expect(ids()).toEqual(['tools.hide']);
+    // A third Esc starts over.
+    expect(manager.handleKeyDown(esc())).toBe('pass');
+  });
+
+  it('needs the two presses close together, with no key between, in a tool terminal', () => {
+    vi.useFakeTimers();
+    const { manager, ids, setCtx } = setup({ ctx: TOOL });
+    manager.handleKeyDown(esc());
+    vi.advanceTimersByTime(500);
+    expect(manager.handleKeyDown(esc())).toBe('pass');
+    manager.handleKeyDown(press({ code: 'KeyJ', key: 'j' }));
+    expect(manager.handleKeyDown(esc())).toBe('pass');
+    setCtx(TERMINAL);
+    manager.handleKeyDown(esc());
+    expect(manager.handleKeyDown(esc())).toBe('pass');
+    expect(ids()).toEqual([]);
+  });
+});
+
+describe('which-key panel', () => {
+  const prefix = (): KeyboardEvent => ctrlShift('Space', ' ');
+  const key = (k: string, code = `Key${k.toUpperCase()}`): KeyboardEvent => press({ code, key: k });
+  const timed = (over: Partial<KeysSettings> = {}, ctx?: KeyContext) =>
+    setup({
+      ctx,
+      keys: keys({ prefix_hint_ms: 400, ...over }),
+      setTimer: (fn, ms) => setTimeout(fn, ms),
+      clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+    });
+
+  it('shows after the pause, keeps the prefix armed without a timer, and the next key runs', () => {
+    vi.useFakeTimers();
+    const { manager, ids } = timed();
+    const states: [boolean, boolean][] = [];
+    manager.onPrefixChange((a, h) => states.push([a, h]));
+    manager.handleKeyDown(prefix());
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(399);
+    expect(manager.prefixHint).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(manager.prefixHint).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(5000); // past prefix_timeout_ms: still armed
+    expect(manager.prefixArmed).toBe(true);
+    manager.handleKeyDown(key('p'));
+    expect(ids()).toEqual(['project.switcher']);
+    expect(states).toEqual([
+      [true, false],
+      [true, true],
+      [false, false],
+    ]);
+  });
+
+  it('never shows when the second key comes fast', () => {
+    vi.useFakeTimers();
+    const { manager, ids } = timed();
+    const hints: boolean[] = [];
+    manager.onPrefixChange((_, h) => hints.push(h));
+    manager.handleKeyDown(prefix());
+    vi.advanceTimersByTime(200);
+    manager.handleKeyDown(key('t'));
+    vi.advanceTimersByTime(5000);
+    expect(hints).not.toContain(true);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(ids()).toEqual(['tickets.open']);
+  });
+
+  it('Esc closes it; ? in the panel opens the key list, ? typed fast is swallowed', () => {
+    vi.useFakeTimers();
+    const { manager, calls } = timed();
+    manager.handleKeyDown(prefix());
+    vi.advanceTimersByTime(400);
+    expect(manager.handleKeyDown(press({ code: 'Escape', key: 'Escape' }))).toBe('consumed');
+    expect(manager.prefixArmed).toBe(false);
+    expect(manager.prefixHint).toBe(false);
+
+    manager.handleKeyDown(prefix());
+    manager.handleKeyDown(press({ code: 'Slash', key: '?', shiftKey: true }));
+    expect(calls).toEqual([]);
+
+    manager.handleKeyDown(prefix());
+    vi.advanceTimersByTime(400);
+    manager.handleKeyDown(press({ code: 'Slash', key: '?', shiftKey: true }));
+    expect(calls).toEqual([{ id: 'settings.open', args: { section: 'keys' } }]);
+  });
+
+  it('is off with prefix_hint_ms = 0 or not below the timeout: the prefix times out', () => {
+    vi.useFakeTimers();
+    for (const prefix_hint_ms of [0, 1000]) {
+      const { manager } = timed({ prefix_hint_ms });
+      manager.handleKeyDown(prefix());
+      vi.advanceTimersByTime(1001);
+      expect(manager.prefixArmed).toBe(false);
+      expect(manager.prefixHint).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+    }
+  });
+
+  it('lists the prefix keys by group, the work group only on a work tab', () => {
+    const { manager } = timed();
+    manager.handleKeyDown(prefix());
+    const off = manager.prefixHints(false);
+    expect(off.prefix).toBe('ctrl+shift+space');
+    expect(off.groups.map((g) => g.group)).toEqual(['goto', 'panes', 'tools']);
+    const goto = off.groups.find((g) => g.group === 'goto')!.hints;
+    expect(goto).toContainEqual({ key: 't', action: 'tickets.open', label: 'Open tickets' });
+    const panes = off.groups.find((g) => g.group === 'panes')!.hints.map((h) => h.key);
+    expect(panes).toContain('h');
+    expect(panes).not.toContain('ArrowLeft');
+    expect(panes).not.toContain('['); // terminal.copy: not runnable outside a terminal
+
+    const on = manager.prefixHints(true);
+    expect(on.groups.map((g) => g.group)).toEqual(['goto', 'work', 'panes', 'tools']);
+    expect(on.groups.find((g) => g.group === 'work')!.hints).toEqual([
+      { key: '.', action: 'work.menu', label: 'Work menu' },
+    ]);
+  });
+
+  it('follows the focus of the prefix press and rebinds', () => {
+    let current = keys({ prefix_hint_ms: 400 });
+    const m = new KeyManager({
+      platform: 'linux',
+      keys: () => current,
+      hasAction: () => true,
+      context: () => TERMINAL,
+    });
+    m.handleKeyDown(prefix());
+    const keysOf = (): string[] => m.prefixHints(false).groups.flatMap((g) => g.hints.map((h) => h.key));
+    expect(keysOf()).toContain('[');
+    current = keys({ prefix_hint_ms: 400, prefix_bindings: { 'tickets.open': 'T' } });
+    m.refresh();
+    expect(keysOf()).toContain('T');
+    expect(keysOf()).not.toContain('t');
   });
 });

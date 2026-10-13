@@ -7,6 +7,7 @@
 // - Letters and punctuation match the character of the active layout, digits and named keys the
 //   physical key (`eventCode`). After the prefix, the next key is matched on `KeyboardEvent.key`
 //   (characters such as `%`, `"`, `(`, `N`).
+// - `Esc` `Esc` in a tool's terminal hides the tool (`tools.hide`); the first `Esc` reaches it.
 // - Linux chords follow the Mac set with Cmd → Ctrl. In a focused terminal a plain Ctrl+letter goes to
 //   the terminal (`keys.linux_terminal = "terminal_first"`, the default); the catalog keeps those actions
 //   on Ctrl+Shift+letter too.
@@ -24,6 +25,9 @@ import {
   type Chord,
   type Platform,
 } from './chords';
+
+/** Two `Esc` presses this close together are one `Esc` `Esc`. */
+const ESCAPE_TWICE_MS = 400;
 
 export interface KeyContext {
   /** Focus is inside a terminal view. */
@@ -57,7 +61,7 @@ export interface KeyManagerOptions {
   /** Extra chords (tool keybindings), re-read on `refresh()`. */
   extraBindings?: () => readonly ExtraBinding[];
   onError?: (err: unknown, actionId: string) => void;
-  /** Timer functions (tests inject fakes). The prefix timeout is the only timer: event-armed. */
+  /** Timer functions (tests inject fakes). The prefix timer (hint or timeout) is the only one: event-armed. */
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
 }
@@ -73,11 +77,34 @@ interface Compiled {
   prefix: Chord | null;
   prefixText: string;
   timeoutMs: number;
+  hintMs: number;
   prefixKeys: Map<string, Binding>;
+}
+
+/** Groups of the which-key panel, in display order. */
+export type HintGroup = 'goto' | 'work' | 'panes' | 'tools';
+
+export interface PrefixHint {
+  key: string;
+  action: string;
+  /** Catalog label (untranslated), the action id for plugin commands. */
+  label: string;
 }
 
 const DEFAULT_PREFIX = 'ctrl+shift+space';
 const DEFAULT_TIMEOUT_MS = 1000;
+const DEFAULT_HINT_MS = 400;
+/** `?` in the which-key panel, when no prefix binding takes it: Settings › Keys lists every key. */
+const KEY_LIST: Binding = { action: 'settings.open', context: 'global', args: { section: 'keys' } };
+const HINT_GROUPS: readonly HintGroup[] = ['goto', 'work', 'panes', 'tools'];
+const NOT_THIS_WORK = new Set(['work.new', 'work.start', 'work.finish_merged']);
+
+function hintGroup(action: string): HintGroup {
+  if (/^(project|inbox|tab|tickets|reviews|attention|nav)\./.test(action)) return 'goto';
+  if (/^(pane|session|terminal|editor)\./.test(action)) return 'panes';
+  if (action.startsWith('work.') && !NOT_THIS_WORK.has(action)) return 'work';
+  return 'tools';
+}
 const ARROW_PREFIX_KEYS: Record<string, string> = {
   'pane.focus_left': 'ArrowLeft',
   'pane.focus_down': 'ArrowDown',
@@ -163,8 +190,11 @@ export class KeyManager {
   #platform: Platform;
   #compiled: Compiled | null = null;
   #armed = false;
+  #hint = false;
+  #armedCtx: KeyContext | null = null;
   #timer: unknown = null;
-  #listeners = new Set<(armed: boolean) => void>();
+  #lastEscape = -Infinity;
+  #listeners = new Set<(armed: boolean, hint: boolean) => void>();
 
   constructor(options: KeyManagerOptions = {}) {
     this.#opts = options;
@@ -180,10 +210,38 @@ export class KeyManager {
     return this.#armed;
   }
 
-  /** Listens to prefix state changes (status bar indicator). Returns an unsubscribe fn. */
-  onPrefixChange(listener: (armed: boolean) => void): () => void {
+  /** The prefix waited `keys.prefix_hint_ms`: the which-key panel shows, armed until a key or Esc. */
+  get prefixHint(): boolean {
+    return this.#hint;
+  }
+
+  /** Listens to prefix state changes (status bar indicator, which-key panel). Returns an unsubscribe fn. */
+  onPrefixChange(listener: (armed: boolean, hint: boolean) => void): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
+  }
+
+  /**
+   * The prefix chord and the keys after it that can run in the focus of the prefix press, by group
+   * (empty groups left out). `onWork`: the focused tab is a work item's, else no `work` group.
+   */
+  prefixHints(onWork: boolean): { prefix: string; groups: { group: HintGroup; hints: PrefixHint[] }[] } {
+    const compiled = this.#compile();
+    const ctx = this.#armedCtx;
+    const by = new Map<HintGroup, PrefixHint[]>();
+    for (const [key, binding] of compiled.prefixKeys) {
+      if (key.startsWith('Arrow')) continue; // twins of h/j/k/l
+      if (ctx && !this.#runnable(binding, ctx)) continue;
+      const group = hintGroup(binding.action);
+      if (group === 'work' && !onWork) continue;
+      const label = ACTIONS.find((a) => a.id === binding.action)?.label ?? binding.action;
+      by.set(group, [...(by.get(group) ?? []), { key, action: binding.action, label }]);
+    }
+    const groups = HINT_GROUPS.flatMap((group) => {
+      const hints = by.get(group);
+      return hints ? [{ group, hints }] : [];
+    });
+    return { prefix: compiled.prefixText, groups };
   }
 
   /** Drops the compiled bindings (call when `[keys]`, tools or plugins change). */
@@ -236,9 +294,12 @@ export class KeyManager {
     if (this.#armed) return this.#handlePrefixKey(event, compiled);
 
     if (compiled.prefix && matchChord(compiled.prefix, event)) {
-      this.#arm(compiled.timeoutMs);
+      this.#armedCtx = this.#context(event);
+      this.#arm(compiled);
       return this.#consume(event);
     }
+
+    if (this.#escapeTwice(event)) return this.#consume(event);
 
     const chord = chordFromEvent(event);
     if (!chord) return 'pass';
@@ -257,6 +318,20 @@ export class KeyManager {
 
   #context(event: KeyboardEvent): KeyContext {
     return (this.#opts.context ?? contextFromEvent)(event);
+  }
+
+  /** `Esc` `Esc` in a tool's terminal runs `tools.hide` (#412); the first `Esc` still reaches the program. */
+  #escapeTwice(event: KeyboardEvent): boolean {
+    const plain =
+      event.key === 'Escape' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
+    const ctx = plain ? this.#context(event) : null;
+    const now = Date.now();
+    const twice = ctx?.kind === 'tool' && now - this.#lastEscape <= ESCAPE_TWICE_MS;
+    this.#lastEscape = ctx?.kind === 'tool' && !twice ? now : -Infinity;
+    const hide: Binding = { action: 'tools.hide', context: 'terminal' };
+    if (!twice || !this.#runnable(hide, ctx!)) return false;
+    this.#run(hide);
+    return true;
   }
 
   #runnable(binding: Binding, ctx: KeyContext): boolean {
@@ -296,11 +371,13 @@ export class KeyManager {
 
   #handlePrefixKey(event: KeyboardEvent, compiled: Compiled): KeyResult {
     if (BARE_MODIFIER_KEYS.has(event.key)) return 'pass'; // holding Shift/Ctrl while choosing is fine
+    const hint = this.#hint;
     this.#disarm();
     if (event.key === 'Escape' || (compiled.prefix && matchChord(compiled.prefix, event))) {
       return this.#consume(event);
     }
-    const binding = this.#prefixBinding(event, compiled);
+    const binding =
+      this.#prefixBinding(event, compiled) ?? (hint && event.key === '?' ? KEY_LIST : undefined);
     if (binding) {
       const ctx = this.#context(event);
       if (this.#runnable(binding, ctx)) this.#run(binding);
@@ -329,15 +406,23 @@ export class KeyManager {
     return this.#consume(event);
   }
 
-  #arm(timeoutMs: number): void {
+  #arm({ timeoutMs, hintMs }: Compiled): void {
     this.#clear();
-    this.#timer = (this.#opts.setTimer ?? ((fn, ms) => setTimeout(fn, ms)))(() => this.#disarm(), timeoutMs); // one-shot: prefix timeout
-    this.#setArmed(true);
+    const set = this.#opts.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+    // One-shot, only while armed: the which-key panel (then armed until a key or Esc), else the timeout.
+    this.#timer =
+      hintMs > 0 && hintMs < timeoutMs
+        ? set(() => {
+            this.#timer = null;
+            this.#setState(true, true);
+          }, hintMs)
+        : set(() => this.#disarm(), timeoutMs);
+    this.#setState(true, false);
   }
 
   #disarm(): void {
     this.#clear();
-    this.#setArmed(false);
+    this.#setState(false, false);
   }
 
   #clear(): void {
@@ -347,10 +432,11 @@ export class KeyManager {
     }
   }
 
-  #setArmed(armed: boolean): void {
-    if (this.#armed === armed) return;
+  #setState(armed: boolean, hint: boolean): void {
+    if (this.#armed === armed && this.#hint === hint) return;
     this.#armed = armed;
-    for (const l of [...this.#listeners]) l(armed);
+    this.#hint = hint;
+    for (const l of [...this.#listeners]) l(armed, hint);
   }
 
   #compile(): Compiled {
@@ -392,6 +478,7 @@ export class KeyManager {
     const prefixText = keys?.prefix ?? DEFAULT_PREFIX;
     const prefix = prefixText === 'off' ? null : parseChord(prefixText, platform);
     const timeoutMs = Math.min(5000, Math.max(200, keys?.prefix_timeout_ms ?? DEFAULT_TIMEOUT_MS));
+    const hintMs = Math.min(5000, Math.max(0, keys?.prefix_hint_ms ?? DEFAULT_HINT_MS));
 
     const prefixKeys = new Map<string, Binding>();
     for (const meta of ACTIONS) {
@@ -407,7 +494,7 @@ export class KeyManager {
       if (!prefixKeys.has(key)) prefixKeys.set(key, { action: id, context: 'global' });
     }
 
-    this.#compiled = { chords, prefix, prefixText, timeoutMs, prefixKeys };
+    this.#compiled = { chords, prefix, prefixText, timeoutMs, hintMs, prefixKeys };
     return this.#compiled;
   }
 }

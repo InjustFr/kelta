@@ -7,6 +7,10 @@ export type KeysSettings = {
  */
 prefix: string, prefix_timeout_ms: number, 
 /**
+ * Pause after the prefix before a panel lists the next keys; `0` turns the panel off.
+ */
+prefix_hint_ms: number, 
+/**
  * ActionId → chords. Overrides only: unlisted actions use the platform defaults of the
  * ActionId catalog (`ui/src/lib/gen/actions.ts`); `[]` unbinds.
  */
