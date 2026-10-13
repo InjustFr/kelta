@@ -19,29 +19,19 @@ notification daemon) and offers the first steps:
   ([details](claude-code.md#set-up-with-claude)). The command palette has the same action later.
 - **Create a project from a folder**, then **Add an account**. The steps below do the same by hand.
 
-1. Open a project: **Add project** in the project rail, or `kelta-ctl open ~/code/shop`. Type the folder or pick it
+1. Open a project: **Add project** in the sidebar, or `kelta-ctl open ~/code/shop`. Type the folder or pick it
    with **Browse...**; Kelta detects the repositories, remotes and tracker. A folder holding several repositories
    becomes one project.
 2. Add an account (Settings > Accounts) for your tracker and code host. Tokens go to the OS keyring; if you have
    none, use `env:` or `command:` references ([keyring setup](keyring-and-notifications.md)). GitHub and GitLab can
    also reuse your `gh` / `glab` login or sign in with the browser ([oauth](oauth.md)).
-3. Click **Tickets** at the top of the rail (`Cmd+Shift+B`). It shows your tickets from every open project (Mine);
-   `2` and `3` switch to Unassigned and Team ([working with tickets](tickets.md)). Select one and press
-   **Start work**: Kelta creates a worktree in the ticket's project and opens Claude and nvim side by side. **Queue**
-   and **Pull requests**, just below, show what waits on you and the PRs to review, across projects too
-   ([pull requests](reviews.md)).
+3. Pick a ticket source: **Pick a board** in Tickets or in the Queue, or **Set up with Claude**
+   ([working with tickets](tickets.md#sources)).
 
-While your Queue is empty and your first item has not shipped yet, it shows **Your loop** instead of a blank list: the stage track and the five steps Kelta
-works in, each checked off from what it finds. The current step is highlighted, with its button.
-
-1. **Add a project.**
-2. **Connect a ticket source**: **Pick a board**, or **Set up with Claude**.
-3. **Start work on a ticket** (`s`): Claude works in its own worktree.
-4. **Review what Claude changed** (`Enter`).
-5. **Ship** (`p`): the pull request opens.
-
-No tickets? `Shift+Cmd+N` starts a branch and a Claude from one sentence. Once your first item has shipped, the
-panel never shows again.
+While your Queue is empty and your first item has not shipped yet, it shows **Your loop** instead of a blank list:
+the stage track and five steps, **Add a project**, **Connect a ticket source**, **Start work on a ticket** (`s`),
+**Review what Claude changed** (`Enter`) and **Ship** (`p`), each checked off from what Kelta finds. The current step
+is highlighted, with its button. The last three are [the loop](#the-loop). Once your first item has shipped, the panel never shows again.
 
 Settings > Diagnostics checks the things Kelta depends on: graphics, WebKitGTK, notification daemon, keyring,
 `claude`, `nvim`, `git`, `gh`, `glab`, hook health and socket paths.
@@ -58,38 +48,118 @@ Settings > Diagnostics checks the things Kelta depends on: graphics, WebKitGTK, 
 | Gitea, Forgejo, Codeberg | issues | yes | access token ([Gitea](gitea.md)) |
 | Bitbucket Cloud | no | yes | Atlassian API token ([Bitbucket](bitbucket.md)) |
 
-## The rail
+## The loop
 
-The rail on the left holds Search, **Tickets**, **Queue** and **Pull requests**, your open projects with their tabs, the
-Tools, and Settings.
+Kelta has three places, listed at the top of the sidebar: the **Queue**, where all your work waits; **Tickets** and
+**Pull requests**, the lists you pick work from; and, for each piece of work you start, its own tab with Claude and
+nvim, the desk. One piece of work (a branch, a worktree, a Claude conversation, at most one pull request) is a
+**work item**. The loop goes:
 
-- **Width.** Drag the edge of the rail to resize it (200 to 480 px). With the edge focused, the arrow keys move
+1. **Pick a ticket.** Open **Tickets** (`Cmd+Shift+B`, `Ctrl+Shift+B` on Linux). It lists your tickets from every
+   open project (Mine); `2` and `3` switch to Unassigned and Team. Select one and press `s` (**Start work**).
+   Kelta creates a worktree and a branch in the ticket's project, moves the ticket to In progress and opens Claude,
+   already briefed on the ticket, next to nvim. No ticket? `Shift+Cmd+N` starts a work item from one sentence.
+2. **Let Claude work.** The work item's tab is the desk. Its header names the item and says, in one sentence,
+   whose move it is and why (`Your move: To review, +212 −3` once Claude stops); the stage track under it runs Ticket, Claude, PR, Review,
+   Merge, Deploy. The **Story panel** on the right (`Cmd+I`) tells the item's story in that order: since you left,
+   the ticket and its acceptance criteria, Claude's tasks and last message, the changes file by file, the pull
+   request, the start log. You can go elsewhere: the item keeps its place in the sidebar.
+3. **Come back when it needs you.** When Claude stops, asks or finishes, the item moves to **Your move** in the
+   Queue (`Cmd+0`). `Cmd+J` goes straight to the next thing that needs you, wherever it is. A Claude that asks a
+   question can be answered from the Queue: `1`–`9` pick an option, or type in **Reply to Claude**.
+4. **Review.** `Enter` runs the item's next step, here **Review changes**: the diff of what Claude changed since you
+   last looked, in nvim. `Shift+R` marks it reviewed; send fixes back to Claude from the Story panel's Changes.
+5. **Ship.** `p` pushes the branch and opens the pull request; the ticket moves to review. The item now waits on
+   others (reviewers, checks) in the Queue, and comes back to Your move when a review asks for changes or checks
+   fail. Once merged, **Finish** removes the worktree.
+
+Pull requests you are asked to review are in **Pull requests** (`Cmd+Shift+R`): read, approve, or review one
+locally in a worktree with Claude ([pull requests](reviews.md)).
+
+### Five keys
+
+| Key | What it does |
+|---|---|
+| `Enter` | the next step of what is selected, in every list; on the desk, `Cmd+.` `Enter` |
+| `Cmd+.` | the actions of whatever is selected (a row, a detail, the work item on the desk), what can run now first |
+| `Cmd+K` | find anything: recent places, work items, sessions, tickets, pull requests, actions, settings. `#`, `!`, `>` and `,` narrow it to tickets, pull requests, commands or settings |
+| `Cmd+J` | the next thing that needs you (`Shift+Cmd+J` back) |
+| `Cmd+0` | the Queue, and from the Queue back where you were |
+
+On Linux, `Ctrl` replaces `Cmd`. The prefix key (`Ctrl+Shift+Space`, then one key) reaches every action; pause after
+it and a panel lists the keys that follow (`Esc` closes it, `?` opens the full list).
+
+## The Queue
+
+The **Queue** lists all your work, across projects, in three zones by whose move it is:
+
+- **Your move**: Claude needs you, ready for review, next up, new for you, fix, review requests, ship and clean up,
+  up next.
+- **Claude working**: work whose Claude is working, background runs included: back in minutes.
+- **Waiting on others**: reviewers, checks and deploys: in flight, elsewhere, blocked, then waiting to deploy
+  (collapsed: tickets in a status their source lists as waiting for a deployment, set in Settings > Sources).
+
+The header sums them up: "9 your move, 2 Claude working, 2 waiting on others". Each row has a stage track: the line
+runs to the furthest stage reached and the mark sits where the item is now, filled when it is your move, a ring while
+it waits, a diamond when something broke. The row's next step is a button that runs it. The selected item's brief
+sits beside the list (under it in a narrow pane): its next action, the two likely after it, the rest behind "more
+actions" (`.`), Claude's last message and the facts.
+
+`j` `k` move, `Enter` runs the next step, `g` goes to its place without acting, `/` filters, `Cmd+Shift+R` refreshes,
+`?` lists every key. A letter means the same in the Queue, Tickets and Pull requests: `s` work on it (start a ticket,
+go to a work item's tab, review a pull request locally), `v` view changes (`Shift+V` the whole diff), `o` open on
+the host, `m` move the ticket, `c` comment, `e` expand Claude's message, `Shift+R` mark reviewed. `Esc` clears the
+filter, then goes back.
+
+## The sidebar
+
+The sidebar on the left lists your work: the **Queue**, **Tickets** and **Pull requests**, then each open project
+with its work items, in the order you started them, so a row never moves under you. `Cmd+1` to `Cmd+9` jump to the
+first nine. Every other tab of a project (shells, diagnostics, details) and its background sessions fold into one
+**n more** row; click it to see them. A row whose Claude needs you is lit. **Settings** sits at the bottom.
+
+- **Width.** Drag the edge of the sidebar to resize it (200 to 480 px). With the edge focused, the arrow keys move
   it by 16 px (64 with Shift).
-- **Collapse.** `Cmd+B` (`Ctrl+B` on Linux), the button at the bottom of the rail, or `Enter` on the edge
-  folds the rail into an icon column. It starts folded when the window is narrower than 1100 px. The width and
-  the state are remembered. In a narrow rail the shortcut hints hide before a label is cut.
+- **Collapse.** `Cmd+B` (`Ctrl+B` on Linux), the button at the bottom of the sidebar, or `Enter` on the edge
+  folds it into an icon column. It starts folded when the window is narrower than 1400 px, and folds while the
+  Queue is shown (the Queue lists the same work); open it by hand and it stays open until you leave the Queue.
+  The width and the state are remembered.
 - A tab running a Claude workflow shows the run's phase under its row ([details](claude-code.md#workflows)).
-- **Elsewhere** lists Claude sessions started outside Kelta, once the relay is installed
+- **Other Claude sessions** lists Claude sessions started outside Kelta, once the relay is installed
   ([details](claude-code.md#sessions-started-outside-kelta)).
+- Tools (lazygit, lazydocker...) are not in the sidebar: their key or the palette opens them in the tab you are on
+  ([tools](tools.md)).
+
+## The top bar
+
+Across the top of the window: `‹` `›` go back and forward through the places you visited, the search field opens
+the palette (`Cmd+K`), **All projects** narrows the Queue, Tickets and Pull requests to one project, the **needs
+you** chip counts the Claudes blocked on you (a click goes to one; `Cmd+J` does the same), and **+ New** starts a
+work item or a session.
+
+The needs you chip is the one thing in Kelta that calls you. A Claude that finished does not send a desktop
+notification by default (it can wait in the Queue), and a toast closes when you leave the view it came from. To
+work without interruptions, **focus mode** (`Shift+Cmd+F`) hides the sidebar and the Story panel and holds the
+rest until you leave it ([focus mode](keyring-and-notifications.md#focus-mode)).
 
 ## Projects
 
 - **Add project** opens the New project sheet; `kelta-ctl open <path>` does the same from a terminal.
-- A project's menu in the rail (right-click, or the button on its row) has **Close project** (its sessions keep
+- A project's menu in the sidebar (right-click, or the button on its name) has **Close project** (its sessions keep
   running), **Close and stop sessions** and **Remove project...** (its file moves to `projects/.trash`).
-- A closed project leaves the rail. Bring it back with **Open project...** under the project list (shown while a
+- A closed project leaves the sidebar. Bring it back with **Open project...** under the project list (shown while a
   closed project exists), the palette action **Open project**, or the switcher (`Cmd+P`, `Ctrl+P`), which
   lists closed projects as "not open".
 
 ## Panes and windows
 
 - Drag a pane by its header onto the side of another pane to split beside or below it, onto its middle to swap the
-  two, onto a tab in the rail to move it there, or onto the project's name in the rail to give it a tab of its
-  own. A pane stays in its project.
-- Drag a pane, or a tab in the rail, out of the Kelta window to open it in its own window. The same is **Move to
+  two, onto a row in the sidebar to move it there, or onto the project's name in the sidebar to give it a tab of
+  its own. A pane stays in its project.
+- Drag a pane, or a row of the sidebar, out of the Kelta window to open it in its own window. The same is **Move to
   new window** in the pane's or the tab's menu, and the palette action **Move pane to new window**. In that window
   the menu says **Move back to main window**. A detached window shows one tab; its sessions keep running.
-- Settings (`Cmd+,`) opens the tab you already have instead of a new one.
+- Settings (`Cmd+,`) opens over the window; `Esc` or `Cmd+,` again closes it onto where you were.
 
 ## Keyboard on Linux
 
@@ -102,25 +172,6 @@ Pause after the prefix and a panel lists the keys that follow (`Esc` closes it, 
 Copy and paste in a terminal are `Ctrl+Shift+C` / `Ctrl+Shift+V`. If you never use those shell keys, set
 `keys.linux_terminal = "kelta_first"` (Settings > Keys) and Kelta's `Ctrl+letter` wins in terminals too. Your
 desktop may already take `Ctrl+Alt+arrows` for workspaces: rebind either side in Settings > Keys.
-
-## Queue
-
-The **Queue** is where all your work waits, across projects, in one list split in three zones by whose move it is:
-**Your move** (Claude needs you, ready for review, next up, new for you, fix, review requests, ship and clean up, up
-next), **Claude working** (work whose Claude is working, background runs included: back in minutes) and **Waiting on
-others** (reviewers, checks and deploys: in flight, elsewhere, blocked, then waiting to deploy, collapsed: tickets in a
-status their source lists as waiting for a deployment, set in Settings → Sources). The header sums them up: "9 your
-move, 2 Claude working, 2 waiting on others". Each row has a stage track, Ticket, Claude, PR, Review, Merge, Deploy:
-the line runs to the furthest stage reached and the mark sits where the item is now, filled when it is your move, a
-ring while it waits, a diamond when something broke. The row's next step is a button that runs it. The selected
-item's brief sits beside the list (under it in a narrow pane): its next action, the two likely after it, the rest
-behind "more actions" (`.`), Claude's last message and the facts. `j` `k` move, `Enter` runs the next step, `g` goes
-to its place without acting, `/` filters, `Cmd+Shift+R` refreshes, `?` lists every key. A letter means the same in
-the Queue, Tickets and Pull requests: `s` work on it (start a ticket, go to a work item's tab, review a pull request
-locally), `v` view changes (`Shift+V` the whole diff), `o` open on the host, `m` move the ticket, `c` comment, `e`
-expand Claude's message, `Shift+R` mark reviewed. `Cmd+.` (`Ctrl+.` on Linux) works on any
-selection: in the Queue, Tickets and Pull requests it opens the selected row's actions in a menu, the next step first, so
-`Cmd+.` `Enter` runs it; on a work tab, the work menu; with nothing selected, the palette.
 
 ## Language
 

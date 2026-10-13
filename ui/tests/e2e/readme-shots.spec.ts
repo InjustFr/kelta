@@ -114,7 +114,7 @@ async function shoot(page: Page, name: string): Promise<void> {
   execFileSync('cwebp', ['-quiet', '-lossless', '-z', '9', '-metadata', 'none', png, '-o', webp]);
 }
 
-test('work-item: SHOP-142 with Claude and nvim side by side, under the context bar', async ({ page }) => {
+test('work-item: SHOP-142 with Claude and nvim side by side, under the desk header', async ({ page }) => {
   await boot(page, 'macos');
   await expect(page.getByTestId('work-header')).toBeVisible();
   const acks = (await callsOf(page, 'session_ack')).length;
@@ -133,7 +133,7 @@ test('tickets: the Tickets view grouped by flow, with the ticket detail', async 
   await shoot(page, 'tickets');
 });
 
-test('reviews: the Reviews view with a pull request detail', async ({ page }) => {
+test('reviews: the Pull requests view with a pull request detail', async ({ page }) => {
   await boot(page, 'macos');
   await page.getByTestId('rail-reviews').click();
   const host = page.getByTestId('global-host');

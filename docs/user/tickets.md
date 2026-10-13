@@ -5,11 +5,11 @@ team sees), with the keyboard doing most of the work. Each row carries the Queue
 reading pane on the right follows the selection and opens on where the ticket stands. Board mode stays available
 with the list/board toggle.
 
-**Tickets** on the rail (`Cmd+Shift+B`) shows this list across every source, outside any project: Mine is the
-default, and its tab, source, grouping, sort and person come back after a restart.
-Opening a ticket, its PR or its work from there switches to the ticket's project. The board needs one project's
-columns: palette **Open project board** opens the active project's Tickets tab as a board (the `+` menu of the tab
-bar opens the project's own Tickets tab).
+**Tickets** in the sidebar (`Cmd+Shift+B`) shows this list across every source, outside any project: Mine is the
+default, and its tab, source, grouping, sort and person come back after a restart. **All projects** in the top bar
+narrows it to one project. Opening a ticket, its PR or its work from there switches to the ticket's project. The
+board needs one project's columns: palette **Open project board** opens Tickets scoped to the active project, as a
+board.
 
 ## Sources
 
@@ -22,8 +22,8 @@ accounts, so one board can show Jira and GitHub tickets together.
   board shared by several projects is set up once. Settings > Projects shows which sources feed each project.
   Boards from older versions moved out of the project files on first launch (a copy of each project file is kept
   in `projects/.trash/`).
-- The Tickets view lists every source by default: the rail's Tickets shows all of them, also those feeding no
-  project; a project's Tickets shows the sources that feed it (first page of each, duplicates removed). **Load
+- The Tickets view lists every source by default: under All projects it shows all of them, also those feeding no
+  project; scoped to a project it shows the sources that feed it (first page of each, duplicates removed). **Load
   more** pages every source that has more. Each row shows its source when several are listed, and Group by Source
   works everywhere.
 - `f` `v` (or the source button) narrows the list to one source; a source with several views lists them indented
@@ -237,7 +237,7 @@ transitions it allows, numbered. Type to filter; press a digit to move at once (
 more fields, Kelta asks for them or offers the browser; a refused move shows the tracker's message and Open in
 browser. Only moves the tracker allows are listed.
 
-The same picker opens from the status in the reading pane, the work bar and the command palette ("Move SHOP-142
+The same picker opens from the status in the reading pane, the Story panel's Ticket section and the command palette ("Move SHOP-142
 to...").
 
 To move several tickets, `x` marks the current one, `Shift+j` and `Shift+k` extend the selection, then `m`. The

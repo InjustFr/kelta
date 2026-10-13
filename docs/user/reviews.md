@@ -1,6 +1,6 @@
 # Pull requests
 
-**Pull requests** on the rail (`Cmd+Shift+R`, `Ctrl+Shift+R` on Linux) lists pull requests (merge requests on
+**Pull requests** in the sidebar (`Cmd+Shift+R`, `Ctrl+Shift+R` on Linux) lists pull requests (merge requests on
 GitLab) across every open project, next to your tickets. `All projects ▾` in the top bar narrows it to one
 project. Pull requests come from the code host account bound to each repository: GitHub, GitLab, Bitbucket Cloud
 and Gitea/Forgejo ([Bitbucket](bitbucket.md), [Gitea](gitea.md)).
