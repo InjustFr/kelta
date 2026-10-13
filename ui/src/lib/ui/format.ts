@@ -60,7 +60,8 @@ export function currentPlatform(): 'macos' | 'linux' {
 /** Splits a chord (`cmd+shift+k`) into display parts for the platform. `mod` = Cmd / Ctrl. */
 export function formatChord(chord: string, platform: 'macos' | 'linux' = currentPlatform()): string[] {
   const table = platform === 'macos' ? MAC_SYMBOLS : LINUX_NAMES;
-  const raw = chord
+  // A bare capital (`V`, `P`) is Shift + the letter: lowercasing alone would show `v` and `V` alike.
+  const raw = (/^[A-Z]$/.test(chord) ? `shift+${chord}` : chord)
     .toLowerCase()
     .split('+')
     .flatMap((p, i, all) => (p === '' && i === all.length - 1 ? ['+'] : p === '' ? [] : [p]));

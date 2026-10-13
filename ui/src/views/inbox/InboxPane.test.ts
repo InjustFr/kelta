@@ -89,9 +89,9 @@ describe('Now', () => {
     ]);
     const header = screen.getByTestId('now-header');
     expect(header.textContent).toContain('1 needs you');
-    expect(header.textContent).toContain('1 LLM diff');
+    expect(header.textContent).toContain('1 ready for review');
     // #311, #98, #7 and #101 (updated since my review).
-    expect(header.textContent).toMatch(/4 PRs waiting/);
+    expect(header.textContent).toMatch(/4 review requests/);
     expect(header.title).toBe(nowSummary().header);
     // A work item shows once; its sessions are not listed as plain sessions.
     expect(container.querySelectorAll('[data-row^="w:0199a6b2-0000-7000-8000-00000000a004"]')).toHaveLength(
@@ -122,13 +122,15 @@ describe('Now', () => {
     await fireEvent.keyDown(pane, { key: 'j' });
     const details = screen.getAllByTestId('now-detail');
     expect(details).toHaveLength(1);
-    // Ready for review: the next: note and the first line of Claude's full message, the delta chip.
-    expect(details[0]!.textContent).toContain('next: check the retry path against staging');
-    expect(details[0]!.textContent).toContain('Added the retry wrapper');
-    expect(within(details[0]!).getByText('Review changes')).toBeTruthy();
+    // Ready for review: the row says what Enter does, the next: note and the first line of Claude's
+    // full message (#399); the delta chip waits on the selected row's detail.
     const row = container.querySelector('.row[aria-current="true"]')!;
-    expect(row.textContent).toContain('212 lines');
+    expect(row.querySelector('.verb')?.textContent).toBe('Review changes');
+    expect(row.textContent).toContain('next: check the retry path against staging');
+    expect(row.textContent).toContain('Added the retry wrapper');
     expect(row.querySelector('.meta.warn')?.textContent).toBe('tests: none');
+    expect(details[0]!.textContent).toContain('212 lines');
+    expect(within(details[0]!).getByText('Review changes')).toBeTruthy();
     // m unfolds the whole message.
     await fireEvent.keyDown(pane, { key: 'm' });
     const lines = screen.getAllByTestId('now-message').map((l) => l.textContent);
@@ -143,7 +145,7 @@ describe('Now', () => {
     const primary = within(detail).getByRole('button', { name: /Review changes$/ });
     expect(primary.classList.contains('primary')).toBe(true);
     expect(primary.querySelector('kbd')).not.toBeNull();
-    expect(container.querySelector('[data-section="to_review"] .k-group-hint')?.textContent).toBe(
+    expect(container.querySelector('[data-section="to_review"]')?.getAttribute('title')).toBe(
       'Claude finished: look at the changes, then ship or ask for more',
     );
     await fireEvent.click(within(detail).getByRole('button', { name: /Mark reviewed$/ }));

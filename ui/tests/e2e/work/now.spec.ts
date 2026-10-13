@@ -69,7 +69,7 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
     () => window.__kelta!.stores.work.all.find((w) => w.ticket?.key === 'SHOP-151')!.id,
   );
   await select(page, `w:${id}`);
-  await expect(now(page).getByTestId('now-detail')).toContainText('Tax lines added.');
+  await expect(selected(page)).toContainText('Tax lines added.');
   await page.keyboard.press('Enter');
   await expect(now(page)).toBeHidden();
   await expect.poll(async () => (await callsOf(page, 'work_diff')).length).toBe(1);

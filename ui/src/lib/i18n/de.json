@@ -414,7 +414,6 @@
   "Down": "Nach unten",
   "Up": "Nach oben",
   "Open in tracker": "Im Tracker öffnen",
-  "Everything waiting on you, across projects": "Alles, was auf Sie wartet, über alle Projekte",
   "Updated {ago}": "Aktualisiert {ago}",
   "Filter": "Filtern",
   "Filter Now": "Jetzt filtern",
@@ -448,6 +447,7 @@
   "Tickets in these statuses leave Up next and wait in the Waiting to deploy section of Now.": "Tickets in diesen Status verlassen Demnächst und warten im Abschnitt Wartet auf Deployment von Jetzt.",
   "Blocking: you're the last reviewer": "Blockierend: Sie sind der letzte Reviewer",
   "Updated since your review": "Seit Ihrem Review aktualisiert",
+  "from {name}": "von {name}",
   "Review requested": "Review angefragt",
   "Changes requested": "Änderungen angefordert",
   "Checks failed": "Prüfungen fehlgeschlagen",
@@ -462,14 +462,12 @@
   "ready for review": "bereit zum Review",
   "feedback": "Feedback",
   "review request": "Review-Anfrage",
-  "{n} LLM diffs": {
-    "one": "{n} LLM-Diff",
-    "other": "{n} LLM-Diffs"
+  "{n} review requests": {
+    "one": "{n} Review-Anfrage",
+    "other": "{n} Review-Anfragen"
   },
-  "{n} PRs waiting": {
-    "one": "{n} PR wartet",
-    "other": "{n} PRs warten"
-  },
+  "{n} ready for review": "{n} bereit zur Review",
+  "{n} Claude working": "{n} Claude arbeitet",
   "Loading Next up": "Als Nächstes wird geladen",
   "Removing {key} from Next up": "{key} wird aus Als Nächstes entfernt",
   "Marking {key} seen": "{key} wird als gesehen markiert",
@@ -1611,7 +1609,6 @@
   "Generate Claude settings and context": "Claude-Einstellungen und Kontext erzeugen",
   "Create tab and layout": "Tab und Layout erstellen",
   "Start editor": "Editor starten",
-  "Start Claude": "Claude starten",
   "Tracker updates (assign, move, comment)": "Tracker-Aktualisierungen (zuweisen, verschieben, kommentieren)",
   "Save work item": "Arbeitselement speichern",
   "Account {id} needs authentication": "Konto {id} muss sich anmelden",

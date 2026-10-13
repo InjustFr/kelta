@@ -40,6 +40,7 @@
     Toggle,
     VirtualList,
     relativeTime,
+    type IconName,
   } from '$lib/ui';
 
   import { chordFor } from '../../shell/labels';
@@ -125,11 +126,17 @@
 
   interface View {
     lamp: LampKind;
+    /** What the id is: a branch of work, a pull request, a ticket, a terminal or an outside Claude. */
+    icon: IconName;
     id: string;
     title: string;
     project: string | null;
     color: string | null;
+    /** The row's state ("Changes requested", "Claude working"): line 2 when the row has no next action. */
     reason: string;
+    /** Line 2 after the next action: the one detail that says why (Claude's words, failed checks, who asked). */
+    hint: string;
+    /** Status and numbers, on the selected row only. */
     meta: string[];
     /** Ticket and review rows: where their local tags live (#349). */
     tagged?: { kind: TagKind; key: string };
@@ -139,8 +146,6 @@
     /** The meta part shown as a warning (`tests: none` when source changed). */
     warn?: string;
     age: string;
-    /** Second line of the selected row. */
-    more: string;
     /** The selected row's buttons (#397), the key on each; the `enter` one is the primary. */
     actions: { key: string; label: string; run: () => unknown }[];
     /** A Claude session Kelta did not start: shown dimmed. */
@@ -153,6 +158,18 @@
   }
 
   const age = (iso: string): string => relativeTime(Date.parse(iso));
+
+  /** Section weight: what needs me now stands out, work that can wait steps back. */
+  const TIER: Partial<Record<NowSection, 'urgent' | 'quiet'>> = {
+    needs_you: 'urgent',
+    to_review: 'urgent',
+    fix: 'urgent',
+    in_flight: 'quiet',
+    elsewhere: 'quiet',
+    blocked: 'quiet',
+    up_next: 'quiet',
+    waiting: 'quiet',
+  };
 
   // Work row letters in Now (FLOW §3.3); `o` opens the PR, else the ticket. `R` marks reviewed on a
   // row that has something to review, else refreshes.
@@ -177,7 +194,7 @@
         const { item, phase } = row;
         const git = work.git[item.id];
         const pr = prOf(item);
-        const meta: string[] = row.blocked ? [t('Blocked')] : [];
+        const meta: string[] = [];
         const delta = phase.section === 'to_review' ? item.delta : null;
         if (delta) meta.push(...deltaParts(delta));
         else if (git && (git.insertions || git.deletions))
@@ -227,18 +244,25 @@
               : phase.id === 'checks_failed' && pr?.failed_check_names.length
                 ? `#${pr.ref.number} · ${pr.failed_check_names.join(', ')}`
                 : phase.detail;
+        const reason = row.status
+          ? `${row.status} · ${phase.label}`
+          : phase.section === 'needs_you' && phase.detail
+            ? phase.detail
+            : phase.label;
+        // Waiting to deploy: its tracker status is the news; Claude asking: its question. A bare `#309`
+        // (Merged, Reviewed) only repeats the id: the state says more.
+        const hint = row.status || !more || /^#\d+$/.test(more) ? reason : more;
         return {
           lamp: phase.lamp,
+          icon: 'git-branch',
           id: workKey(item),
           title: workTitle(item),
           project: p.name,
           color: p.color,
-          reason: row.status
-            ? `${row.status} · ${phase.label}`
-            : phase.section === 'needs_you' && phase.detail
-              ? phase.detail
-              : phase.label,
-          meta,
+          reason,
+          // Without a next action the reason is line 2 already; the hint must not repeat it.
+          hint: phase.primary || hint !== reason ? hint : '',
+          meta: [...(phase.primary && hint !== reason ? [reason] : []), ...meta],
           ctx:
             u && u.context_pct !== null
               ? { text: `${t('ctx')} ${Math.round(u.context_pct)}%`, hot: ctxHot(u) }
@@ -253,7 +277,6 @@
           warn: delta && testsMissing(delta) ? t('tests: none') : row.blocked ? t('Blocked') : undefined,
           // Ready for review: how long it has waited since Claude stopped.
           age: age(delta ? (item.claude_at ?? item.created_at) : item.created_at),
-          more,
           actions,
         };
       }
@@ -263,14 +286,15 @@
         const preview = s.claude?.preview ?? '';
         return {
           lamp: 'needs_input',
+          icon: 'terminal',
           id: s.kind.type,
           title: sessionLabel(s),
           project: p.name,
           color: p.color,
-          reason: preview || t('Needs input'),
+          reason: t('Needs input'),
+          hint: preview,
           meta: [],
           age: age(s.created_at),
-          more: preview,
           actions: [{ key: 'enter', label: t('Go to session'), run: () => enterRow(row) }],
         };
       }
@@ -279,14 +303,15 @@
         const ph = outsidePhase(s);
         return {
           lamp: ph.lamp,
+          icon: 'bot',
           id: s.ticket?.key ?? 'claude',
           title: s.title,
           project: null,
           color: null,
           reason: ph.label,
-          meta: s.branch ? [s.branch] : [],
+          hint: s.preview ?? '',
+          meta: [s.branch, s.cwd].filter((x): x is string => !!x),
           age: age(s.updated_at),
-          more: [s.cwd, s.preview].filter(Boolean).join('  ·  '),
           actions: [],
           dim: true,
         };
@@ -295,31 +320,40 @@
         const r = row.review.review;
         const p = projectOf(row.review.project_ids);
         const stat = r.additions !== null && r.deletions !== null ? [`+${r.additions} −${r.deletions}`] : [];
-        const chip = waitingChip(row.review, settings.value()?.reviews.sla_hours ?? 24);
+        // Who is waiting on whom: only while it sits with the reviewers, not once they sent it back to me.
+        const chip =
+          row.mine && row.reason === 'In review'
+            ? waitingChip(row.review, settings.value()?.reviews.sla_hours ?? 24)
+            : null;
+        const checks = r.failed_check_names.length
+          ? t('checks failed: {names}', { names: r.failed_check_names.join(', ') })
+          : r.ci === 'failure'
+            ? t('checks failed')
+            : '';
         return {
           lamp: 'none',
+          icon: 'git-pull-request',
           id: `#${r.ref.number}`,
           title: r.title,
           project: p.name ?? r.ref.repo,
           color: p.color,
+          reason: t(row.reason),
           // A plain request reads as who asked; mine and "Updated since your review" read as the reason.
           // Red CI does not hide a pending review (#369): `Checks failed · review required`.
-          reason:
+          hint:
             !row.mine && row.reason === 'Review requested'
-              ? r.author.name
-              : [t(row.reason), row.reason === 'Checks failed' ? reviewOf(r) : '']
-                  .filter(Boolean)
-                  .join(' · '),
+              ? t('from {name}', { name: r.author.name })
+              : row.reason === 'Checks failed'
+                ? [checks || t(row.reason), reviewOf(r)].filter(Boolean).join(' · ')
+                : (chip?.label ?? t(row.reason)),
           tagged: { kind: 'prs', key: reviewKey(r.ref) },
-          meta: [...stat, ...(row.mine && chip ? [chip.label] : [])],
+          meta: [
+            ...stat,
+            `${r.source_branch} ${t('into')} ${r.target_branch}`,
+            ...(row.reason !== 'Checks failed' && checks ? [checks] : []),
+          ],
+          warn: chip?.late ? chip.label : undefined,
           age: age((!row.mine && r.requested_at) || r.updated_at),
-          more: `${r.source_branch} ${t('into')} ${r.target_branch}${
-            r.failed_check_names.length
-              ? `, ${t('checks failed: {names}', { names: r.failed_check_names.join(', ') })}`
-              : r.ci === 'failure'
-                ? `, ${t('checks failed')}`
-                : ''
-          }`,
           actions: [
             { key: 'enter', label: t('Open review'), run: () => enterRow(row) },
             ...(row.mine ? [] : [{ key: 's', label: t('Review locally'), run: () => reviewRowLocally(row) }]),
@@ -332,21 +366,19 @@
         const p = projectOf(row.ticket.project_ids);
         return {
           lamp: 'none',
+          icon: 'ticket',
           id: tk.ref.key,
           title: tk.title,
           project: p.name,
           color: p.color,
           reason: tk.status.name,
+          hint: batch.has(tk.ref)
+            ? t('marked')
+            : (waitChip(row.ticket.waiting, { withWhy: true })?.label ?? tk.status.name),
           tagged: { kind: 'tickets', key: ticketKey(tk.ref) },
-          meta: [
-            ...(tk.blocked ? [t('Blocked')] : []),
-            ...(nextUp.isNew(tk.ref) ? [t('New')] : []),
-            ...(batch.has(tk.ref) ? [t('marked')] : []),
-            ...(tk.priority ? [tk.priority] : []),
-          ],
+          meta: tk.priority ? [tk.priority] : [],
           warn: tk.blocked ? t('Blocked') : undefined,
           age: age(tk.updated_at),
-          more: waitChip(row.ticket.waiting, { withWhy: true })?.label ?? '',
           actions: [
             { key: 'enter', label: t('Start work'), run: () => enterRow(row) },
             ...(isNextUp(row)
@@ -654,10 +686,7 @@
   {onkeydown}
 >
   <header class="bar">
-    <span class="heading">
-      <span class="title">{t('Now')}</span>
-      <span class="subtitle">{t('Everything waiting on you, across projects')}</span>
-    </span>
+    <span class="title">{t('Now')}</span>
     <span class="split" data-testid="now-header" title={summary.header}>
       {#each summary.chips as c (c.section)}
         {@const at = c.text.indexOf(String(c.n))}
@@ -754,20 +783,24 @@
         >
           {#snippet row(l)}
             {#if l.type === 'section'}
-              <div class="section" role="heading" aria-level="2" data-section={l.section.id}>
+              <div
+                class="section {TIER[l.section.id] ?? ''}"
+                role="heading"
+                aria-level="2"
+                data-section={l.section.id}
+                title={t(SECTION_HINTS[l.section.id])}
+              >
                 {#if l.section.folded}
                   {@const s = l.section}
                   <button type="button" class="fold" aria-expanded={l.open} onclick={() => toggleSection(s)}>
                     <span class="slot chevron"><Icon name="chevron-right" size={12} /></span>
                     {t(s.label)}
                     <span class="count">{l.count}</span>
-                    <span class="k-group-hint">{t(SECTION_HINTS[s.id])}</span>
                   </button>
                 {:else}
                   <span class="slot"><Lamp level={l.section.lamp} title="" /></span>
                   {t(l.section.label)}
                   <span class="count">{l.count}</span>
-                  <span class="k-group-hint">{t(SECTION_HINTS[l.section.id])}</span>
                 {/if}
               </div>
             {:else if l.type === 'ask'}
@@ -780,6 +813,7 @@
               </button>
             {:else}
               {@const v = view(l.row)}
+              {@const next = v.actions.find((a) => a.key === 'enter')}
               {#if l.type === 'row'}
                 <button
                   type="button"
@@ -821,25 +855,23 @@
                         title={v.reason}
                       />{/if}</span
                   >
-                  <span class="id">{v.id}</span>
+                  <span class="id"><Icon name={v.icon} size={12} />{v.id}</span>
                   <span class="ttl">{v.title}</span>
+                  <!-- Line 2 (#399): what Enter does, the one detail that says why, warnings, age. The rest
+                       waits on the selected row. -->
                   <span class="sub">
+                    {#if next}<span class="verb">{next.label}</span>{:else}<span class="reason"
+                        >{v.reason}</span
+                      >{/if}
+                    {#if v.hint}<span class="hint" class:warn={v.hint === v.warn} title={v.hint}
+                        >{v.hint}</span
+                      >{/if}
+                    {#if v.warn && v.warn !== v.hint}<span class="meta warn">{v.warn}</span>{/if}
+                    {#if v.ctx?.hot}<span class="meta hot" title={t('Compacts soon')}>{v.ctx.text}</span>{/if}
+                    {#if v.cost?.over}<span class="meta over" title={t('Over budget')}>{v.cost.text}</span
+                      >{/if}
                     {#if v.tagged}<TagChips kind={v.tagged.kind} itemKey={v.tagged.key} />{/if}
-                    {#if v.project}<span class="proj">{v.project}</span>{/if}
-                    <span class="reason">{v.reason}</span>
-                    {#each v.meta as m (m)}<span class="meta" class:warn={m === v.warn}>{m}</span>{/each}
-                    {#if v.ctx}<span
-                        class="meta"
-                        class:hot={v.ctx.hot}
-                        title={v.ctx.hot ? t('Compacts soon') : t('Context window used')}>{v.ctx.text}</span
-                      >{/if}
-                    {#if v.cost}<span
-                        class="meta"
-                        class:over={v.cost.over}
-                        title={v.cost.over ? t('Over budget') : t('Claude spend on this item')}
-                        >{v.cost.text}</span
-                      >{/if}
-                    <span class="meta" class:age={compact}>{v.age}</span>
+                    <span class="meta age">{v.age}</span>
                   </span>
                 </button>
               {:else}
@@ -848,6 +880,18 @@
                   style:--hue={resolveProjectColor(v.color) ?? 'transparent'}
                   data-testid="now-detail"
                 >
+                  <span class="info">
+                    {#if v.project}<span class="proj">{v.project}</span>{/if}
+                    {#each v.meta.filter((m) => m !== v.warn) as m (m)}<span class="meta">{m}</span>{/each}
+                    {#if v.ctx}<span class="meta" class:hot={v.ctx.hot} title={t('Context window used')}
+                        >{v.ctx.text}</span
+                      >{/if}
+                    {#if v.cost}<span
+                        class="meta"
+                        class:over={v.cost.over}
+                        title={t('Claude spend on this item')}>{v.cost.text}</span
+                      >{/if}
+                  </span>
                   {#each v.actions as a (a.key)}
                     <button
                       type="button"
@@ -859,7 +903,6 @@
                       ><Kbd chord={a.key} />{a.label}</button
                     >
                   {/each}
-                  {#if v.more}<span class="msg" title={v.more}>{v.more}</span>{/if}
                 </div>
               {/if}
             {/if}
@@ -901,6 +944,7 @@
 
 <style>
   .pane {
+    --id-w: 92px;
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -924,23 +968,18 @@
     background: var(--k-bg-elev);
   }
 
-  .heading {
-    display: flex;
-    flex-direction: column;
-    flex: none;
-    padding: var(--k-space-2) 0;
-    line-height: 1.3;
-  }
-
   .title {
+    flex: none;
     font-weight: 600;
   }
 
+  /* The chips wrap on a narrow pane rather than cut the last ones off. */
   .split {
     display: inline-flex;
+    flex-wrap: wrap;
     gap: var(--k-space-1);
     min-width: 0;
-    overflow: hidden;
+    padding-block: var(--k-space-1);
     font-size: var(--k-font-size-sm);
     font-variant-numeric: tabular-nums;
     color: var(--k-fg-muted);
@@ -962,11 +1001,6 @@
 
   .split :global(.count.error) {
     color: var(--k-lamp-error);
-  }
-
-  .subtitle {
-    font-size: var(--k-font-size-xs);
-    color: var(--k-fg-muted);
   }
 
   .asof {
@@ -993,7 +1027,18 @@
     font-weight: 600;
     color: var(--k-fg-muted);
     background: var(--k-bezel-raised);
-    box-shadow: inset 0 -1px 0 var(--k-border);
+    box-shadow:
+      inset 0 1px 0 var(--k-border),
+      inset 0 -1px 0 var(--k-border);
+  }
+
+  .section.urgent {
+    color: var(--k-fg-strong);
+  }
+
+  .section.quiet {
+    font-weight: 500;
+    color: var(--k-fg-subtle);
   }
 
   /* The chevron turns as the section folds or opens; the rows fade in and out (VirtualList). */
@@ -1067,8 +1112,11 @@
   }
 
   .id {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-space-1);
     flex: none;
-    width: 76px;
+    width: var(--id-w);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1089,6 +1137,33 @@
 
   .selected .ttl {
     font-weight: var(--k-weight-strong);
+  }
+
+  .id :global(svg) {
+    flex: none;
+    color: var(--k-fg-subtle);
+  }
+
+  /* What Enter does: the row's instruction, read first on line 2. */
+  .verb {
+    flex: none;
+    font-size: var(--k-font-size-sm);
+    font-weight: var(--k-weight-medium);
+    color: var(--k-accent);
+  }
+
+  .hint {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--k-font-size-sm);
+    color: var(--k-fg-muted);
+  }
+
+  .hint.warn {
+    color: var(--k-warn);
   }
 
   .proj {
@@ -1134,7 +1209,7 @@
   }
 
   .msgline {
-    padding-left: calc(var(--k-space-4) + 12px + 76px + 3 * var(--k-space-2));
+    padding-left: calc(var(--k-space-4) + 12px + var(--id-w) + 3 * var(--k-space-2));
     background: var(--k-bg-selected-row);
     --k-fg-muted: var(--k-fg-muted-sel);
     font-size: var(--k-font-size-sm);
@@ -1145,7 +1220,7 @@
   }
 
   .askline {
-    padding-left: calc(var(--k-space-4) + 12px + 76px + 3 * var(--k-space-2));
+    padding-left: calc(var(--k-space-4) + 12px + var(--id-w) + 3 * var(--k-space-2));
   }
 
   /* Two-line row (#383): lamp, id and title on line 1; the meta under the title, wrapping rather
@@ -1163,7 +1238,13 @@
     display: contents;
   }
 
+  /* The age closes line 2 on the right, one column to scan. */
   .age {
+    margin-left: auto;
+    padding-left: var(--k-space-3);
+  }
+
+  .compact .age {
     width: 64px;
     text-align: right;
   }
@@ -1171,18 +1252,17 @@
   .sub {
     grid-column: 3;
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
     gap: var(--k-space-1) var(--k-space-3);
     min-width: 0;
   }
 
-  /* The selected row's key hints, then its message, under the title; hints wrap rather than cut. */
+  /* The selected row's status and numbers, then its actions; actions wrap rather than cut. */
   .detail {
     flex-wrap: wrap;
     gap: var(--k-space-1) var(--k-space-3);
     padding-block: 0 var(--k-space-2);
-    padding-left: calc(var(--k-space-4) + 12px + 76px + 3 * var(--k-space-2));
+    padding-left: calc(var(--k-space-4) + 12px + var(--id-w) + 3 * var(--k-space-2));
   }
 
   .compact .detail {
@@ -1190,18 +1270,18 @@
     padding-block: 0;
   }
 
-  .compact .msg {
-    flex: 1;
+  .info {
+    display: flex;
+    flex: 1 0 100%;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--k-space-1) var(--k-space-3);
+    min-width: 0;
   }
 
-  .msg {
-    flex: 1 0 100%;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--k-fg-muted);
-    font-size: var(--k-font-size-sm);
+  .compact .info {
+    flex: none;
+    flex-wrap: nowrap;
   }
 
   /* The selected row's actions (#397): outlined like the Tickets row actions, the next step in accent. */
@@ -1227,6 +1307,19 @@
 
   .act.primary {
     border-color: var(--k-accent);
+    background: var(--k-accent);
+    color: var(--k-accent-fg);
+  }
+
+  .act.primary :global(.k-kbd) {
+    color: inherit;
+    background: none;
+    border-color: currentColor;
+  }
+
+  .act.primary:hover {
+    background: var(--k-accent);
+    filter: brightness(1.1);
   }
 
   /* Next up drag (#397): the row it lands on carries the accent line. */
