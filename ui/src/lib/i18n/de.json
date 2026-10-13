@@ -2498,7 +2498,19 @@
   "Ship pushes the branch and opens a draft PR.": "Ausliefern pusht den Branch und öffnet einen Entwurfs-PR.",
   "Open the Story panel": "Verlaufs-Panel öffnen",
   "{whose}: {what}": "{whose}: {what}",
-  "Tasks": "Aufgaben",
   "{done} of {n}": "{done} von {n}",
-  "Changes so far": "Änderungen bisher"
+  "Changes so far": "Änderungen bisher",
+  "Asks you": "Fragt Sie",
+  "{n} min": "{n} Min.",
+  "Tasks": "Aufgaben",
+  "Completed": "Erledigt",
+  "In progress": "In Arbeit",
+  "Pending": "Offen",
+  "Show more": "Mehr anzeigen",
+  "Show less": "Weniger anzeigen",
+  "Context {pct}%": "Kontext {pct} %",
+  "{done} of {n} tasks": {
+    "one": "{done} von {n} Aufgabe",
+    "other": "{done} von {n} Aufgaben"
+  }
 }
