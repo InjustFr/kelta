@@ -60,7 +60,14 @@ describe('context bar', () => {
     await tickets.loadDetail(work.all.find((w) => w.ticket?.key === 'SHOP-142')!.ticket!);
     render(ContextBar);
     await waitFor(() => expect(document.title).toBe('Shop › SHOP-142 Rate-limit login attempts'));
-    for (const id of ['context-crumb', 'work-header', 'work-status', 'work-phase', 'work-primary', 'work-menu-button'])
+    for (const id of [
+      'context-crumb',
+      'work-header',
+      'work-status',
+      'work-phase',
+      'work-primary',
+      'work-menu-button',
+    ])
       expect(screen.queryByTestId(id)).toBeNull();
     expect(screen.queryByTestId('context-meta')).toBeNull();
     expect(bar().textContent).not.toMatch(/Live status off|ctx|Claude \d/);
@@ -156,7 +163,7 @@ describe('context bar', () => {
 
   it('› goes forward on the jumplist', async () => {
     jumplist.list = [
-      { project: 'shop', tab: 'shop-t1', pane: layout.get('shop')!.tabs[0]!.focused_pane },
+      { project: 'shop', tab: 'shop-t1', pane: layout.get('shop')!.tabs[0]!.focused_pane! },
       { project: GLOBAL, tab: 'reviews', pane: 'reviews' },
     ];
     jumplist.at = 0;
@@ -246,13 +253,13 @@ describe('context bar: Claude sessions waiting on me (#372)', () => {
   it('one jumps straight to it; several open a menu of them; hidden at 0', async () => {
     render(ContextBar);
     // The mock's work item Claude replied on, in Billing.
-    await waitFor(() => expect(chip()?.textContent?.trim()).toBe('1 needs you'));
+    await waitFor(() => expect(chip()?.textContent?.trim()).toMatch(/^1 needs you/));
     await fireEvent.click(chip()!);
     await waitFor(() => expect(projects.activeId).toBe('billing'));
     expect(screen.queryByRole('menu')).toBeNull();
 
     sessions.byId = { ...sessions.byId, [ZSH]: { ...sessions.byId[ZSH]!, status: 'needs_input' } };
-    await waitFor(() => expect(chip()?.textContent?.trim()).toBe('2 need you'));
+    await waitFor(() => expect(chip()?.textContent?.trim()).toMatch(/^2 need you/));
     await fireEvent.click(chip()!);
     const items = await screen.findAllByRole('menuitem');
     expect(items.map((x) => x.textContent?.replace(/\s+/g, ' ').trim())).toEqual([

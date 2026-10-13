@@ -201,26 +201,27 @@
     onclick={() => void dispatch('nav.forward')}
   />
 
-  {#if !item}
-  <span class="crumb" data-tauri-drag-region data-testid="context-crumb">
-    {#if view}
-      <span class="here" data-tauri-drag-region
-        ><Icon name={VIEW_ICONS[view]} size={14} /> {VIEW_NAMES[view]}</span
-      >
-    {:else if tool}
-      <span class="parent" data-tauri-drag-region>{t('Tools')}</span>
-      <span class="sep" aria-hidden="true">›</span>
-      <span class="here" data-tauri-drag-region><span aria-hidden="true">⚒</span>{tool.label}</span>
-    {:else if project}
-      <span class="project" style:--project-color={projectColor} data-tauri-drag-region>{project.name}</span>
-      {#if row}
-        <span class="sep" aria-hidden="true">›</span>
+  {#if view || !item}
+    <span class="crumb" data-tauri-drag-region data-testid="context-crumb">
+      {#if view}
         <span class="here" data-tauri-drag-region
-          >{#if row.glyph}<span aria-hidden="true">{row.glyph}</span>{/if}{row.text}</span
+          ><Icon name={VIEW_ICONS[view]} size={14} /> {VIEW_NAMES[view]}</span
         >
+      {:else if tool}
+        <span class="parent" data-tauri-drag-region>{t('Tools')}</span>
+        <span class="sep" aria-hidden="true">›</span>
+        <span class="here" data-tauri-drag-region><span aria-hidden="true">⚒</span>{tool.label}</span>
+      {:else if project}
+        <span class="project" style:--project-color={projectColor} data-tauri-drag-region>{project.name}</span
+        >
+        {#if row}
+          <span class="sep" aria-hidden="true">›</span>
+          <span class="here" data-tauri-drag-region
+            >{#if row.glyph}<span aria-hidden="true">{row.glyph}</span>{/if}{row.text}</span
+          >
+        {/if}
       {/if}
-    {/if}
-  </span>
+    </span>
   {/if}
 
   {#if tool && project}
