@@ -15,6 +15,7 @@ pub const COMMANDS: &[&str] = &[
     "clipboard_read",
     "clipboard_write",
     "notify_test",
+    "notify_focus",
     "claude_mcp_status",
     "claude_mcp_install",
     "claude_setup",

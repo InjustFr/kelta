@@ -746,6 +746,8 @@ pub struct NotificationSettings {
     pub only_when_unfocused: bool,
     /// `"HH:MM-HH:MM"` local time, or empty.
     pub quiet_hours: String,
+    /// Focus mode still lets a blocked Claude notify.
+    pub focus_allow_blocked: bool,
 }
 
 impl Default for NotificationSettings {
@@ -761,6 +763,7 @@ impl Default for NotificationSettings {
             bell_background: false,
             only_when_unfocused: true,
             quiet_hours: String::new(),
+            focus_allow_blocked: true,
         }
     }
 }

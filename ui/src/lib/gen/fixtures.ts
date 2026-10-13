@@ -2218,6 +2218,7 @@ export const settingsDefault: Settings = {
       "terminal.search": "/",
       "tickets.open": "t",
       "toast.run_last": "o",
+      "view.focus": "f",
       "work.menu": ".",
       "work.new": "w",
       "work.start": "s"
@@ -2241,6 +2242,7 @@ export const settingsDefault: Settings = {
     "claude_blocked": true,
     "claude_done": false,
     "enabled": true,
+    "focus_allow_blocked": true,
     "only_when_unfocused": true,
     "pr_approved": true,
     "pr_changes_requested": true,

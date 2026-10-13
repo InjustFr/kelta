@@ -24,6 +24,7 @@
     "allow-clipboard-read",
     "allow-clipboard-write",
     "allow-notify-test",
+    "allow-notify-focus",
     "allow-claude-mcp-status",
     "allow-claude-mcp-install",
     "allow-claude-setup",

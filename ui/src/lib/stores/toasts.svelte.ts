@@ -22,6 +22,8 @@ const MAX_TOASTS = 5;
 export class ToastsStore {
   list = $state<ToastEntry[]>([]);
   #nextId = 1;
+  /** Focus mode (#421): the background info toasts held for its summary; `null` = not focused. */
+  held: string[] | null = null;
   /** The view on screen, stamped on each toast (wired by ToastHost: the stores know no layout). */
   where: () => string | null = () => null;
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- non-reactive bookkeeping
@@ -29,11 +31,16 @@ export class ToastsStore {
 
   /**
    * Shows a toast. `timeoutMs: 0` keeps it until dismissed. `view` overrides the view it is tied to
-   * (`null`: none, for background work). Returns its id.
+   * (`null`: none, for background work). Returns its id (0 when focus mode held it).
    */
   push(toast: Toast, opts: PushOpts = {}): number {
-    const id = this.#nextId++;
     const view = opts.view === undefined ? this.where() : opts.view;
+    // Errors, warnings, toasts with an action and those of the view on screen still show.
+    if (this.held && view === null && toast.level === 'info' && !toast.action) {
+      this.held.push(toast.text);
+      return 0;
+    }
+    const id = this.#nextId++;
     this.list = [...this.list, { id, toast, createdAt: Date.now(), view }].slice(-MAX_TOASTS);
     const timeout = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS[toast.level];
     if (timeout > 0) {

@@ -497,6 +497,28 @@ describe('Esc Esc in a tool terminal (#412)', () => {
   });
 });
 
+describe('Esc Esc outside a terminal (#421)', () => {
+  const esc = () => press({ code: 'Escape', key: 'Escape' });
+
+  it('leaves focus mode only while view.unfocus is registered, never from a terminal or a field', () => {
+    let focused = true;
+    const { manager, ids, setCtx } = setup({ hasAction: (id) => id !== 'view.unfocus' || focused });
+    expect(manager.handleKeyDown(esc())).toBe('pass');
+    expect(manager.handleKeyDown(esc())).toBe('consumed');
+    expect(ids()).toEqual(['view.unfocus']);
+    focused = false;
+    manager.handleKeyDown(esc());
+    expect(manager.handleKeyDown(esc())).toBe('pass');
+    focused = true;
+    for (const ctx of [TERMINAL, { ...GLOBAL, textInput: true }, { ...GLOBAL, overlay: true }]) {
+      setCtx(ctx);
+      manager.handleKeyDown(esc());
+      expect(manager.handleKeyDown(esc())).toBe('pass');
+    }
+    expect(ids()).toEqual(['view.unfocus']);
+  });
+});
+
 describe('which-key panel', () => {
   const prefix = (): KeyboardEvent => ctrlShift('Space', ' ');
   const key = (k: string, code = `Key${k.toUpperCase()}`): KeyboardEvent => press({ code, key: k });

@@ -522,6 +522,7 @@ Every command below is listed in `apps/desktop/src-tauri/src/commands/names.rs` 
 | `clipboard_read` | `{kind: Clipboard|Primary}` | `String` | `commands/clipboard.rs` (L3) |
 | `clipboard_write` | `{kind, text}` | `()` | `commands/clipboard.rs` (L3) |
 | `notify_test` | `{}` | `()` | `commands/app.rs` (L3) |
+| `notify_focus` | `{on: bool}` | `Vec<String>` (focus mode, #421: holds desktop notifications but a blocked Claude's while `notifications.focus_allow_blocked`; off returns the titles held) | `commands/app.rs` |
 | `claude_mcp_status` | `{}` | `Option<bool>` (Kelta's MCP registered in Claude Code at user scope; `None` = Claude Code not found) | `commands/app.rs` |
 | `claude_mcp_install` | `{}` | `()` (writes `mcpServers.kelta` in Claude Code's user config, opens the global `/mcp`) | `commands/app.rs` |
 | `claude_setup` | `{}` | `SessionInfo` ("Set up with Claude", #343: `claude_mcp_install` when `kelta` is not registered, then a Claude session in Home told to configure Kelta through the MCP setup tools, in a new focused tab) | `commands/app.rs` |
