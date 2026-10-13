@@ -156,6 +156,18 @@ describe('terminal passthrough', () => {
     expect(ids()).toEqual(['palette.open', 'palette.open', 'project.goto.1']);
   });
 
+  it('gives override and tool Ctrl+letter chords a Ctrl+Shift twin that fires in a terminal', () => {
+    const { manager, ids } = setup({
+      ctx: TERMINAL,
+      keys: keys({ bindings: { 'palette.open': ['mod+u'] } }),
+      extraBindings: () => [{ action: 'tools.open', chords: ['mod+g'], args: { tool_id: 'lazygit' } }],
+    });
+    expect(manager.handleKeyDown(ctrl('KeyG', 'g'))).toBe('pass');
+    expect(manager.handleKeyDown(ctrlShift('KeyG', 'G'))).toBe('consumed');
+    expect(manager.handleKeyDown(ctrlShift('KeyU', 'U'))).toBe('consumed');
+    expect(ids()).toEqual(['tools.open', 'palette.open']);
+  });
+
   it('keys.linux_terminal = "kelta_first" runs Ctrl+letter in terminals, Ctrl+C stays SIGINT', () => {
     const { manager, ids } = setup({ ctx: TERMINAL, keys: keys({ linux_terminal: 'kelta_first' }) });
     expect(manager.handleKeyDown(ctrl('KeyD', 'd'))).toBe('consumed');

@@ -358,16 +358,22 @@ export class KeyManager {
     const keys = this.#opts.keys?.() ?? null;
     const platform = this.#platform;
     const chords = new Map<string, Binding>();
-    const add = (text: string, binding: Binding): void => {
+    // Linux: only the catalog ships a Ctrl+Shift twin; a user or tool Ctrl+letter gets one here,
+    // so it still fires in a terminal that keeps plain Ctrl+letter (registered last, never shadows).
+    const twins: [Chord, Binding][] = [];
+    const add = (text: string, binding: Binding, twin = true): void => {
       const chord = parseChord(text, platform);
       if (!chord) return;
       const key = chordToString(chord);
       if (!chords.has(key)) chords.set(key, binding);
+      if (twin && platform === 'linux' && isReservedChord(chord, ['ctrl+<letter>'], 'linux'))
+        twins.push([{ ...chord, shift: true }, binding]);
     };
     for (const meta of ACTIONS) {
       if (meta.context === 'external') continue;
+      const overridden = !!keys?.bindings?.[meta.id];
       for (const text of effectiveChords(meta.id, keys, platform)) {
-        add(text, { action: meta.id, context: meta.context });
+        add(text, { action: meta.id, context: meta.context }, overridden);
       }
     }
     for (const [id, list] of Object.entries(keys?.bindings ?? {})) {
@@ -377,6 +383,10 @@ export class KeyManager {
     for (const extra of this.#opts.extraBindings?.() ?? []) {
       for (const text of extra.chords)
         add(text, { action: extra.action, context: 'global', args: extra.args });
+    }
+    for (const [chord, binding] of twins) {
+      const key = chordToString(chord);
+      if (!chords.has(key)) chords.set(key, binding);
     }
 
     const prefixText = keys?.prefix ?? DEFAULT_PREFIX;
