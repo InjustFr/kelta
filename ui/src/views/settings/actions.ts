@@ -1,7 +1,7 @@
 // settings.open (Mod+,): shows Settings over the window (#410), or closes it when it is showing.
 // Optional args: { section?: string } to land on a given section, { toml?: projectId } to land on
 // that project's raw TOML (the Edit TOML mode, for what the forms cannot edit), { source_id } to
-// bring that source's card into view in Settings → Sources.
+// bring that source's card into view in Settings → Sources, { key: 'tickets.wip_limit' } to show that key.
 
 import { t } from '$lib/i18n/index.svelte';
 import { registerAction } from '$lib/actions';
@@ -13,6 +13,15 @@ import { activateProject } from '../../shell/nav';
 let tomlRequest: string | null = null;
 
 let sourceRequest: string | null = null;
+
+let keyRequest: string | null = null;
+
+/** Settings key the Settings pane searches for, once (⌘K's settings results). */
+export function takeKeyRequest(): string | null {
+  const key = keyRequest;
+  keyRequest = null;
+  return key;
+}
 
 const sourceListeners = new Set<() => void>();
 
@@ -41,8 +50,9 @@ registerAction('settings.open', (args) => {
   // The pane's content only carries a section, so the TOML and source targets travel beside it.
   tomlRequest = typeof args?.toml === 'string' ? args.toml : null;
   sourceRequest = typeof args?.source_id === 'string' ? args.source_id : null;
+  keyRequest = typeof args?.key === 'string' ? args.key : null;
   const wasOpen = ui.settings !== null;
-  if (wasOpen && section === null && tomlRequest === null && sourceRequest === null) {
+  if (wasOpen && section === null && tomlRequest === null && sourceRequest === null && keyRequest === null) {
     ui.settings = null; // ⌘, again closes it
     return;
   }

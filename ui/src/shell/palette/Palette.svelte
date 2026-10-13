@@ -2,10 +2,19 @@
   import { t } from '$lib/i18n/index.svelte';
   import { trackerSearch } from '$lib/ipc/commands';
   import type { TicketItem } from '$lib/gen';
+  import { settings } from '$lib/stores';
 
   import { rank } from './fuzzy';
   import Picker from './Picker.svelte';
-  import { buildItems, GROUP_ORDER, itemText, ticketItems, type PaletteItem } from './sources';
+  import {
+    buildItems,
+    GROUP_ORDER,
+    itemText,
+    parseQuery,
+    recentItems,
+    ticketItems,
+    type PaletteItem,
+  } from './sources';
 
   interface Props {
     initialQuery?: string;
@@ -20,23 +29,30 @@
   let searching = $state(false);
   let seq = 0;
 
+  // Settings keys come from the schema, fetched once per app run.
+  void settings.loadSchema();
+
   const base = $derived(buildItems());
+  const parsed = $derived(parseQuery(query));
+  const wantsTickets = $derived(!parsed.groups || parsed.groups.includes('Tickets'));
 
   const results = $derived.by((): PaletteItem[] => {
-    const q = query.trim();
-    const local = rank(base, q, itemText, 60);
+    const { groups, text: q } = parsed;
+    const pool = groups ? base.filter((i) => groups.includes(i.group)) : base;
+    const local = rank(pool, q, itemText, 60);
     if (q === '') {
       // Group order for the empty query; sessions needing input stay first within their group.
-      return [...local].sort((a, b) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group));
+      const sorted = [...local].sort((a, b) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group));
+      return groups ? sorted : [...recentItems(base), ...sorted];
     }
-    return [...local, ...ticketItems(hits)];
+    return [...local, ...(wantsTickets ? ticketItems(hits) : [])];
   });
 
   $effect(() => {
     // Tickets come from the cached tracker search; typing arms one debounce timer.
-    const q = query.trim();
+    const q = parsed.text;
     hits = [];
-    if (q.length < 2) {
+    if (q.length < 2 || !wantsTickets) {
       searching = false;
       return;
     }

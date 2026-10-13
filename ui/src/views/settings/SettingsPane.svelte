@@ -20,7 +20,9 @@
   import { currentPlatform } from '$lib/ui/format';
   import { untrack, type Component } from 'svelte';
 
-  import { takeTomlRequest } from './actions';
+  import { noteRecent } from '../../shell/jumplist';
+
+  import { takeKeyRequest, takeTomlRequest } from './actions';
   import EditToml from './EditToml.svelte';
   import Field from './fields/Field.svelte';
   import { provideEditor, SettingsEditor, type EditLayer } from './lib/editor.svelte';
@@ -65,12 +67,17 @@
     // retargets this open pane, with its TOML request
     const wanted = content.section;
     if (wanted && sections.some((s) => s.id === wanted)) sectionId = wanted;
+    const key = takeKeyRequest();
+    if (key) query = key;
     const toml = takeTomlRequest();
     if (toml) {
       editor.raw = true;
       untrack(() => void editor.target({ layer: 'project', projectId: toml, repoId: null }));
     }
   });
+
+  // A section shown is a place ⌘K lists under Recent.
+  $effect(() => noteRecent({ id: `setting:${sectionId}`, label: sectionId }));
 
   $effect(() => {
     // initial load only: layer / project / repo changes reload through editor.target()

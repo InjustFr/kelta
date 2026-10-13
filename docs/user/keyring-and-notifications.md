@@ -48,6 +48,15 @@ A Claude that is ready for review or finished does not notify by default: it can
 `notifications.claude_done` (Settings > Notifications) to be told anyway; `notifications.claude_blocked` turns off
 the blocked ones.
 
+### Focus mode
+
+`⇧⌘F` (`Ctrl+Shift+F` on Linux, or the prefix then `f`) hides the sidebar and the Story panel so only the work in
+front of you stays, with its work bar. While it is on, desktop notifications and background toasts about other work
+(ready for review, approvals, checks, merges) wait. A blocked Claude still lights the "needs you" chip and still
+notifies, unless you turn off `notifications.focus_allow_blocked`. `Esc` `Esc` outside a terminal (inside one, `Esc`
+belongs to the program) or `⇧⌘F` again brings the layout back as it was, and one toast sums up what waited: "While
+you were focused: SHOP-12 ready to review, PR approved".
+
 ### Linux: notification daemon
 
 Notifications use `org.freedesktop.Notifications`. GNOME and KDE have one. On Sway and Hyprland install one:

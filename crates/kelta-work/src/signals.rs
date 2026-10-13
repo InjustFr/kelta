@@ -84,10 +84,11 @@ impl WorkService {
         // changes waits on Louis (`claude_blocked`); ready to review and finished can wait (`claude_done`).
         let settings = core.settings(Some(&item.project_id));
         let ns = &settings.notifications;
-        let (en, on) = match delta {
-            Some(Some(_)) => ("{} ready to review", ns.claude_done),
-            Some(None) => ("{}: Claude replied", ns.claude_blocked),
-            None => ("{}: Claude finished", ns.claude_done),
+        // Critical = blocked: focus mode (#421) lets only those through.
+        let (en, on, urgency) = match delta {
+            Some(Some(_)) => ("{} ready to review", ns.claude_done, Urgency::Normal),
+            Some(None) => ("{}: Claude replied", ns.claude_blocked, Urgency::Critical),
+            None => ("{}: Claude finished", ns.claude_done, Urgency::Normal),
         };
         if event == names::STOP && on {
             let key = item_key(&item);
@@ -97,7 +98,7 @@ impl WorkService {
             core.notify(Notification {
                 title,
                 body,
-                urgency: Urgency::Normal,
+                urgency,
                 project_id: Some(item.project_id.clone()),
                 session_id: Some(sid.clone()),
             })

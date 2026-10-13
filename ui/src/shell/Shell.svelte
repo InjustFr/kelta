@@ -31,6 +31,7 @@
   import { confirms, prompts } from './confirm.svelte';
   import ContextBar from './ContextBar.svelte';
   import { closeDetachedWindow, detached } from './detached';
+  import { focus } from './focus.svelte';
   import DialogHost from './DialogHost.svelte';
   import JumpHud from './JumpHud.svelte';
   import GlobalHost from './GlobalHost.svelte';
@@ -325,7 +326,7 @@
   <ContextBar />
 {/if}
 <main class="shell" data-testid="shell" data-theme-resolved={resolvedTheme}>
-  {#if !detached}
+  {#if !detached && !focus.on}
     <ProjectRail />
   {/if}
   <div class="main">

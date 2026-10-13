@@ -1,6 +1,6 @@
 // Palette items (SPEC §1): actions, projects, sessions across projects, tools, plugin commands,
-// settings sections and reviews are built synchronously from the stores; tickets come from
-// `tracker_search`. Every item carries its own `run`.
+// settings sections and keys and pull requests are built synchronously from the stores; tickets come
+// from `tracker_search`. Every item carries its own `run`.
 
 import { msg, t } from '$lib/i18n/index.svelte';
 import { dispatch, hasAction } from '$lib/actions';
@@ -15,16 +15,20 @@ import { attentionRank, lampOf, type LampLevel } from '$lib/stores/reducers';
 import { currentPlatform, isIconName } from '$lib/ui';
 
 import { reviewCtx, ticketCtx, workCtx } from '../../views/plugins/actions';
+import { COPY, descriptionOf, leafFields, titleOf, type SchemaNode } from '../../views/settings/lib/schema';
+import { SECTION_ROOTS } from '../../views/settings/lib/sections';
 import { configWorkflows, pickWorkflow, runWorkflowOn } from '../../views/tickets/workflow.svelte';
 import { focusedWorkItem } from '../../views/work/actions';
 import { phaseNow, sessionLabel, unfinishedWork, workTitle } from '../../views/work/live';
 import { goToWork } from '../../views/work/nav';
 import { startWorkOnTicket } from '../../views/work/startWork';
 import { workKey } from '../../views/work/phase';
+import { recentPlaces } from '../jumplist';
 import { sessionIcon, sessionKindName, statusLabel, toolIcon } from '../labels';
 import { activateProject, focusedPane, openContent, railTools, revealSession } from '../nav';
 
 export type PaletteGroup =
+  | 'Recent'
   | 'Work items'
   | 'Sessions'
   | 'Projects'
@@ -32,7 +36,7 @@ export type PaletteGroup =
   | 'Tools'
   | 'Commands'
   | 'Tickets'
-  | 'Reviews'
+  | 'Pull requests'
   | 'Settings';
 
 export interface PaletteItem {
@@ -48,6 +52,7 @@ export interface PaletteItem {
 
 /** Display order of the groups when the query is empty (headers are translated where shown). */
 export const GROUP_ORDER: readonly PaletteGroup[] = [
+  msg('Recent'),
   msg('Work items'),
   msg('Sessions'),
   msg('Projects'),
@@ -55,9 +60,24 @@ export const GROUP_ORDER: readonly PaletteGroup[] = [
   msg('Tools'),
   msg('Commands'),
   msg('Tickets'),
-  msg('Reviews'),
+  msg('Pull requests'),
   msg('Settings'),
 ];
+
+/** Query prefixes that narrow the palette to their groups (`# 311`, `!311`, `>split`, `,wip`). */
+const PREFIXES: Record<string, readonly PaletteGroup[]> = {
+  '#': ['Tickets'],
+  '!': ['Pull requests'],
+  '>': ['Actions', 'Commands', 'Tools'],
+  ',': ['Settings'],
+};
+
+/** The groups a query's prefix narrows to (null: every group) and the text left to match. */
+export function parseQuery(query: string): { groups: readonly PaletteGroup[] | null; text: string } {
+  const q = query.trimStart();
+  const groups = PREFIXES[q[0] ?? ''];
+  return groups ? { groups, text: q.slice(1).trim() } : { groups: null, text: q.trim() };
+}
 
 /** Text matched against the query. */
 export function itemText(item: PaletteItem): string {
@@ -254,17 +274,37 @@ export function workflowItems(): PaletteItem[] {
   }));
 }
 
+/** Every section, then every key of the loaded schema (label and help as in Settings). */
 export function settingsItems(): PaletteItem[] {
   const linux = currentPlatform() === 'linux';
-  return settingsSections
-    .filter((s) => !s.platform || (s.platform === 'linux') === linux)
-    .map((s) => ({
+  const sections = settingsSections.filter((s) => !s.platform || (s.platform === 'linux') === linux);
+  const schema = settings.schema.data as unknown as SchemaNode | null;
+  const keys = schema
+    ? sections.flatMap((s) =>
+        leafFields(schema, SECTION_ROOTS[s.id] ?? []).map((f) => {
+          const copy = COPY[f.path];
+          const help = copy?.help ? t(copy.help) : descriptionOf(f.node);
+          return {
+            id: `setting-key:${f.path}`,
+            group: 'Settings' as const,
+            label: copy?.label ? t(copy.label) : titleOf(f.segs.at(-1) ?? f.path),
+            detail: [f.path, help].filter(Boolean).join(SEP),
+            icon: s.icon,
+            run: () => void dispatch('settings.open', { section: s.id, key: f.path }),
+          };
+        }),
+      )
+    : [];
+  return [
+    ...sections.map((s) => ({
       id: `setting:${s.id}`,
       group: 'Settings' as const,
       label: t('Settings: {section}', { section: t(s.label) }),
       icon: s.icon,
       run: () => void dispatch('settings.open', { section: s.id }),
-    }));
+    })),
+    ...keys,
+  ];
 }
 
 export function reviewItems(): PaletteItem[] {
@@ -278,7 +318,7 @@ export function reviewItems(): PaletteItem[] {
       seen.push(key);
       out.push({
         id: `review:${key}`,
-        group: 'Reviews',
+        group: 'Pull requests',
         label: `${r.ref.repo}#${r.ref.number} ${r.title}`,
         detail: r.author.name,
         icon: 'git-pull-request',
@@ -362,6 +402,28 @@ export function ticketItems(hits: readonly TicketItem[]): PaletteItem[] {
     },
     ...(i < VERB_HITS ? ticketVerbs(hit) : []),
   ]);
+}
+
+/**
+ * The last places visited (jumplist.ts), most recent first, as the items of `base` with the same
+ * id; a ticket or pull request no list holds reopens its pane, a finished work item drops out.
+ */
+export function recentItems(base: readonly PaletteItem[]): PaletteItem[] {
+  return recentPlaces().flatMap((r): PaletteItem[] => {
+    const item = base.find((i) => i.id === r.id);
+    if (item) return [{ ...item, id: `recent:${r.id}`, group: 'Recent' }];
+    const { project, content } = r;
+    if (!project || (content?.kind !== 'ticket_detail' && content?.kind !== 'review_detail')) return [];
+    return [
+      {
+        id: `recent:${r.id}`,
+        group: 'Recent',
+        label: r.label,
+        icon: content.kind === 'ticket_detail' ? 'ticket' : 'git-pull-request',
+        run: () => void openContent(project, { content, placement: 'new_tab' }),
+      },
+    ];
+  });
 }
 
 /** Every synchronous item, in display order. */

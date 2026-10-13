@@ -171,6 +171,7 @@ describe('mock transport', () => {
       open_external: { url: 'https://example.com' },
       clipboard_read: { kind: 'clipboard' },
       clipboard_write: { kind: 'primary', text: 'x' },
+      notify_focus: { on: true },
       settings_layer_get: { layer: 'global' },
       settings_set: { layer: 'global', path: 'app.theme', value: 'dark' },
       settings_reset: { layer: 'global', path: 'app.theme' },
