@@ -5,29 +5,26 @@ import { registerAction } from '$lib/actions';
 import type { ProjectId, Scope, TicketsMode } from '$lib/gen';
 import { openExternal } from '$lib/ipc/commands';
 import { activateTab, addTab, findTab, makeTab, pane, splitPane } from '$lib/layout';
-import { layout, projects, toasts, ui } from '$lib/stores';
+import { GLOBAL, layout, projects, toasts, ui } from '$lib/stores';
 
 import { activateProject, openView } from '../../shell/nav';
-import { openContent } from '../work/nav';
+import { listScope } from '../../shell/scope.svelte';
+import { loadGlobalLayout, persistPaneContent } from '../work/nav';
 
-/** A project's Tickets tab (the board needs one project's columns). */
-async function openProjectTickets(projectId: ProjectId, mode: TicketsMode): Promise<void> {
-  await openContent(
-    projectId,
-    { kind: 'tickets', scope: { kind: 'project', id: projectId }, view_id: null, mode, who: null },
-    {
-      placement: 'new_tab',
-      title: 'Tickets',
-      match: (c) => c.kind === 'tickets' && c.scope.kind === 'project' && c.scope.id === projectId,
-      replace: mode === 'board',
-    },
-  );
+/** A project's tickets: the Tickets view scoped to it (#409), no tab of their own; `mode` = as it was. */
+async function openProjectTickets(projectId: ProjectId, mode?: TicketsMode): Promise<void> {
+  listScope.set(projectId);
+  if (mode) {
+    await loadGlobalLayout().catch(() => null);
+    persistPaneContent(GLOBAL, 'tickets', { mode });
+  }
+  openView('tickets');
 }
 
-// Without `project_id`: the cross-project Tickets view on the rail.
+// Without `project_id`: the Tickets view in its current scope.
 registerAction('tickets.open', async (args) => {
   const projectId = args?.project_id as string | undefined;
-  if (projectId) await openProjectTickets(projectId, 'list');
+  if (projectId) await openProjectTickets(projectId);
   else openView('tickets');
 });
 

@@ -2,13 +2,14 @@
 // `layout_save` 500 ms after the last change (one-shot timer, exists only while dirty) using the
 // optimistic `rev`. A `Conflict` refetches the backend layout.
 
-import type { KeltaError, Layout, OpenPaneRequest, ProjectId, UiEvent } from '$lib/gen';
+import type { KeltaError, Layout, OpenPaneRequest, ProjectId, Scope, UiEvent } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 import { isIpcError } from '$lib/ipc/transport';
-import { openPane, type PaneLocation } from '$lib/layout';
+import { dropListTabs, openPane, type PaneLocation } from '$lib/layout';
 
 import { toKeltaError } from './loadable';
 import { reduceLayouts, type LayoutMap } from './reducers';
+import { GLOBAL } from './ui.svelte';
 
 export const LAYOUT_SAVE_DEBOUNCE_MS = 500;
 
@@ -17,6 +18,8 @@ export class LayoutStore {
   errors = $state<Record<ProjectId, KeltaError | null>>({});
   /** Called when a save fails for another reason than a conflict (wired to toasts). */
   onSaveError: (err: unknown) => void = () => {};
+  /** Called with the scope of the list tabs a load closed (#409; wired to the global lists' scope). */
+  onListTabsClosed: (scope: Scope) => void = () => {};
 
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- non-reactive bookkeeping
   #timers = new Map<ProjectId, ReturnType<typeof setTimeout>>();
@@ -33,9 +36,15 @@ export class LayoutStore {
 
   async load(projectId: ProjectId): Promise<Layout> {
     try {
-      const layout = await ipc.layoutGet({ project_id: projectId });
+      const saved = await ipc.layoutGet({ project_id: projectId });
+      // The global views' own layout holds the lists by design: only project layouts migrate.
+      const { layout, scope } = projectId === GLOBAL ? { layout: saved, scope: null } : dropListTabs(saved);
       this.byProject = { ...this.byProject, [projectId]: layout };
       this.errors = { ...this.errors, [projectId]: null };
+      if (scope) {
+        this.#scheduleSave(projectId);
+        this.onListTabsClosed(scope);
+      }
       return layout;
     } catch (err) {
       this.errors = { ...this.errors, [projectId]: toKeltaError(err, 'layout_get') };

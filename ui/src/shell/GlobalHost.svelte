@@ -9,10 +9,15 @@
   import { globalContent } from '../views/work/nav';
   import { lazyComponents } from './lazy.svelte';
   import { VIEW_NAMES } from './nav';
+  import { listScope } from './scope.svelte';
 
   let { view }: { view: GlobalView } = $props();
 
-  const content = $derived(globalContent(view));
+  // Tickets and Reviews show the shared scope (#409); Now narrows its rows to it itself.
+  const content = $derived.by(() => {
+    const c = globalContent(view);
+    return c.kind === 'tickets' || c.kind === 'reviews' ? { ...c, scope: listScope.scope } : c;
+  });
   const key = $derived(`pane:${content.kind}`);
   const entry = $derived(lazyComponents.get(key));
   const Component = $derived(entry.component as AnyComponent | null);

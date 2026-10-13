@@ -327,7 +327,7 @@ The cursor is neutral, not project-hued and not acid-green. ANSI red/green/yello
 
 ### 6.1 Lamps (`$lib/ui/Lamp.svelte`, shown by `shell/AttentionDot.svelte`)
 
-One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs, status strip, Now, palette, board cards. Nothing pulses or blinks.
+One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs, Now, palette, board cards. Nothing pulses or blinks.
 
 | State | Shape | Size | Token |
 |---|---|---|---|
@@ -339,28 +339,31 @@ One span, silhouette from CSS only (no SVG). Same shapes everywhere: rail, tabs,
 | `parked` (#142) | hollow ring like `working`, quiet | 10px | `--k-fg-muted` |
 | `none` | renders nothing (the slot keeps its width in tabs) | | |
 
-- `working` and `parked` are not Attention levels: `working` is derived from `sessions[].status === 'working'` in the store, `parked` from a parked work item (FLOW §2.2). Precedence on an aggregate (project, status strip): needs_input > error > working > done > activity.
+- `working` and `parked` are not Attention levels: `working` is derived from `sessions[].status === 'working'` in the store, `parked` from a parked work item (FLOW §2.2). Precedence on an aggregate (project): needs_input > error > working > done > activity.
 - `aria-label` stays as today; lamps are never the only accessible name.
 - Lamps in the rail sit in a 10px socket so the diamond stays sharp on 1x screens.
 
 ### 6.2 Rail (`shell/ProjectRail.svelte`)
 
+The rail lists work, not tabs (#430): the views, then each project's work items, everything else folded.
+
 - **Width**: 288px by default (`--k-rail-width`), set by dragging its right edge between 200 and 480px (`sidebar.svelte.ts`, #362). The edge is a 10px hit area with a 2px accent line on hover, drag and focus; `←` `→` move it by 16px (`⇧` 64px), `Enter` collapses. `rail.toggle` (`⌘B`, `Ctrl+B`) or the panel button at the bottom collapses it to the 64px icon column (`--k-rail-width-compact`); a window under 1100px starts collapsed and the button still opens it until the next start. Width and collapsed state survive a restart (webview storage). `--k-bezel`.
-- Top to bottom: **Search or run…** (the palette; its chord, like Settings', shows on hover and focus only), the global views in loop order, **Tickets** (`ticket` icon, `12 mine`), **Now** (`inbox` icon, red badge, its sub line is the Now header), **Reviews** (`git-pull-request` icon, `2 to review`), 44px two-line rows (`--k-sidebar-row-height`); then the **Open** group with an **Add project** ghost button; the bands; **Open project…** when closed projects exist (#363); **Elsewhere** and **Tools** bands; at the foot **Settings** and the collapse button. Only the current destination (a row or a global view) wears the selected row style and the full-height index bar (a global view's bar is the accent); rows drop theirs while a global view is shown.
-- Counts: only Now's badge is red. Tickets and Reviews counts are muted (the sub line in the wide rail; a `--k-bg-selected` pill with `--k-fg-muted` digits in the badge slot of the compact rail), so nothing is counted twice in red.
-- **Bands**: one per open project, Home last. A caption (project name, `--k-fg-muted` 13/500, `⋯` on hover) over one row per tab. No project tile, status word, lamp or ready count on the caption: its rows carry them.
-- **Rows** (`--k-rail-item`, 32px, one line): `[lamp socket 10px][glyph 14px][title]`, a 2px project-colour bar on the left (raw resolved colour, §2.1; 55% mix), full colour and 3px on the selected row, which also wears `--k-bg-selected` and a 600 title. `×` on hover and focus. A tab in its own window (#342) takes the `app-window` glyph. Background sessions are `--k-fg-muted` rows at the end of the band.
+- Top to bottom: **Search or run…** (the palette; its chord, like Settings', shows on hover and focus only), then the three views, 44px two-line rows (`--k-sidebar-row-height`), each with one count on its sub line: **Now** (`inbox` icon, `9 your move`), **Tickets** (`ticket` icon, `10 assigned to you`), **Reviews** (`git-pull-request` icon, `3 ask for your review`); then the **Open** group with an **Add project** ghost button; the bands; **Open project…** when closed projects exist (#363); **Other Claude sessions** and **Tools**; at the foot **Settings** and the collapse button. Only the current destination (a row, a folded row hiding it, or a view) wears the selected row style and the full-height index bar (a view's bar is the accent); rows drop theirs while a view is shown.
+- Counts: no red badge. The count is the sub line in the wide rail; the compact rail shows it as a `--k-bg-selected` pill with `--k-fg-muted` digits in the badge slot. Lit rows say what waits on you.
+- **Bands**: one per open project, Home last. A caption (project name, `--k-fg-muted` 13/500, `⋯` on hover) over the project's **work rows**, then one **n more** row. No project tile, status word, lamp or ready count on the caption: its rows carry them.
+- **Work rows** (`--k-rail-item`, 32px, one line): `[lamp socket 10px][key][title][stage word]`, the key and the stage word (Claude, PR, Review, Merge, Deploy) in `--k-fg-muted` 11px. Rows keep the order their work started in, so a phase change never moves one. `⌘1`–`⌘9` (`project.goto.N`) jump to the nth work row across bands; its digit sits at the right end. A 2px project-colour bar on the left (raw resolved colour, §2.1; 55% mix), full colour and 3px on the selected row, which also wears `--k-bg-selected` and a 600 title. `×` on hover and focus, over the stage word and digit. A tab in its own window (#342) adds the `app-window` glyph before its key.
+- **n more**: every other tab of the project (shells, boards, review lists, Settings) and its background sessions fold into one row, `[lamp][chevron][n more]`; its lamp is the highest of the folded tabs. A click opens it in place: the folded tabs as `[lamp][glyph][title]` rows in tab order, then the background sessions as `--k-fg-muted` rows. Tool tabs stay under Tools.
 - **Lit row** *(from Faceplate)*: a row whose session needs input takes `--k-lit` (`color-mix(in oklab, var(--k-lamp-needs-input) var(--k-lit-mix), var(--k-bezel))`, `--k-lit-mix` 14% light, 30% dark), the brightest thing in the window, readable in peripheral vision. The selected row keeps its face; its lamp speaks.
-- **Elsewhere**: Claude sessions Kelta did not start (#345), dimmed rows `[lamp][bot glyph][title]` under their own heading; a click jumps to their window or tmux pane (#346).
+- **Other Claude sessions**: Claude sessions Kelta did not start (#345), dimmed rows `[lamp][bot glyph][title]` under their own heading; a click jumps to their window or tmux pane (#346).
 - **Tools**: the same 32px rows, `[lamp][icon or 2 letters][label]`, `↗` (`external-link` 12px, `--k-fg-muted`) for web and external tools, 55% opacity when not installed. Live instances are `--k-fg-muted` sub-lines `└ KEY` indented under the lamp column.
-- **Compact** (collapsed, or < 1100px): the caption becomes a 1px rule in the project colour and each row a tile (bar, lamp, glyph); names are in the tooltips and the accessibility tree; sub lines, `×`, `⋯` and the search text are hidden.
-- **Drag and drop** (#341, #342): a row drags to reorder inside its band. A pane dragged by its header (§6.4) over a row joins that tab (`pane-over`: accent drop line); over a band's empty area it becomes a tab of its own; never across projects. A row or pane dropped outside the window moves to its own window.
+- **Compact** (collapsed, or < 1100px): the caption becomes a 1px rule in the project colour and each row a tile (bar, lamp, glyph; a work row's key and stage word hide); names are in the tooltips and the accessibility tree; sub lines, `×`, `⋯` and the search text are hidden.
+- **Drag and drop** (#341, #342): rows do not reorder (their order is the work's start). A pane dragged by its header (§6.4) over a row joins that tab (`pane-over`: accent drop line); over a band's empty area it becomes a tab of its own; never across projects. A row or pane dropped outside the window moves to its own window.
 - Focus: 2px `--k-focus` outline inset 2px.
 - Drag-over: 2px accent insertion line.
 
 ### 6.3 Context bar (`shell/ContextBar.svelte`)
 
-One bar across the top of the window, above the rail and the panes: `--k-contextbar-height` (30px), `--k-bezel`, `--k-font-size-sm`. It describes the selected rail row; the status strip stays app-wide, the pane header per pane, the rail keeps the lamps. No tab list and no tool strip: the rail lists the tabs and the tools (§6.2).
+One bar across the top of the window, above the rail and the panes: `--k-contextbar-height` (30px), `--k-bezel`, `--k-font-size-sm`. It describes the selected rail row; the status strip stays app-wide, the pane header per pane, the rail keeps the lamps. No tab list and no tool strip: the rail lists the work and the tools (§6.2).
 
 - Always: `‹` (`nav.back`, its tooltip names the jumplist target), the breadcrumb, `+` on the right (New session, Tickets, Reviews; tools live in the rail). The breadcrumb is `▌project › row`: a 3px project-colour bar, the project name in `--k-fg-muted` 500, `›` in `--k-fg-subtle`, the row in `--k-fg` 600 (ellipsis). It is a pure drag region (double-click zooms the window), never clickable.
 - Work tab: the mono key and the title, then the ticket status chip (status picker), the phase chip with its lamp (opens `WorkItemPane` as a split below), the PR chip `PR #482 ●` (CI lamp; opens the PR, as `⌘.` `o`), `↑a ↓b`, the cost (`--k-warn` over budget), `⎇` (branch, worktree, ports, armed, `+ins −del` and uncommitted changes in its tooltip), then on the right the primary button (its blocked reason in the tooltip) and `Work ⌘.`. The return strip sits directly under the bar.
@@ -368,7 +371,7 @@ One bar across the top of the window, above the rail and the panes: `--k-context
 - Tool tab: `Tools › ⚒ tool`; in Home a muted "for you", else a context chip `▌project › KEY` (goes to that tab) and the cwd; on the right the return chip `↩ <back target> <tool key>` (`nav.back`, what pressing the tool's key again does).
 - Global view: its name, and on the right the "underneath" chip `‹ project › row` that leaves the view. The view's own 40px `.k-toolbar` (filters) stays under the bar.
 - A detached window (§6.4) has no context bar; the native title bar sits above its tab.
-- Never in the bar: session status, ctx % and session cost (pane header); rate limits, Claude slots, the lamp meter, restart, prefix (status strip); row lamps and peek (rail).
+- Never in the bar: session status, ctx % and session cost (pane header); rate limits, Claude slots, restart, prefix (status strip); row lamps and peek (rail).
 - Narrow bars (container queries) drop, in order: `⎇` and the cwd/model, the cost unless over budget, `↑↓`, the PR chip's `PR` word, the ticket chip, the title (the key stays), the phase label (its lamp stays), the `Work` label (its icon stays). `‹`, the key, the primary button and `+` never drop.
 - Window chrome: native decorations keep the system title bar, whose title follows the breadcrumb. macOS custom chrome draws the traffic lights over a 72px leading inset of the bar (overlay title bar); Linux custom chrome adds minimize, maximize and close after `+` and the edge resize handles. Empty bar area is `data-tauri-drag-region`. Hyprland/Sway: no title bar, the context bar is the top edge.
 
@@ -386,7 +389,7 @@ One bar across the top of the window, above the rail and the panes: `--k-context
 
 - 28px (`--k-statusbar-height`), `--k-bezel-raised`, 12px, tabular-nums, segments spaced 12px, no dots.
 - No key hints (#385): the list views carry their own line (§6.8), and the global chords live in their `?` dialog and the palette.
-- Right, exceptions only: prefix armed, "Restart needed", Claude slots (`Claude 3/4 · 1 queued`), the 5h and 7d rate windows, then the **lamp meter** *(from Faceplate)*: one ghost button per non-zero state, lamp plus a count in words (`● 2 need input`, `● 1 ready to review`, `● 1 in error`, `● 3 working`); clicking focuses the next session in that state. Zero counts render nothing.
+- Right, exceptions only: prefix armed, "Restart needed", Claude slots (`Claude 3/4 · 1 queued`), the 5h and 7d rate windows. No lamp meter (#407): the waiting count already shows in the Now header and the context bar's "needs you" chip, which with `⌘J` stays the one call signal.
 
 ### 6.6 Command palette
 
@@ -406,6 +409,8 @@ One bar across the top of the window, above the rail and the panes: `--k-context
 
 One row grammar for all three, so they read as one instrument:
 `lamp | id (mono 13, --k-info, 76px) | title (14/500, --k-fg-strong, fills) | meta (12, right-aligned, tabular)`.
+
+- Scope (#409): the toolbar of each global list (Now, Tickets as list or board, Reviews) holds `All projects ▾` (`shell/ScopeSelect.svelte`), a menu of the open projects setting the one scope the three share (`shell/scope.svelte.ts`, kept in the webview's storage), so switching view keeps it. Home, or a project closed since, reads as All projects. Now keeps the scoped project's rows (a Claude session Kelta did not start has none) and its header counts them; the Tickets source menu and the Reviews repo filter narrow inside the scope. A project has no Board, Reviews or Inbox tab of its own: `tickets.open` / `tickets.board` / `reviews.open` with a project open the global view scoped to it, and a saved layout's tabs holding only such a list close on load, the last one's project applied once as the scope.
 
 - Hierarchy (#382): the title is the brightest text in the row (500, 600 on the selected row), the key wears one hue in every list (`--k-info`, never a lamp colour) so the eye runs down the key column, the state word takes its lamp's colour, and everything else stays muted.
 

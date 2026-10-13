@@ -8,7 +8,7 @@ use crate::status::NotifyKind;
 
 pub fn kind_enabled(kind: NotifyKind, n: &NotificationSettings) -> bool {
     match kind {
-        NotifyKind::ClaudeNeedsInput => n.claude_needs_input,
+        NotifyKind::ClaudeNeedsInput => n.claude_blocked,
         NotifyKind::ClaudeDone => n.claude_done,
         NotifyKind::BellBackground => n.bell_background,
         NotifyKind::ReviewRequested => n.review_requested,

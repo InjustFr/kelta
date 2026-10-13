@@ -654,3 +654,19 @@ fn prompt_template_overrides_accept_the_shipped_placeholders() {
     e.global("[claude.prompt_templates]\nticket = \"{nope}\"\n");
     assert!(e.load().issues().iter().any(|i| i.issue.message.contains("{nope}")));
 }
+
+/// #433: `claude_done` turns off by default, an explicit value is kept, and the old
+/// `claude_needs_input` key reads as `claude_blocked` (the new key wins when both are set).
+#[test]
+fn notification_kinds_keep_explicit_values() {
+    let e = env();
+    assert!(!e.load().effective(None).notifications.claude_done);
+    e.global("[notifications]\nclaude_done = true\nclaude_needs_input = false\n");
+    e.project("shop", "[notifications]\nclaude_blocked = true\nclaude_needs_input = false\n");
+    let svc = e.load();
+    assert!(svc.issues().is_empty(), "{:?}", svc.issues());
+    let global = svc.effective(None);
+    assert!(global.notifications.claude_done);
+    assert!(!global.notifications.claude_blocked);
+    assert!(svc.effective(Some(&pid("shop"))).notifications.claude_blocked);
+}
