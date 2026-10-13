@@ -64,8 +64,8 @@ describe('healthProblems', () => {
 });
 
 describe('Health section', () => {
-  it('lists the mock\'s missing Claude installs, then says everything works once fixed', async () => {
-    render(Health, { layer: 'global', projectId: null, repoId: null });
+  it("lists the mock's missing Claude installs, then says everything works once fixed", async () => {
+    render(Health);
     await fireEvent.click(await screen.findByRole('button', { name: 'Install hooks' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Install MCP' }));
     expect(await screen.findByText('Everything works.')).toBeTruthy();

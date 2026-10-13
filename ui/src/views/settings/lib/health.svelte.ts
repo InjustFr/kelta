@@ -45,7 +45,9 @@ export function healthProblems(h: HealthInput): Problem[] {
   if (h.hooks === false && h.hooksOffer) {
     out.push({
       id: 'claude-hooks',
-      what: t("Kelta's hooks are not installed in Claude Code: sessions started in another terminal do not show in the Queue"),
+      what: t(
+        "Kelta's hooks are not installed in Claude Code: sessions started in another terminal do not show in the Queue",
+      ),
       where: t('Claude'),
       since: null,
       fix: { label: t('Install hooks'), action: 'claude.hooks_install' },
@@ -133,12 +135,13 @@ class Health {
 
   get problems(): Problem[] {
     const v = settings.value();
-    const labels = new Map((v?.sources ?? []).map((s) => [s.id, s.label]));
-    const sources = new Map<string, HealthInput['sources'][number]>();
+    // One row per source, whichever of its lists (scope, view) failed.
+    const sources: Record<string, HealthInput['sources'][number]> = {};
     for (const l of Object.values(tickets.lists)) {
-      if (!l.sourceId || (!l.error && !l.stale)) continue;
-      const label = labels.get(l.sourceId) ?? l.sourceId;
-      sources.set(l.sourceId, { id: l.sourceId, label, error: l.error?.message ?? null, since: l.fetchedAt });
+      const id = l.sourceId;
+      if (!id || (!l.error && !l.stale)) continue;
+      const label = v?.sources.find((s) => s.id === id)?.label ?? id;
+      sources[id] = { id, label, error: l.error?.message ?? null, since: l.fetchedAt };
     }
     const state = updates.status?.state;
     return healthProblems({
@@ -147,7 +150,7 @@ class Health {
       hooksOffer: v?.claude.hooks_offer ?? true,
       mcpOffer: v?.claude.mcp_offer ?? true,
       accounts: settings.accounts,
-      sources: [...sources.values()],
+      sources: Object.values(sources),
       restart: settings.pendingRestart,
       restartSince: settings.restartSince,
       update: state?.type === 'ready' ? state.version : null,

@@ -303,7 +303,8 @@
             <Icon name={s.icon} size={14} />
             {sectionLabel(s)}
             {#if s.id === 'health' && problemCount > 0}
-              <span class="count" data-testid="health-count"><Badge tone="danger">{problemCount}</Badge></span>
+              <span class="count" data-testid="health-count"><Badge tone="danger">{problemCount}</Badge></span
+              >
             {/if}
           </button>
         {/each}

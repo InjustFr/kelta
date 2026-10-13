@@ -19,7 +19,12 @@ test('Health lists what is broken and each button fixes it or opens its setting'
     value.themes = {
       murky: { name: 'Murky', base: 'dark', ui: { well: '#777777', fg: '#7a7a7a' }, terminal: {} },
     };
-    mock.emit({ type: 'settings.changed', layers: ['global'], paths: ['themes'], requires_restart: ['window.decorations'] });
+    mock.emit({
+      type: 'settings.changed',
+      layers: ['global'],
+      paths: ['themes'],
+      requires_restart: ['window.decorations'],
+    });
     // a source whose tickets fail to load
     mock.failNext('tracker_list', { code: 'network', message: 'connection refused' });
     await window.__kelta!.stores.tickets.load({ kind: 'all' }, null, false, null, 'board').catch(() => {});
@@ -28,7 +33,15 @@ test('Health lists what is broken and each button fixes it or opens its setting'
 
   const nav = page.getByRole('navigation', { name: 'Settings sections' });
   const row = (id: string) => page.locator(`[data-testid="health-problem"][data-problem="${id}"]`);
-  const ids = ['claude-hooks', 'claude-mcp', 'account:jira-acme', 'source:board', 'restart', 'update', 'theme'];
+  const ids = [
+    'claude-hooks',
+    'claude-mcp',
+    'account:jira-acme',
+    'source:board',
+    'restart',
+    'update',
+    'theme',
+  ];
   for (const id of ids) await expect(row(id)).toBeVisible();
   await expect(nav.getByTestId('health-count')).toHaveText(String(ids.length));
 
