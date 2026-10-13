@@ -137,7 +137,9 @@ No status strip segment. The ticket status, the PR and its CI, the branch, `behi
 
 ### 2.5 The work menu (`⌘.`)
 
-`work.menu` opens a menu anchored to the Actions button of the focused tab's header, from any pane including terminals (it is a Mod chord, like `⌘K`). Single letters run actions; `Enter` runs the primary.
+`⌘.` works on any selection (#404): it opens the action menu of whatever has the keys. In the Queue, Tickets (list and board) and Reviews it is the selected row's menu, anchored on the row like its `⋯`, the next step first and lit, so `⌘.` `↵` runs it; in a detail column (or a ticket detail in its own pane) that has the keys, the detail's More menu; on a work tab, the work menu below. With nothing selected it opens the palette, never a toast.
+
+On a work tab, `work.menu` opens a menu anchored to the Actions button of the focused tab's header, from any pane including terminals (it is a Mod chord, like `⌘K`). Single letters run actions; `Enter` runs the primary.
 
 It lists only what can run now (#405): the next step first (`Enter`, its own letter runs it too and is not listed twice), then the available actions grouped by what they act on: the work item, its ticket, its branch or PR. With no next step it starts with its first available action; "No next action" is never an entry. Actions of this kind of item that cannot run now come last, under **Not available now (n)**, each with its reason on a second line: at most 5, those whose group sits nearest the phase's stage (§2.2, the stage track) first. Actions that belong to one situation are left out while it does not hold: Continue / Abort rebase and Open conflicts without a stopped rebase, Skip step without a failed step, Link and Create ticket on a ticketed item, Open ticket without one, and a review checkout's read-only keys. The letters never change: a key whose entry is not available, listed or not, does nothing and flashes its reason (as outside the menu).
 
@@ -492,7 +494,7 @@ All follow DESIGN §6.13: one sentence saying what happened, one or two actions.
 | `attention.next` (label "Next waiting") | `⌘J` | `Ctrl+J` | `u` | global, walks the Now queue (§3.4) |
 | `attention.peek` (label "Peek waiting session") | `⇧⌘Y` | `Ctrl+Shift+Y` | `y` | global, peek & reply without switching (#139) |
 | `work.new` | `⇧⌘N` | `Ctrl+Shift+N` | `w` | global |
-| `work.menu` | `⌘.` | `Ctrl+.` | `.` | global, needs a focused work tab |
+| `work.menu` | `⌘.` | `Ctrl+.` | `.` | global: the menu of what has the keys, a selected row, a detail or a work tab (§2.5); else the palette |
 | `toast.run_last` (label "Run last toast action") | `⇧⌘O` | `Ctrl+Shift+O` | `o` | global, runs the primary action of the most recent toast still shown |
 | `work.start` | `⌘↵` | `Ctrl+Enter` | `s` | unchanged; also submits every work sheet and dialog |
 

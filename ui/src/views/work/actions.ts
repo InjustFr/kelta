@@ -43,7 +43,7 @@ import type { Phase, WorkActionId } from './phase';
 import { selection } from './selection.svelte';
 import { startWorkOnTicket } from './startWork';
 import { story } from './story/panel.svelte';
-import { workUi } from './ui.svelte';
+import { ACTIONS_EVENT, workUi } from './ui.svelte';
 
 export const NOT_YET = msg('not available yet');
 
@@ -507,7 +507,8 @@ export function focusedWorkItem(): WorkItem | null {
   return id ? work.get(id) : null;
 }
 
-/** `args.id` names the item (palette, Now rows); default: the focused tab's. */
+/** `args.id` names the item (palette, Now rows); default: the focused tab's. Without one, the palette
+ *  opens on its commands (#404). */
 function onFocused(
   fn: (item: WorkItem) => void | Promise<void>,
 ): (args?: Record<string, unknown>) => Promise<void> {
@@ -515,19 +516,27 @@ function onFocused(
     const id = args?.id as string | undefined;
     const item = (id ? work.get(id) : null) ?? focusedWorkItem();
     if (item) await fn(item);
-    else toasts.info(t('Focus a work item tab first'));
+    else ui.openOverlay('palette');
   };
 }
 
-registerAction(
-  'work.menu',
-  onFocused((item) => void (workUi.menu = item.id)),
-);
+/** `⌘.` (#404): whatever has the keys opens its menu (a list's selected row, a detail's More menu);
+ *  else the focused tab's work menu; else the palette. */
+function paneMenu(): boolean {
+  const ask = new Event(ACTIONS_EVENT, { bubbles: true, cancelable: true });
+  document.activeElement?.dispatchEvent(ask);
+  return ask.defaultPrevented;
+}
+
+const openWorkMenu = onFocused((item) => void (workUi.menu = item.id));
+registerAction('work.menu', async (args) => {
+  if (args?.id || !paneMenu()) await openWorkMenu(args);
+});
 registerAction('work.next', onFocused(runPrimary));
 registerAction('work.story', () => {
   const tab = ui.view ? null : currentTab();
   if (tab?.work_item_id) story.toggle(tab.id);
-  else toasts.info(t('Focus a work item tab first'));
+  else ui.openOverlay('palette');
 });
 for (const a of WORK_ACTIONS)
   if (a.key)

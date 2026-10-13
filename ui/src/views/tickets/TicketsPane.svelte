@@ -35,7 +35,7 @@
 
   import { columnFor, initials, isAuthError } from '../work/common';
   import { openFrom, persistPaneContent } from '../work/nav';
-  import ActionMenu, { below, type RowAction } from '../work/shared/ActionMenu.svelte';
+  import ActionMenu, { below, under, type RowAction } from '../work/shared/ActionMenu.svelte';
   import KeyHints from '../work/shared/KeyHints.svelte';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
@@ -43,6 +43,7 @@
   import { startWorkOnTicket } from '../work/startWork';
   import { batch, batchKey } from '../work/batch.svelte';
   import { runPrimary } from '../work/actions';
+  import { onActions } from '../work/ui.svelte';
   import AskBar from '../work/AskBar.svelte';
   import { askerOf, phaseNow } from '../work/live';
   import { STAGES } from '../work/stage';
@@ -679,13 +680,21 @@
   }
 
   // ---- the row's `⋯` menu (#397): every key of a ticket, with the key on the right ------------
-  let more = $state.raw<{ x: number; y: number; actions: RowAction[] } | null>(null);
+  let more = $state.raw<{ x: number; y: number; actions: RowAction[]; lit?: boolean } | null>(null);
 
   function rowActions(item: TicketItem): RowAction[] {
     const key = keyOf(item);
     const off = (a: TicketAction) => blockedReason(a, item, null);
     const marked = batch.has(item.ticket.ref);
+    const w = liveWork(item);
     const acts: (RowAction | false)[] = [
+      // Work under way: its next step first, as Now's (#404); Enter runs it on a list row with the detail closed.
+      !!w && {
+        id: 'next',
+        label: nextLabel(item)!,
+        key: mode === 'list' && !splitShown ? 'enter' : undefined,
+        run: () => runPrimary(w),
+      },
       {
         id: 'start',
         label: hasWork(item) ? t('Resume work') : t('Start work'),
@@ -759,6 +768,14 @@
   function openMore(e: Event, item: TicketItem): void {
     selKey = keyOf(item);
     more = { ...below(e), actions: rowActions(item) };
+  }
+
+  /** `⌘.` (#404): the selected row's menu, under the row (a card's `⋯`). */
+  function menuKey(): boolean {
+    if (!cur) return false;
+    const at = root?.querySelector('.card.selected .card-more, .tk.selected');
+    more = { ...under(at), actions: rowActions(cur), lit: true };
+    return true;
   }
 
   function shiftLane(delta: number): void {
@@ -975,6 +992,7 @@
   role="group"
   aria-label={t('Tickets')}
   {onkeydown}
+  use:onActions={menuKey}
 >
   <TicketsToolbar
     hasSource={!noSource}
