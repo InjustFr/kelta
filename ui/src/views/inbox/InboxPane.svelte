@@ -667,7 +667,8 @@
         const asker = cur && /^[1-9]$/.test(e.key) ? answerable(cur) : null;
         const option = asker && questionOf(asker)?.options[Number(e.key) - 1];
         if (asker && option) {
-          void answer(asker.id, option);
+          // One answer at a time: a held or repeated key must not type the option again.
+          if (!inflight.has(cur.id)) void inflight.track(cur.id, () => answer(asker.id, option));
           break;
         }
         if (!cur || !'vVbpfrcansoPC'.includes(e.key) || e.key.length !== 1) return;
@@ -704,10 +705,12 @@
     const text = draft.trim();
     const asker = answerable(row);
     if (!text) return;
+    // Emptied first so a second Enter cannot send it twice; put back if it failed.
+    draft = '';
     const sent = asker
       ? await answer(asker.id, text)
       : row.type === 'work' && (await sendToClaude(row.item, text));
-    if (sent) draft = '';
+    if (!sent && !draft) draft = text;
   }
 
   function onReplyKey(e: KeyboardEvent, row: NowRow): void {
