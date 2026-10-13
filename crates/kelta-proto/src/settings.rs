@@ -398,6 +398,9 @@ pub struct KeysSettings {
     pub prefix: String,
     #[schemars(range(min = 200, max = 5000))]
     pub prefix_timeout_ms: u32,
+    /// Pause after the prefix before a panel lists the next keys; `0` turns the panel off.
+    #[schemars(range(max = 5000))]
+    pub prefix_hint_ms: u32,
     /// ActionId → chords. Overrides only: unlisted actions use the platform defaults of the
     /// ActionId catalog (`ui/src/lib/gen/actions.ts`); `[]` unbinds.
     pub bindings: BTreeMap<String, Vec<String>>,
@@ -426,6 +429,7 @@ impl Default for KeysSettings {
         Self {
             prefix: "ctrl+shift+space".into(),
             prefix_timeout_ms: 1000,
+            prefix_hint_ms: 400,
             bindings: BTreeMap::new(),
             prefix_bindings: crate::actions::default_prefix_bindings(),
             list_keys: true,

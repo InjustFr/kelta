@@ -54,6 +54,7 @@ Types: `str`, `bool`, `int`, `float`, `enum(a|b)`, `list<T>`, `map<K,V>`, `Secre
 |---|---|---|---|
 | `prefix` | Chord \| "off" | `ctrl+shift+space` | app-prefix key |
 | `prefix_timeout_ms` | int (200..5000) | `1000` | one-shot timer |
+| `prefix_hint_ms` | int (0..5000) | `400` | pause after the prefix before a panel at the bottom of the window lists the next keys (Go to, This work on a work tab, Panes, Tools); the prefix then stays armed until a key or `Esc`, and `?` opens Settings › Keys. `0`, or a value not below `prefix_timeout_ms`, turns the panel off. The timer runs only while the prefix is armed |
 | `bindings` | map<ActionId, list<Chord>> | `{}` (overrides only; platform defaults per SPEC §4 live in the ActionId catalog, `ui/src/lib/gen/actions.ts`, so the schema is OS-independent) | effective = catalog default ⊕ override; `[]` unbinds |
 | `prefix_bindings` | map<ActionId, str> | SPEC §4 | single key after prefix |
 | `list_keys` | bool | `true` | single-key shortcuts of lists and boards. `false`: plain printable keys (letters, digits, `?`, `/`, with or without Shift, no Ctrl/Cmd/Alt) no longer reach the panes, `j`/`k` included; arrows, `Enter`, `Escape`, `Space`, `Home`/`End`, `Tab` and every Ctrl/Cmd/Alt chord still work, as do text fields, terminals, dialogs, menus and a Kelta action you bound to a plain key. Applies at once |

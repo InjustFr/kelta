@@ -2,7 +2,7 @@
 // disabled webview shortcuts.
 import { expect, test, type Page } from '@playwright/test';
 
-import { boot, callsOf, dispatch, SESSIONS } from './helpers';
+import { boot, callsOf, dispatch, SESSIONS, unfold } from './helpers';
 
 /** Bytes written to a session (decoded) by `session_write`. */
 async function written(page: Page, id: string): Promise<string[]> {
@@ -82,7 +82,7 @@ test.describe('keys', () => {
     expect((await written(page, SESSIONS.shopClaude)).join('')).not.toContain('\x0b');
   });
 
-  test('app prefix: prefix then key, unknown keys are swallowed, timeout disarms', async ({ page }) => {
+  test('app prefix: prefix then key, unknown keys are swallowed, Esc disarms', async ({ page }) => {
     await boot(page);
     await page.locator('[data-testid="pane"][data-focused="true"] .xterm-helper-textarea').focus();
     await page.keyboard.press('Control+Shift+Space');
@@ -99,12 +99,35 @@ test.describe('keys', () => {
     await expect(page.getByTestId('status-prefix')).toHaveCount(0);
     expect((await written(page, SESSIONS.shopClaude)).join('')).not.toContain('q');
 
-    // Timeout: one-shot after keys.prefix_timeout_ms (1000 ms).
+    // which-key (#416): after keys.prefix_hint_ms (400 ms) a panel lists the keys, the prefix stays armed
+    // past keys.prefix_timeout_ms (1000 ms) until a key or Esc.
     await page.keyboard.press('Control+Shift+Space');
+    const panel = page.getByTestId('which-key');
+    await expect(panel).toBeVisible();
+    await expect(panel.locator('[data-group="work"] h5')).toHaveText('This work: SHOP-142');
+    await expect(panel.locator('[data-group="panes"]')).toContainText('Split right');
+    await page.waitForTimeout(1200);
     await expect(page.getByTestId('status-prefix')).toBeVisible();
-    await expect(page.getByTestId('status-prefix')).toHaveCount(0, { timeout: 3000 });
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await expect(page.getByTestId('status-prefix')).toHaveCount(0);
     await page.keyboard.press('x');
     await expect.poll(async () => (await written(page, SESSIONS.shopClaude)).join('')).toContain('x');
+  });
+
+  test('which-key panel: no work group off a work tab, ? opens Settings › Keys', async ({ page }) => {
+    await boot(page);
+    await unfold(page, 'shop');
+    await page.locator('[data-testid="rail-row"][data-tab-id="shop-t2"]').click();
+    await page.locator('[data-testid="pane"][data-focused="true"] .xterm-helper-textarea').focus();
+    await page.keyboard.press('Control+Shift+Space');
+    const panel = page.getByTestId('which-key');
+    await expect(panel).toBeVisible();
+    await expect(panel.locator('[data-group="goto"]')).toContainText('Open tickets');
+    await expect(panel.locator('[data-group="work"]')).toHaveCount(0);
+    await page.keyboard.press('?');
+    await expect(panel).toHaveCount(0);
+    await expect(page.locator('[data-testid="settings-section"][data-section="keys"]')).toBeVisible();
   });
 
   test('prefix pane actions: split and zoom', async ({ page }) => {
