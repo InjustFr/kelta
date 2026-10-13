@@ -158,6 +158,7 @@
       "labels": [],
       "kind": "authored",
       "waiting_on": ["anna"],
+      "unresolved_threads": 3,
       "assigned": false,
       "author_to_act": false,
       "requested_at": "2026-10-08T09:00:00Z",

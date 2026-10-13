@@ -123,12 +123,14 @@ impl WorkService {
     /// tree, so uncommitted work shows. `delta`: `reviewed..last` (what changed since the last look).
     /// `from`: a review item's reviewed PR head to HEAD, or `git range-diff` in a shell when the PR
     /// was force-pushed. The editor with `editor.review_args` (`{range}`) when set, else the git
-    /// command typed into a shell. The UI places the pane.
+    /// command typed into a shell. `path`: the same diff narrowed to that file (`-- <path>`). The UI
+    /// places the pane.
     pub(crate) async fn diff_impl(
         &self,
         id: &WorkItemId,
         delta: bool,
         from: Option<&str>,
+        path: Option<&str>,
     ) -> Result<SessionInfo, KeltaError> {
         let item = self.load(id).await?;
         if !item.worktree.is_dir() {
@@ -162,6 +164,13 @@ impl WorkService {
         } else {
             let base = Self::base_ref(&env, &item).await?.unwrap_or_else(|| item.base.clone());
             (None, format!("git diff $(git merge-base {} HEAD)", shell_quote(&base)))
+        };
+        // shortcut: the path lands in an editor command line, so a file name outside this set (a space,
+        // `|`, non-ASCII) opens the whole diff; quote it per editor if that ever bites.
+        let path = path.filter(|p| p.chars().all(|c| c.is_ascii_alphanumeric() || "._-/+@".contains(c)));
+        let (range, line) = match path {
+            Some(p) => (range.map(|r| format!("{r} -- {p}")), format!("{line} -- {}", shell_quote(p))),
+            None => (range, line),
         };
         if let Some(r) = &range {
             ctx.set("range", r.clone());

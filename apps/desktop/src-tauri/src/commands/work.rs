@@ -143,15 +143,22 @@ pub async fn work_status_all(core: State<'_, Arc<Core>>) -> Res<BTreeMap<WorkIte
 }
 
 /// The review diff session (the UI places it zoomed in the work tab). `delta`: only what changed
-/// since the last review; `from`: a review item's reviewed PR head.
+/// since the last review; `from`: a review item's reviewed PR head; `path`: at that file.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn work_diff(
     core: State<'_, Arc<Core>>,
     id: WorkItemId,
     delta: Option<bool>,
     from: Option<String>,
+    path: Option<String>,
 ) -> Res<SessionInfo> {
-    core.work().diff(&id, delta.unwrap_or(false), from.as_deref()).await
+    core.work().diff(&id, delta.unwrap_or(false), from.as_deref(), path.as_deref()).await
+}
+
+/// The files of the delta since the last review (`reviewed..last`), for the Story panel's Changes.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_delta_files(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<Vec<DeltaFile>> {
+    core.work().delta_files(&id).await
 }
 
 #[tauri::command(rename_all = "snake_case")]

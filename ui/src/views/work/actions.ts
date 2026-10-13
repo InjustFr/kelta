@@ -80,12 +80,16 @@ async function goClaude({ item }: Ctx): Promise<void> {
 
 async function reviewDiff(
   { item }: Ctx,
-  args: { delta?: boolean; from?: string | null } = {},
+  args: { delta?: boolean; from?: string | null; path?: string } = {},
 ): Promise<void> {
   await goToWork(item);
   const s = sessions.upsert(await workDiff({ id: item.id, ...args }));
   showZoomedInWorkTab(item, s);
 }
+
+/** A Story › Changes row: the delta since the last look, at `path`. */
+export const reviewDeltaFile = (item: WorkItem, path: string): Promise<void> =>
+  reviewDiff({ item, phase: phaseNow(item) }, { delta: true, path });
 
 /** `v`: own items since the last review; a review item since the PR head I reviewed. */
 const reviewDelta = (c: Ctx): Promise<void> =>
