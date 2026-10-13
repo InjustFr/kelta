@@ -197,7 +197,7 @@ export function readCriteria(html: string): Criteria {
     checked: li.querySelector(':scope > input[checked], :scope > p > input[checked]') !== null,
   });
 
-  let lis = [...root.querySelectorAll('li')].filter((li) =>
+  let lis: Element[] = [...root.querySelectorAll('li')].filter((li) =>
     li.querySelector(':scope > input[type=checkbox], :scope > p > input[type=checkbox]'),
   );
   if (lis.length === 0) {
@@ -210,5 +210,11 @@ export function readCriteria(html: string): Criteria {
   lis = lis.filter((li) => text(li) !== '');
 
   const first = root.querySelector('p, pre')?.textContent ?? '';
-  return { items: lis.map(item), intro: first.trim().split(/\n\s*\n/)[0]!.trim() };
+  return {
+    items: lis.map(item),
+    intro: first
+      .trim()
+      .split(/\n\s*\n/)[0]!
+      .trim(),
+  };
 }

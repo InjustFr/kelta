@@ -33,9 +33,14 @@
       source,
       detail?.ticket.status.name ?? '…',
       criteria?.items.length
-        ? tn('{checked} of {n} criterion checked', '{checked} of {n} criteria checked', criteria.items.length, {
-            checked,
-          })
+        ? tn(
+            '{checked} of {n} criterion checked',
+            '{checked} of {n} criteria checked',
+            criteria.items.length,
+            {
+              checked,
+            },
+          )
         : null,
     ]
       .filter(Boolean)

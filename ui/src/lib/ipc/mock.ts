@@ -350,7 +350,9 @@ function ticketDetailFor({ ticket: t, prs, caps }: TicketItem, comments: string[
     body_html:
       `<p>Ticket <strong>${t.ref.key}</strong> (${escapeHtml(t.title)}).</p><p>${escapeHtml(blurb)} <a href="${t.url}">Open in tracker</a></p>` +
       '<h2>Acceptance</h2><ul><li><input disabled="" type="checkbox" checked="">Shown in the detail</li><li><input disabled="" type="checkbox">Covered by a test</li>' +
-      (MORE_CRITERIA[t.ref.key] ? `<li><input disabled="" type="checkbox">${MORE_CRITERIA[t.ref.key]}</li>` : '') +
+      (MORE_CRITERIA[t.ref.key]
+        ? `<li><input disabled="" type="checkbox">${MORE_CRITERIA[t.ref.key]}</li>`
+        : '') +
       '</ul>' +
       '<hr><h3>Notes</h3><ol><li>First</li><li>Second</li></ol>',
     body_format: 'markdown',
