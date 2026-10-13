@@ -109,19 +109,19 @@
     };
   }
 
-  /** When the list mounted: rows landing at their first measured height do not slide there. */
+  /** When the list mounted, and when it last scrolled (user or `scrollTo`). */
   const born = performance.now();
-  /** FLIP, but not for the pinned header (it moves with the scroll) nor while the rows first measure. */
+  let scrolledAt = 0;
+  /** Rows landing at their first measured height, or entering/leaving the slice by scrolling, do not animate. */
+  const quiet = (): boolean => performance.now() - Math.max(born, scrolledAt) < 500;
+
+  /** FLIP, but not for the pinned header (it moves with the scroll). */
   function move(node: Element, rects: { from: DOMRect; to: DOMRect }) {
-    if (node.classList.contains('pin') || performance.now() - born < 500) return { duration: 0 };
-    return glide(node, rects);
+    return node.classList.contains('pin') || quiet() ? { duration: 0 } : glide(node, rects);
   }
 
-  /** A row arriving with the data (a section unfolding, a row added) fades in; one scrolled into view does not. */
-  let scrolledAt = 0;
-  function enter(node: Element) {
-    return performance.now() - Math.max(born, scrolledAt) < 500 ? { duration: 0 } : fadeMove(node);
-  }
+  /** A row arriving with the data (a section unfolding, a row added) fades in/out; one scrolled in or out of view does not. */
+  const fade = (node: Element) => (quiet() ? { duration: 0 } : fadeMove(node));
 
   let endNotifiedAt = -1;
   $effect(() => {
@@ -145,6 +145,7 @@
     // Untracked: reading `tops` must not re-run the callers' effects on every row measurement.
     untrack(() => {
       if (!viewport) return;
+      scrolledAt = performance.now();
       // Keep a row clear of the pinned header above it.
       const y = top(index) - (heads.length > 0 && !heads.includes(index) ? itemHeight : 0);
       const bottom = top(index + 1);
@@ -189,8 +190,8 @@
         style:min-height={measure ? `${itemHeight}px` : undefined}
         use:sized={String(key(item, index))}
         animate:move
-        in:enter
-        out:fadeMove
+        in:fade
+        out:fade
       >
         {@render row(item, index)}
       </div>
