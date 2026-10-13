@@ -33,7 +33,10 @@ describe('healthProblems', () => {
         gl: { status: 'offline', detail: null, since: 20 },
         busy: { status: 'rate_limited', detail: null, since: 30 },
       },
-      sources: [{ id: 'board', label: 'My board', error: 'boom', since: 40 }],
+      sources: [
+        { id: 'board', label: 'My board', error: 'boom', since: 40 },
+        { id: 'all', label: 'Tickets', error: null, since: 50 },
+      ],
       restart: ['window.decorations'],
       restartSince: 50,
       update: '9.9.9',
@@ -45,6 +48,7 @@ describe('healthProblems', () => {
       ['account:jira', 'Reconnect account', 'settings.open', 'accounts'],
       ['account:gl', 'Open account', 'settings.open', 'accounts'],
       ['source:board', 'Open source', 'settings.open', 'sources'],
+      ['source:all', 'Open source', 'settings.open', 'sources'],
       ['restart', 'Restart', 'app.restart', null],
       ['update', 'Restart', 'app.restart', null],
       ['theme', 'Open theme', 'settings.open', 'general'],
@@ -52,6 +56,7 @@ describe('healthProblems', () => {
     const source = problems.find((p) => p.id === 'source:board')!;
     expect(source).toMatchObject({ what: 'boom', where: 'My board', since: 40 });
     expect(source.fix.args).toEqual({ section: 'sources', source_id: 'board' });
+    expect(problems.find((p) => p.id === 'source:all')!.fix.args).toEqual({ section: 'sources' });
     expect(problems.find((p) => p.id === 'restart')!.what).toContain('window.decorations');
   });
 

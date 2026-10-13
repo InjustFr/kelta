@@ -35,6 +35,9 @@ export interface HealthInput {
   themeBelowFloor: boolean;
 }
 
+// Id of the row for ticket lists loaded across every source (no source id).
+const ALL = 'all';
+
 const open = (section: string, more: Record<string, unknown> = {}) => ({
   action: 'settings.open',
   args: { section, ...more },
@@ -84,7 +87,7 @@ export function healthProblems(h: HealthInput): Problem[] {
       what: s.error ?? t('Showing cached tickets: the last refresh failed'),
       where: s.label,
       since: s.since,
-      fix: { label: t('Open source'), ...open('sources', { source_id: s.id }) },
+      fix: { label: t('Open source'), ...open('sources', s.id === ALL ? {} : { source_id: s.id }) },
     });
   }
   const restart = { label: t('Restart'), action: 'app.restart' };
@@ -138,9 +141,9 @@ class Health {
     // One row per source, whichever of its lists (scope, view) failed.
     const sources: Record<string, HealthInput['sources'][number]> = {};
     for (const l of Object.values(tickets.lists)) {
-      const id = l.sourceId;
-      if (!id || (!l.error && !l.stale)) continue;
-      const label = v?.sources.find((s) => s.id === id)?.label ?? id;
+      if (!l.error && !l.stale) continue;
+      const id = l.sourceId ?? ALL;
+      const label = l.sourceId ? (v?.sources.find((s) => s.id === id)?.label ?? id) : t('Tickets');
       sources[id] = { id, label, error: l.error?.message ?? null, since: l.fetchedAt };
     }
     const state = updates.status?.state;

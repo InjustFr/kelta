@@ -28,6 +28,9 @@ test('Health lists what is broken and each button fixes it or opens its setting'
     // a source whose tickets fail to load
     mock.failNext('tracker_list', { code: 'network', message: 'connection refused' });
     await window.__kelta!.stores.tickets.load({ kind: 'all' }, null, false, null, 'board').catch(() => {});
+    // the default load, across every source
+    mock.failNext('tracker_list', { code: 'network', message: 'connection refused' });
+    await window.__kelta!.stores.tickets.load({ kind: 'all' }, null, false, null, null).catch(() => {});
   });
   await dispatch(page, 'settings.open', { section: 'health' });
 
@@ -38,6 +41,7 @@ test('Health lists what is broken and each button fixes it or opens its setting'
     'claude-mcp',
     'account:jira-acme',
     'source:board',
+    'source:all',
     'restart',
     'update',
     'theme',
@@ -59,6 +63,7 @@ test('Health lists what is broken and each button fixes it or opens its setting'
   const opens: [string, string, string][] = [
     ['account:jira-acme', 'Reconnect account', 'accounts'],
     ['source:board', 'Open source', 'sources'],
+    ['source:all', 'Open source', 'sources'],
     ['theme', 'Open theme', 'general'],
   ];
   for (const [id, label, section] of opens) {
