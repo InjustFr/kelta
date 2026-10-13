@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { boot, unfold } from './helpers';
+import { boot, callsOf, unfold } from './helpers';
 
 test('the top bar has no tab list or tool strip; a work tab has no breadcrumb, its header names it', async ({
   page,
@@ -34,13 +34,24 @@ test("a rail row's × shows on hover and focus and closes it after the tab confi
   await expect(rows).toHaveCount(2);
 });
 
-test('⌥⌘1 opens the first tool from Now, and again returns to Now', async ({ page }) => {
+test('⌥⌘1 opens the first tool zoomed in the current tab, and again hides it (#412)', async ({ page }) => {
   await boot(page, 'macos');
-  await page.getByTestId('rail-inbox').click();
-  await expect(page.getByTestId('global-host')).toBeVisible();
+  const activeTab = () => page.evaluate(() => window.__kelta!.stores.layout.get('shop')!.active_tab);
+  const tab = await activeTab();
+  const panes = page.locator('[data-testid="pane"]:not(.hidden)');
+  const before = await panes.count();
   await page.keyboard.press('Meta+Alt+Digit1');
-  await expect(page.getByTestId('global-host')).toBeHidden();
-  await expect(page.locator('[data-testid="rail-tool-instance"][data-tool-id="lazydocker"]')).toHaveCount(2);
+  await expect(page.locator('[data-testid="pane"][data-zoomed="true"][data-focused="true"]')).toHaveCount(1);
+  expect(await activeTab()).toBe(tab);
+  expect((await callsOf(page, 'tool_open'))[0]?.args).toMatchObject({
+    project_id: 'shop',
+    tool_id: 'lazydocker',
+    placement: 'split_right',
+  });
+  await expect(page.getByTestId('rail-tools')).toHaveCount(0);
+  await expect(page.getByTestId('context-return')).toHaveCount(0);
   await page.keyboard.press('Meta+Alt+Digit1');
-  await expect(page.getByTestId('global-host')).toHaveAttribute('data-view', 'now');
+  await expect(page.locator('[data-testid="pane"][data-zoomed="true"]')).toHaveCount(0);
+  await expect(panes).toHaveCount(before);
+  expect(await activeTab()).toBe(tab);
 });

@@ -7,6 +7,7 @@
 // - Letters and punctuation match the character of the active layout, digits and named keys the
 //   physical key (`eventCode`). After the prefix, the next key is matched on `KeyboardEvent.key`
 //   (characters such as `%`, `"`, `(`, `N`).
+// - `Esc` `Esc` in a tool's terminal hides the tool (`tools.hide`); the first `Esc` reaches it.
 // - Linux chords follow the Mac set with Cmd → Ctrl. In a focused terminal a plain Ctrl+letter goes to
 //   the terminal (`keys.linux_terminal = "terminal_first"`, the default); the catalog keeps those actions
 //   on Ctrl+Shift+letter too.
@@ -24,6 +25,9 @@ import {
   type Chord,
   type Platform,
 } from './chords';
+
+/** Two `Esc` presses this close together are one `Esc` `Esc`. */
+const ESCAPE_TWICE_MS = 400;
 
 export interface KeyContext {
   /** Focus is inside a terminal view. */
@@ -165,6 +169,7 @@ export class KeyManager {
   #armed = false;
   #timer: unknown = null;
   #listeners = new Set<(armed: boolean) => void>();
+  #lastEscape = -Infinity;
 
   constructor(options: KeyManagerOptions = {}) {
     this.#opts = options;
@@ -240,6 +245,8 @@ export class KeyManager {
       return this.#consume(event);
     }
 
+    if (this.#escapeTwice(event)) return this.#consume(event);
+
     const chord = chordFromEvent(event);
     if (!chord) return 'pass';
     const binding = compiled.chords.get(chordToString(chord));
@@ -257,6 +264,19 @@ export class KeyManager {
 
   #context(event: KeyboardEvent): KeyContext {
     return (this.#opts.context ?? contextFromEvent)(event);
+  }
+
+  /** `Esc` `Esc` in a tool's terminal runs `tools.hide` (#412); the first `Esc` still reaches the program. */
+  #escapeTwice(event: KeyboardEvent): boolean {
+    const plain = event.key === 'Escape' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
+    const ctx = plain ? this.#context(event) : null;
+    const now = Date.now();
+    const twice = ctx?.kind === 'tool' && now - this.#lastEscape <= ESCAPE_TWICE_MS;
+    this.#lastEscape = ctx?.kind === 'tool' && !twice ? now : -Infinity;
+    const hide: Binding = { action: 'tools.hide', context: 'terminal' };
+    if (!twice || !this.#runnable(hide, ctx!)) return false;
+    this.#run(hide);
+    return true;
   }
 
   #runnable(binding: Binding, ctx: KeyContext): boolean {

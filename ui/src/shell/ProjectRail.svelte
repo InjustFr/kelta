@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
 
   import { dispatch } from '$lib/actions';
-  import type { ProjectId, ProjectInfo, Tab, ToolInfo, WorkItem } from '$lib/gen';
+  import type { ProjectId, ProjectInfo, Tab, WorkItem } from '$lib/gen';
   import { allPanes } from '$lib/layout';
   import {
     layout,
@@ -18,7 +18,7 @@
     type GlobalView,
   } from '$lib/stores';
   import { resolveProjectColor } from '$lib/theme';
-  import { Button, Icon, IconButton, isIconName, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
+  import { Button, Icon, IconButton, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
   import { currentPlatform, formatChord } from '$lib/ui/format';
   import { frames } from '$lib/terminal/raf';
 
@@ -27,34 +27,26 @@
   import { maxLamp, outsidePhase, workKey } from '../views/work/phase';
   import { STAGES, workStage } from '../views/work/stage';
   import { confirms } from './confirm.svelte';
-  import { chordFor, runLine, toolIcon } from './labels';
+  import { chordFor, runLine } from './labels';
   import {
     activateProject,
     attachTab,
     backgroundSessions,
     bandTabs,
-    currentTab,
     detachTab,
-    focusedPane,
-    focusPaneById,
     openRuns,
-    isToolTab,
     liveSessionsOfTab,
     openView,
     railProjects,
-    railTools,
     railToolsOf,
     requestCloseTab,
     revealSession,
     rowLabel,
     selectRow,
     tabAttention,
-    toolLamp,
-    toolSubLines,
     VIEW_NAMES,
     workItemOfTab,
     workRows,
-    type ToolInstance,
   } from './nav';
   import { droppedOutside, paneDrag } from './paneDrag.svelte';
   import { peekHover, peekTarget } from './peek.svelte';
@@ -72,13 +64,11 @@
   const toReview = $derived(reviews.list(ALL, 'review_requested').data?.items.length ?? 0);
 
   const toolsOf = $derived(railToolsOf());
-  const toolList = $derived(railTools());
-  // Tool membership, once per change: the Tools sub-lines and which tabs leave the bands.
-  const lines = $derived(toolSubLines());
   // `project.goto.N` index of each work row.
-  const index = $derived(new Map(workRows(lines).map((r, i) => [r.tab.id, i + 1])));
+  const index = $derived(new Map(workRows().map((r, i) => [r.tab.id, i + 1])));
   // Bands whose "n more" row is open.
   let unfolded = $state<Record<ProjectId, boolean>>({});
+  // The tool list behind the tool keys and the palette.
   $effect(() => {
     if (tools.byProject[toolsOf] === undefined) void tools.load(toolsOf);
   });
@@ -90,11 +80,6 @@
     for (const s of sessions.all)
       if (s.kind.type === 'claude' && s.lifecycle === 'live') void sessions.loadRuns(s.id);
   });
-
-  // The pane in front (no global view): marks the tool row or sub-line it belongs to.
-  const front = $derived(ui.view ? null : focusedPane());
-  const frontTab = $derived(ui.view ? null : currentTab());
-  const frontTool = $derived(front ? (lines.get(front.id)?.tool ?? null) : null);
 
   // Startup and window focus refresh Now's sources (no polling).
   onMount(() => void refreshNow());
@@ -255,15 +240,6 @@
     return !ui.view && projects.activeId === project && layout.get(project)?.active_tab === tabId;
   }
 
-  function instanceLabel(x: ToolInstance): string {
-    return workItemOfTab(x.tab)?.ticket?.key ?? projects.byId(x.project)?.name ?? x.project;
-  }
-
-  function focusInstance(x: ToolInstance): void {
-    void activateProject(x.project);
-    focusPaneById(x.project, x.tab.id, x.pane.id);
-  }
-
   /** `label (Ctrl+K)`: the tooltip keeps the chord when its badge has no room (#362). */
   function tip(label: string, id: string): string {
     const c = chordFor(id);
@@ -310,11 +286,6 @@
       sidebar.toggle();
     }
   }
-
-  function toolHint(tool: ToolInfo): string {
-    if (tool.installed === false) return t('{tool}: not installed', { tool: tool.label });
-    return tool.description ? `${tool.label}: ${tool.description}` : tool.label;
-  }
 </script>
 
 <svelte:window onfocus={() => void refreshNow()} />
@@ -347,7 +318,7 @@
   </button>
 {/snippet}
 
-<!-- The muted `⌘N` / `⌥⌘N` index of a row, when that chord is bound. -->
+<!-- The muted `⌘N` index of a row, when that chord is bound. -->
 <!-- A row's workflow run (#392): opens the session's runs beside its terminal. -->
 {#snippet runRow(run: { text: string; sessionId: string }, label: string)}
   <li class="row">
@@ -500,7 +471,7 @@
 
     <div class="scroll">
       {#each rail as p (p.id)}
-        {@const band = bandTabs(p.id, lines)}
+        {@const band = bandTabs(p.id)}
         {@const background = backgroundSessions(p.id)}
         {@const folded = band.more.length + background.length}
         {@const open = !!unfolded[p.id]}
@@ -654,64 +625,6 @@
         </section>
       {/if}
 
-      {#if toolList.length > 0}
-        <section class="band tools" aria-label={t('Tools')} data-testid="rail-tools">
-          <h2 class="tools-heading">{t('Tools')}</h2>
-          <ul class="rows">
-            {#each toolList as tool, i (tool.id)}
-              {@const launchOnly = tool.kind !== 'pty'}
-              {@const lvl = launchOnly ? 'none' : toolLamp(tool.id)}
-              {@const mark = toolIcon(tool)}
-              <!-- A `user` tool has one instance: its row is the way to it. -->
-              {@const instances =
-                tool.scope === 'user' ? [] : [...lines.values()].filter((x) => x.tool === tool.id)}
-              <li class="row">
-                <button
-                  type="button"
-                  class="item tool-row"
-                  class:active={frontTool === tool.id && !!frontTab && isToolTab(frontTab, lines)}
-                  class:missing={tool.installed === false}
-                  title={toolHint(tool)}
-                  data-testid="rail-tool"
-                  data-tool-id={tool.id}
-                  data-attention={lvl}
-                  onclick={() => void dispatch('tools.open', { tool_id: tool.id, focus_only: true })}
-                >
-                  <span class="socket" aria-hidden="true"><Lamp level={lvl} /></span>
-                  <span class="kind" aria-hidden="true">
-                    {#if isIconName(mark)}<Icon name={mark} size={14} />{:else}<span class="abbr">{mark}</span
-                      >{/if}
-                  </span>
-                  <span class="text"><span class="name">{tool.label}</span></span>
-                  {@render digit(`tool.goto.${i + 1}`, `⌥${i + 1}`)}
-                  {#if launchOnly}<span class="launch" aria-hidden="true"
-                      ><Icon name="external-link" size={12} /></span
-                    >{/if}
-                </button>
-              </li>
-              {#each instances as x (x.pane.id)}
-                <li class="row">
-                  <button
-                    type="button"
-                    class="item instance"
-                    class:active={front?.id === x.pane.id && isFront(x.project, x.tab.id)}
-                    title={t('{tool} in {place}', {
-                      tool: tool.label,
-                      place: `${projects.byId(x.project)?.name ?? x.project} › ${t(x.tab.title)}`,
-                    })}
-                    data-testid="rail-tool-instance"
-                    data-tool-id={tool.id}
-                    data-pane-id={x.pane.id}
-                    onclick={() => focusInstance(x)}
-                  >
-                    <span class="text"><span class="name">└ {instanceLabel(x)}</span></span>
-                  </button>
-                </li>
-              {/each}
-            {/each}
-          </ul>
-        </section>
-      {/if}
     </div>
   </div>
 
@@ -1021,7 +934,7 @@
     color: var(--k-fg);
   }
 
-  /* Elsewhere and Tools: their own sections after the projects (#402). */
+  /* Other Claude sessions: its own section after the projects (#402). */
   .tools {
     margin-top: var(--k-space-3);
     padding-top: var(--k-space-3);
@@ -1035,7 +948,6 @@
 
   /* Rows: [lamp socket][glyph][title], the project colour bar on the left (full height when selected). */
   .tab-row,
-  .tool-row,
   .instance {
     gap: var(--k-space-2);
     height: var(--k-rail-item);
@@ -1050,8 +962,7 @@
     box-shadow: inset 3px 0 0 var(--project-color);
   }
 
-  .tab-row.active .name,
-  .tool-row.active .name {
+  .tab-row.active .name {
     font-weight: var(--k-weight-strong);
   }
 
@@ -1062,7 +973,6 @@
   }
 
   .tab-row .name,
-  .tool-row .name,
   .instance .name {
     font-size: var(--k-font-size-sm);
   }
@@ -1088,11 +998,6 @@
     color: var(--k-fg-chrome);
   }
 
-  .abbr {
-    font-size: var(--k-font-size-xs);
-    font-weight: var(--k-weight-strong);
-  }
-
   .key,
   .stage {
     flex: none;
@@ -1104,16 +1009,6 @@
     flex: none;
     color: var(--k-fg-subtle);
     font-size: var(--k-font-size-xs);
-  }
-
-  .launch {
-    display: inline-flex;
-    flex: none;
-    color: var(--k-fg-muted);
-  }
-
-  .missing {
-    opacity: 0.55;
   }
 
   .instance {
@@ -1210,8 +1105,7 @@
     padding: 0;
   }
 
-  .compact .tab-row,
-  .compact .tool-row {
+  .compact .tab-row {
     gap: 2px;
     height: 28px;
     padding: 0 2px 0 4px;
@@ -1239,7 +1133,6 @@
   .compact .kbd,
   .compact h2,
   .compact .caption .name,
-  .compact .launch,
   .compact .index,
   .compact .key,
   .compact .stage,

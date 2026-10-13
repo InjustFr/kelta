@@ -97,33 +97,15 @@ describe('context bar', () => {
     );
   });
 
-  it('tool without a project argument: Tools › tool, "for you", and the return chip is nav.back', async () => {
-    toolTab('home');
-    // Opened from Now: the jumplist holds Now, then the tool.
-    jumplist.list = [
-      { project: GLOBAL, tab: 'now', pane: 'now' },
-      { project: 'home', tab: 'tool-tab', pane: 'tool-pane' },
-    ];
-    jumplist.at = 1;
-    await activateProject('home');
-    render(ContextBar);
-    await waitFor(() => expect(crumb()).toBe('Tools › ⚒lazydocker'));
-    expect(bar().textContent).toContain('for you');
-    expect(screen.queryByTestId('context-owner')).toBeNull();
-    const chip = screen.getByTestId('context-return');
-    expect(chip.textContent).toContain('↩ Queue');
-    await fireEvent.click(chip);
-    await waitFor(() => expect(ui.view).toBe('now'));
-  });
-
-  it('tool in a project: the context chip goes to that project, then the cwd', async () => {
+  it('a tool pane has no tool segment (#412): no Tools crumb, context chip or return chip', async () => {
     toolTab('shop');
+    jumplist.list = [{ project: GLOBAL, tab: 'now', pane: 'now' }];
+    jumplist.at = 0;
     render(ContextBar);
-    await waitFor(() => expect(crumb()).toBe('Tools › ⚒lazydocker'));
-    expect(bar().textContent).not.toContain('for you');
-    expect(screen.getByText('~/code/shop-api')).toBeTruthy();
-    await fireEvent.click(screen.getByTestId('context-owner'));
-    expect(layout.get('shop')?.active_tab).toBe('shop-t1');
+    await waitFor(() => expect(crumb()).toMatch(/^Shop › ❯/));
+    expect(bar().textContent).not.toContain('Tools');
+    expect(screen.queryByTestId('context-owner')).toBeNull();
+    expect(screen.queryByTestId('context-return')).toBeNull();
   });
 
   it('Home: Home › the terminal and its cwd', async () => {

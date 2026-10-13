@@ -467,3 +467,31 @@ describe('keys.list_keys', () => {
     expect(reached(true, { code: 'KeyA', key: 'a' })).toEqual(['a']);
   });
 });
+
+describe('Esc Esc in a tool terminal (#412)', () => {
+  const TOOL: KeyContext = { ...TERMINAL, kind: 'tool' };
+  const esc = () => press({ code: 'Escape', key: 'Escape' });
+
+  it('passes the first Esc to the program and hides the tool on the second', () => {
+    const { manager, ids } = setup({ ctx: TOOL });
+    expect(manager.handleKeyDown(esc())).toBe('pass');
+    expect(manager.handleKeyDown(esc())).toBe('consumed');
+    expect(ids()).toEqual(['tools.hide']);
+    // A third Esc starts over.
+    expect(manager.handleKeyDown(esc())).toBe('pass');
+  });
+
+  it('needs the two presses close together, with no key between, in a tool terminal', () => {
+    vi.useFakeTimers();
+    const { manager, ids, setCtx } = setup({ ctx: TOOL });
+    manager.handleKeyDown(esc());
+    vi.advanceTimersByTime(500);
+    expect(manager.handleKeyDown(esc())).toBe('pass');
+    manager.handleKeyDown(press({ code: 'KeyJ', key: 'j' }));
+    expect(manager.handleKeyDown(esc())).toBe('pass');
+    setCtx(TERMINAL);
+    manager.handleKeyDown(esc());
+    expect(manager.handleKeyDown(esc())).toBe('pass');
+    expect(ids()).toEqual([]);
+  });
+});
