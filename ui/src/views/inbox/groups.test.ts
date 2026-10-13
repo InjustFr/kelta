@@ -8,6 +8,7 @@ import {
   jumpQueue,
   nowSections,
   rowKey,
+  scopeSections,
   waitingCount,
   zoneCount,
   zoneOf,
@@ -568,5 +569,27 @@ describe('ask questions (#356)', () => {
     prompt.claude = { ...prompt.claude!, question: null };
     const sections = nowSections({ ...empty, work: [claimed], sessions: [prompt] });
     expect(sections.find((s) => s.id === 'needs_you')!.rows.map((r) => r.id)).toEqual(['s:orch']);
+  });
+});
+
+describe('scopeSections (#409)', () => {
+  it("keeps one project's rows: work, sessions, PRs and tickets by their project, never an outside session", () => {
+    const outside = (samples.uiEventOutsideUpdated as Extract<UiEvent, { type: 'outside.updated' }>).session;
+    const sections = nowSections({
+      ...empty,
+      work: [entry('no_changes', 'in_flight'), entry('no_changes', 'in_flight', { project_id: 'billing' })],
+      outside: [{ ...outside, id: 'o', status: 'working' }],
+      requested: [review(1), review(2, {}, ['billing'])],
+      tickets: [ticket('T-1', 'todo'), { ...ticket('T-2', 'todo'), project_ids: ['billing'] }],
+    });
+    expect(scopeSections(sections, null)).toBe(sections);
+    const billing = scopeSections(sections, 'billing');
+    expect(billing.map((s) => [s.id, s.rows.length])).toEqual([
+      ['requests', 1],
+      ['in_flight', 1],
+      ['elsewhere', 0],
+      ['up_next', 1],
+    ]);
+    expect(zoneCount(billing, 'yours') + zoneCount(billing, 'waiting')).toBe(3);
   });
 });

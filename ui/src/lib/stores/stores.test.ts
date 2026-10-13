@@ -153,6 +153,52 @@ describe('LayoutStore', () => {
     expect(store.isDirty('shop')).toBe(false);
   });
 
+  it('closes the saved list tabs on load and hands their scope over, once (#409)', async () => {
+    const shop = mock.state.layouts.shop!;
+    mock.state.layouts.shop = {
+      ...shop,
+      tabs: [
+        ...shop.tabs,
+        makeTab(
+          'Board',
+          pane({
+            kind: 'tickets',
+            scope: { kind: 'project', id: 'shop' },
+            view_id: null,
+            mode: 'board',
+            who: null,
+          }),
+        ),
+      ],
+    };
+    const store = new LayoutStore();
+    const closed = vi.fn();
+    store.onListTabsClosed = closed;
+    const loaded = await store.load('shop');
+    expect(loaded.tabs.map((t) => t.id)).toEqual(shop.tabs.map((t) => t.id));
+    expect(closed).toHaveBeenCalledWith({ kind: 'project', id: 'shop' });
+    await store.flush('shop');
+    expect(mock.state.layouts.shop!.tabs.map((t) => t.id)).toEqual(shop.tabs.map((t) => t.id));
+    const again = new LayoutStore();
+    again.onListTabsClosed = closed;
+    await again.load('shop');
+    expect(closed).toHaveBeenCalledOnce();
+  });
+
+  it('never migrates the global views own layout', async () => {
+    const store = new LayoutStore();
+    const closed = vi.fn();
+    store.onListTabsClosed = closed;
+    mock.state.layouts.global = {
+      project_id: 'global',
+      tabs: [makeTab('now', pane({ kind: 'inbox' }, 'now'), { id: 'now' })],
+      active_tab: 'now',
+      rev: 1,
+    };
+    expect((await store.load('global')).tabs).toHaveLength(1);
+    expect(closed).not.toHaveBeenCalled();
+  });
+
   it('flushForClose saves pending edits without waiting for the debounce', async () => {
     const store = new LayoutStore();
     await store.load('shop');
@@ -213,14 +259,14 @@ describe('LayoutStore', () => {
       type: 'ui.open',
       project_id: 'home',
       request: {
-        content: { kind: 'inbox' },
+        content: { kind: 'settings', section: null },
         placement: 'focused',
         focus: true,
         tab_title: null,
         work_item_id: null,
       },
     });
-    // The Inbox tab already exists: it is focused, and the change is saved.
+    // The Settings tab already exists: it is focused, and the change is saved.
     expect(store.get('home')?.active_tab).toBe('home-t2');
     expect(store.isDirty('home')).toBe(true);
   });

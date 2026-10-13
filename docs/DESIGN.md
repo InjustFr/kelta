@@ -410,6 +410,8 @@ One bar across the top of the window, above the rail and the panes: `--k-context
 One row grammar for all three, so they read as one instrument:
 `lamp | id (mono 13, --k-info, 76px) | title (14/500, --k-fg-strong, fills) | meta (12, right-aligned, tabular)`.
 
+- Scope (#409): the toolbar of each global list (Now, Tickets as list or board, Reviews) holds `All projects ▾` (`shell/ScopeSelect.svelte`), a menu of the open projects setting the one scope the three share (`shell/scope.svelte.ts`, kept in the webview's storage), so switching view keeps it. Home, or a project closed since, reads as All projects. Now keeps the scoped project's rows (a Claude session Kelta did not start has none) and its header counts them; the Tickets source menu and the Reviews repo filter narrow inside the scope. A project has no Board, Reviews or Inbox tab of its own: `tickets.open` / `tickets.board` / `reviews.open` with a project open the global view scoped to it, and a saved layout's tabs holding only such a list close on load, the last one's project applied once as the scope.
+
 - Hierarchy (#382): the title is the brightest text in the row (500, 600 on the selected row), the key wears one hue in every list (`--k-info`, never a lamp colour) so the eye runs down the key column, the state word takes its lamp's colour, and everything else stays muted.
 
 - Rows `ROW_HEIGHT` (32px, `$lib/ui`), no row borders, no zebra. Reviews and Now rows have two lines (#383): lamp, id and title on line 1, then the chips and meta left-aligned under the title, in full, wrapping to a third line rather than cut (`VirtualList` `measure`). A Compact switch in their toolbars (saved in the pane's `density`) brings back the one-line 32px row (no `measure`).
