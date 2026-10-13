@@ -17,9 +17,9 @@ import { mainPr } from './prs';
 
 export type GroupBy = TicketGroupBy;
 export const GROUP_BYS: readonly GroupBy[] = [
+  'flow',
   'to_start',
   'status',
-  'flow',
   'priority',
   'sprint',
   'assignee',

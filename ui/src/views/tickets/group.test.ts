@@ -261,7 +261,7 @@ describe('toStartOf', () => {
       ['Done in the last 7 days', ['A']],
     ]);
     expect(groups.at(-1)?.category).toBe('done');
-    expect(GROUP_BYS.slice(0, 2)).toEqual(['to_start', 'status']);
+    expect(GROUP_BYS[GROUP_BYS.indexOf('to_start') + 1]).toBe('status');
   });
 });
 

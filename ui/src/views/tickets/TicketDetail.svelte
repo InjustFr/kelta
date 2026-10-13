@@ -88,7 +88,11 @@
     const k = key;
     // Once the selection settles: walking the split view with j/k plans where it lands, not on the way.
     const timer = setTimeout(() => {
-      workPlan({ project_id: null, source: { kind: 'ticket', ticket: ref }, source_id: item.source_ids[0] ?? null })
+      workPlan({
+        project_id: null,
+        source: { kind: 'ticket', ticket: ref },
+        source_id: item.source_ids[0] ?? null,
+      })
         .then((p) => {
           if (key === k) plan = p;
         })

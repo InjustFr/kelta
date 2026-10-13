@@ -372,7 +372,9 @@
   });
 
   /** What each group holds, in one line under its header. */
-  const hints = $derived(groupBy === 'flow' ? FLOW_HINTS : groupBy === 'to_start' ? TO_START_HINTS : null);
+  const groupHints = $derived(
+    groupBy === 'flow' ? FLOW_HINTS : groupBy === 'to_start' ? TO_START_HINTS : null,
+  );
 
   function toggleGroup(row: Row): void {
     if (row.kind !== 'group') return;
@@ -1162,7 +1164,8 @@
                   {r.group.label}
                   <span class="count k-num">{r.group.items.length}</span>
                   {#if overWip}<span class="wip-note">{t('Above your limit of {n}', { n: wipLimit })}</span
-                    >{:else if hints?.[r.group.id]}<span class="k-group-hint">{t(hints[r.group.id]!)}</span
+                    >{:else if groupHints?.[r.group.id]}<span class="k-group-hint"
+                      >{t(groupHints[r.group.id]!)}</span
                     >{/if}
                 </button>
               {:else if r.kind === 'ask'}

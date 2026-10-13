@@ -140,7 +140,6 @@
   const errors = $derived(validatePlan(built));
   const valid = $derived(planValid(errors));
 
-
   // ---- progress (driven by work.updated) ----------------------------------------------------
   const live = $derived<WorkItem | null>(
     startedItem

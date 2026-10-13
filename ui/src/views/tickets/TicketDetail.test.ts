@@ -14,6 +14,7 @@ import { dispatch } from '$lib/actions';
 import '../work/actions';
 
 import { acceptanceCriteria, refines, withCriteria } from './refine.svelte';
+import { startPreview } from '../work/startWork';
 import TicketDetail from './TicketDetail.svelte';
 import { NO_WORKFLOWS, workflows } from './workflow.svelte';
 
@@ -152,6 +153,22 @@ describe('TicketDetail', () => {
     await work.load();
     mount('SHOP-142');
     expect(action('Resume work').classList.contains('primary')).toBe(true);
+  });
+
+  it('says what Start work will do, from the plan its sheet opens on; with work, its stage and next step (#418)', async () => {
+    const detail = mount('SHOP-151');
+    const preview = await screen.findByTestId('start-preview');
+    await fireEvent.keyDown(detail, { key: 's' });
+    await waitFor(() => expect(ui.sheet?.key).toBe('start_work'));
+    const plan = ui.sheet!.props.plan as StartWorkPlan;
+    expect(preview.textContent).toBe(startPreview(plan, null));
+    expect(preview.textContent).toContain(`creates branch ${plan.branch} in ${plan.repo_id}`);
+  });
+
+  it('names the stage and next step of work under way instead (#418)', async () => {
+    await work.load();
+    mount('SHOP-142');
+    expect(screen.getByTestId('start-preview').textContent).toMatch(/^\w+ stage\. Next: .+\.$/);
   });
 
   it('drops a half-written comment when the item changes under it (split view)', async () => {
