@@ -28,6 +28,8 @@
     where?: string;
     /** Filled, first. */
     primary?: BriefAction | null;
+    /** The primary outlined, not filled: its step is taken elsewhere (my PRs in Pull requests: the Queue). */
+    quiet?: boolean;
     /** In likely order: the first two show, the rest wait behind "N more actions". */
     actions?: BriefAction[];
     /** The rest are shown (`.` toggles it). */
@@ -50,6 +52,7 @@
     title,
     where = '',
     primary = null,
+    quiet = false,
     actions = [],
     more = $bindable(false),
     message = '',
@@ -90,7 +93,7 @@
     <div class="actions">
       {#if primary}
         {@const a = primary}
-        <button type="button" class="btn primary" data-key={a.key} onclick={() => void a.run()}
+        <button type="button" class="btn" class:primary={!quiet} data-key={a.key} onclick={() => void a.run()}
           ><span
             >{#if busy}<Spinner size={10} />{/if}{a.label}</span
           ><span aria-hidden="true"><Kbd chord={a.key} /></span></button

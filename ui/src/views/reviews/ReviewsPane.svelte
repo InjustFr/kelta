@@ -488,14 +488,14 @@
   bind:this={root}
   tabindex="0"
   role="group"
-  aria-label={t('Reviews')}
+  aria-label={t('Pull requests')}
   {onkeydown}
   use:onActions={menuKey}
   use:onRefresh={refresh}
 >
   <!-- k-toolbar: its selects keep their label for screen readers only. -->
   <header class="bar k-toolbar">
-    <span class="title">{t('Reviews')}</span>
+    <span class="title">{t('Pull requests')}</span>
     <TagFilter
       kind="prs"
       keys={allItems.map((i) => reviewKey(i.review.ref))}
@@ -522,15 +522,15 @@
     bind:input={filterInput}
     active={activeFilters}
     placeholder={t('Filter title, repo, number, author, branch, ticket (/)')}
-    aria-label={t('Filter reviews')}
+    aria-label={t('Filter pull requests')}
     onkeydown={filterKeys}
   />
-  <LoadBar active={!noData && shown.some((l) => l.loading)} label={t('Loading reviews')} />
+  <LoadBar active={!noData && shown.some((l) => l.loading)} label={t('Loading pull requests')} />
 
   {#if noData && !firstError}
-    <Loading label={t('Loading reviews')} />
+    <Loading label={t('Loading pull requests')} />
   {:else if noData && firstError}
-    <ErrorState error={firstError} title={t('Could not load reviews')} onretry={refresh}>
+    <ErrorState error={firstError} title={t('Could not load pull requests')} onretry={refresh}>
       {#snippet actions()}
         <Button onclick={() => void dispatch('settings.open', { section: 'accounts' })}>
           {isAuthError(firstError) ? t('Re-authenticate') : t('Open account settings')}
@@ -613,6 +613,7 @@
                     tabindex="-1"
                     class="row grid"
                     class:selected={sel}
+                    class:dim={mine}
                     aria-current={sel ? 'true' : undefined}
                     data-key={key}
                     onclick={() => (selId = l.id)}
@@ -940,6 +941,11 @@
 
   .row:hover {
     background: var(--k-bg-hover);
+  }
+
+  /* Yours (#419): their next step is in the Queue, so the words are quieter. */
+  .row.dim > * {
+    opacity: 0.6;
   }
 
   /* Subtle and muted text on the selected row take their -sel steps (as Now, #399). */

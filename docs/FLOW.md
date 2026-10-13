@@ -137,7 +137,7 @@ No status strip segment. The ticket status, the PR and its CI, the branch, `behi
 
 ### 2.5 The work menu (`⌘.`)
 
-`⌘.` works on any selection (#404): it opens the action menu of whatever has the keys. In the Queue, Tickets (list and board) and Reviews it is the selected row's menu, anchored on the row like its `⋯`, the next step first and lit, so `⌘.` `↵` runs it; in a detail column (or a ticket detail in its own pane) that has the keys, the detail's More menu; on a work tab, the work menu below. With nothing selected it opens the palette, never a toast.
+`⌘.` works on any selection (#404): it opens the action menu of whatever has the keys. In the Queue, Tickets (list and board) and Pull requests it is the selected row's menu, anchored on the row like its `⋯`, the next step first and lit, so `⌘.` `↵` runs it; in a detail column (or a ticket detail in its own pane) that has the keys, the detail's More menu; on a work tab, the work menu below. With nothing selected it opens the palette, never a toast.
 
 On a work tab, `work.menu` opens a menu anchored to the Actions button of the focused tab's header, from any pane including terminals (it is a Mod chord, like `⌘K`). Single letters run actions; `Enter` runs the primary.
 
@@ -187,7 +187,7 @@ Does not work, because Kelta cannot type into that Claude:
 
 ![Queue](images/flow/f1-now.png)
 
-The Queue (named Now until #413) replaces the Inbox. It keeps the Inbox's plumbing (`⌘0`, action id `inbox.open`), so settings and keybindings do not break; only the label and contents change. "Now" named a moment; the Queue names the place where all work waits. On the rail it sits between the two other global views, in the order of the loop: **Tickets** (`⌘⇧B`, pick a ticket from any source), **Queue**, **Reviews** (`⌘⇧R`, review PRs). All three render in `GlobalHost` outside any project, live in the built-in `global` layout (one tab per view, its active tab the view shown: polled like a visible pane, restored on relaunch), and follow the "leaves the Queue" rule of §3.3. They share one project scope (#409, DESIGN §6.8): `All projects ▾` in each toolbar narrows all three to one project, switching view keeps it, and it is restored on relaunch. A project's Board, Reviews or Inbox is that global view scoped to it, never a tab: the commands that opened such a tab open the view instead, and saved tabs of these lists close on load, their project applied once as the scope.
+The Queue (named Now until #413) replaces the Inbox. It keeps the Inbox's plumbing (`⌘0`, action id `inbox.open`), so settings and keybindings do not break; only the label and contents change. "Now" named a moment; the Queue names the place where all work waits. On the rail it sits between the two other global views, in the order of the loop: **Tickets** (`⌘⇧B`, pick a ticket from any source), **Queue**, **Pull requests** (`⌘⇧R`, review PRs; named Reviews until #419). All three render in `GlobalHost` outside any project, live in the built-in `global` layout (one tab per view, its active tab the view shown: polled like a visible pane, restored on relaunch), and follow the "leaves the Queue" rule of §3.3. They share one project scope (#409, DESIGN §6.8): `All projects ▾` in each toolbar narrows all three to one project, switching view keeps it, and it is restored on relaunch. A project's Board, Reviews or Inbox is that global view scoped to it, never a tab: the commands that opened such a tab open the view instead, and saved tabs of these lists close on load, their project applied once as the scope.
 
 ### 3.1 Sections
 
@@ -225,7 +225,7 @@ DESIGN §6.8 row (`lamp | id | title | meta`) plus a 3px project-hue bar at the 
 
 Meta, right-aligned, tabular: the *reason* in `--k-fg` 12px (the one thing to read: "Changes requested, 3 threads", "Allow `pnpm test:int`?"), then diffstat (with a `dirty` tag when part of it is uncommitted) or PR number, `↓n {base}` when behind, age.
 
-A **waiting chip** (`waiting on Anna · 26h`, `waiting on Anna +2`, `waiting on you`; hover lists each person with the reason: review requested, changes requested so the author acts, assigned; an unmatched person adds "Not matched to a tracker / code host user") sits in Tickets rows next to the PR chip, in Reviews rows on every tab, and in the Queue: a ticket row's detail line says `waiting on Anna (review) · 26h` instead of the bare assignee, and my PRs carry the Reviews chip.
+A **waiting chip** (`waiting on Anna · 26h`, `waiting on Anna +2`, `waiting on you`; hover lists each person with the reason: review requested, changes requested so the author acts, assigned; an unmatched person adds "Not matched to a tracker / code host user") sits in Tickets rows next to the PR chip, in Pull requests rows on every tab, and in the Queue: a ticket row's detail line says `waiting on Anna (review) · 26h` instead of the bare assignee, and my PRs carry the Pull requests chip.
 
 The **selected row expands** to a second line: Claude's last message for Claude needs you (`ClaudeMeta.preview`), the `next:` note and the first line of Claude's full final message for Ready for review (`m` unfolds the whole message line by line; the row's meta is the delta chip `212 lines · 9 files · tests: none · +1.8k generated`, `tests: none` in amber when source changed, and the age is the wait since Claude stopped), the first unresolved thread for Changes requested, failing check names for Checks failed, and the row's actions as buttons with their key (#397: they run on a click; Next up rows also reorder by dragging). Nothing else ever expands; rows stay 26px in `VirtualList`.
 
@@ -267,7 +267,7 @@ A ticket the source marks **blocked** (`b`; a flag, a label, a relation or a sta
 | `/` | filter on id, title, project, branch |
 | `⇧⌘R` | refresh |
 
-Gating is the work menu's (§2.5): disabled keys on review items do nothing and flash the reason. Every action that leaves the Queue (or the Tickets and Reviews views) **closes it and focuses the target in its project** (`ui.view = null` through `activateProject`, focus tab and pane: the target's rail row is selected); the project is the item's first, else the active one, never the `GLOBAL` sentinel. Panes opened from the Queue use `new_tab` placement with reuse (one tab per target), never a split inside whatever tab happened to be active. This fixes bug B1.
+Gating is the work menu's (§2.5): disabled keys on review items do nothing and flash the reason. Every action that leaves the Queue (or the Tickets and Pull requests views) **closes it and focuses the target in its project** (`ui.view = null` through `activateProject`, focus tab and pane: the target's rail row is selected); the project is the item's first, else the active one, never the `GLOBAL` sentinel. Panes opened from the Queue use `new_tab` placement with reuse (one tab per target), never a split inside whatever tab happened to be active. This fixes bug B1.
 
 ### 3.4 Next waiting, without opening the Queue
 
@@ -429,11 +429,11 @@ Rebase is single-item. No bulk update and no merge strategy (§11.2).
 ### 4.7 Reviewing other people's PRs
 
 - **Review requests** in Now, `Blocking: you're the last reviewer` first, then oldest request first (rows show the request age and diff size; GitHub: `reviewDecision` REVIEW_REQUIRED and every other user asked has reviewed since, request time from the `ReviewRequestedEvent` timeline; GitLab: `approvals_left` 1 with me among the approvers, request time from `/reviewers`, `updated_at` otherwise, diff size from `/changes`); a request comes back as "updated since your review" when the head moves after my review (detected by the `reviewed-by:@me` query and the `get` refresh, §3.6).
-- `Enter`: the review detail opens in the project's Reviews tab (reused), Now closes (bug B1). Actions there, with keys: `a` Approve, `c` Request changes, `m` Comment, `o` Open on host, `s` Review locally.
-- In the Reviews view the detail sits in a column beside the list (SPEC §3.3): `Enter` focuses it and the same keys act there, `Esc` goes back to the list, `Shift+Enter` opens it in the project. Nothing leaves the view.
-- `o` in Now: open on the host. In the Reviews view `w` runs a workflow on the PR (§4.8) and `t` puts a local tag on it (SPEC §3.4c).
-- **My PRs** (Reviews pane): `waiting on Anna · 26h` (names merged from tracker and code host, SPEC §3.4a), amber past `reviews.sla_hours`, for the reviewers still asked (since their latest request) or who requested changes before my last push (since the head commit; GitLab: `/reviewers` not reviewed yet). `n`: Re-request review from those it waits on (`CodeHost::rerequest_review` with `waiting_on`) or Comment ping (`reviews.nudge_template`); one nudge per PR per 24 h (`nudges` table), the picker greys both out meanwhile. No extra poll: the authored list query carries it.
-- **Team** (Reviews pane, `2`): what the team ships on the repos of my sources' projects, mine included, with who each PR waits on; `G` groups the PRs by ticket so the api and web PRs of SHOP-142 sit together. A row opens in the split column like any other; `s` reviews it locally with the PR rules of the project binding its repo.
+- `Enter`: the review detail opens in the project's Pull requests tab (reused), Now closes (bug B1). Actions there, with keys: `a` Approve, `c` Request changes, `m` Comment, `o` Open on host, `s` Review locally.
+- In the Pull requests view the detail sits in a column beside the list (SPEC §3.3): `Enter` focuses it and the same keys act there, `Esc` goes back to the list, `Shift+Enter` opens it in the project. Nothing leaves the view.
+- `o` in Now: open on the host. In the Pull requests view `w` runs a workflow on the PR (§4.8) and `t` puts a local tag on it (SPEC §3.4c).
+- **My PRs** (Pull requests pane): `waiting on Anna · 26h` (names merged from tracker and code host, SPEC §3.4a), amber past `reviews.sla_hours`, for the reviewers still asked (since their latest request) or who requested changes before my last push (since the head commit; GitLab: `/reviewers` not reviewed yet). `n`: Re-request review from those it waits on (`CodeHost::rerequest_review` with `waiting_on`) or Comment ping (`reviews.nudge_template`); one nudge per PR per 24 h (`nudges` table), the picker greys both out meanwhile. No extra poll: the authored list query carries it.
+- **Team** (Pull requests pane, `2`): what the team ships on the repos of my sources' projects, mine included, with who each PR waits on; `G` groups the PRs by ticket so the api and web PRs of SHOP-142 sit together. A row opens in the split column like any other; `s` reviews it locally with the PR rules of the project binding its repo.
 - `s` (Now or detail), then `⌘↵`: review locally. Existing Review source: worktree on `kelta/pr-<n>`, `review` layout (Claude in plan mode with the `review` prompt, nvim with `review_args` diff, a shell with `git diff --stat`). The row stays in Review requests and shows the local Claude's lamp. The work bar's primary is **Open review**.
 - Line comments without leaving Kelta: MCP tool `add_review_comment{path, line, body}` adds to a **pending (draft) review** on the host. Claude adds its findings, Louis asks it to add his own notes; the detail pane shows "n pending comments" and `a` / `c` / `m` submit them with the decision. No thread UI in Kelta.
 - When `my_state` stops being pending (submitted in Kelta or on github.com, seen by the `get` refresh), the row moves to Ship and clean up as "Reviewed", `Enter` = Finish (removes the review worktree).
@@ -442,7 +442,7 @@ Rebase is single-item. No bulk update and no merge strategy (§11.2).
 
 A workflow is a prompt Claude runs in a background tab. Two kinds: saved `*.js` workflows (`.claude/workflows/` of the repo or home, #233) and `[[workflows]]` entries in the config (#355), which are a prompt or a slash command (SETTINGS §2). `on` says where an entry is offered:
 - `ticket` (default): Run workflow (`w`) on a ticket row, in its detail, or the palette's "Run workflow on KEY…". The run **claims** the ticket as a background run (`WorkItem.run`, #235): the ticket shows the run's name, phase and state (phase row 0a), and a second `w` on a ticket whose run is live opens that session. A ticket held by a real work item cannot be claimed.
-- `pr`: `w` on a Reviews row or in the review detail. It runs in the worktree of the PR's unfinished work item, else the repo bound to the PR's code host, in a tab named `<label> · <repo>#<n>`. It claims nothing; one run per PR is kept, and a second `w` opens the live one.
+- `pr`: `w` on a Pull requests row or in the review detail. It runs in the worktree of the PR's unfinished work item, else the repo bound to the PR's code host, in a tab named `<label> · <repo>#<n>`. It claims nothing; one run per PR is kept, and a second `w` opens the live one.
 - `global`: "Run <label>" in the palette, with no ticket and no PR.
 
 A running workflow can stop and ask: MCP `ask` (§2.2 row 0) shows its question with buttons on the ticket row, in Now and in Peek.
@@ -501,7 +501,7 @@ All follow DESIGN §6.13: one sentence saying what happened, one or two actions.
 
 | Action id | macOS | Linux | Prefix | Context |
 |---|---|---|---|---|
-| `inbox.open` (label "Open Now") | `⌘0` | `Ctrl+0` | `0` | global, unchanged chord |
+| `inbox.open` (label "Open Queue") | `⌘0` | `Ctrl+0` | `0` | global, unchanged chord; on the Queue, the chord goes back (below); the palette entry and the HUD only open it |
 | `attention.next` (label "Next waiting") | `⌘J` | `Ctrl+J` | `u` | global, walks the Now queue (§3.4) |
 | `attention.peek` (label "Peek waiting session") | `⇧⌘Y` | `Ctrl+Shift+Y` | `y` | global, peek & reply without switching (#139) |
 | `work.new` | `⇧⌘N` | `Ctrl+Shift+N` | `w` | global |
@@ -509,6 +509,8 @@ All follow DESIGN §6.13: one sentence saying what happened, one or two actions.
 | `toast.run_last` (label "Run last toast action") | `⇧⌘O` | `Ctrl+Shift+O` | `o` | global, runs the primary action of the most recent toast still shown |
 | `work.start` | `⌘↵` | `Ctrl+Enter` | `s` | unchanged; also submits every work sheet and dialog |
 | `reviews.open` (label "Open reviews") | `⇧⌘R` | `Ctrl+Shift+R` | `r` | global; the chord (not the leader key or the palette, which always open Reviews) in a list or detail that has the keys (Queue, Tickets, Reviews, ticket and review details) refreshes it instead (#417): the key manager passes `chord`, the pane takes `kelta:refresh` (`use:onRefresh`), as `⌘.` takes `kelta:actions` |
+
+`⌘0` zooms out and back (#415): opening the Queue records the tab and pane that had focus as the way back (the `‹` tooltip names it); `⌘0` on the Queue returns there through the jumplist, focused. `Esc` on the Queue clears what the list holds first (the filter, then the marks, then the brief's extra actions; an open menu closes itself) and, with nothing left to clear, does the same.
 
 Now's single keys are in §3.3, the work menu's in §2.5. If `⌘.` turns out to be swallowed by macOS cancel handling in the webview, rebind it; the prefix key `.` always works. Check this first when implementing, and check `⇧⌘O` against existing defaults.
 

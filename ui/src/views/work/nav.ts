@@ -200,13 +200,13 @@ export async function openFromNow(
   await openContent(projectId, content, { placement: 'new_tab', ...opts });
 }
 
-/** A review in the project's one Reviews tab (reused, never a split in the active tab). */
+/** A review in the project's one Pull requests tab (reused, never a split in the active tab). */
 export function openReview(
   projectId: ProjectId,
   content: Extract<PaneContent, { kind: 'review_detail' }>,
 ): Promise<void> {
   return openFromNow(projectId, content, {
-    title: 'Reviews',
+    title: 'Pull requests',
     match: (c) => c.kind === 'review_detail',
     replace: true,
   });

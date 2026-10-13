@@ -99,7 +99,7 @@ describe('ReviewsPane filters', () => {
   it('a filter that hides every PR says which filters are on; Clear all brings them back (#370)', async () => {
     const { container } = mountReviews();
     await waitFor(() => expect(container.querySelectorAll('.row').length).toBeGreaterThan(0));
-    await fireEvent.input(screen.getByLabelText('Filter reviews'), { target: { value: 'zzzz' } });
+    await fireEvent.input(screen.getByLabelText('Filter pull requests'), { target: { value: 'zzzz' } });
     expect(await screen.findByText(/^No match: .*"zzzz"/)).toBeTruthy();
     await fireEvent.click(screen.getAllByRole('button', { name: 'Clear all' })[0]!);
     await waitFor(() => expect(container.querySelectorAll('.row').length).toBeGreaterThan(0));
