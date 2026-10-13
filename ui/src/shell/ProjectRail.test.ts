@@ -231,7 +231,9 @@ describe('ProjectRail', () => {
       'rail-tickets',
       'rail-reviews',
     ]);
-    await expect.poll(() => r.getByTestId('rail-reviews').title).toMatch(/^Reviews: \d+ asks? for your review$/);
+    await expect
+      .poll(() => r.getByTestId('rail-reviews').title)
+      .toMatch(/^Reviews: \d+ asks? for your review$/);
     expect(r.getByTestId('rail-inbox').title).toMatch(/^Now: \d+ your move$/);
     expect(r.getByTestId('rail-tickets').title).toMatch(/^Tickets: \d+ assigned to you$/);
   });
@@ -245,7 +247,9 @@ describe('ProjectRail', () => {
     await expect.poll(() => more().classList.contains('active')).toBe(true);
     await unfold(r, 'billing');
     expect(more().classList).not.toContain('active'); // the row itself wears it once shown
-    expect(r.container.querySelector('[data-tab-id="billing-t2"]')!.getAttribute('aria-current')).toBe('page');
+    expect(r.container.querySelector('[data-tab-id="billing-t2"]')!.getAttribute('aria-current')).toBe(
+      'page',
+    );
     const shop = layout.get('shop')!.tabs.filter((t) => t.id !== 'shop-t1');
     expect(within(band(r, 'shop')).getByTestId('rail-more').dataset.attention).toBe(
       maxLamp(shop.map((t) => tabAttention(t))),

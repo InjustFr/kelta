@@ -391,7 +391,10 @@
     liveSessionsOfTab(tab).flatMap((s) => sessions.runs[s.id] ?? []),
     claims,
   )}
-  <li class="row" class:pane-over={rowOver === tab.id && paneDrag.current && paneDrag.current.tabId !== tab.id}>
+  <li
+    class="row"
+    class:pane-over={rowOver === tab.id && paneDrag.current && paneDrag.current.tabId !== tab.id}
+  >
     <button
       type="button"
       class="item tab-row"
@@ -442,7 +445,8 @@
       <span class="socket" aria-hidden="true"><Lamp level={lvl} /></span>
       {#if item}
         {@const key = workKey(item)}
-        {#if tab.detached}<span class="kind" aria-hidden="true"><Icon name="app-window" size={14} /></span>{/if}
+        {#if tab.detached}<span class="kind" aria-hidden="true"><Icon name="app-window" size={14} /></span
+          >{/if}
         <span class="key k-num">{key}</span>
         <span class="text"><span class="name">{workTitle(tab, key)}</span></span>
         <span class="stage" data-testid="rail-stage">{stageWord(item)}</span>
@@ -509,6 +513,10 @@
 
     <div class="scroll">
       {#each rail as p (p.id)}
+        {@const band = bandTabs(p.id, lines)}
+        {@const background = backgroundSessions(p.id)}
+        {@const folded = band.more.length + background.length}
+        {@const open = !!unfolded[p.id]}
         <section
           class="band"
           class:pane-target={bandOver === p.id && paneDrag.current}
@@ -564,10 +572,6 @@
             >
             {@render more(p)}
           </div>
-          {@const band = bandTabs(p.id, lines)}
-          {@const background = backgroundSessions(p.id)}
-          {@const folded = band.more.length + background.length}
-          {@const open = !!unfolded[p.id]}
           <ul class="rows">
             {#each band.work as tab (tab.id)}{@render row(p, tab)}{/each}
             {#if folded > 0}

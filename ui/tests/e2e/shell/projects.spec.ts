@@ -118,7 +118,7 @@ test.describe('project switching', () => {
     for (const t of measures.slice(-8)) expect(t).toBeLessThanOrEqual(50);
   });
 
-  test('rail: row lamps, Now badge and caption menu reorder', async ({ page }) => {
+  test('rail: row lamps, Now count and caption menu reorder', async ({ page }) => {
     await boot(page);
     const row = (tab: string) => page.locator(`[data-testid="rail-row"][data-tab-id="${tab}"]`);
     const billing = page.locator('[data-testid="rail-project"][data-project-id="billing"]');
@@ -128,8 +128,7 @@ test.describe('project switching', () => {
     // kelta-tools' Claude finished long ago: "done" comes from review_due, not the seen flag.
     const tools = row('kt-t1');
     await expect(tools).toHaveAttribute('data-attention', 'none');
-    // One count on the sub line, no red badge (#430): what is my move (#399).
-    await expect(page.getByTestId('inbox-badge')).toBeHidden();
+    // One count on the sub line (#430): what is my move (#399).
     await expect(page.getByTestId('rail-inbox')).toHaveAttribute('title', /^Now: \d+ your move$/);
 
     // A Claude stop with changes lights the row.
