@@ -142,10 +142,7 @@ export function parseChord(text: string, platform: Platform = currentPlatform())
       if (isLast) return null; // chord without a key
       if (mod === 'mod') {
         if (platform === 'macos') chord.meta = true;
-        else {
-          chord.ctrl = true;
-          chord.shift = true;
-        }
+        else chord.ctrl = true;
       } else chord[mod] = true;
       continue;
     }

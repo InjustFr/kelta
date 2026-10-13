@@ -391,6 +391,18 @@ pub struct KeysSettings {
     pub list_keys: bool,
     /// The key hint line under lists; `?` still lists every key.
     pub hints: bool,
+    /// Linux, focused terminal: who gets a plain `ctrl+<letter>` bound in Kelta.
+    pub linux_terminal: LinuxTerminalKeys,
+}
+
+/// `terminal_first`: the terminal gets the key and the action stays on `ctrl+shift+<letter>`;
+/// `kelta_first`: Kelta runs the action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LinuxTerminalKeys {
+    #[default]
+    TerminalFirst,
+    KeltaFirst,
 }
 
 impl Default for KeysSettings {
@@ -402,6 +414,7 @@ impl Default for KeysSettings {
             prefix_bindings: crate::actions::default_prefix_bindings(),
             list_keys: true,
             hints: true,
+            linux_terminal: LinuxTerminalKeys::TerminalFirst,
         }
     }
 }

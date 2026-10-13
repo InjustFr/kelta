@@ -15,6 +15,7 @@ function keys(over: Partial<KeysSettings> = {}): KeysSettings {
     prefix_bindings: {},
     list_keys: true,
     hints: true,
+    linux_terminal: 'terminal_first',
     ...over,
   };
 }
@@ -47,6 +48,7 @@ function press(init: KeyboardEventInit & { code: string; key: string }): Keyboar
 
 const ctrlShift = (code: string, key: string): KeyboardEvent =>
   press({ code, key, ctrlKey: true, shiftKey: true });
+const ctrl = (code: string, key: string): KeyboardEvent => press({ code, key, ctrlKey: true });
 
 afterEach(() => vi.useRealTimers());
 
@@ -61,8 +63,8 @@ describe('direct chords (Linux)', () => {
 
   it('matches digits on the physical key', () => {
     const { manager, ids } = setup();
-    manager.handleKeyDown(ctrlShift('Digit2', '@'));
-    manager.handleKeyDown(ctrlShift('Digit0', ')'));
+    manager.handleKeyDown(ctrl('Digit2', '2'));
+    manager.handleKeyDown(ctrl('Digit0', '0'));
     manager.handleKeyDown(ctrlShift('PageDown', 'PageDown'));
     expect(ids()).toEqual(['project.goto.2', 'inbox.open', 'project.next']);
   });
@@ -78,7 +80,7 @@ describe('direct chords (Linux)', () => {
 
   it('supports plugin command bindings from keys.bindings', () => {
     const { manager, calls } = setup({
-      keys: keys({ bindings: { 'plugin.command.acme/deploy': ['ctrl+shift+9'] } }),
+      keys: keys({ bindings: { 'plugin.command.acme/deploy': ['ctrl+9'] } }),
     });
     // 9 is project.goto.9 by default: first binding wins, so use another key.
     const { manager: m2, calls: c2 } = setup({
@@ -86,7 +88,7 @@ describe('direct chords (Linux)', () => {
     });
     m2.handleKeyDown(ctrlShift('F9', 'F9'));
     expect(c2.map((c) => c.id)).toEqual(['plugin.command.acme/deploy']);
-    manager.handleKeyDown(ctrlShift('Digit9', '('));
+    manager.handleKeyDown(ctrl('Digit9', '9'));
     expect(calls[0]?.id).toBe('project.goto.9');
   });
 
@@ -100,7 +102,7 @@ describe('direct chords (Linux)', () => {
     const { manager, calls } = setup({
       extraBindings: () => [{ action: 'tools.open', chords: ['mod+g'], args: { tool_id: 'lazygit' } }],
     });
-    manager.handleKeyDown(ctrlShift('KeyG', 'G'));
+    manager.handleKeyDown(ctrl('KeyG', 'g'));
     expect(calls).toEqual([{ id: 'tools.open', args: { tool_id: 'lazygit' } }]);
   });
 });
@@ -108,14 +110,14 @@ describe('direct chords (Linux)', () => {
 describe('terminal passthrough', () => {
   const letters = 'abcdefghijklmnopqrstuvwxyz'.split('');
 
-  it('never consumes plain Ctrl+letter, Alt, Ctrl+Alt, Super, Shift+Tab, Ctrl+Space, Ctrl+\\', () => {
+  it('never consumes Alt, Ctrl+Alt+letter, Super, Shift+Tab, Ctrl+Space, Ctrl+\\ (plain Ctrl+letter in terminals)', () => {
     for (const ctx of [GLOBAL, TERMINAL]) {
       const { manager, calls, setCtx } = setup({ ctx });
       setCtx(ctx);
       const events: KeyboardEvent[] = [];
       for (const l of letters) {
         const code = `Key${l.toUpperCase()}`;
-        events.push(press({ code, key: l, ctrlKey: true }));
+        if (ctx.terminal) events.push(press({ code, key: l, ctrlKey: true }));
         events.push(press({ code, key: l, altKey: true }));
         events.push(press({ code, key: l, altKey: true, shiftKey: true }));
         events.push(press({ code, key: l, ctrlKey: true, altKey: true }));
@@ -139,6 +141,30 @@ describe('terminal passthrough', () => {
       }
       expect(calls).toEqual([]);
     }
+  });
+
+  it('gives plain Ctrl+letter to a focused terminal, Kelta keeps its Ctrl+Shift twin', () => {
+    const { manager, ids, setCtx } = setup();
+    expect(manager.handleKeyDown(ctrl('KeyK', 'k'))).toBe('consumed');
+    setCtx(TERMINAL);
+    const k = ctrl('KeyK', 'k');
+    expect(manager.handleKeyDown(k)).toBe('pass');
+    expect(k.defaultPrevented).toBe(false);
+    expect(manager.handleKeyDown(ctrl('KeyD', 'd'))).toBe('pass'); // EOF, not split right
+    expect(manager.handleKeyDown(ctrlShift('KeyK', 'K'))).toBe('consumed');
+    expect(manager.handleKeyDown(ctrl('Digit1', '1'))).toBe('consumed'); // not a shell key
+    expect(ids()).toEqual(['palette.open', 'palette.open', 'project.goto.1']);
+  });
+
+  it('keys.linux_terminal = "kelta_first" runs Ctrl+letter in terminals, Ctrl+C stays SIGINT', () => {
+    const { manager, ids } = setup({ ctx: TERMINAL, keys: keys({ linux_terminal: 'kelta_first' }) });
+    expect(manager.handleKeyDown(ctrl('KeyD', 'd'))).toBe('consumed');
+    expect(manager.handleKeyDown(ctrl('KeyC', 'c'))).toBe('pass');
+    expect(manager.handleKeyDown(ctrl('KeyV', 'v'))).toBe('pass');
+    expect(ids()).toEqual(['pane.split_right']);
+    // macOS is unaffected: Cmd chords never reach the PTY.
+    const mac = setup({ platform: 'macos', ctx: TERMINAL });
+    expect(mac.manager.handleKeyDown(press({ code: 'KeyD', key: 'd', metaKey: true }))).toBe('consumed');
   });
 
   it('keeps Ctrl+R and Ctrl+F for the shell inside a terminal', () => {

@@ -7,14 +7,23 @@
 // - Letters and punctuation match the character of the active layout, digits and named keys the
 //   physical key (`eventCode`). After the prefix, the next key is matched on `KeyboardEvent.key`
 //   (characters such as `%`, `"`, `(`, `N`).
-// - Default chords never use plain Ctrl+letter, Alt/Meta chords, Ctrl+Alt, Shift+Tab, Ctrl+Space or
-//   Ctrl+\ on Linux (checked by the unit tests against the generated catalog).
+// - Linux chords follow the Mac set with Cmd → Ctrl. In a focused terminal a plain Ctrl+letter goes to
+//   the terminal (`keys.linux_terminal = "terminal_first"`, the default); the catalog keeps those actions
+//   on Ctrl+Shift+letter too.
 
 import type { KeysSettings } from '$lib/gen';
 import { ACTIONS, type ActionContext } from '$lib/gen/actions';
 import { currentPlatform } from '$lib/ui/format';
 
-import { chordFromEvent, chordToString, matchChord, parseChord, type Chord, type Platform } from './chords';
+import {
+  chordFromEvent,
+  chordToString,
+  isReservedChord,
+  matchChord,
+  parseChord,
+  type Chord,
+  type Platform,
+} from './chords';
 
 export interface KeyContext {
   /** Focus is inside a terminal view. */
@@ -236,7 +245,7 @@ export class KeyManager {
     const binding = compiled.chords.get(chordToString(chord));
     if (binding) {
       const ctx = this.#context(event);
-      if (this.#runnable(binding, ctx)) {
+      if (this.#runnable(binding, ctx) && !this.#terminalKeeps(chord, ctx)) {
         this.#run(binding);
         return this.#consume(event);
       }
@@ -255,6 +264,16 @@ export class KeyManager {
     if (!contextAllows(binding.context, ctx)) return false;
     const has = this.#opts.hasAction;
     return has ? has(binding.action) : true;
+  }
+
+  /** Linux: a plain Ctrl+letter in a focused terminal is the shell's (`keys.linux_terminal`). */
+  #terminalKeeps(chord: Chord, ctx: KeyContext): boolean {
+    return (
+      ctx.terminal &&
+      this.#platform === 'linux' &&
+      this.#opts.keys?.()?.linux_terminal !== 'kelta_first' &&
+      isReservedChord(chord, ['ctrl+<letter>'], 'linux')
+    );
   }
 
   #run(binding: Binding): void {

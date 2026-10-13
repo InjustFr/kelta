@@ -53,7 +53,7 @@ Tools, and Settings.
 
 - **Width.** Drag the edge of the rail to resize it (200 to 480 px). With the edge focused, the arrow keys move
   it by 16 px (64 with Shift).
-- **Collapse.** `Cmd+B` (`Ctrl+Shift+S` on Linux), the button at the bottom of the rail, or `Enter` on the edge
+- **Collapse.** `Cmd+B` (`Ctrl+B` on Linux), the button at the bottom of the rail, or `Enter` on the edge
   folds the rail into an icon column. It starts folded when the window is narrower than 1100 px. The width and
   the state are remembered. In a narrow rail the shortcut hints hide before a label is cut.
 - A tab running a Claude workflow shows the run's phase under its row ([details](claude-code.md#workflows)).
@@ -66,7 +66,7 @@ Tools, and Settings.
 - A project's menu in the rail (right-click, or the button on its row) has **Close project** (its sessions keep
   running), **Close and stop sessions** and **Remove project...** (its file moves to `projects/.trash`).
 - A closed project leaves the rail. Bring it back with **Open project...** under the project list (shown while a
-  closed project exists), the palette action **Open project**, or the switcher (`Cmd+P`, `Ctrl+Shift+P`), which
+  closed project exists), the palette action **Open project**, or the switcher (`Cmd+P`, `Ctrl+P`), which
   lists closed projects as "not open".
 
 ## Panes and windows
@@ -78,6 +78,16 @@ Tools, and Settings.
   new window** in the pane's or the tab's menu, and the palette action **Move pane to new window**. In that window
   the menu says **Move back to main window**. A detached window shows one tab; its sessions keep running.
 - Settings (`Cmd+,`) opens the tab you already have instead of a new one.
+
+## Keyboard on Linux
+
+Linux shortcuts are the macOS ones with `Cmd` replaced by `Ctrl`: `Ctrl+K` palette, `Ctrl+D` / `Ctrl+Shift+D`
+split, `Ctrl+W` close pane, `Ctrl+Alt+arrows` move between panes. Inside a terminal a plain `Ctrl+letter` belongs to
+the shell (`Ctrl+D` still ends it, `Ctrl+W` deletes a word), so the same actions also answer to `Ctrl+Shift+letter`
+(`Ctrl+Shift+K`, `Ctrl+Shift+W`...), and the prefix key (`Ctrl+Shift+Space`, then one key) reaches every action.
+Copy and paste in a terminal are `Ctrl+Shift+C` / `Ctrl+Shift+V`. If you never use those shell keys, set
+`keys.linux_terminal = "kelta_first"` (Settings > Keys) and Kelta's `Ctrl+letter` wins in terminals too. Your
+desktop may already take `Ctrl+Alt+arrows` for workspaces: rebind either side in Settings > Keys.
 
 ## Now
 

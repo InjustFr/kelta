@@ -279,7 +279,7 @@
     focusPaneById(x.project, x.tab.id, x.pane.id);
   }
 
-  /** `label (Ctrl+Shift+K)`: the tooltip keeps the chord when its badge has no room (#362). */
+  /** `label (Ctrl+K)`: the tooltip keeps the chord when its badge has no room (#362). */
   function tip(label: string, id: string): string {
     const c = chordFor(id);
     return c ? `${label} (${formatChord(c).join(currentPlatform() === 'macos' ? '' : '+')})` : label;

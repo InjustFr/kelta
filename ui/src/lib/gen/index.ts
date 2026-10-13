@@ -96,6 +96,7 @@ export type * from './LayoutSaveResult';
 export type * from './Lifecycle';
 export type * from './LinuxGraphics';
 export type * from './LinuxSettings';
+export type * from './LinuxTerminalKeys';
 export type * from './LocalTag';
 export type * from './LocalTags';
 export type * from './LogLevel';

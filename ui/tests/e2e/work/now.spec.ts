@@ -20,7 +20,7 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
   // Two-line rows (#383): a taller window keeps every Now section rendered.
   await page.setViewportSize({ width: 1280, height: 1200 });
   await boot(page);
-  await page.keyboard.press('Control+Shift+0');
+  await page.keyboard.press('Control+0');
   await expect(now(page)).toBeVisible();
   await expect(now(page).locator('[data-section="up_next"]')).toBeVisible();
 
@@ -62,7 +62,7 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
   await expect(page.getByTestId('work-branch')).toHaveAttribute('title', /\+30 −4/);
 
   // Now: the item sits in Ready for review with Claude's last message; Enter opens the delta.
-  await page.keyboard.press('Control+Shift+0');
+  await page.keyboard.press('Control+0');
   const toReview = now(page).locator('[data-section="to_review"]');
   await expect(toReview).toBeVisible();
   const id = await page.evaluate(
@@ -83,7 +83,7 @@ test('the work menu opens from a terminal with its chord; letters never move', a
   // The shop tab hosts SHOP-142 (Claude + nvim); focus is in a terminal.
   await expect(page.getByTestId('context-work')).toBeVisible();
   await page.locator('[data-testid="terminal-pane"] .xterm').first().click();
-  await page.keyboard.press('Control+Shift+Period');
+  await page.keyboard.press('Control+Period');
   const menu = page.getByRole('menu', { name: 'Work' });
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('menuitem')).toHaveCount(21);
@@ -119,7 +119,7 @@ test('Now open refreshes review items: a moved head reads Updated since your rev
     mock.emit({ type: 'work.updated', work: structuredClone(w) });
     return w.id;
   });
-  await page.keyboard.press('Control+Shift+0');
+  await page.keyboard.press('Control+0');
   const row = now(page).locator(`[data-row="w:${id}"]`);
   await expect(row).toContainText('Reviewed');
   // #101's head moved after my review: back in Review requests.
@@ -135,7 +135,7 @@ test('Now open refreshes review items: a moved head reads Updated since your rev
   });
   await expect(now(page)).toBeHidden();
   const before = (await callsOf(page, 'review_get')).length;
-  await page.keyboard.press('Control+Shift+0');
+  await page.keyboard.press('Control+0');
   await expect(row).toContainText('Updated since your review');
   const gets = (await callsOf(page, 'review_get')).slice(before);
   expect(gets.some((c) => (c.args as { review: { number: number } }).review.number === 309)).toBe(true);
@@ -176,7 +176,7 @@ test('a Claude session Kelta did not start: Elsewhere, Claude needs you, Mod+J, 
   await emit('needs_input');
   await expect(rail).toHaveAttribute('data-attention', 'needs_input');
   await expect.poll(waiting).toBe(before + 1);
-  await page.keyboard.press('Control+Shift+0');
+  await page.keyboard.press('Control+0');
   await expect(now(page).locator('[data-section="needs_you"]')).toBeVisible();
   await expect(now(page).locator('[data-row="o:u1"]')).toContainText('Claude needs you, outside Kelta');
   await dispatch(page, 'attention.next');
