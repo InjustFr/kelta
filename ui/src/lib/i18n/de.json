@@ -2518,5 +2518,17 @@
   "{done} of {n} tasks": {
     "one": "{done} von {n} Aufgabe",
     "other": "{done} von {n} Aufgaben"
-  }
+  },
+  "Health": "Zustand",
+  "Kelta's hooks are not installed in Claude Code: sessions started in another terminal do not show in the Queue": "Keltas Hooks sind nicht in Claude Code installiert: in einem anderen Terminal gestartete Sitzungen erscheinen nicht in der Warteschlange",
+  "Kelta's ticket tools are not installed in Claude Code": "Keltas Ticket-Werkzeuge sind nicht in Claude Code installiert",
+  "Install hooks": "Hooks installieren",
+  "Install MCP": "MCP installieren",
+  "Reconnect account": "Konto neu verbinden",
+  "Open account": "Konto öffnen",
+  "Open source": "Quelle öffnen",
+  "Open theme": "Design öffnen",
+  "Showing cached tickets: the last refresh failed": "Zwischengespeicherte Tickets: die letzte Aktualisierung ist fehlgeschlagen",
+  "Everything works.": "Alles funktioniert.",
+  "Fixing failed": "Beheben fehlgeschlagen"
 }

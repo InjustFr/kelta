@@ -21,6 +21,8 @@ export class SettingsStore {
   accounts = $state<Record<AccountId, AccountState>>({});
   /** Paths changed since start that need a restart (Settings shows a marker). */
   pendingRestart = $state<string[]>([]);
+  /** `Date.now()` of the first of them. */
+  restartSince = $state<number | null>(null);
   lastChange = $state<SettingsChange | null>(null);
   /** OS dark preference; Shell keeps it current. */
   systemDark = $state(
@@ -83,7 +85,10 @@ export class SettingsStore {
     if (ev.type !== 'settings.changed') return;
     this.lastChange = { layers: ev.layers, paths: ev.paths, requiresRestart: ev.requires_restart };
     const add = ev.requires_restart.filter((p) => !this.pendingRestart.includes(p));
-    if (add.length) this.pendingRestart = [...this.pendingRestart, ...add];
+    if (add.length) {
+      this.restartSince ??= Date.now();
+      this.pendingRestart = [...this.pendingRestart, ...add];
+    }
     for (const key of Object.keys(this.effective)) void this.load(key === GLOBAL ? null : key);
   }
 }

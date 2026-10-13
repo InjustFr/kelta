@@ -32,7 +32,10 @@ export const TOML_ROOTS: Partial<Record<SettingsSectionId, readonly string[]>> =
 
 /** Nav groups, in order. A section missing here (e.g. a platform-only one) is not shown. */
 export const SECTION_GROUPS: readonly { label: string; ids: readonly SettingsSectionId[] }[] = [
-  { label: msg('Basics'), ids: ['general', 'window', 'terminal', 'keys', 'notifications', 'linux-graphics'] },
+  {
+    label: msg('Basics'),
+    ids: ['health', 'general', 'window', 'terminal', 'keys', 'notifications', 'linux-graphics'],
+  },
   { label: msg('Work'), ids: ['projects', 'sources', 'worktree', 'reviews', 'tags', 'claude', 'editors'] },
   { label: msg('Integrations'), ids: ['accounts', 'tools', 'triggers', 'plugins'] },
   { label: msg('Advanced'), ids: ['performance'] },
