@@ -1454,7 +1454,7 @@
   "Type a ticket key or words from its title.": "Geben Sie einen Ticket-Schlüssel oder Wörter aus dem Titel ein.",
   "Searching…": "Wird gesucht…",
   "No ticket matches.": "Kein passendes Ticket.",
-  "No next action": "Keine nächste Aktion",
+  "Not available now ({n})": "Gerade nicht verfügbar ({n})",
   "Move to…": "Verschieben nach…",
   "PR": "PR",
   "Work menu": "Arbeitsmenü",

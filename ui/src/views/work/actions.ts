@@ -6,6 +6,7 @@
 import { msg, t } from '$lib/i18n/index.svelte';
 import { registerAction } from '$lib/actions';
 import type { TicketRef, WorkItem } from '$lib/gen';
+import type { MenuItem } from '$lib/ui';
 import {
   openExternal,
   workDiff,
@@ -33,6 +34,7 @@ import {
   rebaseStep,
 } from './fixloop.svelte';
 import { workActionDisabled } from './common';
+import { CLAUDE, PR, TICKET, workStage } from './stage';
 import { batch } from './batch.svelte';
 import { askerOf, claudeOf, phaseNow, prOf } from './live';
 import { draftBlocked, draftLabel, toggleDraft } from '../reviews/draft';
@@ -59,7 +61,16 @@ export interface WorkAction {
   blocked: (c: Ctx) => string | null;
   /** Null until the owning lane wires it. */
   run: ((c: Ctx) => Promise<void>) | null;
+  /** What it acts on: the menu groups by it (#405). */
+  group: WorkGroup;
+  /** It belongs to one situation (a stopped rebase, a failed step, a scratch item): the menu leaves
+   *  it out, not under "Not available now", whenever it is blocked. */
+  situational?: true;
 }
+
+/** The work menu's groups, in order (#405), with the stage each sits nearest to. */
+type WorkGroup = 'work' | 'ticket' | 'branch';
+const GROUP_STAGE: Record<WorkGroup, number> = { work: CLAUDE, ticket: TICKET, branch: PR };
 
 // A rebase is stopped while git has it open, also after Claude staged the last conflict.
 const stopped = (c: Ctx) =>
@@ -114,6 +125,7 @@ async function openTicket({ item }: Ctx): Promise<void> {
 export const WORK_ACTIONS: readonly WorkAction[] = [
   {
     id: 'review_delta',
+    group: 'work',
     key: 'v',
     label: () => t('Review changes since last look'),
     blocked: (c) =>
@@ -126,6 +138,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'review_diff',
+    group: 'work',
     key: 'V',
     label: () => t('Review the whole diff in nvim'),
     blocked: (c) => (c.phase.id === 'missing' ? t('Worktree missing') : null),
@@ -133,6 +146,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'ship',
+    group: 'branch',
     key: 'p',
     label: (c) => (c.phase.id === 'rebased' ? t('Force push…') : hasPr(c) ? t('Push') : t('Ship')),
     blocked: () => null,
@@ -145,6 +159,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'mark_reviewed',
+    group: 'work',
     key: 'R',
     label: () => t('Mark reviewed'),
     blocked: (c) => (c.item.review_due ? null : t('Nothing to review')),
@@ -152,6 +167,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'fix',
+    group: 'branch',
     key: 'f',
     label: () => t('Fix with Claude'),
     blocked: (c) => (hasPr(c) ? null : t('Needs a PR')),
@@ -159,6 +175,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'rebase',
+    group: 'branch',
     key: 'r',
     label: (c) => t('Rebase onto {base}', { base: c.item.base }),
     blocked: () => null,
@@ -166,6 +183,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'rebase_continue',
+    group: 'branch', situational: true,
     key: 'c',
     label: () => t('Continue rebase'),
     blocked: stopped,
@@ -173,6 +191,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'rebase_abort',
+    group: 'branch', situational: true,
     key: 'a',
     label: () => t('Abort rebase'),
     blocked: stopped,
@@ -180,6 +199,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'conflicts',
+    group: 'branch', situational: true,
     key: 'n',
     label: () => t('Open conflicts in nvim'),
     blocked: (c) => (c.item.rebase?.conflicts.length ? null : t('No conflicted files')),
@@ -187,6 +207,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'skip_step',
+    group: 'work', situational: true,
     key: 's',
     label: (c) =>
       c.item.state.kind === 'failed' ? t('Skip {step}', { step: c.item.state.step }) : t('Skip step'),
@@ -195,14 +216,23 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'edit_note',
+    group: 'work',
     key: 'b',
     label: (c) => (c.item.next_note ? t('Edit next: note…') : t('Add next: note…')),
     blocked: () => null,
     run: editNote,
   },
-  { id: 'go_claude', key: 'g', label: () => t('Go to Claude'), blocked: () => null, run: goClaude },
+  {
+    id: 'go_claude',
+    key: 'g',
+    label: () => t('Go to Claude'),
+    blocked: () => null,
+    run: goClaude,
+    group: 'work',
+  },
   {
     id: 'start_claude',
+    group: 'work',
     key: 'C',
     label: () => t('Start Claude'),
     blocked: ({ item }) =>
@@ -220,6 +250,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'link',
+    group: 'ticket', situational: true,
     key: 'l',
     label: () => t('Link to ticket…'),
     blocked: (c) => (c.item.kind !== 'branch' ? t('Already linked to a ticket') : null),
@@ -227,6 +258,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'create_ticket',
+    group: 'ticket', situational: true,
     key: 'T',
     label: () => t('Create ticket…'),
     blocked: (c) => (c.item.kind !== 'branch' ? t('Already linked to a ticket') : null),
@@ -234,6 +266,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'open_ticket',
+    group: 'ticket', situational: true,
     key: 't',
     label: () => t('Open ticket'),
     blocked: (c) => (c.item.ticket ? null : t('No ticket')),
@@ -241,6 +274,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'open_pr',
+    group: 'branch',
     key: 'o',
     label: () => t('Open PR'),
     blocked: (c) => (hasPr(c) ? null : t('No PR yet')),
@@ -251,6 +285,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'merge',
+    group: 'branch',
     key: 'M',
     label: (c) => (c.item.auto_finish ? t('Disarm merge when ready') : t('Merge when ready…')),
     blocked: (c) => (c.item.state.kind === 'pr_open' ? null : t('Needs an open PR')),
@@ -261,6 +296,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'set_draft',
+    group: 'branch',
     key: 'd',
     label: (c) => {
       const pr = prOf(c.item);
@@ -277,6 +313,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'park',
+    group: 'work',
     key: 'P',
     label: () => t('Park'),
     blocked: (c) => {
@@ -292,6 +329,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'finish',
+    group: 'work',
     key: 'F',
     label: () => t('Finish…'),
     blocked: () => null,
@@ -303,6 +341,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   // Primary-only actions (no letter of their own).
   {
     id: 'retry',
+    group: 'work',
     key: null,
     label: (c) => c.phase.primaryLabel,
     blocked: () => null,
@@ -310,6 +349,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'fix_checks',
+    group: 'branch',
     key: null,
     label: (c) => c.phase.primaryLabel,
     blocked: (c) => (hasPr(c) ? null : t('Needs a PR')),
@@ -317,6 +357,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'start_now',
+    group: 'work',
     key: null,
     label: () => t('Start now (over cap)'),
     blocked: queuedOnly,
@@ -324,6 +365,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'queue_front',
+    group: 'work',
     key: null,
     label: () => t('Move to front'),
     blocked: queuedOnly,
@@ -331,6 +373,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'recreate',
+    group: 'work',
     key: null,
     label: () => t('Recreate'),
     blocked: () => null,
@@ -341,6 +384,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'resolve',
+    group: 'branch',
     key: null,
     label: () => t('Ask Claude to resolve'),
     blocked: stopped,
@@ -348,6 +392,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'open_review',
+    group: 'branch',
     key: null,
     label: () => t('Open review'),
     blocked: (c) => (c.item.review ? null : t('No PR')),
@@ -376,6 +421,47 @@ export function blockedReason(
   const a = workAction(id);
   // Review items: p/r/f/l are read-only (#131), whatever the action's own check says.
   return workActionDisabled(item, a.key ?? '') ?? a.blocked({ item, phase }) ?? (a.run ? null : t(NOT_YET));
+}
+
+const chordOf = (key: string): string => (key === key.toLowerCase() ? key : `shift+${key.toLowerCase()}`);
+
+/**
+ * The work menu's entries (FLOW §2.5, #405): the next step first, then what can run now grouped by
+ * object (the work item, its ticket, its branch or PR), then what cannot, nearest the phase's stage
+ * first (`Menu` lists 5 of them). A situational action that cannot run is left out; every letter
+ * still answers, the blocked ones with their reason.
+ */
+export function workMenu(item: WorkItem, phase: Phase = phaseNow(item)): MenuItem[] {
+  const c = { item, phase };
+  const at = workStage(item, phase, null, false).at;
+  const primary = phase.primary ? workAction(phase.primary) : null;
+  const entry = (a: WorkAction, reason: string | null): MenuItem => ({
+    id: a.id,
+    label: a.label(c),
+    kbd: chordOf(a.key!),
+    key: a.key!,
+    reason,
+    hidden: !!reason && (a.situational || workActionDisabled(item, a.key!) !== null),
+    danger: a.id === 'finish',
+  });
+  const now: MenuItem[] = [];
+  if (primary) {
+    // Its letter, if it has one, runs it from here: the lettered entry is not listed twice.
+    const reason = blockedReason(primary.id, item, phase);
+    now.push({ id: 'primary', label: phase.primaryLabel, kbd: 'enter', key: primary.key ?? undefined, reason });
+  }
+  const off: MenuItem[] = [];
+  for (const g of ['work', 'ticket', 'branch'] as const) {
+    const start = now.length;
+    for (const a of WORK_ACTIONS) {
+      if (a.group !== g || !a.key || a.id === primary?.id) continue;
+      const e = entry(a, blockedReason(a.id, item, phase));
+      if (e.reason) off.push(e);
+      else now.push({ ...e, separator: now.length === start && start > 0 });
+    }
+  }
+  const dist = (e: MenuItem) => Math.abs(GROUP_STAGE[workAction(e.id as WorkActionId).group] - at);
+  return [...now, ...off.sort((a, b) => dist(a) - dist(b))];
 }
 
 /** Runs a work action; a blocked one flashes its reason instead. */

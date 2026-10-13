@@ -66,8 +66,11 @@ describe('ReviewsPane row actions (#397)', () => {
     const entry = (name: string) => within(menu).getByRole('menuitem', { name: new RegExp(`^${name}`) });
     expect(entry('Review locally').querySelector('kbd')?.textContent).toBe('S');
     // For me lists other people's PRs: Nudge is mine only.
+    // Not available now (#405): last, the reason under the label.
     expect(entry('Nudge reviewers').getAttribute('aria-disabled')).toBe('true');
-    expect(entry('Nudge reviewers').title).toBe('Only on your own pull requests');
+    expect(entry('Nudge reviewers').querySelector('.reason')?.textContent).toBe('Only on your own pull requests');
+    expect(within(menu).getAllByRole('menuitem').at(-1)?.getAttribute('aria-disabled')).toBe('true');
+    expect(within(menu).getByText(/^Not available now \(\d\)$/)).toBeTruthy();
     // Open in own pane opens the PR in its own pane.
     await fireEvent.click(entry('Open in own pane'));
     await waitFor(() =>

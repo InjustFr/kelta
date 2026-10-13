@@ -14,7 +14,7 @@
 
   import { focusedSessionId } from '../../shell/nav';
   import { pluginActions, runPluginAction, workCtx } from '../plugins/actions';
-  import { blockedReason, runPrimary, runWorkAction, WORK_ACTIONS } from './actions';
+  import { blockedReason, runPrimary, runWorkAction, workMenu, type WorkAction } from './actions';
   import { phaseNow, prOf, workTitle } from './live';
   import { workKey } from './phase';
   import StageTrack from './shared/StageTrack.svelte';
@@ -59,29 +59,7 @@
 
   const menuItems = $derived.by((): MenuItem[] => {
     if (!item || !phase) return [];
-    const out: MenuItem[] = [
-      {
-        id: 'primary',
-        label: phase.primaryLabel || t('No next action'),
-        kbd: 'enter',
-        disabled: !phase.primary || primaryBlocked !== null,
-        title: primaryBlocked ?? undefined,
-      },
-    ];
-    for (const a of WORK_ACTIONS) {
-      if (!a.key) continue;
-      const reason = blockedReason(a.id, item, phase);
-      out.push({
-        id: a.id,
-        label: a.label({ item, phase }),
-        kbd: a.key === a.key.toLowerCase() ? a.key : `shift+${a.key.toLowerCase()}`,
-        key: a.key,
-        disabled: reason !== null,
-        title: reason ?? undefined,
-        separator: a.id === 'review_delta' || a.id === 'go_claude' || a.id === 'finish',
-        danger: a.id === 'finish',
-      });
-    }
+    const out = workMenu(item, phase);
     plugin.forEach((a, i) =>
       out.push({ id: `plugin:${a.command_id}`, label: a.title, detail: a.plugin, separator: i === 0 }),
     );
@@ -98,7 +76,7 @@
     if (!item) return;
     if (id === 'primary') void runPrimary(item);
     else if (id.startsWith('plugin:')) void runPlugin(id.slice('plugin:'.length));
-    else void runWorkAction(id as (typeof WORK_ACTIONS)[number]['id'], item);
+    else void runWorkAction(id as WorkAction['id'], item);
   }
 
   /** ⌘. is used from inside Claude or nvim: closing the menu gives the keyboard back. */

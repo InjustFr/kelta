@@ -17,11 +17,27 @@
     detail?: string;
     /** Colour of a 2px category bar shown in place of the icon. */
     bar?: string;
+    /** Why it cannot run now (#405): listed under "Not available now", the reason on a second line. */
+    reason?: string | null;
+    /** With a reason: not listed at all (it never applies here); its key still flashes the reason. */
+    hidden?: boolean;
+  }
+
+  /** At most this many entries under "Not available now", the first ones given (#405). */
+  export const MAX_OFF = 5;
+
+  /** What a menu lists: the entries that can run, then those that cannot (the "Not available now" group). */
+  export function menuView(items: readonly MenuItem[]): { now: MenuItem[]; off: MenuItem[] } {
+    return {
+      now: items.filter((it) => !it.reason && !it.hidden),
+      off: items.filter((it) => it.reason && !it.hidden).slice(0, MAX_OFF),
+    };
   }
 </script>
 
 <script lang="ts">
   import { t } from '$lib/i18n/index.svelte';
+  import { toasts } from '$lib/stores';
   import type { Snippet } from 'svelte';
 
   import Icon from './Icon.svelte';
@@ -48,11 +64,14 @@
   let el = $state<HTMLDivElement>();
   let active = $state(-1);
 
-  const enabled = $derived(items.map((it, i) => (it.disabled ? -1 : i)).filter((i) => i >= 0));
+  const view = $derived(menuView(items));
+  /** The listed entries, in order; `active` indexes this. */
+  const list = $derived([...view.now, ...view.off]);
+  const enabled = $derived(list.map((it, i) => (it.disabled || it.reason ? -1 : i)).filter((i) => i >= 0));
 
   const pos = $derived.by(() => {
     const w = el?.offsetWidth ?? 200;
-    const h = el?.offsetHeight ?? items.length * 32;
+    const h = el?.offsetHeight ?? list.length * 32;
     const vw = typeof window === 'undefined' ? 1e4 : window.innerWidth;
     const vh = typeof window === 'undefined' ? 1e4 : window.innerHeight;
     return { left: Math.max(4, Math.min(x, vw - w - 4)), top: Math.max(4, Math.min(y, vh - h - 4)) };
@@ -75,8 +94,8 @@
   }
 
   function choose(i: number): void {
-    const item = items[i];
-    if (!item || item.disabled) return;
+    const item = list[i];
+    if (!item || item.disabled || item.reason) return;
     onselect(item.id);
     onclose();
   }
@@ -92,15 +111,16 @@
       case 'Enter':
       case ' ':
         // Nothing highlighted (or a filter shrank the list under it): Enter runs the first item.
-        choose(items[active] ? active : e.key === 'Enter' ? 0 : -1);
+        choose(list[active] ? active : e.key === 'Enter' ? 0 : -1);
         break;
       case 'Escape':
         onclose();
         break;
       default: {
-        // Letters never move: a disabled entry swallows its key.
-        const i = items.findIndex((it) => it.key !== undefined && it.key === e.key);
-        if (i >= 0) choose(i);
+        // Letters never move: a disabled entry swallows its key, one that cannot run now flashes why.
+        const it = items.find((x) => x.key !== undefined && x.key === e.key);
+        if (it?.reason) toasts.info(`${it.label}: ${it.reason}`);
+        else if (it) choose(list.indexOf(it));
         else if (e.key === 'j' || e.key === 'k')
           move(e.key === 'j' ? 1 : -1); // unless an item claims them
         else {
@@ -135,23 +155,33 @@
   out:fadeMove
 >
   {#if header}<div id={headerId}>{@render header()}</div>{/if}
-  {#each items as item, i (item.id)}
-    {#if item.separator}<div class="sep" role="separator"></div>{/if}
+  {#each list as item, i (item.id)}
+    {#if item.reason}
+      {#if item === view.off[0]}
+        {#if i > 0}<div class="sep" role="separator"></div>{/if}
+        <div class="group" role="presentation">{t('Not available now ({n})', { n: view.off.length })}</div>
+      {/if}
+    {:else if item.separator && i > 0}<div class="sep" role="separator"></div>{/if}
     <button
       type="button"
       role="menuitem"
       class:active={i === active}
       class:danger={item.danger}
       class:off={item.disabled}
-      aria-disabled={item.disabled ? 'true' : undefined}
-      title={item.title}
-      onpointerenter={() => (active = item.disabled ? -1 : i)}
+      class:why={item.reason}
+      aria-disabled={item.disabled || item.reason ? 'true' : undefined}
+      title={item.title ?? item.reason ?? undefined}
+      onpointerenter={() => (active = item.disabled || item.reason ? -1 : i)}
       onclick={() => choose(i)}
     >
       {#if item.bar}<span class="bar" style:--bar={item.bar}></span>{:else}<span class="icon"
           >{#if item.icon}<Icon name={item.icon} size={16} />{/if}</span
         >{/if}
-      <span class="label">{item.label}</span>
+      {#if item.reason}
+        <span class="text"><span class="label">{item.label}</span><span class="reason">{item.reason}</span></span>
+      {:else}
+        <span class="label">{item.label}</span>
+      {/if}
       {#if item.detail}<span class="detail">{item.detail}</span>{/if}
       {#if item.kbd}<Kbd chord={item.kbd} />{/if}
     </button>
@@ -202,6 +232,35 @@
   button.off {
     opacity: 0.5;
     cursor: default;
+  }
+
+  /* Not available now: the label muted, its reason under it. */
+  button.why {
+    height: auto;
+    padding-block: var(--k-space-1);
+    color: var(--k-fg-muted);
+    cursor: default;
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .reason {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--k-font-size-xs);
+    color: var(--k-fg-subtle);
+  }
+
+  .group {
+    padding: var(--k-space-1) var(--k-space-4);
+    font-size: var(--k-font-size-xs);
+    color: var(--k-fg-subtle);
   }
 
   .icon {
