@@ -137,7 +137,9 @@ No status strip segment. The ticket status, the PR and its CI, the branch, `behi
 
 ### 2.5 The work menu (`⌘.`)
 
-`work.menu` opens a menu anchored to the Actions button of the focused tab's header, from any pane including terminals (it is a Mod chord, like `⌘K`). Single letters run actions; `Enter` runs the primary. Unavailable actions are listed but disabled with their reason in the tooltip, so the letters never move.
+`work.menu` opens a menu anchored to the Actions button of the focused tab's header, from any pane including terminals (it is a Mod chord, like `⌘K`). Single letters run actions; `Enter` runs the primary.
+
+It lists only what can run now (#405): the next step first (`Enter`, its own letter runs it too and is not listed twice), then the available actions grouped by what they act on: the work item, its ticket, its branch or PR. With no next step it starts with its first available action; "No next action" is never an entry. Actions of this kind of item that cannot run now come last, under **Not available now (n)**, each with its reason on a second line: at most 5, those whose group sits nearest the phase's stage (§2.2, the stage track) first. Actions that belong to one situation are left out while it does not hold: Continue / Abort rebase and Open conflicts without a stopped rebase, Skip step without a failed step, Link and Create ticket on a ticketed item, Open ticket without one, and a review checkout's read-only keys. The letters never change: a key whose entry is not available, listed or not, does nothing and flashes its reason (as outside the menu).
 
 | Key | Action | Notes |
 |---|---|---|
@@ -162,7 +164,7 @@ No status strip segment. The ticket status, the PR and its CI, the branch, `behi
 | `t` / `o` | Open ticket / Open PR on the host | |
 | `⇧F` | Finish… | always confirmed |
 
-**Review-kind items**: `p`, `r`, `f` and `l` are disabled with "Review checkout: read-only". A `kelta/pr-<n>` branch is never pushed or rebased.
+**Review-kind items**: `p`, `r`, `f`, `l`, `⇧T` and `⇧M` are not listed; their keys flash "Review checkout: read-only". A `kelta/pr-<n>` branch is never pushed or rebased.
 
 Plugin work actions (PLUGINS §4) follow the built-ins, with no letter. A queued row has no letter for Start now and Move to front: they are its primary button and its right-click menu. The same letters are shown on the ghost buttons of the expanded Now row. The same actions exist in the palette as "Work: …" commands for the focused item, so they are rebindable and searchable.
 

@@ -5,7 +5,7 @@
     label: string;
     /** The key or chord shown on the right of the menu entry. */
     key?: string;
-    /** Why it cannot run now: the entry stays, off, with this as its tooltip. */
+    /** Why it cannot run now: the entry goes under "Not available now" with this under its label (#405). */
     reason?: string | null;
     run: () => unknown;
   }
@@ -21,7 +21,8 @@
   import { t } from '$lib/i18n/index.svelte';
   import { Menu } from '$lib/ui';
 
-  // The `⋯` menu of a list row: every action of the row, each with its key on the right, like a menu bar.
+  // The `⋯` menu of a list row: the row's actions that can run, each with its key on the right like a
+  // menu bar, then the ones that cannot under "Not available now".
   interface Props {
     actions: readonly RowAction[];
     x: number;
@@ -37,8 +38,7 @@
     id: a.id,
     label: a.label,
     kbd: a.key,
-    disabled: !!a.reason,
-    title: a.reason ?? undefined,
+    reason: a.reason,
   }))}
   {x}
   {y}
