@@ -1,6 +1,6 @@
 # Pull requests
 
-**Pull requests** on the rail (`Cmd+Shift+R`, `Ctrl+Shift+R` on Linux) lists pull requests (merge requests on
+**Pull requests** in the sidebar (`Cmd+Shift+R`, `Ctrl+Shift+R` on Linux) lists pull requests (merge requests on
 GitLab) across every open project, next to your tickets. `All projects ▾` in the top bar narrows it to one
 project. Pull requests come from the code host account bound to each repository: GitHub, GitLab, Bitbucket Cloud
 and Gitea/Forgejo ([Bitbucket](bitbucket.md), [Gitea](gitea.md)).
@@ -58,7 +58,7 @@ In the list:
 | `d` | on yours, mark ready for review, or convert back to a draft |
 | `t` | put a local tag on the pull request |
 | `w` | run a workflow on the pull request |
-| `Cmd+Shift+R` (`Ctrl+Shift+R` on Linux) | refresh (outside a list or detail, it opens Reviews) |
+| `Cmd+Shift+R` (`Ctrl+Shift+R` on Linux) | refresh (outside a list or detail, it opens Pull requests) |
 | `Cmd+.` (`Ctrl+.` on Linux) | the selected pull request's actions in a menu, Open review first (`Enter` runs it); in the detail, its own actions |
 
 In the detail of someone else's pull request: `a` approve, `c` comment, `Shift+C` request changes, `s` review

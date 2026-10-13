@@ -51,7 +51,7 @@ the blocked ones.
 ### Focus mode
 
 `⇧⌘F` (`Ctrl+Shift+F` on Linux, or the prefix then `f`) hides the sidebar and the Story panel so only the work in
-front of you stays, with its work bar. While it is on, desktop notifications and background toasts about other work
+front of you stays, under its header. While it is on, desktop notifications and background toasts about other work
 (ready for review, approvals, checks, merges) wait. A blocked Claude still lights the "needs you" chip and still
 notifies, unless you turn off `notifications.focus_allow_blocked`. `Esc` `Esc` outside a terminal (inside one, `Esc`
 belongs to the program) or `⇧⌘F` again brings the layout back as it was, and one toast sums up what waited: "While

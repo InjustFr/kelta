@@ -18,8 +18,8 @@ You can do all of it by hand: see [getting started](getting-started.md#first-lau
 
 ## Status on every pane
 
-Kelta starts Claude with hooks that report its state: working, needs you, done. The state shows on the pane, its
-tab, the project in the rail and in the Queue. If Kelta cannot tell (the hooks are not installed in that session), the
+Kelta starts Claude with hooks that report its state: working, needs you, done. The state shows on the pane, its tab,
+its row in the sidebar and in the Queue. If Kelta cannot tell (the hooks are not installed in that session), the
 pane shows **Live status off** with a **Fix** button that opens Diagnostics.
 
 ## Tickets from any Claude session
@@ -52,10 +52,10 @@ A `claude` you start in another terminal can show in Kelta too, with its state. 
 The relay is `kelta-ctl hook --outside`. It reports a session only when Kelta runs, never fails Claude, and does
 nothing inside a Kelta pane (those report as usual).
 
-Such sessions are listed under **Elsewhere** in the rail and in the Queue, dimmed, with their state. One that needs you
+Such sessions are listed under **Other Claude sessions** in the sidebar and **Elsewhere** in the Queue, dimmed, with their state. One that needs you
 moves up to **Claude needs you**. If the session has a ticket, its row shows the state too.
 
-`Enter` or `g` on one (or a click in the rail) jumps to it:
+`Enter` or `g` on one (or a click in the sidebar) jumps to it:
 
 - if it runs in tmux (the default tmux server), Kelta selects its window and pane, and switches the client to it;
 - Kelta then raises the terminal window that owns it: on Hyprland and Sway the window of the closest parent
@@ -100,9 +100,9 @@ A workflow is a task for Claude that runs in the background in its own tab. Kelt
 `~/.claude/workflows/`. On a ticket, `w` runs one: Kelta claims the ticket for it, starts Claude in a new tab and
 tells it to run that workflow on the ticket. The run reports its phase, and the ticket's row shows it.
 
-A run that claimed a ticket shows its phase on that ticket: its row in the Queue, and its tab's row in the rail. Any
-other running run shows under its session's row in the rail (`<workflow> · <phase>`, `+N` when the session runs
-several). Click that line, or the `⚙` chip of the context bar, for the session's runs: they open beside its
+A run that claimed a ticket shows its phase on that ticket: its row in the Queue, and its tab's row in the sidebar. Any
+other running run shows under its session's row in the sidebar (`<workflow> · <phase>`, `+N` when the session runs
+several). Click that line, or the `⚙` chip of the top bar, for the session's runs: they open beside its
 terminal, in the same tab, so you can follow the run and talk to Claude at once.
 
 **Workflows from your config**: a prompt or a slash command, in `config.toml`:

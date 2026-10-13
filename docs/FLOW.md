@@ -17,14 +17,29 @@ And the two questions behind them, asked many times a day with many things in fl
 
 ## 1. Principles
 
+### 1.1 The map
+
+Kelta has three places and a sidebar (DESIGN §1.1):
+
+- **Queue** (§3): where all work waits, across projects, ranked by whose move it is: **Your move**, **Claude working**, **Waiting on others**. It answers both questions on one screen.
+- **Desk**: a work item's tab. Claude and nvim in panes, the desk header (key, title, why, the stage track, the next step, `Actions ⌘.`) and the Story panel, the item's story in stage order (§2.4).
+- **Library**: **Tickets** and **Pull requests**, the lists to pick work from, under the one project scope of the top bar (§3).
+- **Sidebar of work**: the three places, then each project's work items in a stable order (the order they started); every other tab folds into one **n more** row per project. It folds to its lamps while the Queue is shown.
+
+The loop runs through them: pick a ticket in the Library, start it (`s`), Claude works on the Desk, the Queue calls you back when it stops (`⌘J`), you review (`↵`), ship (`p`), and the pull request waits on others in the Queue until it merges.
+
+### 1.2 Rules
+
 - **The work item is the unit of parallel work.** One branch, one worktree, one Claude conversation, at most one PR, with or without a ticket. Everything Louis does to his own code goes through a work item.
-- **Every work item has exactly one next action**, derived from its state. The same action is `Enter` on its row in Now, the primary button in its work bar, and `⌘.` `Enter` from inside Claude or nvim. Learn one key, use it everywhere.
-- **Now answers both questions on one screen**, across all projects, ordered by what to do next, one row per thing. No per-project hunting.
+- **Every work item has exactly one next action**, derived from its state. The same action is `↵` on its row in the Queue, the primary button in its desk header, and `⌘.` `↵` from inside Claude or nvim. Learn one key, use it everywhere.
+- **Five keys first.** `↵` the next step, `⌘.` the actions of whatever is selected, `⌘K` find anything, `⌘J` the next thing that needs you, `⌘0` the Queue and back (§7). A letter means the same in every list (§3.3). The prefix reaches every action, and its which-key panel lists them.
+- **One call signal (the attention budget).** In the window only a Claude blocked on you calls: the top bar's "needs you" chip, the lit sidebar row. Everything else waits in the Queue without asking: a finished Claude does not notify by default (`notifications.claude_done`), and an info toast closes when you leave the view that raised it. Focus mode (§7) holds the other desktop notifications (review requests, checks, merges) and background toasts too, never a blocked Claude.
 - **"Claude finished" is durable** until Louis acts on it. A glance at a tab never clears it.
+- **Menus show what can run now.** What cannot comes last, with its reason (§2.5).
 - **Automatic when reversible, confirmed when destructive.** Reading state, fetching, moving a ticket after merge: automatic. Force push, removing a worktree: confirmed in one keystroke, never batched.
-- **No new polling.** State refreshes on events (hooks, `work.updated`, the review polls that already exist), on window focus, on startup and when Now opens.
+- **No new polling.** State refreshes on events (hooks, `work.updated`, the review polls that already exist), on window focus, on startup and when the Queue opens.
 - **Every flow is keyboard-complete**, including sheets, dialogs, toasts and stopped rebases (§7.1).
-- **No ticket source is an onboarding step, not an empty list.** With no `[[sources]]` board, Tickets (every scope, Home included) shows "Add a ticket source: pick a board" and **Pick a board**; Now shows "No ticket source yet · Pick a board" above its list, or as its empty state. The picker creates a source labelled after the board (feeding the project it was opened from, else none) and its toast "… added · Choose its projects" opens Settings → Sources on it.
+- **No ticket source is an onboarding step, not an empty list.** With no `[[sources]]` board, Tickets (every scope, Home included) shows "Add a ticket source: pick a board" and **Pick a board**; the Queue shows "No ticket source yet · Pick a board" above its rows; with no rows it shows **Your loop** until a first item has shipped (its second step is the board picker), else "Add a ticket source: pick a board" as its empty state. The picker creates a source labelled after the board (feeding the project it was opened from, else none) and its toast "… added · Choose its projects" opens Settings → Sources on it.
 
 ---
 
@@ -46,7 +61,7 @@ Work items are git worktrees. Sapling is not a work-item backend (§11.2).
 
 ### 2.2 Phase: one derived state, one next action
 
-`views/work/phase.ts` is a pure function, unit-tested, used by Now, the work bar, the tab lamp and the palette:
+`views/work/phase.ts` is a pure function, unit-tested, used by the Queue, the desk header, the sidebar lamp and the palette:
 
 ```ts
 phaseOf(item: WorkItem, claude: SessionInfo | null, pr: Review | null, git: GitStatus | null): Phase
@@ -55,9 +70,7 @@ phaseOf(item: WorkItem, claude: SessionInfo | null, pr: Review | null, git: GitS
 
 The first matching row wins. "Claude" below means the item's Claude session `status` (not `attention`).
 
-![Work bar in each phase](images/flow/f5-work-bar-states.png)
-
-| # | Condition | Label (detail) | Lamp | Primary action | Now section |
+| # | Condition | Label (detail) | Lamp | Primary action | Queue section |
 |---|---|---|---|---|---|
 | 0 | an open MCP `ask` question (#356) on the item's Claude, or on its run's session | the question | needs input | Go to Claude | Claude needs you |
 | 0a | a background run holds the item (`WorkItem.run`, #235) and is not done | {workflow} {phase} (the run's note) | working; blocked amber (error); failed red (needs input); orphaned none | none | In flight (blocked and failed: Claude needs you) |
@@ -88,7 +101,7 @@ Notes:
 - **Flow 2 ordering** (row 8 above row 11, and row 11's local-HEAD condition): after Claude fixes review feedback and stops, the PR head has not moved yet. The item must read To review, then Unpushed → Push, never "Changes requested" again. `phase.ts` tests cover: `changes_requested` + `review_due` + unpushed → To review; same after Mark reviewed → Unpushed (Push); after push with the decisive review on an older commit → In review.
 - "On the PR head" (row 11): a changes-requested review left on an older commit means Louis already pushed a fix; the item waits for re-review (row 17). Needs `Review.decision_head` (§8).
 - **Parked** (#142, `P` in the work menu, `claude.auto_park_after_mins`): Park stops the item's Claude and nvim and keeps the conversation; showing the item resumes it. A parked item keeps its phase, but a quiet lamp (none, activity, done) turns into a quiet hollow ring. Never offered while Claude works.
-- **Asking** (row 0, #356): Claude's MCP `ask` tool puts a question with one button per option on the item's row, in Now and in Peek. The Tickets list shows the question on one line above the buttons, the ticket detail the question, its Markdown body and the buttons (#375). A button pastes the option and Enter into the session. Any typed input clears the question. The buttons are off while the session is `needs_input`, because an Enter would answer a permission prompt.
+- **Asking** (row 0, #356): Claude's MCP `ask` tool puts a question with one button per option on the item's row, in the Queue (numbered in its brief, §3.2) and in Peek. The Tickets list shows the question on one line above the buttons, the ticket detail the question, its Markdown body and the buttons (#375). A button pastes the option and Enter into the session. Any typed input clears the question. The buttons are off while the session is `needs_input`, because an Enter would answer a permission prompt.
 - **GitLab** has no "changes requested" decision in today's adapter. Row 11 is derived from unresolved blocking discussions (`blocking_discussions_resolved = false` or `detailed_merge_status = discussions_not_resolved`) or a reviewer in GitLab 17 `requested_changes` state (§8).
 - `↓n` behind base is shown on every row and bar as meta, not as a phase. It only becomes a phase when the PR actually conflicts (row 12). Rebase stays one key away in the work menu.
 - Review-kind items use rows 1-5, then "Reviewing #n" (primary: Open review, the detail pane where Approve lives), then "Reviewed" once `my_state` is not pending (primary: Finish…), then "Updated since your review" when the head moved after my review (primary: Open review). `my_state` and head are refreshed per §3.6.
@@ -105,11 +118,11 @@ Clearing:
 - `review_due` is also cleared by a **UI** Ship or Push, Finish, and Mark reviewed (`R`, which also stamps `reviewed`). A Ship or push Claude does itself through MCP leaves it set: LLM work is not reviewed until Louis looks. Opening the diff does not clear it: Louis may stop halfway.
 - `claude_replied` is also cleared by Finish.
 
-Heuristic sessions (hooks inactive) never set either: a 3 s quiet guess would flood the queue. The work bar shows the existing "status hooks inactive · Fix" instead. A Claude adopted after Kelta quit with sessions left running keeps its hook status (#360): its hooks still arrive, only its `SessionStart` is past, so adoption sets the flag.
+Heuristic sessions (hooks inactive) never set either: a 3 s quiet guess would flood the queue. The Claude pane shows the existing "Live status off · Fix" instead. A Claude adopted after Kelta quit with sessions left running keeps its hook status (#360): its hooks still arrive, only its `SessionStart` is past, so adoption sets the flag.
 
 **Stop signals done.** A `Stop` ends in the session's `done` status and one desktop notification whose body is Claude's last message (first 200 characters): "SHOP-142 ready to review" or "SHOP-142: Claude finished" (a review checkout, which never sets the flags) with `notifications.claude_done` on (off by default), "SHOP-142: Claude replied" (no changes, Claude waits on you) with `notifications.claude_blocked` on (the default). It is skipped when the session's pane is visible in the focused window. Kelta sends it, not core, for a work item's hook-driven Claude. The relay's `Stop` line reaches the ctl socket even when `kelta-ctl` closes first (#366: macOS refused the peer check on a closed client and dropped the line, so nothing was marked done).
 
-**Return strip.** Leaving a work item's tab stamps `WorkItem.left_at` (`work_left`). Refocusing it after `work.return_brief_after_mins` (default 20) shows a dismissible strip under the work bar: the `next:` note, `+N/−M since you reviewed` and Claude's last message (folded). `v` opens the delta, `x` dismisses. Never while Claude is Working.
+**Since you left.** Leaving a work item's tab stamps `WorkItem.left_at` (`work_left`). Refocusing it after `work.return_brief_after_mins` (default 20) opens the Story panel's Since you left section (a closed panel shows itself for it): the `next:` note, `+N/−M since you reviewed` and Claude's last message (folded). `v` opens the delta, `x` dismisses. Never while Claude is Working.
 
 **Others' PRs.** Approving in Kelta stamps the approved head next to `seen_reviews` (`reviewed_sha`); hosts that report no `reviewed_head` (GitLab, Bitbucket, Gitea) read it back, so "Updated since your review" works there too.
 
@@ -123,25 +136,22 @@ Writes are field-level (§8): the hook listener never overwrites `pr_url` or `st
 
 | Place | What it shows |
 |---|---|
-| Tab | `[phase lamp] KEY title` (scratch: `wip title`). Mono key, lamp slot per DESIGN §6.3. |
-| Context bar (above the rail and all panes; DESIGN §6.3) | the breadcrumb only (`project › KEY title`); no work segment (#428). |
-| Header (above the tab's panes, survives pane zoom; DESIGN §6.3) | key, project and title; one sentence of why from Now's zone and the phase label and detail (`Your move: To review, +212 −3`; opens the Story panel); the stage track (`workStage`) with its stage named and the mark of whose move; primary button; **Actions ⌘.** menu. |
-| Story panel (docked right of the work tab, `⌘I`; DESIGN §6.4) | the item's story in stage order: Since you left (the return brief), Ticket, Claude, Changes, Pull request, Log (start steps, open by itself on a failed step with Retry / Skip step). The current stage's section is open, the others fold to a one-line summary. |
-| Rail row | a work tab's lamp (DESIGN §6.2) folds in `review_due`, `claude_replied` and work-item errors, not just sessions. |
-| Now | one row (§3). |
-| Palette | Work items group (§3.5). |
+| Sidebar row (DESIGN §6.2) | `[lamp] KEY title` and its stage word, in its project's band, in the order the work started. The lamp folds in `review_due`, `claude_replied` and work-item errors, not just sessions; a session that needs input lights the row. A workflow run adds its phase on a line under it. |
+| Top bar (DESIGN §6.3) | nothing of its own on the Desk: no breadcrumb, the desk header names the item. A Claude blocked on you counts in the "needs you" chip. |
+| Desk header (above the tab's panes, survives pane zoom; DESIGN §6.3) | key, project and title; one sentence of why, the Queue's zone and the phase label and detail (`Your move: To review, +212 −3`; opens the Story panel); the stage track (`workStage`) with its stage named and the mark of whose move; the primary button; **Actions ⌘.** (§2.5). |
+| Story panel (docked right of the Desk, `⌘I`; DESIGN §6.4) | the item's story in stage order: Since you left (the return brief), Ticket (status and acceptance criteria), Claude (status, task list, last message, cost), Changes (file by file since you looked), Pull request (checks, reviewers, threads), Log (start steps, open by itself on a failed step with Retry / Skip step). The current stage's section is open, the others fold to a one-line summary. |
+| Queue | one row in its section's zone, with its stage track and next step; selected, the brief beside the list (§3.2). |
+| Palette | Work items group (§3.5), and Recent once you have been there. |
 
-No status strip segment. The ticket status, the PR and its CI, the branch, `behind` and the cost are in the Story panel's summaries (Ticket, Pull request, Changes, Claude). `⌘↵` does not run the primary: `work.start` holds that chord (start the marked or selected tickets), and one chord binds one action; `⌘.` `↵` runs the primary from any pane, terminals included. `views/work/WorkContext.svelte` is the header, `views/work/StoryPanel.svelte` the Story panel (sections in `views/work/story/`, the return brief in `story/ReturnBrief.svelte`).
-
-![Work tab with the work bar and the work menu open (before the context bar, #248)](images/flow/f2-work-tab.png)
+No status strip segment. The ticket status, the PR and its CI, the branch, `behind` and the cost are in the Story panel's summaries. `⌘↵` does not run the primary: `work.start` holds that chord (start the marked or selected tickets), and one chord binds one action; `⌘.` `↵` runs the primary from any pane, terminals included. `views/work/WorkContext.svelte` is the header, `views/work/StoryPanel.svelte` the Story panel (sections in `views/work/story/`, the return brief in `story/ReturnBrief.svelte`).
 
 ### 2.5 The work menu (`⌘.`)
 
-`⌘.` works on any selection (#404): it opens the action menu of whatever has the keys. In the Queue, Tickets (list and board) and Pull requests it is the selected row's menu, anchored on the row like its `⋯`, the next step first and lit, so `⌘.` `↵` runs it; in a detail column (or a ticket detail in its own pane) that has the keys, the detail's More menu; on a work tab, the work menu below. With nothing selected it opens the palette, never a toast.
+`⌘.` works on any selection: it opens the action menu of whatever has the keys. In the Queue, Tickets (list and board) and Pull requests it is the selected row's menu, anchored on the row like its `⋯`, the next step first and lit, so `⌘.` `↵` runs it; in a detail column (or a ticket detail in its own pane) that has the keys, the detail's More menu; on the Desk, the work menu below. With nothing selected it opens the palette, never a toast.
 
-On a work tab, `work.menu` opens a menu anchored to the Actions button of the focused tab's header, from any pane including terminals (it is a Mod chord, like `⌘K`). Single letters run actions; `Enter` runs the primary.
+On the Desk, `work.menu` opens a menu anchored to the Actions button of the focused tab's header, from any pane including terminals (it is a Mod chord, like `⌘K`). Single letters run actions; `↵` runs the primary.
 
-It lists only what can run now (#405): the next step first (`Enter`, its own letter runs it too and is not listed twice), then the available actions grouped by what they act on: the work item, its ticket, its branch or PR. With no next step it starts with its first available action; "No next action" is never an entry. Actions of this kind of item that cannot run now come last, under **Not available now (n)**, each with its reason on a second line: at most 5, those whose group sits nearest the phase's stage (§2.2, the stage track) first. In the Queue, `⌘.` on a work row opens this menu too (#417): its Continue / Abort rebase and Skip step letters are not Queue keys. Actions that belong to one situation are left out while it does not hold: Continue / Abort rebase and Open conflicts without a stopped rebase, Skip step without a failed step, Link and Create ticket on a ticketed item, Open ticket without one, and a review checkout's read-only keys. The letters never change: a key whose entry is not available, listed or not, does nothing and flashes its reason (as outside the menu).
+It lists only what can run now: the next step first (`↵`, its own letter runs it too and is not listed twice), then the available actions grouped by what they act on: the work item, its ticket, its branch or PR. With no next step it starts with its first available action; "No next action" is never an entry. Actions of this kind of item that cannot run now come last, under **Not available now (n)**, each with its reason on a second line: at most 5, those whose group sits nearest the phase's stage (§2.2, the stage track) first. In the Queue, `⌘.` on a work row opens this menu too: its Continue / Abort rebase and Skip step letters are not Queue keys. Actions that belong to one situation are left out while it does not hold: Continue / Abort rebase and Open conflicts without a stopped rebase, Skip step without a failed step, Link and Create ticket on a ticketed item, Open ticket without one, and a review checkout's read-only keys. The letters never change: a key whose entry is not available, listed or not, does nothing and flashes its reason (as outside the menu).
 
 | Key | Action | Notes |
 |---|---|---|
@@ -168,7 +178,7 @@ It lists only what can run now (#405): the next step first (`Enter`, its own let
 
 **Review-kind items**: `p`, `r`, `f`, `l`, `⇧T` and `⇧M` are not listed; their keys flash "Review checkout: read-only". A `kelta/pr-<n>` branch is never pushed or rebased.
 
-Plugin work actions (PLUGINS §4) follow the built-ins, with no letter. A queued row has no letter for Start now and Move to front: they are its primary button and its right-click menu. The same letters are shown on the ghost buttons of the expanded Now row. The same actions exist in the palette as "Work: …" commands for the focused item, so they are rebindable and searchable.
+Plugin work actions (PLUGINS §4) follow the built-ins, with no letter. A queued row has no letter for Start now and Move to front: they are its primary button and its right-click menu. The same letters are shown on the action buttons of the Queue's brief. The same actions exist in the palette as "Work: …" commands for the focused item, so they are rebindable and searchable.
 
 ### 2.6 Claude in another terminal (#347)
 
@@ -185,9 +195,7 @@ Does not work, because Kelta cannot type into that Claude:
 
 ## 3. Queue: where all work waits
 
-![Queue](images/flow/f1-now.png)
-
-The Queue (named Now until #413) replaces the Inbox. It keeps the Inbox's plumbing (`⌘0`, action id `inbox.open`), so settings and keybindings do not break; only the label and contents change. "Now" named a moment; the Queue names the place where all work waits. On the rail it sits between the two other global views, in the order of the loop: **Tickets** (`⌘⇧B`, pick a ticket from any source), **Queue**, **Pull requests** (`⌘⇧R`, review PRs; named Reviews until #419). All three render in `GlobalHost` outside any project, live in the built-in `global` layout (one tab per view, its active tab the view shown: polled like a visible pane, restored on relaunch), and follow the "leaves the Queue" rule of §3.3. They share one project scope (#409, DESIGN §6.8): `All projects ▾` in each toolbar narrows all three to one project, switching view keeps it, and it is restored on relaunch. A project's Board, Reviews or Inbox is that global view scoped to it, never a tab: the commands that opened such a tab open the view instead, and saved tabs of these lists close on load, their project applied once as the scope.
+The Queue is the first of the three places, in the order of the loop: **Queue** (`⌘0`, action id `inbox.open`, pane kind `inbox`), **Tickets** (`⌘⇧B`, pick a ticket from any source), **Pull requests** (`⌘⇧R`, review PRs). Tickets and Pull requests are the Library. All three sit at the top of the sidebar, render in `GlobalHost` outside any project, live in the built-in `global` layout (one tab per place, its active tab the place shown: polled like a visible pane, restored on relaunch), and follow the "leaves the Queue" rule of §3.3. They share one project scope (DESIGN §6.8): `All projects ▾` in the top bar narrows all three to one project, switching place keeps it, and it is restored on relaunch. A project's tickets or pull requests are that place scoped to it, never a tab. While the Queue is shown the sidebar folds to its lamps: the Queue lists the same work.
 
 ### 3.1 Sections
 
@@ -202,14 +210,14 @@ Each row is one *thing*: a work item, a session that is not part of a work item,
 | Fix | error | my work items in phase rows 1, 3, 10, 11, 11a, 12; my PRs without a work item that have changes requested or failing checks | changes requested and new comments, checks failed, remote commits, conflicts, failed steps | Fix with Claude / Rebase / Retry |
 | Review requests | none (row lamp = local review Claude, if any) | PRs requesting my review with `my_state` pending, or a new head since my review | blocking first (I am the last required reviewer), then oldest request first | Open review |
 | Ship and clean up | none | phases 6, 7, 13-16, and reviewed review items | approved, unpushed, ready to ship, merged | per phase |
-| Claude working | working | work items that would be In flight whose Claude is `Working` or starting, and background runs in flight (#235, #413) | latest activity first | Go to work tab |
+| Claude working | working | work items that would be In flight whose Claude is `Working` or starting, and background runs in flight (#235) | latest activity first | Go to work tab |
 | In flight | none | everything else that is mine and unfinished: queued for a Claude slot, in review, idle | queued, then waiting on others (In review), then idle (No changes yet); latest activity first within each | Go to work tab |
 | Elsewhere | none | Claude sessions Kelta did not start (#345), dimmed, with their status; they need Kelta's hook relay in Claude Code's user settings (Settings → Claude, or the startup offer, `claude.hooks_offer`) | latest first | jump to their terminal window or tmux pane (#346) |
 | Blocked | none | tickets carrying their source's blocked marker (#348) that would be in Next up, New for you or Up next, and work items on a blocked ticket unless they are in Claude needs you, Ready for review or Fix (#390); rows wear the Blocked chip, and clearing the marker moves them back on the next refresh (Next up keeps their place) | work items in phase order, then tickets in Next up then tracker order | per row |
 | Up next | none | tickets assigned to me, not Done nor in their source's `waiting_statuses`, not blocked, with no unfinished work item and not in Next up; in-progress first, then tracker order; 10 max, then "Show all" (the Tickets view on Mine) | | Start work |
 | Waiting to deploy | none | collapsed until its header opens it (#391): tickets assigned to me (or in Next up) in their source's `waiting_statuses` and not Done, and the work items of such tickets unless they are in Claude needs you or Fix; rows show the status name (`A MEPP`, `A MEP`), a work row also its phase, whose actions (Ship and clean up) stay on the row. Not in the badge nor the header | work items, then Next up and tracker order | per row |
 
-Sections run in the order of the table above, grouped in three zones by whose move it is (#399, #413). Each zone has a sticky header with its count and a one-line hint (`.k-group-hint`):
+Sections run in the order of the table above, grouped in three zones by whose move it is. Each zone has a sticky header with its count and a one-line hint (`.k-group-hint`):
 
 | Zone | Sections | Hint |
 |---|---|---|
@@ -217,21 +225,29 @@ Sections run in the order of the table above, grouped in three zones by whose mo
 | Claude working | Claude working | Your parallel capacity: back in minutes. |
 | Waiting on others | In flight, Elsewhere, Blocked, Waiting to deploy | Reviewers, checks, deploys and blockers: hours or days. |
 
-Claude working is split from Waiting on others because a Claude at work is my parallel capacity, back in minutes, while reviewers, checks and deploys take hours or days. The header is one summary line, the zone counts in the scope (#409): `9 your move, 2 Claude working, 2 waiting on others`. The rail's Queue tile reads `9 your move`; its badge shows the sum of the first four sections. "needs you" is the same wording in the rail, the top-bar chip (#372) and the status strip. The dock badge stays "sessions needing input" (interrupt level only).
+Claude working is split from Waiting on others because a Claude at work is my parallel capacity, back in minutes, while reviewers, checks and deploys take hours or days. The header is one summary line, the zone counts in the scope: `9 your move, 2 Claude working, 2 waiting on others`. The sidebar's Queue row reads `9 your move`. Inside a zone the sections have no header of their own (Waiting to deploy keeps its fold line). "needs you" is the top bar's chip only: the sessions of Claude needs you, the one call signal (§1.2). The dock badge counts the same blocked sessions.
 
-### 3.2 Row grammar
+### 3.2 Row grammar and the brief
 
-DESIGN §6.8 row (`lamp | id | title | meta`) plus a 3px project-hue bar at the left edge (the raw project colour, as on rail tiles), so rows from many projects stay legible without grouping by project. The project name follows the title in 11px `--k-fg-subtle`. Scratch items show `wip` as their id.
+A row (DESIGN §6.8) is `id | title over its why line | stage track | next step | last change`, with a 3px project-hue bar at the left edge (the raw project colour, as on sidebar rows), so rows from many projects stay legible without grouping by project. Scratch items show `wip` as their id.
 
-Meta, right-aligned, tabular: the *reason* in `--k-fg` 12px (the one thing to read: "Changes requested, 3 threads", "Allow `pnpm test:int`?"), then diffstat (with a `dirty` tag when part of it is uncommitted) or PR number, `↓n {base}` when behind, age.
+- **Why line**, under the title: the one detail that says why, the thing to read (Claude's words or question, "Allow `pnpm test:int`?", the failed checks, who asked; a waiting-to-deploy row its tracker status), then a warning in `--k-warn` (`tests: none` when source changed) and the local tags. The project, diffstat, PR number and `↓n {base}` are the brief's facts.
+- **Stage track**: Ticket, Claude, PR, Review, Merge, Deploy. The line runs to the furthest stage reached and the mark sits where the item is now: filled when it is your move, a ring while it waits, a diamond when something broke.
+- **Next step**: the row's `↵` action as a button that runs it on a click; a row with none shows its state there ("Claude working").
+- **Last change**: the age, tabular; for Ready for review the wait since Claude stopped.
+- A row whose Claude asks (an MCP `ask`) has its option buttons on a line under it.
 
-A **waiting chip** (`waiting on Anna · 26h`, `waiting on Anna +2`, `waiting on you`; hover lists each person with the reason: review requested, changes requested so the author acts, assigned; an unmatched person adds "Not matched to a tracker / code host user") sits in Tickets rows next to the PR chip, in Pull requests rows on every tab, and in the Queue: a ticket row's detail line says `waiting on Anna (review) · 26h` instead of the bare assignee, and my PRs carry the Pull requests chip.
+A **waiting chip** (`waiting on Anna · 26h`, `waiting on Anna +2`, `waiting on you`; hover lists each person with the reason: review requested, changes requested so the author acts, assigned; an unmatched person adds "Not matched to a tracker / code host user") sits in Tickets rows next to the PR chip, in Pull requests rows on every tab, and in the Queue: a ticket row's why line says `waiting on Anna (review) · 26h` instead of the bare assignee, and my PRs carry the Pull requests chip.
 
-The **selected row expands** to a second line: Claude's last message for Claude needs you (`ClaudeMeta.preview`), the `next:` note and the first line of Claude's full final message for Ready for review (`m` unfolds the whole message line by line; the row's meta is the delta chip `212 lines · 9 files · tests: none · +1.8k generated`, `tests: none` in amber when source changed, and the age is the wait since Claude stopped), the first unresolved thread for Changes requested, failing check names for Checks failed, and the row's actions as buttons with their key (#397: they run on a click; Next up rows also reorder by dragging). Nothing else ever expands; rows stay 26px in `VirtualList`.
+The **brief** (`views/work/shared/Brief.svelte`) sits beside the list (under it in a narrow pane) and follows the selection: the id and title, where it stands, the next step (`↵`) and the two likely after it as buttons with their key, the rest behind **n more actions** (`.`), Claude's last message (folded after 6 lines, `e` unfolds it; for Ready for review the `next:` note and Claude's full final message, with the delta chip `212 lines · 9 files · tests: none · +1.8k generated`, `tests: none` in amber when source changed), and the facts (first unresolved thread, failing check names, the PR, the branch).
+
+**Answering Claude from the brief**: when the row's Claude asks a question, its options are numbered and `1`–`9` answer it; a **Reply to Claude** field under the message types the answer to a Claude that asks or replied (`work_send` rules: never into a permission prompt, which only offers Go to Claude). The draft clears when the selection moves.
+
+**First run**: while the Queue has no rows and no item has shipped yet, it shows **Your loop** (`views/onboarding/`): the stage track and the five steps of the loop (Add a project, Connect a ticket source, Start work on a ticket, Review what Claude changed, Ship), each checked off from real state, the current one with its button. It never shows again once a first item has shipped.
 
 ### 3.3 Keys in the Queue
 
-**One verb per letter** (#417): a letter means the same in the Queue, Tickets and Reviews, whatever the row; the menus, the hint lines and the `?` dialogs follow this table (`views/work/shared/keymap.ts`, held to it by its test). A blank cell: the key does nothing on that row.
+**One verb per letter**: a letter means the same in the Queue, Tickets and Pull requests, whatever the row; the menus, the hint lines and the `?` dialogs follow this table (`views/work/shared/keymap.ts`, held to it by its test). A blank cell: the key does nothing on that row.
 
 | Key | Verb | Ticket | My work | Someone's PR |
 |---|---|---|---|---|
@@ -258,26 +274,31 @@ The Queue's other keys:
 | `r` | Rebase |
 | `n` | open conflicts in nvim (Rebase stopped rows) |
 | `S` / `J` / `K` | Next up rows: start the top ones / move the row down / up |
-
-In the Tickets list (not the Queue; the rail's Tickets view, in the scope of §3; the board toggle shows once one source is in effect): `Enter` the next step (§3.3: a ticket with work runs its phase's action, another starts work), `1` `2` `3` Mine / Unassigned / Team, `f` `v` choose sources (all by default, "Add source…" at the end), `Shift+g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, Parent, None), `f` `s` current sprint only, `x` mark the ticket, `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `w` run a workflow (§4.8), `t` put a local tag on the ticket or take it off, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it, `g` moves the keys into it (`y` copies the branch there, `b` blocks or unblocks the ticket, `r` refines the ticket with Claude, `u` assigns to anyone the tracker offers, `!` changes the priority; in a narrow pane `g` opens the detail pane), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
-
-A ticket the source marks **blocked** (`b`; a flag, a label, a relation or a status, SETTINGS §2) shows a Blocked chip, sorts last in its group and lands in the **Waiting** flow group of the Tickets list (so does a ticket whose status reads blocked, on hold, waiting or impediment). Blocked tickets still count as unfinished work in the start sheet's finish-first list (§4.1).
+| `1`–`9` | answer the selected row's Claude question (§3.2) |
+| `.` | show every action of the brief |
 | `N` | New work item |
 | `P` | Park the work row (same gate as the work menu's `P`) |
 | `/` | filter on id, title, project, branch |
 | `⇧⌘R` | refresh |
+| `Esc` | clear the filter, then the marks, then the brief's extra actions; with nothing to clear, back where `⌘0` came from (§7) |
 
-Gating is the work menu's (§2.5): disabled keys on review items do nothing and flash the reason. Every action that leaves the Queue (or the Tickets and Pull requests views) **closes it and focuses the target in its project** (`ui.view = null` through `activateProject`, focus tab and pane: the target's rail row is selected); the project is the item's first, else the active one, never the `GLOBAL` sentinel. Panes opened from the Queue use `new_tab` placement with reuse (one tab per target), never a split inside whatever tab happened to be active. This fixes bug B1.
+In the Tickets list (not the Queue; the Library's Tickets, in the scope of §3; the board toggle shows once one source is in effect): `Enter` the next step (§3.3: a ticket with work runs its phase's action, another starts work), `1` `2` `3` Mine / Unassigned / Team, `f` `v` choose sources (all by default, "Add source…" at the end), `Shift+g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, Parent, None), `f` `s` current sprint only, `x` mark the ticket, `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `w` run a workflow (§4.8), `t` put a local tag on the ticket or take it off, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it, `g` moves the keys into it (`y` copies the branch there, `b` blocks or unblocks the ticket, `r` refines the ticket with Claude, `u` assigns to anyone the tracker offers, `!` changes the priority; in a narrow pane `g` opens the detail pane), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
+
+A ticket the source marks **blocked** (`b`; a flag, a label, a relation or a status, SETTINGS §2) shows a Blocked chip, sorts last in its group and lands in the **Waiting** flow group of the Tickets list (so does a ticket whose status reads blocked, on hold, waiting or impediment). Blocked tickets still count as unfinished work in the start sheet's finish-first list (§4.1).
+
+Gating is the work menu's (§2.5): disabled keys on review items do nothing and flash the reason. Every action that leaves the Queue (or the Tickets and Pull requests views) **closes it and focuses the target in its project** (`ui.view = null` through `activateProject`, focus tab and pane: the target's sidebar row is selected); the project is the item's first, else the active one, never the `GLOBAL` sentinel. Panes opened from the Queue use `new_tab` placement with reuse (one tab per target), never a split inside whatever tab happened to be active (bug B1).
 
 ### 3.4 Next waiting, without opening the Queue
 
-`attention.next` (`⌘J`, `⇧⌘J` back) is renamed "Next waiting" and walks the waiting rows of the Queue in priority bands (SPEC §4), *going* to each row's place (like `g`), cycling on repeat. The bands, most urgent first: needs input (including outside sessions), error (a broken item, or a Claude stopped by an API error), ready for review, feedback and red CI on my PRs, review requests (blocking first). From there `⌘.` `Enter` runs the action. So the whole day can be driven as: `⌘J`, look, `⌘.` `Enter`, repeat.
+`attention.next` ("Next waiting", `⌘J`, `⇧⌘J` back) walks the waiting rows of the Queue in priority bands (SPEC §4), *going* to each row's place (like `g`), cycling on repeat. The bands, most urgent first: needs input (including outside sessions), error (a broken item, or a Claude stopped by an API error), ready for review, feedback and red CI on my PRs, review requests (blocking first). From there `⌘.` `↵` runs the action. So the whole day can be driven as: `⌘J`, look, `⌘.` `↵`, repeat. `attention.peek` (`⇧⌘Y`) shows the waiting session in a popover to answer it without going there.
 
 ### 3.5 Palette
 
-- New group **Work items**: every unfinished work item, `[lamp] KEY title` with the phase label as meta. Matches key, title, branch. `Enter` goes to it (`work_resume` recreates a closed tab and resumes Claude).
-- Session rows that belong to a work item are named `KEY claude`, `KEY nvim` instead of three identical `claude` rows.
-- New commands: New work item, Work: Review diff / Ship / Push / Fix with Claude / Rebase / Continue rebase / Abort rebase / Mark reviewed / Link to ticket / Create ticket / Finish (focused item), Finish all merged, Run last toast action.
+`⌘K`, or the top bar's search field, finds anything (DESIGN §6.6).
+
+- Groups, in this order with an empty query: **Recent** (the last places you were, from the jumplist), **Work items** (every unfinished work item, `[lamp] KEY title` with the phase label as meta; matches key, title, branch; `↵` goes to it, `work_resume` recreates a closed tab and resumes Claude), **Sessions** (a work item's are named `KEY claude`, `KEY nvim`), **Projects**, **Actions**, **Tools**, **Commands**, **Tickets** (searched in the trackers), **Pull requests**, **Settings** (every key, opening its section).
+- Prefixes narrow the groups: `#` tickets, `!` pull requests, `>` actions, commands and tools, `,` settings.
+- Work commands: New work item, Work: Review diff / Ship / Push / Fix with Claude / Rebase / Continue rebase / Abort rebase / Mark reviewed / Link to ticket / Create ticket / Finish (focused item), Finish all merged, Run last toast action.
 
 ### 3.6 Freshness
 
@@ -301,11 +322,11 @@ Keystroke counts use macOS chords. Typing free text (a prompt, a search) counts 
 2. Start sheet (existing `StartWorkSheet`) with **Start focused**: `⌘↵`.
    - **Finish first** (#354, `work.finish_first`, default on). A new ticket start (never a Resume) with other work unfinished opens on that list: my unfinished work items, then my tickets in progress or in review that have none, closest to done first (merged, approved, in review, in progress), each with its phase or status and a Blocked chip when the tracker says so. A row goes to that item and closes the sheet. **Start anyway** (`Enter`) shows the plan. **Don't ask again** sets `work.finish_first = false`. It asks, it never forbids, and it shows even when `work.plan_preview` is off or the start was `S`.
    - Then the plan. Its first field is **Project** when several open projects have a repository: the default follows the six ticket rules of SPEC §3.1 (unfinished work item, explicit pick, source route, last pick for the source, the source's projects, the active project); when it is only a guess, the sheet always shows, focus starts on Project and a hint says Kelta will remember the pick. Under the Claude prompt sit the **start options** (#357): checkboxes (one value) and choices (several) that the ticket's route or the template declares (`options`, SETTINGS §2). The picked values go into the prompt at `{options}`, else after it; the last picks are remembered per route or template and a start without the sheet uses them. Assign me, move to In Progress and the comment run after the sessions are up (existing saga). The new work tab opens and takes focus (mock must do this too, bug B5).
-3. Claude works with the ticket file and the `ticket` prompt. The tab, tile and Now row show the working ring. Louis goes elsewhere.
-4. Claude stops with changes: `review_due` is set. Desktop notification "SHOP-142 ready to review" if the tab is not visible (§2.3). The item moves to **To review** in Now, with Claude's last message on the expanded row. (Claude stops with a question and no changes: `claude_replied`, the item moves to **Claude needs you** with the question as reason.)
+3. Claude works with the ticket file and the `ticket` prompt. The sidebar row and the Queue row show the working ring. Louis goes elsewhere.
+4. Claude stops with changes: `review_due` is set. Desktop notification "SHOP-142 ready to review" if the tab is not visible (§2.3). The item moves to **To review** in the Queue, with Claude's last message in the brief row. (Claude stops with a question and no changes: `claude_replied`, the item moves to **Claude needs you** with the question as reason.)
 5. Review, either way:
    - **In nvim**: `Enter` on the row (or `⌘J`, then `⌘.` `Enter`). `work_diff` opens a split in the work tab running `nvim` with `editor.review_args` rendered for this item, zoomed, cwd = worktree. The diff is **merge base to working tree**, so uncommitted work is included: for own work items `{range}` renders as `origin/{base}` (for example `-c "DiffviewOpen origin/{base}"`, no `...HEAD`). Closing it returns to the Claude + nvim layout. With `review_args` empty, it opens a shell pane running `git diff $(git merge-base origin/{base} HEAD)` through the user's pager. `review_args` now applies to own work items too, not only review items: one setting, one diff command. The row and bar show `dirty` next to `+ins −del` when part of the diff is uncommitted.
-   - **On GitHub**: `p` (Ship, §4.5) with Draft on. The PR opens in the browser with `⇧⌘O` (last toast action) or `o` in Now. There is no "compare page without a PR": reviewing on GitHub means a (draft) PR.
+   - **On GitHub**: `p` (Ship, §4.5) with Draft on. The PR opens in the browser with `⇧⌘O` (last toast action) or `o` in the Queue. There is no "compare page without a PR": reviewing on GitHub means a (draft) PR.
 6. Not happy: type into Claude (`g` then type). The prompt submit clears `review_due`; the next Stop sets it again. Happy: Ship. A UI Ship clears it.
 
 | | Before | After |
@@ -354,7 +375,7 @@ Own PRs in the PR detail pane no longer offer Approve / Request changes; they of
 
 ### 4.3 Flow 3: ticket-free (scratch) work
 
-1. `⇧⌘N` anywhere (or `N` in Now, palette "New work item", `kelta-ctl start --task "…"`). **New work item** sheet (`NewWorkSheet.svelte`, mockup `f4-new-work.png`):
+1. `⇧⌘N` anywhere (or `N` in the Queue, palette "New work item", `kelta-ctl start --task "…"`). **New work item** sheet (`NewWorkSheet.svelte`, mockup `f4-new-work.png`):
    - "What should Claude do?" textarea, focused. This text is the first prompt (`{task}` in `standalone`).
    - Project (active one), repo (only shown when the project has several), base, layout: prefilled, editable.
    - Branch: `wip/{slug}` from the first line, updated live while typing, editable. Validated with `git check-ref-format`.
@@ -375,7 +396,7 @@ Own PRs in the PR detail pane no longer offer Approve / Request changes; they of
 
 ### 4.4 Flow 4: rebase
 
-`⌘.` `r` (or `r` in Now, or primary action when the PR conflicts). `work_rebase{op: start}`:
+`⌘.` `r` (or `r` in the Queue, or primary action when the PR conflicts). `work_rebase{op: start}`:
 
 1. **Preconditions**, each refused with the reason and a way out, never worked around:
    - Claude `Working` or `NeedsInput` in this worktree: "Claude is working in this worktree. Rebase when it stops."
@@ -402,7 +423,7 @@ Rebase is single-item. No bulk update and no merge strategy (§11.2).
 
 ### 4.5 Ship
 
-`⌘.` `p` (or `p` in Now, or primary in Ready to ship). The existing Create PR dialog, renamed **Ship**:
+`⌘.` `p` (or `p` in the Queue, or primary in Ready to ship). The existing Create PR dialog, renamed **Ship**:
 
 - Title prefilled (ticket: `work.pr.title_template`; scratch: item title), Draft toggle (default `work.pr.draft`), `⌘↵`.
 - Claude `Working` or `NeedsInput` on this item: Ship, Push and Force push are refused, "Claude is working in this worktree. Ship when it stops." (same rule as rebase: never push a half-finished turn).
@@ -416,25 +437,25 @@ Rebase is single-item. No bulk update and no merge strategy (§11.2).
 ### 4.6 Merge, finish and clean up
 
 - Merging happens on the host. The Approved phase's action is Open PR. To skip the wait, **Merge when ready…** (`M` in the work menu, own open PR) arms the host's own auto-merge: pick the method (default `work.pr.merge_method`), and the host merges once approvals and checks pass. A host that refuses (auto-merge off for the repo, missing permission) shows its message and nothing is armed. The row reads `armed` and `⎇` carries a dot (`M` again disarms). When the PR merges, Kelta runs Finish by itself: stops the sessions, removes the worktree if it is clean and pushed, deletes the branch and moves the ticket as below. A closed PR, a Done status to choose or a dirty or unpushed worktree disarms it and leaves the item for the Finish dialog, with the reason in the phase detail.
-- When an authored PR leaves the open list, or the startup/Now-open check finds it closed (§3.6), Kelta publishes `pr.merged` or `pr.closed`. On `pr.merged`, kelta-work sets `state = merged` and applies `on_merge.transition_to` automatically, with a stricter pick than an interactive move: only transitions with `needs_fields = false`, and only for a Name target or a **single** category match. Otherwise (several Done candidates such as Done / Won't Do / Rejected, or fields required) the status is left as is, the phase detail says "choose Done status", and the Finish dialog shows the choice. A failed transition shows in the phase detail; it does not block Finish.
+- When an authored PR leaves the open list, or the startup/Queue-open check finds it closed (§3.6), Kelta publishes `pr.merged` or `pr.closed`. On `pr.merged`, kelta-work sets `state = merged` and applies `on_merge.transition_to` automatically, with a stricter pick than an interactive move: only transitions with `needs_fields = false`, and only for a Name target or a **single** category match. Otherwise (several Done candidates such as Done / Won't Do / Rejected, or fields required) the status is left as is, the phase detail says "choose Done status", and the Finish dialog shows the choice. A failed transition shows in the phase detail; it does not block Finish.
 - The item lands in **Ship and clean up** as "Merged". `Enter` opens the existing Finish dialog prefilled (stop sessions, remove worktree, delete local branch), `⌘↵` confirms. Dirty or unpushed worktrees keep today's "Force remove" danger path.
 - "Finish all merged" (palette) shows one dialog listing the merged items with clean worktrees and finishes them on one confirmation. Dirty ones are listed as skipped. This is the only bulk destructive action, and it touches only work whose PR is merged.
 - Review items finish the same way once I have reviewed (`my_state` not pending) or the PR is merged or closed.
 
 | | Before | After |
 |---|---|---|
-| Notice the merge | on GitHub; the item stays PR open forever | Merged row in Now, also for merges while Kelta was closed; ticket already moved when unambiguous |
+| Notice the merge | on GitHub; the item stays PR open forever | Merged row in the Queue, also for merges while Kelta was closed; ticket already moved when unambiguous |
 | Clean up | `⌘N`, `⇧⌘]`×k, click Finish, confirm: 3+k | `⌘0`, `j`×N, `Enter`, `⌘↵`: 3+N |
 
 ### 4.7 Reviewing other people's PRs
 
-- **Review requests** in Now, `Blocking: you're the last reviewer` first, then oldest request first (rows show the request age and diff size; GitHub: `reviewDecision` REVIEW_REQUIRED and every other user asked has reviewed since, request time from the `ReviewRequestedEvent` timeline; GitLab: `approvals_left` 1 with me among the approvers, request time from `/reviewers`, `updated_at` otherwise, diff size from `/changes`); a request comes back as "updated since your review" when the head moves after my review (detected by the `reviewed-by:@me` query and the `get` refresh, §3.6).
-- `Enter`: the review detail opens in the project's Pull requests tab (reused), Now closes (bug B1). Actions there, with keys: `a` Approve, `c` Request changes, `m` Comment, `o` Open on host, `s` Review locally.
+- **Review requests** in the Queue, `Blocking: you're the last reviewer` first, then oldest request first (rows show the request age and diff size; GitHub: `reviewDecision` REVIEW_REQUIRED and every other user asked has reviewed since, request time from the `ReviewRequestedEvent` timeline; GitLab: `approvals_left` 1 with me among the approvers, request time from `/reviewers`, `updated_at` otherwise, diff size from `/changes`); a request comes back as "updated since your review" when the head moves after my review (detected by the `reviewed-by:@me` query and the `get` refresh, §3.6).
+- `Enter`: the review detail opens in the project's Pull requests tab (reused), the Queue closes (bug B1). Actions there, with keys: `a` Approve, `c` Request changes, `m` Comment, `o` Open on host, `s` Review locally.
 - In the Pull requests view the detail sits in a column beside the list (SPEC §3.3): `Enter` focuses it and the same keys act there, `Esc` goes back to the list, `Shift+Enter` opens it in the project. Nothing leaves the view.
-- `o` in Now: open on the host. In the Pull requests view `w` runs a workflow on the PR (§4.8) and `t` puts a local tag on it (SPEC §3.4c).
+- `o` in the Queue: open on the host. In the Pull requests view `w` runs a workflow on the PR (§4.8) and `t` puts a local tag on it (SPEC §3.4c).
 - **My PRs** (Pull requests pane): `waiting on Anna · 26h` (names merged from tracker and code host, SPEC §3.4a), amber past `reviews.sla_hours`, for the reviewers still asked (since their latest request) or who requested changes before my last push (since the head commit; GitLab: `/reviewers` not reviewed yet). `n`: Re-request review from those it waits on (`CodeHost::rerequest_review` with `waiting_on`) or Comment ping (`reviews.nudge_template`); one nudge per PR per 24 h (`nudges` table), the picker greys both out meanwhile. No extra poll: the authored list query carries it.
 - **Team** (Pull requests pane, `2`): what the team ships on the repos of my sources' projects, mine included, with who each PR waits on; `G` groups the PRs by ticket so the api and web PRs of SHOP-142 sit together. A row opens in the split column like any other; `s` reviews it locally with the PR rules of the project binding its repo.
-- `s` (Now or detail), then `⌘↵`: review locally. Existing Review source: worktree on `kelta/pr-<n>`, `review` layout (Claude in plan mode with the `review` prompt, nvim with `review_args` diff, a shell with `git diff --stat`). The row stays in Review requests and shows the local Claude's lamp. The work bar's primary is **Open review**.
+- `s` (the Queue or the detail), then `⌘↵`: review locally. Existing Review source: worktree on `kelta/pr-<n>`, `review` layout (Claude in plan mode with the `review` prompt, nvim with `review_args` diff, a shell with `git diff --stat`). The row stays in Review requests and shows the local Claude's lamp. The work bar's primary is **Open review**.
 - Line comments without leaving Kelta: MCP tool `add_review_comment{path, line, body}` adds to a **pending (draft) review** on the host. Claude adds its findings, Louis asks it to add his own notes; the detail pane shows "n pending comments" and `a` / `c` / `m` submit them with the decision. No thread UI in Kelta.
 - When `my_state` stops being pending (submitted in Kelta or on github.com, seen by the `get` refresh), the row moves to Ship and clean up as "Reviewed", `Enter` = Finish (removes the review worktree).
 
@@ -445,7 +466,7 @@ A workflow is a prompt Claude runs in a background tab. Two kinds: saved `*.js` 
 - `pr`: `w` on a Pull requests row or in the review detail. It runs in the worktree of the PR's unfinished work item, else the repo bound to the PR's code host, in a tab named `<label> · <repo>#<n>`. It claims nothing; one run per PR is kept, and a second `w` opens the live one.
 - `global`: "Run <label>" in the palette, with no ticket and no PR.
 
-A running workflow can stop and ask: MCP `ask` (§2.2 row 0) shows its question with buttons on the ticket row, in Now and in Peek.
+A running workflow can stop and ask: MCP `ask` (§2.2 row 0) shows its question with buttons on the ticket row, in the Queue and in Peek.
 
 ---
 
@@ -453,7 +474,7 @@ A running workflow can stop and ask: MCP `ask` (§2.2 row 0) shows its question 
 
 | Action | Mode | Why |
 |---|---|---|
-| Fetch base and PR branches, compute ahead/behind/diffstat/remote_new | automatic, on Now open and window focus, 5 min floor per repo | read only |
+| Fetch base and PR branches, compute ahead/behind/diffstat/remote_new | automatic, on Queue open and window focus, 5 min floor per repo | read only |
 | Set and clear `review_due` / `claude_replied`, phase changes, `pr_url` backfill by branch | automatic | state |
 | Update `claude_uuid` from hooks | automatic | state |
 | Move ticket on start, on PR | automatic, per existing `work.on_*` settings | reversible, user-configured |
@@ -475,8 +496,8 @@ All follow DESIGN §6.13: one sentence saying what happened, one or two actions.
 
 | Situation | Where | Message and actions |
 |---|---|---|
-| Start step failed | work bar, Fix row | "Failed at tracker side effects: Redmine has no transition to In Progress." [Retry `Enter`] [Skip step `s`] |
-| Status hooks inactive | work bar | existing "status hooks inactive · Fix"; no To review / Claude replied signal for that item, a send to its live Claude is copied to the clipboard |
+| Start step failed | desk header, Fix row | "Failed at tracker side effects: Redmine has no transition to In Progress." [Retry `Enter`] [Skip step `s`] |
+| Status hooks inactive | desk header | existing "status hooks inactive · Fix"; no To review / Claude replied signal for that item, a send to its live Claude is copied to the clipboard |
 | Claude busy when sending feedback or conflicts | toast | "Claude is working: it gets your message when it stops." (held until its `Stop`) |
 | Claude busy on Ship / Push / Rebase | toast | "Claude is working in this worktree. {Action} when it stops." |
 | No free Claude slot (`claude.max_live`, #141) | Queued row, status strip "Claude 4/4 · 1 queued" | the item waits with its worktree ready and starts, oldest first, when a Claude exits. [Start now (over cap)] [Move to front] |
@@ -484,7 +505,7 @@ All follow DESIGN §6.13: one sentence saying what happened, one or two actions.
 | Claude's MCP ship in progress | toast | "Claude is shipping this item." |
 | Previous conversation gone (`--resume` exits fast) | toast | existing fallback to `--continue`, now with the same prompt, then: "Previous conversation not found; Claude continued the latest one in this worktree with your prompt." |
 | Feedback fetch failed (token scope, offline) | Fix sheet | "GitHub refused the review threads (403: token lacks `pull_requests:read`)." [Open account settings] [Send without feedback] |
-| Code host needs auth / offline | Now header | existing account banner; PR-based phases fall back to local phases and the header says "as of 14:02" |
+| Code host needs auth / offline | Queue header | existing account banner; PR-based phases fall back to local phases and the header says "as of 14:02" |
 | Rebase refused: dirty or Claude busy | toast with actions | §4.4 step 1 |
 | Rebase fetch failed | dialog | "Could not fetch origin/main (offline)." [Rebase onto last fetched main] [Cancel] |
 | Remote branch has commits not in my pre-rebase work | phase row 10 | "origin/feat/x has 2 commits you don't have (suggestions or Update branch)." [Rebase onto origin/feat/x] — Force push not offered |
@@ -492,34 +513,55 @@ All follow DESIGN §6.13: one sentence saying what happened, one or two actions.
 | Plain push rejected (non-fast-forward) | toast | "origin has commits you do not have." [Rebase] |
 | Merge transition ambiguous | phase detail, Finish dialog | "Merged. Choose Done status: Done / Won't Do." |
 | Ship with nothing to ship | Ship disabled | "No commits ahead of main." |
-| Worktree deleted outside Kelta | work bar, In flight row | "Worktree missing at ~/…/SHOP-142." [Recreate] (re-enters the saga) [Finish] (drops the record) |
+| Worktree deleted outside Kelta | desk header, In flight row | "Worktree missing at ~/…/SHOP-142." [Recreate] (re-enters the saga) [Finish] (drops the record) |
 | PR closed without merge | Ship and clean up | "PR #13 closed without merge." [Finish…] [Open PR] |
 
 ---
 
-## 7. Keyboard map (new and changed)
+## 7. Keyboard map
+
+**The five keys**, learned first and the same everywhere:
+
+| Key | macOS | Linux | Prefix | Action id | What it does |
+|---|---|---|---|---|---|
+| next step | `↵` | `Enter` | | (the list's or the header's primary) | the selected row's next step in any list; on the Desk `⌘.` `↵` from any pane, terminals included (§2.5) |
+| actions | `⌘.` | `Ctrl+.` | `.` | `work.menu` | the menu of what has the keys: a selected row, a detail, the Desk (§2.5); else the palette |
+| find anything | `⌘K` | `Ctrl+K`, `Ctrl+Shift+K` | `:` | `palette.open` | the palette (§3.5) |
+| next that needs you | `⌘J` (`⇧⌘J` back) | `Ctrl+J` (`Ctrl+Shift+J`) | `u` (`U`) | `attention.next` | goes to the next waiting row's place (§3.4) |
+| zoom out and back | `⌘0` | `Ctrl+0` | `0` | `inbox.open` | opens the Queue, recording the tab and pane that had focus as the way back (the `‹` tooltip names it); on the Queue, returns there through the jumplist, focused. The palette entry and the which-key panel only open it |
+
+`Esc` on the Queue clears what the list holds first (the filter, then the marks, then the brief's extra actions; an open menu closes itself) and, with nothing left to clear, goes back like `⌘0`.
+
+**The prefix** (`⌃⇧Space` on both, `keys.prefix`, then one key) reaches every action, terminals included. After `keys.prefix_hint_ms` (400ms) without a second key, the which-key panel lists the keys that follow: Go to, This work (on the Desk), Panes, Tools; the prefix stays armed until a key or `Esc`, and `?` opens Settings › Keys.
+
+The other window-level chords:
 
 | Action id | macOS | Linux | Prefix | Context |
 |---|---|---|---|---|
-| `inbox.open` (label "Open Queue") | `⌘0` | `Ctrl+0` | `0` | global, unchanged chord; on the Queue, the chord goes back (below); the palette entry and the HUD only open it |
-| `attention.next` (label "Next waiting") | `⌘J` | `Ctrl+J` | `u` | global, walks the Now queue (§3.4) |
-| `attention.peek` (label "Peek waiting session") | `⇧⌘Y` | `Ctrl+Shift+Y` | `y` | global, peek & reply without switching (#139) |
+| `tickets.open` ("Open tickets") | `⇧⌘B` | `Ctrl+Shift+B` | `t` | global, the Library's Tickets |
+| `reviews.open` ("Open pull requests") | `⇧⌘R` | `Ctrl+Shift+R` | `r` | global; in a list or detail that has the keys (Queue, Tickets, Pull requests, ticket and review details) the chord refreshes it instead: the key manager passes `chord`, the pane takes `kelta:refresh` (`use:onRefresh`), as `⌘.` takes `kelta:actions`. The prefix key and the palette always open Pull requests |
+| `nav.back` / `nav.forward` | `⌃⌘←` / `⌃⌘→` | `Ctrl+Alt+Shift+←` / `→` | `-` / `=` | global, the jumplist (the top bar's `‹ ›`) |
+| `attention.peek` ("Peek waiting session") | `⇧⌘Y` | `Ctrl+Shift+Y` | `y` | global, peek and reply without switching |
 | `work.new` | `⇧⌘N` | `Ctrl+Shift+N` | `w` | global |
-| `work.menu` | `⌘.` | `Ctrl+.` | `.` | global: the menu of what has the keys, a selected row, a detail or a work tab (§2.5); else the palette |
-| `toast.run_last` (label "Run last toast action") | `⇧⌘O` | `Ctrl+Shift+O` | `o` | global, runs the primary action of the most recent toast still shown |
-| `work.start` | `⌘↵` | `Ctrl+Enter` | `s` | unchanged; also submits every work sheet and dialog |
-| `reviews.open` (label "Open reviews") | `⇧⌘R` | `Ctrl+Shift+R` | `r` | global; the chord (not the leader key or the palette, which always open Reviews) in a list or detail that has the keys (Queue, Tickets, Reviews, ticket and review details) refreshes it instead (#417): the key manager passes `chord`, the pane takes `kelta:refresh` (`use:onRefresh`), as `⌘.` takes `kelta:actions` |
+| `work.story` ("Work: Story panel") | `⌘I` | `Ctrl+I`, `Ctrl+Shift+I` | | global, on the Desk: shows or hides the Story panel |
+| `work.start` | `⌘↵` | `Ctrl+Enter` | `s` | ticket views; also submits every work sheet and dialog |
+| `view.focus` ("Focus mode") | `⇧⌘F` | `Ctrl+Shift+F` | `f` | global (below) |
+| `rail.toggle` ("Toggle sidebar") | `⌘B` | `Ctrl+B` | `b` | global |
+| `project.goto.N` | `⌘1`–`⌘9` | `Ctrl+1`–`Ctrl+9` | `1`–`9` | global, the nth work row of the sidebar |
+| `tool.goto.N` | `⌥⌘1`–`⌥⌘9` | `Ctrl+Alt+1`–`9` | | global, a tool zoomed in the current tab |
+| `toast.run_last` ("Run last toast action") | `⇧⌘O` | `Ctrl+Shift+O` | `o` | global, runs the primary action of the most recent toast still shown |
+| `settings.open` | `⌘,` | `Ctrl+,` | `,` | global; Settings opens over the window, `Esc` or `⌘,` closes it |
 
-`⌘0` zooms out and back (#415): opening the Queue records the tab and pane that had focus as the way back (the `‹` tooltip names it); `⌘0` on the Queue returns there through the jumplist, focused. `Esc` on the Queue clears what the list holds first (the filter, then the marks, then the brief's extra actions; an open menu closes itself) and, with nothing left to clear, does the same.
+**Focus mode** (`view.focus`): the sidebar and the Story panel hide, the desk header stays. While it is on, background info toasts and the desktop notifications about other work are held; a blocked Claude still notifies and still lights the "needs you" chip (`notifications.focus_allow_blocked`). `Esc` `Esc` outside a terminal (inside one `Esc` belongs to the program; `view.unfocus` exists only while focus mode is on) or the chord again leaves it, the layout as it was, and one toast sums up what was held: "While you were focused: SHOP-12 ready to review, PR approved".
 
-Now's single keys are in §3.3, the work menu's in §2.5. If `⌘.` turns out to be swallowed by macOS cancel handling in the webview, rebind it; the prefix key `.` always works. Check this first when implementing, and check `⇧⌘O` against existing defaults.
+The Queue's single keys are in §3.3, the work menu's in §2.5.
 
 ### 7.1 Sheets, dialogs, toasts
 
 - Every sheet and dialog: `Tab` / `⇧Tab` move, `Space` toggles the focused checkbox or switch, `⌘↵` submits, `Esc` cancels. Focus starts on the main input.
 - Fix sheet: `j` / `k` move through feedback items (when focus is not in the prompt), `Space` toggles one.
 - Toasts are not focusable; their primary action runs with `⇧⌘O` (or palette "Run last toast action"). The key is printed on the toast's button.
-- Review detail: `a` Approve, `c` Comment, `⇧C` Request changes, `v` View changes, `o` Open on host, `s` Review locally (#417: `c` comments, as in every list).
+- Review detail: `a` Approve, `c` Comment, `⇧C` Request changes, `v` View changes, `o` Open on host, `s` Review locally (`c` comments, as in every list).
 
 ---
 
@@ -553,7 +595,7 @@ Store writes: `review_due`, `claude_replied`, `claude_uuid`, `sent_threads`, `pr
 
 CodeHost trait:
 - `feedback(&ReviewRef) -> Feedback` (GitHub: GraphQL `reviewThreads(isResolved:false)`, latest reviews, failed check runs + job log tail; GitLab: unresolved resolvable discussions, failed pipeline jobs + trace tail).
-- `state` (open/merged/closed) on `ReviewDetail`, used by the startup/Now-open check.
+- `state` (open/merged/closed) on `ReviewDetail`, used by the startup/Queue-open check.
 - GitLab `decision = ChangesRequested` from `blocking_discussions_resolved = false`, `detailed_merge_status = discussions_not_resolved`, or a reviewer in `requested_changes` state (GitLab 17+).
 - `rerequest_review`, `resolve_threads(ids)`, `add_pending_comment{path, line, body}`, and submit of the pending review with the decision.
 
@@ -564,7 +606,7 @@ Feeds (`kelta-core/src/feeds.rs`):
 - Authored reviews are joined to work items by `pr_url`, else `(repo, source_branch == item.branch)` with a `pr_url` backfill.
 
 Events and listeners:
-- Publish `pr.merged` (already declared) and new `pr.closed` when an authored PR leaves the open list, and from the startup/Now-open `get` check.
+- Publish `pr.merged` (already declared) and new `pr.closed` when an authored PR leaves the open list, and from the startup/Queue-open `get` check.
 - kelta-work listener on `claude.hook`: set/clear `review_due` and `claude_replied` (§2.3), update `claude_uuid` (B3). On `pr.merged` (idempotent per item): `state = merged` + the guarded `on_merge` transition (§4.6).
 - No new `UiEvent`: everything travels in `work.updated`.
 

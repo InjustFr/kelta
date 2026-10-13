@@ -31,8 +31,9 @@ Svelte 5 and Rust. The [user guide](docs/user/README.md) covers everything below
 
 - Jira, Redmine, GitHub Issues and Projects v2, GitLab, Gitea/Forgejo and Linear, several sources per project:
   [working with tickets](docs/user/tickets.md#sources).
-- **Tickets**, **Queue** and **Pull requests** on the rail work across every open project; the Queue shows where all work waits:
-  [first launch](docs/user/getting-started.md#first-launch).
+- The **Queue** shows where all your work waits, across projects, by whose move it is; **Tickets** and **Pull
+  requests** list what to pick from; each work item gets its own tab with Claude, nvim and its story:
+  [the loop](docs/user/getting-started.md#the-loop).
 - A keyboard-first list grouped by flow (Doing, Waiting, Ready), with a detail column, status moves and bulk
   moves, or a board: [keys](docs/user/tickets.md#keys).
 - Start work in the right project: Kelta proposes the ticket's project and remembers your pick; per-ticket options
@@ -55,7 +56,7 @@ Svelte 5 and Rust. The [user guide](docs/user/README.md) covers everything below
 **Claude integration**
 
 - Claude's state (working, needs you, done) on every pane, tab and project, from Claude Code hooks:
-  [next step](docs/user/tickets.md#next-step).
+  [status on every pane](docs/user/claude-code.md#status-on-every-pane).
 - Kelta's MCP ticket tools in any Claude session, not only the ones Kelta starts:
   [tickets from any Claude session](docs/user/tickets.md#tickets-from-any-claude-session).
 - Refine a ticket with Claude (`r`): acceptance criteria, open questions and sub-tasks to post or keep:
@@ -68,14 +69,14 @@ Svelte 5 and Rust. The [user guide](docs/user/README.md) covers everything below
 
 **Tools**
 
-- lazygit, lazydocker, k9s, `sl web` or an app like Fork, defined once in Global settings and opened from the tab
-  bar where you are: [tools](docs/user/tools.md).
+- lazygit, lazydocker, k9s, `sl web` or an app like Fork, defined once in Global settings and opened in the tab
+  you are on, from their key or the palette: [tools](docs/user/tools.md).
 
 **Interface**
 
 - English, French and German (`app.language`); a sidebar you can resize and collapse (`Cmd+B`, `Ctrl+B`);
   panes you drag to rearrange, or out of the window to open them in their own window; closed projects you can
-  reopen: [getting started](docs/user/getting-started.md#the-rail).
+  reopen: [getting started](docs/user/getting-started.md#the-sidebar).
 - Dark and light theme slots, and import from VS Code, iTerm2, Ghostty, Kitty, Alacritty or base16:
   [themes](docs/user/themes.md).
 
@@ -131,12 +132,14 @@ Closing the window keeps sessions running (background mode); `kelta-ctl toggle` 
 
 ## Quick start
 
-1. **Add a project**: **Add project** in the rail, or `kelta-ctl open ~/code/shop`.
+1. **Add a project**: **Add project** in the sidebar, or `kelta-ctl open ~/code/shop`.
 2. **Add a ticket source**: an account in Settings > Accounts, then **Pick a board** in Tickets (or **Add source**
    in Settings > Sources). Or let Claude do steps 1 and 2: the welcome sheet and the palette have **Set up with
    Claude**.
 3. **Start work on a ticket**: **Tickets** (`Cmd+Shift+B`), select one, press `s`.
-4. **Review a PR**: **Pull requests** (`Cmd+Shift+R`), select one, **Approve** or **Review locally**.
+4. **Review and ship**: when Claude stops, the item waits under Your move in the **Queue** (`Cmd+0`, or `Cmd+J`
+   for the next thing that needs you); `Enter` reviews its changes, `p` opens the pull request.
+5. **Review a PR**: **Pull requests** (`Cmd+Shift+R`), select one, **Approve** or **Review locally**.
 
 The details are in [getting started](docs/user/getting-started.md).
 

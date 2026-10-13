@@ -161,7 +161,7 @@ pub enum Matcher { Str(String) /* exact; "glob:…" ; "re:…" ; "!…" negation
 A command's `when` decides where the palette offers it: `terminal` with a focused terminal pane; `ticket` /
 `review` with a ticket / review detail pane focused, run with that ticket / PR; `work` with a focused work
 item tab, run with that item (as a work action, §4); `always` (or none) everywhere. Ticket, review and work
-commands are hidden on list panes and while Now or another global view is shown (no single subject).
+commands are hidden on list panes and while the Queue or another global view is shown (no single subject).
 
 ### 3.2 Examples
 
@@ -406,7 +406,7 @@ Every event carries `{name, ts, project_id?, session_id?, work_item_id?, payload
 | `pr.review_requested` | `{review: Review}` (new key only) |
 | `pr.updated` | `{review, changes: ["ci","decision","head"]}` |
 | `pr.ci_changed` | `{review, state, previous}` |
-| `pr.approved` / `pr.changes_requested` / `pr.merged` / `pr.closed` | `{review, linked_tickets}` (`pr.merged` / `pr.closed`: an authored PR left the open list, seen live or by the startup / Now-open check; `pr.closed` = closed without merge; once per PR) |
+| `pr.approved` / `pr.changes_requested` / `pr.merged` / `pr.closed` | `{review, linked_tickets}` (`pr.merged` / `pr.closed`: an authored PR left the open list, seen live or by the startup / Queue-open check; `pr.closed` = closed without merge; once per PR) |
 | `tool.opened` / `tool.exited` | `{tool_id, instance_id, code?}` |
 | `settings.changed` | `{paths, layers}` |
 | `custom.*` | arbitrary (from `kelta-ctl emit`) |
