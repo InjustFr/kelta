@@ -364,6 +364,27 @@ describe('nowSections', () => {
     expect(rows('in_flight').map((r) => r.type === 'work' && r.item.ticket?.key)).toEqual(['T-1']);
     expect(rows('fix').map((r) => r.type === 'work' && r.blocked)).toEqual([undefined]);
   });
+
+  it('a blocked ticket in a waiting status: Waiting to deploy wins, for the ticket and its work', () => {
+    const t = blockedTicket('W-1', 'in_progress');
+    const both = {
+      ...t,
+      ticket: { ...t.ticket, status: { ...t.ticket.status, name: 'A MEP' } },
+      source_ids: ['s'],
+    };
+    const merged = entry('merged', 'ship', { ticket: { account: 'jira', key: 'W-1', id: 'W-1' } });
+    const sections = nowSections({
+      ...empty,
+      work: [merged],
+      tickets: [both],
+      waiting: new Map([['s', ['A MEP']]]),
+    });
+    expect(sections.map((s) => [s.id, s.rows.map((r) => r.id)])).toEqual([
+      ['waiting', [`w:${merged.item.id}`]],
+    ]);
+    const row = sections[0]!.rows[0]!;
+    expect(row.type === 'work' && [row.status, row.blocked]).toEqual(['A MEP', undefined]);
+  });
 });
 
 describe('header and badge', () => {
