@@ -190,9 +190,13 @@
   "Collapse sidebar": "Seitenleiste einklappen",
   "Expand sidebar": "Seitenleiste ausklappen",
   "Sidebar width": "Breite der Seitenleiste",
-  "{n} mine": "{n} meine",
+  "{n} assigned to you": "{n} dir zugewiesen",
   "Nothing waiting": "Nichts wartet",
-  "{n} to review": "{n} zu prüfen",
+  "{n} ask for your review": {
+    "one": "{n} bittet um deine Prüfung",
+    "other": "{n} bitten um deine Prüfung"
+  },
+  "{n} more": "{n} weitere",
   "Open or create a project": "Projekt öffnen oder erstellen",
   "Add project": "Projekt hinzufügen",
   "Close {name}": "{name} schließen",
@@ -2277,6 +2281,7 @@
   "A Linear blocked-by relation to an open issue.": "Eine Linear-Beziehung „blockiert durch“ zu einem offenen Ticket.",
   "This label (case-insensitive).": "Dieses Label (ohne Groß-/Kleinschreibung).",
   "Elsewhere": "Anderswo",
+  "Other Claude sessions": "Andere Claude-Sitzungen",
   "Claude needs you, outside Kelta": "Claude braucht Sie, außerhalb von Kelta",
   "Claude working outside Kelta": "Claude arbeitet außerhalb von Kelta",
   "Claude stopped on an error, outside Kelta": "Claude wurde durch einen Fehler gestoppt, außerhalb von Kelta",

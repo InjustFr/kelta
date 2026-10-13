@@ -1,7 +1,7 @@
 // Project switching keeps sessions alive and re-uses pooled terminal views (ARCH §9.1, SPEC §1).
 import { expect, type Page, test } from '@playwright/test';
 
-import { activeProject, boot, callLog, callsOf, SESSIONS, waitForAttached } from './helpers';
+import { activeProject, boot, callLog, callsOf, SESSIONS, unfold, waitForAttached } from './helpers';
 
 test.describe('project switching', () => {
   test('never kills a session and re-attaches pooled views without a snapshot', async ({ page }) => {
@@ -55,7 +55,7 @@ test.describe('project switching', () => {
       page.evaluate(() =>
         document.querySelectorAll('.xterm').forEach((x) => x.setAttribute('data-warm', '')),
       );
-    await goto(4); // billing's work tab (rows: shop's three, then billing's)
+    await goto(2); // billing's work tab (work rows: shop's, then billing's)
     await expect(page.locator('[data-testid="workspace"][data-project-id="billing"] .xterm')).toHaveCount(3);
     await tag();
     await goto(1);
@@ -82,7 +82,7 @@ test.describe('project switching', () => {
         });
       const ms: number[] = [];
       for (let i = 0; i < 8; i += 1) {
-        window.__switchTo = i % 2 === 0 ? 'project.goto.4' : 'project.goto.1';
+        window.__switchTo = i % 2 === 0 ? 'project.goto.2' : 'project.goto.1';
         const sel =
           i % 2 === 0
             ? '[data-testid="workspace"][data-project-id="billing"] .xterm'
@@ -118,7 +118,7 @@ test.describe('project switching', () => {
     for (const t of measures.slice(-8)) expect(t).toBeLessThanOrEqual(50);
   });
 
-  test('rail: row lamps, Now badge and caption menu reorder', async ({ page }) => {
+  test('rail: row lamps, Now count and caption menu reorder', async ({ page }) => {
     await boot(page);
     const row = (tab: string) => page.locator(`[data-testid="rail-row"][data-tab-id="${tab}"]`);
     const billing = page.locator('[data-testid="rail-project"][data-project-id="billing"]');
@@ -128,8 +128,7 @@ test.describe('project switching', () => {
     // kelta-tools' Claude finished long ago: "done" comes from review_due, not the seen flag.
     const tools = row('kt-t1');
     await expect(tools).toHaveAttribute('data-attention', 'none');
-    await expect(page.getByTestId('inbox-badge')).toBeVisible();
-    // One count, never a truncated list (#386): what is my move (#399).
+    // One count on the sub line (#430): what is my move (#399).
     await expect(page.getByTestId('rail-inbox')).toHaveAttribute('title', /^Now: \d+ your move$/);
 
     // A Claude stop with changes lights the row.
@@ -191,6 +190,9 @@ test.describe('project switching', () => {
       }),
     );
     await expect.poll(() => activeProject(page)).toBe('billing');
+    // Not a work tab: it folds under billing's "n more", which wears the selection.
+    await expect(page.locator('[data-testid="rail-more"][data-project-id="billing"]')).toHaveClass(/active/);
+    await unfold(page, 'billing');
     await expect(page.getByTestId('rail-row').filter({ hasText: 'Diagnostics' })).toHaveCount(1);
     expect((await callsOf(page, 'session_kill')).length).toBe(0);
   });

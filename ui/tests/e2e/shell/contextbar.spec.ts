@@ -3,7 +3,7 @@
 // items in the stated order.
 import { expect, test, type Page } from '@playwright/test';
 
-import { boot } from './helpers';
+import { boot, unfold } from './helpers';
 
 const bar = (page: Page) => page.getByTestId('contextbar');
 
@@ -12,6 +12,7 @@ test('one 30px bar; the window title follows the breadcrumb', async ({ page }) =
   expect((await bar(page).boundingBox())?.height).toBe(30);
   await expect(page.getByTestId('titlebar')).toHaveCount(0);
   await expect(page).toHaveTitle(/^Shop › SHOP-142 Rate-limit login/);
+  await unfold(page, 'shop');
   await page.locator('[data-testid="rail-row"][data-tab-id="shop-t2"]').click();
   await expect(page).toHaveTitle('Shop › ~/code/shop-api');
   await page.getByTestId('rail-inbox').click();
@@ -23,6 +24,7 @@ test('a work tab has no header row: its panes start right under the bar, like an
   await boot(page);
   await expect(page.getByTestId('context-work')).toBeVisible();
   const workPanes = await page.getByTestId('panes').boundingBox();
+  await unfold(page, 'shop');
   await page.locator('[data-testid="rail-row"][data-tab-id="shop-t2"]').click();
   await expect(page.getByTestId('context-work')).toHaveCount(0);
   const shellPanes = await page.getByTestId('panes').boundingBox();
