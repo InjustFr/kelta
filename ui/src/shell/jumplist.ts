@@ -1,7 +1,7 @@
 // Jumplist (ticket #136): every focus change (Mod+J, notification click, kelta-ctl, rail, pane clicks)
 // is recorded; `nav.back` / `nav.forward` walk it.
 
-import type { PaneId, ProjectId, TabId } from '$lib/gen';
+import type { PaneContent, PaneId, ProjectId, TabId } from '$lib/gen';
 import { findPane } from '$lib/layout';
 import { GLOBAL, layout, projects, type GlobalView } from '$lib/stores';
 
@@ -75,6 +75,66 @@ function save(): void {
 
 function recordJump(loc: JumpLoc): void {
   if (jumplist.record(loc)) save();
+  // Also when `nav.back` lands here: the place focus rests on is the most recent one.
+  const place = placeOf(loc);
+  if (place) noteRecent(place);
+}
+
+// ---- recent places (#420) -------------------------------------------------------------------
+
+/** A place ⌘K lists under Recent: its palette item id, and what reopens a ticket / PR no list holds. */
+export interface RecentPlace {
+  id: string;
+  label: string;
+  project?: ProjectId;
+  content?: PaneContent;
+}
+
+export const RECENT_CAP = 8;
+const RECENT_KEY = 'kelta.recents.v1';
+
+let recent: RecentPlace[] = [];
+try {
+  const saved = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]') as unknown;
+  if (Array.isArray(saved)) recent = (saved as RecentPlace[]).slice(0, RECENT_CAP);
+} catch {
+  // storage unavailable or corrupt: start empty
+}
+
+/** Most recent first. */
+export const recentPlaces = (): readonly RecentPlace[] => recent;
+
+/** A visit: `place` moves to the front. */
+export function noteRecent(place: RecentPlace): void {
+  recent = [place, ...recent.filter((r) => r.id !== place.id)].slice(0, RECENT_CAP);
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+  } catch {
+    // storage unavailable: recents live for this window only
+  }
+}
+
+/** The place a pane location shows, in the ids the palette gives its items; null for other panes. */
+export function placeOf(loc: JumpLoc): RecentPlace | null {
+  if (loc.project === GLOBAL) return null;
+  const tab = layout.get(loc.project)?.tabs.find((t) => t.id === loc.tab);
+  const content = tab && findPane(tab.root, loc.pane)?.pane.content;
+  if (!tab || !content) return null;
+  const work = tab.work_item_id ?? (content.kind === 'work_item' ? content.id : null);
+  if (work) return { id: `work:${work}`, label: tab.title };
+  const reopen = { label: tab.title, project: loc.project, content };
+  switch (content.kind) {
+    case 'ticket_detail':
+      return { id: `ticket:${content.ticket.account}:${content.ticket.key}`, ...reopen };
+    case 'review_detail': {
+      const r = content.review;
+      return { id: `review:${r.account}:${r.repo}#${r.number}`, ...reopen };
+    }
+    case 'terminal':
+      return { id: `session:${content.session_id}`, label: tab.title };
+    default:
+      return null;
+  }
 }
 
 // A place counts once focus rests on it: a cross-project jump passes through the target's old
