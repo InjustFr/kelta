@@ -185,7 +185,9 @@ account, else in the browser; `P` always opens the browser. With several pull re
 ## Blocked tickets
 
 A ticket can be marked blocked without changing its status. A blocked ticket shows a Blocked chip, goes to
-Waiting in the Flow grouping and sorts last in its group.
+Waiting in the Flow grouping and sorts last in its group. In Now it leaves Next up, New for you and Up next for the Blocked
+section, with its work items unless they need you (Claude needs you, Ready for review, Fix); unblocked, it comes
+back on the next refresh.
 
 `b` in the detail (or **Block ticket** under More) blocks or unblocks. What it does depends on the source's
 `blocked` setting:

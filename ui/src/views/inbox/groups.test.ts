@@ -12,6 +12,7 @@ import {
   topChip,
   waitingCount,
   type NowInput,
+  type Section,
   type WorkEntry,
 } from './groups';
 
@@ -276,6 +277,55 @@ describe('nowSections', () => {
       waiting: new Map([['mine', ['A MEPP', 'A MEP']]]),
     });
     expect(sections.flatMap((s) => s.rows.map((r) => r.id))).toEqual(['t:jira:T-3', 't:jira:T-4']);
+  });
+
+  const blockedTicket = (key: string, category: TicketItem['ticket']['status']['category']): TicketItem => {
+    const t = ticket(key, category);
+    return { ...t, ticket: { ...t.ticket, blocked: true } };
+  };
+
+  it('Blocked tickets leave Up next, Next up and New for Blocked, and come back in place once cleared (#390)', () => {
+    const input = (b: typeof ticket): NowInput => ({
+      ...empty,
+      tickets: [b('T-1', 'in_progress'), ticket('T-2', 'todo'), b('F-1', 'todo'), b('N-1', 'todo')],
+      nextUp: [b('N-1', 'todo'), ticket('N-2', 'todo')],
+      parked: new Set(['jira:N-1']),
+      fresh: new Set(['jira:F-1']),
+    });
+    const ids = (sections: Section[], id: string) => sections.find((s) => s.id === id)?.rows.map((r) => r.id);
+    const blocked = nowSections(input(blockedTicket));
+    expect(blocked.map((s) => s.id)).toEqual(['next_up', 'blocked', 'up_next']);
+    expect(ids(blocked, 'next_up')).toEqual(['n:jira:N-2']);
+    expect(ids(blocked, 'blocked')).toEqual(['t:jira:N-1', 't:jira:T-1', 't:jira:F-1']);
+    expect(ids(blocked, 'up_next')).toEqual(['t:jira:T-2']);
+    expect(waitingCount(blocked)).toBe(0);
+
+    const cleared = nowSections(input(ticket));
+    expect(cleared.map((s) => s.id)).toEqual(['next_up', 'new', 'up_next']);
+    expect(ids(cleared, 'next_up')).toEqual(['n:jira:N-1', 'n:jira:N-2']);
+    expect(ids(cleared, 'up_next')).toEqual(['t:jira:T-1', 't:jira:T-2']);
+  });
+
+  it("a blocked ticket's work moves to Blocked unless it needs me (#390)", () => {
+    const on = (key: string) => ({ ticket: { account: 'jira', key, id: key } });
+    const work = [
+      entry('working', 'in_flight', on('B-1')),
+      entry('ready', 'ship', on('B-2')),
+      entry('checks_failed', 'fix', on('B-3')),
+      entry('to_review', 'to_review', on('B-4')),
+      entry('asking', 'needs_you', on('B-5')),
+      entry('working', 'in_flight', on('T-1')),
+    ];
+    const tickets = ['B-1', 'B-2', 'B-3', 'B-4', 'B-5'].map((k) => blockedTicket(k, 'in_progress'));
+    const sections = nowSections({ ...empty, work, tickets: [...tickets, ticket('T-1', 'in_progress')] });
+    const rows = (id: string) => sections.find((s) => s.id === id)?.rows ?? [];
+    expect(sections.map((s) => s.id)).toEqual(['needs_you', 'to_review', 'fix', 'in_flight', 'blocked']);
+    expect(rows('blocked').map((r) => r.type === 'work' && [r.item.ticket?.key, r.blocked])).toEqual([
+      ['B-1', true],
+      ['B-2', true],
+    ]);
+    expect(rows('in_flight').map((r) => r.type === 'work' && r.item.ticket?.key)).toEqual(['T-1']);
+    expect(rows('fix').map((r) => r.type === 'work' && r.blocked)).toEqual([undefined]);
   });
 });
 

@@ -26,6 +26,7 @@ export type NowSection =
   | 'ship'
   | 'in_flight'
   | 'elsewhere'
+  | 'blocked'
   | 'up_next';
 
 /** Ids of the work action registry (`actions.ts`). */
