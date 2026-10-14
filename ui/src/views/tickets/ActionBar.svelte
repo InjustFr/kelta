@@ -9,8 +9,8 @@
   import { blockedReason, MORE_CHORD, TICKET_ACTIONS, type TicketAction } from './caps';
   import { workflows } from './workflow.svelte';
 
-  // Ticket detail action bar (TICKETS.md T3): the primary action, one row of quiet secondary actions,
-  // and More for the rest. Keys show in tooltips and in the menu; every key works without the bar.
+  // Ticket detail action bar (TICKETS.md T3): Start (Resume) is always the primary, then Move and Comment
+  // (and Open PR once the ticket has one), and More for the rest. Keys show in tooltips and in the menu; every key works without the bar.
   // An action the tracker (or the ticket) cannot do stays visible in the row, off, with the reason as its
   // tooltip; in More it goes under "Not available now", its key flashing the reason (#405).
   interface Props {
@@ -18,8 +18,6 @@
     branch: string | null;
     /** A work item exists: Start reads Resume. */
     resume: boolean;
-    /** Unfinished work to open: only then is Start (Resume) the filled primary (#400). */
-    open?: boolean;
     /** Assigned to me: no Assign to me (#400). */
     mine?: boolean;
     onrun: (action: TicketAction) => void;
@@ -27,7 +25,7 @@
     projectId?: ProjectId | null;
   }
 
-  let { item, branch, resume, open = false, mine = false, onrun, projectId = null }: Props = $props();
+  let { item, branch, resume, mine = false, onrun, projectId = null }: Props = $props();
 
   /** Plugin actions run where the ticket's work runs, else in the ticket's (or the pane's) project. */
   const pluginCtx = $derived(ticketCtx(item.ticket.ref, item.work_item_id, item.project_ids, projectId));
@@ -46,8 +44,8 @@
     browser: t('Open in browser'),
     tag: t('Tags…'),
   });
-  /** The row; the rest of TICKET_ACTIONS goes under More. */
-  const ROW: readonly TicketAction[] = ['start', 'move', 'pr', 'assign', 'comment'];
+  /** The row; the rest of TICKET_ACTIONS goes under More. Open PR only joins it when the ticket has a PR. */
+  const ROW: readonly TicketAction[] = ['start', 'move', 'pr', 'comment'];
   const mac = currentPlatform() === 'macos';
   const chordText = (c: string): string => formatChord(c).join(mac ? '' : '+');
 
@@ -68,7 +66,7 @@
       chord: a.key === 'A' ? 'shift+a' : a.key,
     })),
   );
-  const row = $derived(actions.filter((a) => ROW.includes(a.id)));
+  const row = $derived(actions.filter((a) => ROW.includes(a.id) && (a.id !== 'pr' || item.prs.length > 0)));
   const more = $derived(actions.filter((a) => !ROW.includes(a.id)));
 
   let moreBtn = $state<HTMLElement>();
@@ -85,7 +83,8 @@
   {#each row as a (a.id)}
     <Button
       size="sm"
-      variant={a.id === 'start' && open ? 'primary' : 'ghost'}
+      variant={a.id === 'start' ? 'primary' : 'ghost'}
+      chord={a.chord}
       class={a.reason ? 'off' : ''}
       aria-label={a.label}
       aria-keyshortcuts={a.key === 'A' ? 'Shift+A' : a.key}

@@ -94,7 +94,7 @@ describe('TicketDetail', () => {
       within(bar)
         .getAllByRole('button')
         .map((b) => b.getAttribute('aria-keyshortcuts')),
-    ).toEqual(['s', 'm', 'p', 'a', 'c', 'Control+.']);
+    ).toEqual(['s', 'm', 'p', 'c', 'Control+.']);
     expect(action('Open PRs')).toBeTruthy(); // two PRs
     // the rest under More (Mod+. while the detail has the keys, #404), each with its key
     screen.getByTestId('ticket-detail').focus();
@@ -105,6 +105,7 @@ describe('TicketDetail', () => {
         .getAllByRole('menuitem')
         .map((b) => b.querySelector('.label')?.textContent),
     ).toEqual([
+      'Assign to me',
       'Unassign',
       'Block ticket',
       'Refine with Claude',
@@ -133,7 +134,7 @@ describe('TicketDetail', () => {
     expect(screen.getByLabelText(/Add a comment/)).toBeTruthy();
   });
 
-  it('opens on where it stands: the spec folded by heading, no Assign to me on my ticket, no filled Start without work (#400)', async () => {
+  it('opens on where it stands: the spec folded by heading, no Assign to me on my ticket (#400)', async () => {
     await tickets.load({ kind: 'all' }, null, false, 'mine');
     const mine = tickets.items({ kind: 'all' }, null, 'mine').find((i) => !work.forTicket(i.ticket.ref))!;
     render(TicketDetail, { props: { item: mine, projectId: 'shop', embedded: true } });
@@ -146,7 +147,7 @@ describe('TicketDetail', () => {
     ]);
     const bar = screen.getByRole('toolbar', { name: 'Ticket actions' });
     expect(within(bar).queryByRole('button', { name: 'Assign to me' })).toBeNull();
-    expect(action('Start work').classList.contains('primary')).toBe(false);
+    expect(action('Start work').classList.contains('primary')).toBe(true);
   });
 
   it('Resume work is the filled primary while the ticket has work under way (#400)', async () => {
@@ -207,14 +208,13 @@ describe('TicketDetail', () => {
 
   it('turns off what the tracker cannot do, with the reason, and a key says why', async () => {
     mount('#88'); // gitlab-corp: no assign, no comment, no PR, no branch
-    for (const [name, reason] of [
-      ['Assign to me', 'This tracker does not let Kelta change the assignee.'],
-      ['Comment', 'This tracker does not let Kelta add comments.'],
-      ['Open PR', 'No pull request is linked to this ticket yet.'],
-    ]) {
-      expect(action(name!).getAttribute('aria-disabled')).toBe('true');
-      expect(action(name!).title).toBe(reason);
-    }
+    expect(action('Comment').getAttribute('aria-disabled')).toBe('true');
+    expect(action('Comment').title).toBe('This tracker does not let Kelta add comments.');
+    expect(
+      within(screen.getByRole('toolbar', { name: 'Ticket actions' })).queryByRole('button', {
+        name: 'Open PR',
+      }),
+    ).toBeNull(); // no PR
     await fireEvent.click(action('More'));
     const branch = screen.getByRole('menuitem', { name: /^Copy branch/ });
     expect(branch.getAttribute('aria-disabled')).toBe('true');
@@ -226,7 +226,6 @@ describe('TicketDetail', () => {
     await fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     expect(action('Move').getAttribute('aria-disabled')).toBeNull();
     expect(screen.queryByLabelText(/Add a comment/)).toBeNull();
-    await fireEvent.click(action('Assign to me'));
     await fireEvent.keyDown(screen.getByTestId('ticket-detail'), { key: 'a' });
     expect(mock.calls.some((c) => c.cmd === 'tracker_assign')).toBe(false);
     expect(toasts.list.at(-1)?.toast.text).toBe('This tracker does not let Kelta change the assignee.');
