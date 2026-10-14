@@ -100,12 +100,13 @@ async fn queue_survives_a_restart_in_order() {
     let old = std::sync::Arc::downgrade(&w);
     drop(w);
     // A queue kick of the old service may still be in flight: it must end before the "restart".
-    for _ in 0..100 {
+    for _ in 0..500 {
         if old.strong_count() == 0 {
             break;
         }
-        tokio::task::yield_now().await;
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
+    assert_eq!(old.strong_count(), 0, "the old service is still running a task");
 
     // Restart: Claude is gone (the fake keeps it live; exit it without a listener), one slot frees.
     let sid = live_claude(&fx).into_iter().find(|s| s.work_item_id.as_ref() == Some(&a.id)).unwrap().id;
