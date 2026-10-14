@@ -52,6 +52,7 @@
     SECTIONS,
     STALE_DAYS,
     openDays,
+    ownStep,
     rowState,
     sectionItems,
     stackOrder,
@@ -590,7 +591,7 @@
             <span class="legend"
               >{#each AREAS as a (a)}<span><i class={a}></i>{t(AREA_LABEL[a])}</span>{/each}</span
             >
-            <span class="right">{t('Open')}</span><span></span>
+            <span>{t('Next step')}</span><span class="right">{t('Open')}</span><span></span>
           </div>
           <div class="list">
             <VirtualList
@@ -663,6 +664,21 @@
                     <span class="mapcell"
                       >{#if map}<ChangeMap {map} />{/if}</span
                     >
+                    <!-- Someone's PR: the button is what Enter runs. Mine: the Queue's step as words, it is acted on there. -->
+                    <span class="next">
+                      {#if mine}
+                        {@const step = ownStep(rv)}
+                        {#if step}<span class="step" data-next-text>{step}</span>{/if}
+                      {:else}
+                        <RowButton
+                          label={t('Open review')}
+                          onclick={() => {
+                            selId = l.id;
+                            void focusDetail();
+                          }}><span class="act" data-next>{t('Open review')}</span></RowButton
+                        >
+                      {/if}
+                    </span>
                     <span class="age" class:stale={!mine && days > STALE_DAYS}
                       >{days === 0 ? t('today') : t('{n} d', { n: days })}</span
                     >
@@ -847,10 +863,10 @@
     background: var(--k-bg-elev);
   }
 
-  /* number, title and state, the change map, the age, the row's menu: one grid for header and rows. */
+  /* number, title and state, the change map, the next step, the age, the row's menu: one grid for header and rows. */
   .grid {
     display: grid;
-    grid-template-columns: 60px minmax(0, 1fr) 170px 48px 24px;
+    grid-template-columns: 60px minmax(0, 1fr) 170px 110px 48px 24px;
     column-gap: var(--k-space-4);
     align-items: center;
     padding-inline: var(--k-space-4);
@@ -1057,6 +1073,42 @@
     min-width: 0;
   }
 
+  .next {
+    display: flex;
+    min-width: 0;
+  }
+
+  .next :global(.rb) {
+    max-width: 100%;
+  }
+
+  /* The Queue's next-step look (InboxPane). */
+  .act {
+    max-width: 100%;
+    padding: 3px var(--k-space-2);
+    border: 1px solid var(--k-border-strong);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-bg);
+    color: var(--k-fg);
+    font-size: var(--k-font-size-sm);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .act:hover {
+    background: var(--k-bg-active);
+  }
+
+  .step {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--k-font-size-sm);
+    color: var(--k-fg-muted);
+  }
+
   .age {
     white-space: nowrap;
     font-size: var(--k-font-size-xs);
@@ -1081,7 +1133,7 @@
     }
 
     .grid {
-      grid-template-columns: 60px minmax(0, 1fr) 120px 48px 24px;
+      grid-template-columns: 60px minmax(0, 1fr) 120px 110px 48px 24px;
     }
   }
 
@@ -1119,6 +1171,11 @@
     .row .mapcell {
       grid-column: 2 / 5;
       grid-row: 2;
+    }
+
+    .row .next {
+      grid-column: 2 / 5;
+      grid-row: 3;
     }
 
     .none {
