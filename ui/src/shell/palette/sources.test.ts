@@ -193,7 +193,7 @@ describe('palette sources', () => {
     const items = sessionItems();
     expect(items).toHaveLength(12);
     // Sessions of a work item are told apart by its key.
-    expect(items.map((i) => i.label)).toContain('SHOP-142 claude');
+    expect(items.map((i) => i.label)).toContain('SHOP-155 claude');
     expect(items[0]!.detail).toContain('Needs input');
     expect(items[0]!.detail).toContain('Billing');
     expect(items.every((i) => i.group === 'Sessions')).toBe(true);
