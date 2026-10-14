@@ -106,6 +106,8 @@ test.describe('keys', () => {
     await expect(panel).toBeVisible();
     await expect(panel.locator('[data-group="work"] h5')).toHaveText('This work: SHOP-142');
     await expect(panel.locator('[data-group="panes"]')).toContainText('Split right');
+    await expect(panel.locator('[data-group="work"] dt').first()).toHaveText('↵');
+    await expect(panel.locator('[data-group="goto"] dt')).toContainText(['0', '1–9']);
     await page.waitForTimeout(1200);
     await expect(page.getByTestId('status-prefix')).toBeVisible();
     await page.keyboard.press('Escape');
@@ -123,7 +125,7 @@ test.describe('keys', () => {
     await page.keyboard.press('Control+Shift+Space');
     const panel = page.getByTestId('which-key');
     await expect(panel).toBeVisible();
-    await expect(panel.locator('[data-group="goto"]')).toContainText('Open tickets');
+    await expect(panel.locator('[data-group="goto"]')).toContainText('Tickets');
     await expect(panel.locator('[data-group="work"]')).toHaveCount(0);
     await page.keyboard.press('?');
     await expect(panel).toHaveCount(0);

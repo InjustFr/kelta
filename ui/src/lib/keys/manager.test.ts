@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { KeysSettings } from '$lib/gen';
+import { ACTIONS } from '$lib/gen/actions';
 
-import { KeyManager, type KeyContext, type KeyManagerOptions } from './manager';
+import { HINT_TABLE, KeyManager, type KeyContext, type KeyManagerOptions } from './manager';
 
 const GLOBAL: KeyContext = { terminal: false, kind: null, textInput: false, overlay: false };
 const TERMINAL: KeyContext = { terminal: true, kind: 'shell', textInput: false, overlay: false };
@@ -604,27 +605,38 @@ describe('which-key panel', () => {
     }
   });
 
-  it('lists the prefix keys by group, the work group only on a work tab', () => {
+  it('lists the curated prefix keys by group, the work group only on a work tab', () => {
     const { manager } = timed();
     manager.handleKeyDown(prefix());
     const off = manager.prefixHints(false);
     expect(off.prefix).toBe('ctrl+shift+space');
     expect(off.groups.map((g) => g.group)).toEqual(['goto', 'panes', 'tools']);
     const goto = off.groups.find((g) => g.group === 'goto')!.hints;
-    expect(goto).toContainEqual({ key: 't', action: 'tickets.open', label: 'Open tickets' });
-    const panes = off.groups.find((g) => g.group === 'panes')!.hints.map((h) => h.key);
-    expect(panes).toContain('h');
-    expect(panes).not.toContain('ArrowLeft');
-    expect(panes).not.toContain('['); // terminal.copy: not runnable outside a terminal
+    expect(goto).toContainEqual({ key: 't', action: 'tickets.open', label: 'Tickets' });
+    expect(goto).toContainEqual({ key: '1–9', action: 'project.goto.1', label: 'Work row' }); // one line
+    const keys = off.groups.flatMap((g) => g.hints.map((h) => h.key));
+    expect(keys).not.toContain('ArrowLeft');
+    expect(keys).not.toContain('h'); // bound, not listed
+    expect(keys).not.toContain('['); // terminal.copy
 
     const on = manager.prefixHints(true);
     expect(on.groups.map((g) => g.group)).toEqual(['goto', 'work', 'panes', 'tools']);
-    expect(on.groups.find((g) => g.group === 'work')!.hints).toEqual([
-      { key: '.', action: 'work.menu', label: 'Work menu' },
-    ]);
+    expect(on.groups.find((g) => g.group === 'work')!.hints[0]).toEqual({
+      key: '↵',
+      action: 'work.next',
+      label: 'Next step',
+    });
   });
 
-  it('follows the focus of the prefix press and rebinds', () => {
+  it('curated groups: at most 6 lines, every action has a prefix key', () => {
+    for (const [group, lines] of Object.entries(HINT_TABLE)) {
+      expect(lines.length, group).toBeLessThanOrEqual(6);
+      for (const id of lines.flatMap((l) => l.actions))
+        expect(ACTIONS.find((a) => a.id === id)?.prefix, id).toBeTruthy();
+    }
+  });
+
+  it('rebinds keep their place in the panel', () => {
     let current = keys({ prefix_hint_ms: 400 });
     const m = new KeyManager({
       platform: 'linux',
@@ -634,7 +646,6 @@ describe('which-key panel', () => {
     });
     m.handleKeyDown(prefix());
     const keysOf = (): string[] => m.prefixHints(false).groups.flatMap((g) => g.hints.map((h) => h.key));
-    expect(keysOf()).toContain('[');
     current = keys({ prefix_hint_ms: 400, prefix_bindings: { 'tickets.open': 'T' } });
     m.refresh();
     expect(keysOf()).toContain('T');

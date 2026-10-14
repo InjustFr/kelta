@@ -2219,8 +2219,13 @@ export const settingsDefault: Settings = {
       "tickets.open": "t",
       "toast.run_last": "o",
       "view.focus": "f",
+      "work.edit_note": "e",
+      "work.go_claude": "g",
       "work.menu": ".",
       "work.new": "w",
+      "work.next": "Enter",
+      "work.review_delta": "v",
+      "work.ship": "d",
       "work.start": "s"
     },
     "prefix_hint_ms": 400,
