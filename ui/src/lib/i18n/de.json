@@ -422,6 +422,7 @@
     "other": "nvim hat {n} ungespeicherte Puffer behalten"
   },
   "Claude needs you": "Claude braucht Sie",
+  "Claude asks you to choose": "Claude bittet Sie, zu wählen",
   "Ready for review": "Bereit zum Review",
   "New for you": "Neu für Sie",
   "Review requests": "Review-Anfragen",

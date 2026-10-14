@@ -111,7 +111,7 @@
         onclick={() => tabId && story.setOpen(tabId, true)}>{head.why}</button
       >
     </div>
-    <span class="stage"><StageTrack stage={head.stage} named /></span>
+    <span class="stage"><StageTrack stage={head.stage} labels /></span>
     {#if phase.primary}
       <!-- The wrapper carries the blocked reason: a disabled button shows no tooltip in WebKit. -->
       <span class="primary" title={primaryBlocked ?? (phase.id === 'failed' ? phase.detail : undefined)}>
@@ -225,8 +225,9 @@
     color: var(--k-fg);
   }
 
+  /* Room for the six names in French and German (#438, DESIGN §6.14). */
   .stage {
-    flex: 0 1 240px;
+    flex: 0 1 340px;
     min-width: 140px;
   }
 
