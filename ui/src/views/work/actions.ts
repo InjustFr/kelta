@@ -35,7 +35,6 @@ import {
   rebaseStep,
 } from './fixloop.svelte';
 import { workActionDisabled } from './common';
-import { CLAUDE, PR, TICKET, workStage } from './stage';
 import { batch } from './batch.svelte';
 import { askerOf, claudeOf, phaseNow, prOf } from './live';
 import { draftBlocked, draftLabel, toggleDraft } from '../reviews/draft';
@@ -69,9 +68,8 @@ export interface WorkAction {
   soon?: true;
 }
 
-/** The work menu's groups, in order (#405, #439), with the stage each sits nearest to. */
+/** The work menu's groups, in order (#405, #439). */
 type WorkGroup = 'work' | 'ticket' | 'branch' | 'pr';
-const GROUP_STAGE: Record<WorkGroup, number> = { work: CLAUDE, ticket: TICKET, branch: PR, pr: PR };
 
 // A rebase is stopped while git has it open, also after Claude staged the last conflict.
 const stopped = (c: Ctx) =>
@@ -430,12 +428,11 @@ const chordOf = (key: string): string => (key === key.toLowerCase() ? key : `shi
 /**
  * The work menu's entries (FLOW §2.5, #405, #439): the next step first, then what can run now grouped
  * by object under a header (the work item, Ticket KEY, Branch name, Pull request #n), then the
- * blocked `soon` ones, nearest the phase's stage first. Other blocked actions are left out; every
- * letter still answers, the blocked ones with their reason.
+ * blocked `soon` ones. Other blocked actions are left out; every letter still answers, the blocked
+ * ones with their reason.
  */
 export function workMenu(item: WorkItem, phase: Phase = phaseNow(item)): MenuItem[] {
   const c = { item, phase };
-  const at = workStage(item, phase, null, false).at;
   const primary = phase.primary ? workAction(phase.primary) : null;
   const behind = work.git[item.id]?.behind ?? 0;
   const prNo = prOf(item)?.ref.number ?? item.pr_url?.match(/(\d+)\/?$/)?.[1];
@@ -478,8 +475,7 @@ export function workMenu(item: WorkItem, phase: Phase = phaseNow(item)): MenuIte
       else now.push({ ...e, separator: start > 0, group: heads[g] });
     }
   }
-  const dist = (e: MenuItem) => Math.abs(GROUP_STAGE[workAction(e.id as WorkActionId).group] - at);
-  return [...now, ...off.sort((a, b) => dist(a) - dist(b))];
+  return [...now, ...off];
 }
 
 /** Runs a work action; a blocked one flashes its reason instead. */
