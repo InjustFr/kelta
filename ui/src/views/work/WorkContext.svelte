@@ -10,8 +10,9 @@
   import { layout, projects, settings, tickets, work } from '$lib/stores';
   import { terminalPool } from '$lib/terminal';
   import { resolveProjectColor } from '$lib/theme';
-  import { Button, currentPlatform, Menu, type MenuItem } from '$lib/ui';
+  import { Button, currentPlatform, Kbd, Menu, type MenuItem } from '$lib/ui';
 
+  import { focus } from '../../shell/focus.svelte';
   import { focusedSessionId } from '../../shell/nav';
   import { pluginActions, runPluginAction, workCtx } from '../plugins/actions';
   import { blockedReason, runPrimary, runWorkAction, workMenu, type WorkAction } from './actions';
@@ -125,6 +126,18 @@
           {phase.primaryLabel}
         </Button>
       </span>
+    {/if}
+    {#if focus.on}
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-label={t('Leave focus')}
+        data-testid="work-leave-focus"
+        onclick={() => void focus.leave()}
+        >{t('Leave focus')}<span class="esc" aria-hidden="true"
+          ><Kbd chord="escape" /><Kbd chord="escape" /></span
+        ></Button
+      >
     {/if}
     <span class="menu" bind:this={workBtn}>
       <Button
@@ -245,6 +258,12 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .esc {
+    display: inline-flex;
+    gap: var(--k-space-1);
+    margin-left: var(--k-space-2);
   }
 
   .muted {

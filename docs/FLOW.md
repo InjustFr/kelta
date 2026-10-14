@@ -258,6 +258,8 @@ The **brief** (`views/work/shared/Brief.svelte`) sits beside the list (under it 
 | `m` | move the ticket | status picker | its ticket's status | |
 | `c` | comment | comment | | comment |
 | `e` | expand | | Claude's full message | |
+| `b` | mark for a batch start (`⌘↵` starts the marked) | mark | (the work menu's `b`: edit the `next:` note) | |
+| `Space` | show or hide the side panel | brief | brief | brief |
 | `/` `?` | filter, every key | | | |
 
 `⇧R` is only Mark reviewed (only with `review_due`); refresh is `⇧⌘R` in every list and detail (§7). Continue rebase, Abort rebase and Skip step keep their letters (`c`, `a`, `s`) inside the work menu only: `⌘.` on a work row of the Queue opens that menu, they are not list keys.
@@ -269,7 +271,7 @@ The Queue's other keys:
 | `j` / `k` | move |
 | `g` | go to the row's place without acting: work tab, session pane, review detail |
 | `p` | Ship / Push on a work item row |
-| `b` | Edit the `next:` note |
+| `b` | Edit the `next:` note on a work row (a ticket row: mark, above) |
 | `f` | Fix with Claude (Fix rows; on a PR without a work item, it first adopts the PR, §2.1) |
 | `r` | Rebase |
 | `n` | open conflicts in nvim (Rebase stopped rows) |
@@ -282,7 +284,7 @@ The Queue's other keys:
 | `⇧⌘R` | refresh |
 | `Esc` | clear the filter, then the marks, then the brief's extra actions; with nothing to clear, back where `⌘0` came from (§7) |
 
-In the Tickets list (not the Queue; the Library's Tickets, in the scope of §3; the board toggle shows once one source is in effect): `Enter` the next step (§3.3: a ticket with work runs its phase's action, another starts work), `1` `2` `3` Mine / Unassigned / Team, `f` `v` choose sources (all by default, "Add source…" at the end), `Shift+g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, Parent, None), `f` `s` current sprint only, `x` mark the ticket, `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `w` run a workflow (§4.8), `t` put a local tag on the ticket or take it off, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it, `g` moves the keys into it (`y` copies the branch there, `b` blocks or unblocks the ticket, `r` refines the ticket with Claude, `u` assigns to anyone the tracker offers, `!` changes the priority; in a narrow pane `g` opens the detail pane), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
+In the Tickets list (not the Queue; the Library's Tickets, in the scope of §3; the board toggle shows once one source is in effect): `Enter` the next step (§3.3: a ticket with work runs its phase's action, another starts work), `1` `2` `3` Mine / Unassigned / Team, `f` `v` choose sources (all by default, "Add source…" at the end), `Shift+g` cycle the grouping (Flow, Status, Priority, Sprint, Assignee, Source, Parent, None), `f` `s` current sprint only, `x` mark the ticket, `b` mark it for a batch start (`⌘↵` starts the marked tickets, on the board too), `Shift+j` / `Shift+k` extend the marks (`Esc` clears them), `m` open the status picker (on the marked tickets when there are any; `1`-`9` picks a transition, only statuses every marked ticket can reach are listed), `s` Start or Resume work through the plan sheet (`work.plan_preview`), `S` start with no sheet, `p` open the linked PR in the review detail (browser when the code host is not bound) and `P` always in the browser, `a` / `A` assign to me / unassign, `c` comment, `w` run a workflow (§4.8), `t` put a local tag on the ticket or take it off, `o` open in the tracker. The detail column on the right follows the selection: `Space` shows or hides it (in Pull requests too), `g` moves the keys into it (`y` copies the branch there, `b` blocks or unblocks the ticket, `r` refines the ticket with Claude, `u` assigns to anyone the tracker offers, `!` changes the priority; in a narrow pane `g` opens the detail pane), `Esc` returns them to the list, `Shift+Enter` opens the standalone detail pane.
 
 A ticket the source marks **blocked** (`b`; a flag, a label, a relation or a status, SETTINGS §2) shows a Blocked chip, sorts last in its group and lands in the **Waiting** flow group of the Tickets list (so does a ticket whose status reads blocked, on hold, waiting or impediment). Blocked tickets still count as unfinished work in the start sheet's finish-first list (§4.1).
 

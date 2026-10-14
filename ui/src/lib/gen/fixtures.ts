@@ -3923,6 +3923,11 @@ export const uiEventCtlCommand: UiEvent = {
   "type": "ctl.command"
 };
 
+export const uiEventFocusHeld: UiEvent = {
+  "count": 2,
+  "type": "focus.held"
+};
+
 export const uiEventUiOpen: UiEvent = {
   "project_id": "shop",
   "request": {
@@ -4114,6 +4119,7 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "ui_event_toast": uiEventToast,
   "ui_event_plugin_event": uiEventPluginEvent,
   "ui_event_ctl_command": uiEventCtlCommand,
+  "ui_event_focus_held": uiEventFocusHeld,
   "ui_event_ui_open": uiEventUiOpen,
   "ui_event_workflow_updated": uiEventWorkflowUpdated,
   "ui_event_quit_requested": uiEventQuitRequested,

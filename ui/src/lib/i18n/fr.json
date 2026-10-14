@@ -188,6 +188,11 @@
   "Toggle sidebar": "Afficher ou masquer la barre latérale",
   "Focus mode": "Mode concentration",
   "While you were focused: {what}": "Pendant votre concentration : {what}",
+  "Leave focus": "Quitter la concentration",
+  "{n} updates held until you leave focus": {
+    "one": "{n} mise à jour en attente jusqu’à la fin de la concentration",
+    "other": "{n} mises à jour en attente jusqu’à la fin de la concentration"
+  },
   "Collapse sidebar": "Réduire la barre latérale",
   "Expand sidebar": "Déplier la barre latérale",
   "Sidebar width": "Largeur de la barre latérale",
@@ -220,6 +225,8 @@
   "Create project from folder": "Créer un projet depuis un dossier",
   "Switch project": "Changer de projet",
   "Commands": "Commandes",
+  "Show or hide the brief": "Afficher ou masquer le résumé",
+  "Show or hide the detail": "Afficher ou masquer le détail",
   "Split": "Diviser",
   "done": "terminées",
   "Top sessions by spend": "Sessions les plus coûteuses",

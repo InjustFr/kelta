@@ -188,6 +188,11 @@
   "Toggle sidebar": "Seitenleiste ein-/ausblenden",
   "Focus mode": "Fokusmodus",
   "While you were focused: {what}": "Während des Fokusmodus: {what}",
+  "Leave focus": "Fokusmodus verlassen",
+  "{n} updates held until you leave focus": {
+    "one": "{n} Update wartet, bis Sie den Fokusmodus verlassen",
+    "other": "{n} Updates warten, bis Sie den Fokusmodus verlassen"
+  },
   "Collapse sidebar": "Seitenleiste einklappen",
   "Expand sidebar": "Seitenleiste ausklappen",
   "Sidebar width": "Breite der Seitenleiste",
@@ -220,6 +225,8 @@
   "Create project from folder": "Projekt aus Ordner erstellen",
   "Switch project": "Projekt wechseln",
   "Commands": "Befehle",
+  "Show or hide the brief": "Kurzinfo ein- oder ausblenden",
+  "Show or hide the detail": "Details ein- oder ausblenden",
   "Split": "Teilen",
   "done": "fertig",
   "Top sessions by spend": "Teuerste Sitzungen",

@@ -165,6 +165,11 @@ describe('ReviewsPane brief beside the list', () => {
     await fireEvent.keyDown(detail()!, { key: 'Escape' });
     expect(document.activeElement).toBe(pane());
     expect(JSON.stringify(layout.get('shop') ?? null)).not.toContain('"review_detail"');
+    // #440: Space hides and shows the detail; Enter shows it again too.
+    await fireEvent.keyDown(pane(), { key: ' ' });
+    expect(detail()).toBeNull();
+    await fireEvent.keyDown(pane(), { key: ' ' });
+    await waitFor(() => expect(detail()).not.toBeNull());
   });
 
   it('holding j through the list loads the detail of the row it stops on, not every row passed', async () => {
