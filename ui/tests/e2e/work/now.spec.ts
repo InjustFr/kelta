@@ -88,15 +88,13 @@ test('the work menu opens from a terminal with its chord; letters never move', a
   await page.keyboard.press('Control+Period');
   const menu = page.getByRole('menu', { name: 'Work' });
   await expect(menu).toBeVisible();
-  // 8 runnable entries and the 5 closest to the phase under "Not available now".
-  await expect(menu.getByRole('menuitem')).toHaveCount(13);
-  await expect(menu.getByText('Not available now (5)')).toBeVisible();
-  await expect(menu.locator('[aria-disabled="true"]')).toHaveCount(5);
-  // SHOP-142's Claude runs: Start Claude waits for an item without one.
-  await expect(menu.getByRole('menuitem', { name: /Start Claude/ })).toHaveAttribute(
-    'title',
-    'Claude is already running',
-  );
+  // 8 runnable entries headed by object, and Mark reviewed under "Not available now" (#439).
+  await expect(menu.getByRole('menuitem')).toHaveCount(9);
+  await expect(menu.getByText('Ticket SHOP-142')).toBeVisible();
+  await expect(menu.getByText('Not available now (1)')).toBeVisible();
+  await expect(menu.locator('[aria-disabled="true"]')).toHaveCount(1);
+  // SHOP-142's Claude runs: Start Claude is ruled out for the phase, so not listed.
+  await expect(menu.getByRole('menuitem', { name: /Start Claude/ })).toHaveCount(0);
   // Continue rebase never applies here: unlisted, its key still flashes why.
   await expect(menu.getByRole('menuitem', { name: /Continue rebase/ })).toHaveCount(0);
   await page.keyboard.press('c');
