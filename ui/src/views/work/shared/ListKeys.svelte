@@ -66,8 +66,11 @@
   </Dialog>
 {:else}
   <KeyPanel label={t('Keys')} groups={panel} data-testid="list-keys">
-    {#snippet foot()}<span>{t('Esc closes')}</span><button type="button" class="all" tabindex="-1" onclick={onopen}
-        ><Kbd chord="?" /> {t('All keys')}</button
+    {#snippet foot()}<span>{t('Esc closes')}</span><button
+        type="button"
+        class="all"
+        tabindex="-1"
+        onclick={onopen}><Kbd chord="?" /> {t('All keys')}</button
       >{/snippet}
   </KeyPanel>
 {/if}
