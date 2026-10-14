@@ -41,7 +41,7 @@ pub fn mcp_json(port: u16, sid: &str) -> Value {
     })
 }
 
-/// Lines past which `context.md` lists only a count (commits, uncommitted files).
+/// Entries `context.md` lists per list (commits, uncommitted files); past it, a `…` line.
 pub const CONTEXT_LIST_MAX: usize = 20;
 
 /// Facts rendered into `context.md`.
