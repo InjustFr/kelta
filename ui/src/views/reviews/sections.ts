@@ -111,3 +111,11 @@ export function openDays(rv: Pick<Review, 'created_at' | 'updated_at'>, now = Da
 
 /** Team PRs open longer than this are highlighted. */
 export const STALE_DAYS = 14;
+
+/** My PR's next step as the Queue words it (Fix with Claude, Nudge Bob); '' when it waits on nobody. */
+export function ownStep(rv: Pick<Review, 'decision' | 'ci' | 'waiting_on'>): string {
+  if (rv.decision === 'changes_requested') return t('Fix with Claude');
+  if (rv.ci === 'failure' || rv.ci === 'error') return t('Send failures to Claude');
+  const [who] = rv.waiting_on;
+  return who ? t('Nudge {name}', { name: who }) : '';
+}

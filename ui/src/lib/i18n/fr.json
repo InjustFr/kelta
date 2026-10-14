@@ -647,6 +647,7 @@
   "Comment ping": "Relance en commentaire",
   "Ping posted": "Relance publiée",
   "Review re-requested": "Revue redemandée",
+  "Nudge {name}": "Relancer {name}",
   "Nudge": "Relancer",
   "Other": "Autre",
   "Filter pull requests": "Filtrer les pull requests",
