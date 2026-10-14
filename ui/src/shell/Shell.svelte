@@ -5,7 +5,7 @@
 
   import type { AnyComponent } from '$app/registry';
   import { dispatch } from '$lib/actions';
-  import { setLocale, t } from '$lib/i18n/index.svelte';
+  import { setLocale, t, tn } from '$lib/i18n/index.svelte';
   import { onUiEvent } from '$lib/ipc/events';
   import { appInfo, sessionSpawnTemplate, terminalSetPalette } from '$lib/ipc/commands';
   import { keyManager } from '$lib/keys';
@@ -381,6 +381,11 @@
   <SheetHost />
   <DialogHost />
   <ToastHost />
+  {#if focus.held > 0}
+    <div class="held" role="status" data-testid="focus-held">
+      {tn('{n} update held until you leave focus', '{n} updates held until you leave focus', focus.held)}
+    </div>
+  {/if}
   <JumpHud />
   <PeekPopover />
 </main>
@@ -406,5 +411,19 @@
 
   .grow {
     flex: 1;
+  }
+
+  /* Focus mode (#442): what leaving will sum up, quiet at the bottom right, under the toasts. */
+  .held {
+    position: fixed;
+    right: var(--k-space-5);
+    bottom: calc(var(--k-statusbar-height) + var(--k-space-2));
+    padding: var(--k-space-1) var(--k-space-3);
+    border: 1px solid var(--k-border);
+    border-radius: 999px;
+    background: var(--k-bg-float);
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-sm);
+    pointer-events: none;
   }
 </style>

@@ -59,6 +59,16 @@ describe('work tab header', () => {
     await waitFor(() => expect(header.textContent).toContain('Rate-limit login attempts'));
     expect(header.dataset.phase).toBe('working');
     expect(header.querySelector('.track')?.getAttribute('data-mark')).toBe('wait');
+    // All six stages named, the current one bold (#438).
+    expect([...header.querySelectorAll('.track .name')].map((n) => n.textContent)).toEqual([
+      'Ticket',
+      'Claude',
+      'PR',
+      'Review',
+      'Merge',
+      'Deploy',
+    ]);
+    expect(header.querySelector('.track .name.now')?.textContent).toBe('Claude');
     expect(screen.getByTestId('work-why').textContent).toBe('Waiting on others: Claude working');
     // Status, PR, git and cost moved to the Story panel (#428).
     for (const id of ['work-status', 'work-phase', 'work-pr', 'ahead', 'work-branch'])
@@ -143,24 +153,44 @@ describe('work tab header', () => {
       'Ship',
       'Rebase onto main',
       'Mark reviewed',
-      'Start Claude',
-      'Park',
-      'Fix with Claude',
-      'Open PR',
     ]);
-    // Every entry that cannot run is in the last group, its reason on a second line.
-    const group = within(menu).getByText('Not available now (5)');
+    // Headed by object (#439); only what could run soon is under "Not available now", its reason below.
+    within(menu).getByText(`Ticket ${item(0).ticket!.key}`);
+    within(menu).getByText(`Branch ${item(0).branch}`);
+    const group = within(menu).getByText('Not available now (1)');
     const off = entries.filter((e) => e.getAttribute('aria-disabled') === 'true');
-    expect(off).toHaveLength(5);
-    for (const e of off)
-      expect(group.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(off).toHaveLength(1);
+    expect(group.compareDocumentPosition(off[0]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(off[0]!.querySelector('.reason')?.textContent).toBe('Nothing to review');
     // A letter not listed still answers with its reason, and the menu stays.
     await fireEvent.keyDown(menu, { key: 'c' });
     expect(toasts.list.at(-1)?.toast.text).toBe('Continue rebase: Only while a rebase is stopped');
-    await fireEvent.keyDown(menu, { key: 'M' }); // past the 5 listed
+    await fireEvent.keyDown(menu, { key: 'C' });
+    expect(toasts.list.at(-1)?.toast.text).toBe('Start Claude: Claude is already running');
+    await fireEvent.keyDown(menu, { key: 'M' });
     expect(toasts.list.at(-1)?.toast.text).toBe('Merge when ready…: Needs an open PR');
     expect(screen.getByRole('menu', { name: 'Work' })).toBeTruthy();
+  });
+
+  it("the mock's SHOP-155 and SHOP-120 menus are headed by ticket, branch and PR (#439)", async () => {
+    await reviews.load({ kind: 'all' }, 'authored', false);
+    const byKey = (key: string) => mock.state.work.find((w) => w.ticket?.key === key) as WorkItem;
+    const heads = async (w: WorkItem) => {
+      const { unmount } = mountHeader(w);
+      const menu = await openMenu();
+      const out = [...menu.querySelectorAll('.group')].map((e) => e.textContent);
+      workUi.menu = null;
+      unmount();
+      return out;
+    };
+    const shop155 = byKey('SHOP-155');
+    expect(await heads(shop155)).toEqual(
+      expect.arrayContaining(['Ticket SHOP-155', `Branch ${shop155.branch}`]),
+    );
+    const shop120 = byKey('SHOP-120');
+    expect(await heads(shop120)).toEqual(
+      expect.arrayContaining(['Ticket SHOP-120', `Branch ${shop120.branch}`, 'Pull request #305']),
+    );
   });
 
   it('plugin work actions come after the built-ins, without letters, and run with the work item', async () => {
@@ -188,7 +218,7 @@ describe('work tab header', () => {
     mountHeader(w);
     const menu = await openMenu();
     const entries = within(menu).getAllByRole('menuitem');
-    expect(entries.length).toBe(14); // the 8 that can run, the enabled plugin's action, then 5 not available
+    expect(entries.length).toBe(10); // the 8 that can run, the enabled plugin's action, then 1 not available
     const last = entries[8]!;
     expect(last.textContent).toContain('Deploy to QA');
     expect(last.textContent).toContain('QA');

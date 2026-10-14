@@ -24,6 +24,10 @@ export function heldSummary(held: readonly string[]): string | null {
 
 class FocusStore {
   on = $state(false);
+  /** What leaving will sum up so far: the held pill (#442). */
+  get held(): number {
+    return this.on ? (toasts.held?.length ?? 0) + toasts.heldRemote : 0;
+  }
   #unregister: (() => void) | null = null;
   /** The last `notify_focus` call: the next waits for it, so a quick on-off lands on the backend in order. */
   #sent: Promise<string[]> = Promise.resolve([]);
@@ -40,6 +44,7 @@ class FocusStore {
     if (this.on) return this.leave();
     this.on = true;
     toasts.held = [];
+    toasts.heldRemote = 0;
     // `Esc` `Esc` leaves (KeyManager): the action exists only while focus mode is on.
     this.#unregister = registerAction('view.unfocus', () => this.leave());
     await this.#send(true).catch((err: unknown) => toasts.error(err, t('Focus mode')));
@@ -52,6 +57,7 @@ class FocusStore {
     this.#unregister = null;
     const local = toasts.held ?? [];
     toasts.held = null;
+    toasts.heldRemote = 0;
     const remote = await this.#send(false).catch(() => [] as string[]);
     const text = heldSummary([...remote, ...local]);
     if (text) toasts.info(text, { view: null });

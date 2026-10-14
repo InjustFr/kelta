@@ -10,8 +10,9 @@
   import { layout, projects, settings, tickets, work } from '$lib/stores';
   import { terminalPool } from '$lib/terminal';
   import { resolveProjectColor } from '$lib/theme';
-  import { Button, currentPlatform, Menu, type MenuItem } from '$lib/ui';
+  import { Button, currentPlatform, Kbd, Menu, type MenuItem } from '$lib/ui';
 
+  import { focus } from '../../shell/focus.svelte';
   import { focusedSessionId } from '../../shell/nav';
   import { pluginActions, runPluginAction, workCtx } from '../plugins/actions';
   import { blockedReason, runPrimary, runWorkAction, workMenu, type WorkAction } from './actions';
@@ -111,7 +112,7 @@
         onclick={() => tabId && story.setOpen(tabId, true)}>{head.why}</button
       >
     </div>
-    <span class="stage"><StageTrack stage={head.stage} named /></span>
+    <span class="stage"><StageTrack stage={head.stage} labels /></span>
     {#if phase.primary}
       <!-- The wrapper carries the blocked reason: a disabled button shows no tooltip in WebKit. -->
       <span class="primary" title={primaryBlocked ?? (phase.id === 'failed' ? phase.detail : undefined)}>
@@ -125,6 +126,18 @@
           {phase.primaryLabel}
         </Button>
       </span>
+    {/if}
+    {#if focus.on}
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-label={t('Leave focus')}
+        data-testid="work-leave-focus"
+        onclick={() => void focus.leave()}
+        >{t('Leave focus')}<span class="esc" aria-hidden="true"
+          ><Kbd chord="escape" /><Kbd chord="escape" /></span
+        ></Button
+      >
     {/if}
     <span class="menu" bind:this={workBtn}>
       <Button
@@ -225,8 +238,9 @@
     color: var(--k-fg);
   }
 
+  /* Room for the six names in French and German (~240px, #438, DESIGN §6.14); 300px leaves the text block room above the 640px drop. */
   .stage {
-    flex: 0 1 240px;
+    flex: 0 1 300px;
     min-width: 140px;
   }
 
@@ -245,6 +259,12 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .esc {
+    display: inline-flex;
+    gap: var(--k-space-1);
+    margin-left: var(--k-space-2);
   }
 
   .muted {

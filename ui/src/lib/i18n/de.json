@@ -188,6 +188,11 @@
   "Toggle sidebar": "Seitenleiste ein-/ausblenden",
   "Focus mode": "Fokusmodus",
   "While you were focused: {what}": "Während des Fokusmodus: {what}",
+  "Leave focus": "Fokusmodus verlassen",
+  "{n} updates held until you leave focus": {
+    "one": "{n} Update wartet, bis Sie den Fokusmodus verlassen",
+    "other": "{n} Updates warten, bis Sie den Fokusmodus verlassen"
+  },
   "Collapse sidebar": "Seitenleiste einklappen",
   "Expand sidebar": "Seitenleiste ausklappen",
   "Sidebar width": "Breite der Seitenleiste",
@@ -425,6 +430,7 @@
     "other": "nvim hat {n} ungespeicherte Puffer behalten"
   },
   "Claude needs you": "Claude braucht Sie",
+  "Claude asks you to choose": "Claude bittet Sie, zu wählen",
   "Ready for review": "Bereit zum Review",
   "New for you": "Neu für Sie",
   "Review requests": "Review-Anfragen",
@@ -1460,6 +1466,9 @@
   "Searching…": "Wird gesucht…",
   "No ticket matches.": "Kein passendes Ticket.",
   "Not available now ({n})": "Gerade nicht verfügbar ({n})",
+  "Ticket {key}": "Ticket {key}",
+  "Branch {branch}": "Branch {branch}",
+  "Pull request #{n}": "Pull Request #{n}",
   "Move to…": "Verschieben nach…",
   "PR": "PR",
   "Work menu": "Arbeitsmenü",
@@ -2567,5 +2576,12 @@
   "Start work on a ticket": "Arbeit an einem Ticket beginnen",
   "Review what Claude changed": "Prüfen, was Claude geändert hat",
   "No tickets?": "Keine Tickets?",
-  "starts a branch and a Claude from one sentence.": "startet aus einem Satz einen Branch und einen Claude."
+  "starts a branch and a Claude from one sentence.": "startet aus einem Satz einen Branch und einen Claude.",
+  "Next that needs you": "Das Nächste, das dich braucht",
+  "Work row": "Arbeitszeile",
+  "Claude pane": "Claude-Bereich",
+  "Changes since you looked": "Änderungen seit deinem letzten Blick",
+  "Ship / Push": "Ausliefern / Pushen",
+  "Note for later": "Notiz für später",
+  "Tools here": "Werkzeuge hier"
 }
