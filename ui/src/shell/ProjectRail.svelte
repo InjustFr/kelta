@@ -1172,6 +1172,16 @@
     padding: 0;
   }
 
+  /* A row with no lamp (the socket renders nothing) shows a dim dot, so no tile reads as empty (#446). */
+  .compact .socket:empty::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--k-fg-muted);
+    opacity: 0.5;
+  }
+
   .compact .tab-row {
     gap: 2px;
     height: 28px;
