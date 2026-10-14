@@ -187,11 +187,11 @@ key and title, acceptance criteria written Given / When / Then are laid out as s
 editable); the fields that have a value (assignee, priority, sprint, due date, the source's fields, labels, last
 update); and the last 20 comments with a box to add one (`Cmd+Enter` posts).
 
-The action bar shows Start or Resume work `s`, then Move `m`, Open PR `p`, Assign to me `a` (not on a ticket already
-yours) and Comment `c`; Resume work is the filled button only while there is work to open. More (`Cmd+.`, `Ctrl+.` on
-Linux) holds Unassign `A`, Block ticket `b`, Refine with Claude `r`, Run workflow `w`, Copy branch `y`, Open in
-browser `o` and Tags `t`. Hover a button for its key; every key works without the bar. An action the tracker cannot
-do (a tracker without assignment or comments), or that has nothing to act on (no pull request yet, no branch yet),
+The action bar shows Start or Resume work `s`, always the filled button (when it is blocked it says why), then Move `m` and
+Comment `c`; Open PR `p` joins them only when the ticket has a pull request. More (`Cmd+.`, `Ctrl+.` on Linux) holds
+Assign to me `a` (not on a ticket already yours), Unassign `A`, Block ticket `b`, Refine with Claude `r`, Run workflow
+`w`, Copy branch `y`, Open in browser `o` and Tags `t`. Hover a button for its key; every key works without the bar. An
+action the tracker cannot do (a tracker without assignment or comments), or that has nothing to act on (no branch yet),
 stays visible but dimmed; hover it or press its key to read why.
 
 ## Pull requests
