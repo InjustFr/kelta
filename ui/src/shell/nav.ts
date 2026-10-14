@@ -117,11 +117,10 @@ export function openRow(r: RailRow): void {
   else if (r.tab) selectRow(r.project, r.tab.id);
 }
 
-/** A row's lamp: its Claude session's, its tab's, else its work item's phase. */
+/** A row's lamp: its session's (a Claude or Background row), else its tab's. */
 export function rowLamp(r: RailRow): Lamp {
   if (r.session) return sessionLamp(r.session);
-  if (r.tab) return tabAttention(r.tab);
-  return r.item ? phaseNow(r.item).lamp : 'none';
+  return r.tab ? tabAttention(r.tab) : 'none';
 }
 
 // shortcut: the active project's tool list (Home's in a global view) until #237 slice 6 makes the

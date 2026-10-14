@@ -460,7 +460,10 @@
           >{/if}
         <span class="key k-num">{key}</span>
         <span class="text"><span class="name">{itemTitle(item, tab, key)}</span></span>
-        <span class="stage" data-testid="rail-stage">{stageWord(item)}</span>
+        <!-- A work item's other background sessions (nvim, a shell) name themselves, so its rows differ. -->
+        <span class="stage" data-testid="rail-stage"
+          >{s && !tab && s.kind.type !== 'claude' ? sessionTitle(s) : stageWord(item)}</span
+        >
       {:else if s}
         {#if s.kind.type === 'claude'}<span class="kind glyph" aria-hidden="true">✻</span>{:else}<span
             class="kind"

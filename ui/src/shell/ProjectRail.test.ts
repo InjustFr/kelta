@@ -8,7 +8,7 @@ import { allPanes } from '$lib/layout';
 import { layout, projects, sessions, tools, ui, work } from '$lib/stores';
 
 import { confirms } from './confirm.svelte';
-import { statusLabel } from './labels';
+import { sessionTitle, statusLabel } from './labels';
 import { sidebar } from './sidebar.svelte';
 
 import '../views/tools/actions';
@@ -255,6 +255,11 @@ describe('ProjectRail', () => {
     expect(first.classList).toContain('background');
     expect(first.querySelector('.key')?.textContent).toBe('SHOP-142');
     expect(first.title).toBe(`Shop › SHOP-142 ${first.querySelector('.name')?.textContent}`);
+    // The item's nvim names itself in the stage slot, so the two rows differ.
+    expect(rows().map((e) => e.querySelector('[data-testid="rail-stage"]')?.textContent)).toEqual([
+      'Claude',
+      sessionTitle(sessions.get(rows()[1]!.dataset.sessionId!)!),
+    ]);
     await fireEvent.keyDown(window, { key: 'Meta', metaKey: true, ctrlKey: true });
     expect(section()!.querySelector('.index')).toBeNull();
     await fireEvent.keyUp(window, { key: 'Meta' });
