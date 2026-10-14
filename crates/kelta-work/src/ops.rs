@@ -502,9 +502,10 @@ impl WorkService {
         let items = self.store.list_items(None).await?;
         let ours = items.into_iter().filter(|w| w.pr_url.as_deref() == Some(review.url.as_str()));
         for it in ours {
-            let merging = self.merge_lock.lock().await;
             let lock = self.item_lock(&it.id);
             let guard = lock.lock().await;
+            // After the item lock: a busy item (Ship/Finish) must not stall every other merge.
+            let merging = self.merge_lock.lock().await;
             let mut item = self.load(&it.id).await?;
             if item.state.pr_done() || matches!(item.state, WorkState::Finished | WorkState::Failed { .. }) {
                 continue;
@@ -528,8 +529,8 @@ impl WorkService {
                 env.core.toast(Toast::warn(format!("{key} merged · auto-finish skipped: {why}")));
             }
             // Finish takes the item lock itself.
-            drop(guard);
             drop(merging);
+            drop(guard);
             self.auto_finish(&item).await;
         }
         Ok(())
