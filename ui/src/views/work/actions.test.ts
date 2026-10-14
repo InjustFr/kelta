@@ -204,12 +204,7 @@ describe('work menu: what can run now, then Not available now (#405, #439)', () 
     rebase_stopped: [{ rebase } as Patch, 'done', 'resolve', '⏎ | v V b g P F | t | p r c a n / R'],
     needs_you: [{}, 'needs_input', 'go_claude', '⏎ | v V b P F | t | p r / R'],
     working: [{}, 'working', null, 'v V b g F | t | p r / R'],
-    merged: [
-      { state: { kind: 'merged', detail: null } },
-      null,
-      'finish',
-      '⏎ | v V b g C | t | p r / R',
-    ],
+    merged: [{ state: { kind: 'merged', detail: null } }, null, 'finish', '⏎ | v V b g C | t | p r / R'],
     closed: [{ state: { kind: 'pr_closed' } }, null, 'finish', '⏎ | v V b g C | t | p r / R'],
     to_review: [{ review_due: true }, 'done', 'review_delta', '⏎ | V R b g P F | t | p r / '],
     replied: [{ claude_replied: true }, 'done', 'go_claude', '⏎ | v V b P F | t | p r / R'],
@@ -257,7 +252,10 @@ describe('work menu: what can run now, then Not available now (#405, #439)', () 
       expect(`${letters(now)} / ${off.map((e) => e.key).join(' ')}`, id).toBe(want);
       expect(off.every((e) => e.reason)).toBe(true);
       // Start Claude, Park and Merge when ready never sit under "Not available now" (#439).
-      expect(off.filter((e) => ['C', 'P', 'M'].includes(e.key!)), id).toEqual([]);
+      expect(
+        off.filter((e) => ['C', 'P', 'M'].includes(e.key!)),
+        id,
+      ).toEqual([]);
     }
   });
 
