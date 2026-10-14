@@ -419,7 +419,6 @@ The sidebar lists work, not tabs: the three places, then each project's unfinish
   - **Log**: Kelta's start steps; it opens by itself when a step failed, with **Retry** and **Skip step** on it.
 
   A section is a 1px `--k-border`-ruled header, the title in 600 and a one-line `--k-fg-muted` summary on the right (ellipsis); the section of the item's current stage (the stage track, `stage.ts`) is open and its title takes `--k-fg`, the others fold to their header. The start saga's progress pane (`work_item`) is the same panel; a tab that shows it docks none.
-
 - **Own window**: a pane menu item, a tab's row menu, or a drag out of the window moves a tab to a second window. That window shows the tab alone under the native title bar: no sidebar, top bar or status strip, the accent of the tab's project. Its sessions keep running. Closing the window, or "Move back to main window", brings the tab back. Meanwhile the main window shows that tab as an empty state, "This tab is in its own window", with **Show window** (primary) and **Move back here**.
 
 ### 6.5 Status strip (`shell/StatusBar.svelte`)
