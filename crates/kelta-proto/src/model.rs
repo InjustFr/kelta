@@ -1205,10 +1205,24 @@ pub struct StartWorkPlan {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub adopt_pr: Option<String>,
+    /// My open PRs naming the ticket (#453): `adopt_pr` is the first; the sheet picks among several.
+    #[serde(default)]
+    pub pr_choices: Vec<PrChoice>,
     /// Options picked per ticket (#357), set by `Core::work_plan`; `claude.prompt` has them applied.
     #[serde(default)]
     #[ts(optional = nullable)]
     pub options: Option<PlanOptions>,
+}
+
+/// An open PR of mine a ticket's Start work can resume: its head branch on `repo_id`, from `base`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PrChoice {
+    pub url: String,
+    pub number: u64,
+    pub title: String,
+    pub repo_id: String,
+    pub branch: String,
+    pub base: String,
 }
 
 /// The start options of a plan: the route's, else the template's.

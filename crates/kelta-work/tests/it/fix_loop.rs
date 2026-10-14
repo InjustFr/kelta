@@ -735,3 +735,132 @@ async fn a_failed_fetch_offers_the_last_fetched_base() {
     assert!(out.rebase.is_none());
     git(&item.worktree, &["merge-base", "--is-ancestor", "origin/main", "HEAD"]);
 }
+
+// ---- PRs made before their ticket (#453) -----------------------------------------------------
+
+/// My open PR #96 on `feat/outside`, made outside Kelta.
+fn outside_pr(fx: &Fx) -> kelta_proto::codehost::Review {
+    let mut r = samples::review();
+    r.r#ref.number = 96;
+    r.kind = ReviewKind::Authored;
+    r.url = "https://github.com/acme/shop-api/pull/96".into();
+    r.title = "SHOP-141 fix(cart): no crash on an empty cart".into();
+    r.source_branch = "feat/outside".into();
+    fx.core
+        .add_code_host(AccountId::new("github-work"), Arc::new(FakeCodeHost::with_reviews(vec![r.clone()])));
+    r
+}
+
+/// Commits on `feat/outside` checked out in `dir` and pushes it; its head.
+fn push_outside(dir: &Path) -> String {
+    commit(dir, "outside.txt", "x\n", "outside work");
+    git(dir, &["push", "-q", "origin", "feat/outside"]);
+    git(dir, &["rev-parse", "HEAD"])
+}
+
+/// Core's ticket detail lists `r` as a PR naming the ticket (`ticket_prs`).
+async fn named_by(fx: &Fx, t: &kelta_proto::tracker::TicketRef, r: &kelta_proto::codehost::Review) {
+    use kelta_proto::api::Tracker;
+    use kelta_proto::codehost::{CiState, PrLink, PrSource, PrState};
+    let mut d = fx.tracker.get(t).await.unwrap();
+    d.prs = vec![PrLink {
+        url: r.url.clone(),
+        account: Some(r.r#ref.account.clone()),
+        repo: r.r#ref.repo.clone(),
+        number: r.r#ref.number,
+        title: r.title.clone(),
+        branch: r.source_branch.clone(),
+        state: PrState::Open,
+        draft: false,
+        ci: CiState::None,
+        review: None,
+        source: PrSource::KeyMatch,
+    }];
+    fx.core.respond("ticket_get", serde_json::to_value(d).unwrap());
+}
+
+fn ticket(key: &str) -> kelta_proto::tracker::TicketRef {
+    let mut t = samples::ticket_ref();
+    t.key = key.into();
+    t
+}
+
+#[tokio::test]
+async fn start_work_on_a_ticket_my_pr_names_plans_on_the_pr_head_branch() {
+    need_git!();
+    let fx = Fx::new();
+    git(&fx.repo, &["checkout", "-q", "-b", "feat/outside"]);
+    let head = push_outside(&fx.repo);
+    git(&fx.repo, &["checkout", "-q", "main"]);
+    git(&fx.repo, &["branch", "-q", "-D", "feat/outside"]);
+    let r = outside_pr(&fx);
+    let t = ticket("SHOP-141");
+    named_by(&fx, &t, &r).await;
+
+    let w = fx.service();
+    let plan = w.plan(&project(), WorkSource::Ticket { ticket: t.clone() }).await.unwrap();
+    assert_eq!(plan.source, WorkSource::Ticket { ticket: t.clone() });
+    assert_eq!(plan.branch, "feat/outside", "not the branch template's");
+    assert_eq!(plan.adopt_pr.as_deref(), Some(r.url.as_str()));
+    assert_eq!((plan.base.as_str(), plan.branch_exists.as_ref()), (r.target_branch.as_str(), None));
+    assert_eq!(plan.pr_choices.len(), 1);
+    let item = w.start(plan).await.unwrap();
+    assert_eq!((item.kind, item.state.clone()), (WorkKind::Ticket, WorkState::PrOpen), "{:?}", item.steps);
+    assert_eq!(item.pr_url.as_deref(), Some(r.url.as_str()));
+    assert_eq!(git(&item.worktree, &["rev-parse", "HEAD"]), head, "checked out the PR head");
+}
+
+#[tokio::test]
+async fn a_pr_branch_checked_out_in_another_worktree_is_adopted_not_added_again() {
+    need_git!();
+    let fx = Fx::new();
+    let other = fx.tmp.path().join("terminal-wt");
+    git(&fx.repo, &["worktree", "add", "-q", "-b", "feat/outside", other.to_str().unwrap()]);
+    let head = push_outside(&other);
+    let r = outside_pr(&fx);
+    let t = ticket("SHOP-141");
+    named_by(&fx, &t, &r).await;
+
+    let w = fx.service();
+    let before = fx.worktree_count();
+    let plan = w.plan(&project(), WorkSource::Ticket { ticket: t }).await.unwrap();
+    let item = w.start(plan).await.unwrap();
+    assert_eq!(item.state, WorkState::PrOpen, "{:?}", item.steps);
+    assert_eq!(item.worktree.canonicalize().unwrap(), other.canonicalize().unwrap());
+    assert_eq!(fx.worktree_count(), before, "no second worktree");
+    assert_eq!(git(&item.worktree, &["rev-parse", "HEAD"]), head);
+}
+
+#[tokio::test]
+async fn link_pr_links_once_without_claude_and_conflicts_on_a_held_ticket() {
+    need_git!();
+    let fx = Fx::new();
+    git(&fx.repo, &["checkout", "-q", "-b", "feat/outside"]);
+    let head = push_outside(&fx.repo);
+    git(&fx.repo, &["checkout", "-q", "main"]);
+    let r = outside_pr(&fx);
+    let (w, held) = started(&fx, "SHOP-142").await;
+    let claudes = fx.spawned_of(|k| *k == SessionKind::Claude).len();
+
+    // The PR does not name the ticket: linked after the fact.
+    let t = ticket("SHOP-141");
+    let item = w.link_ticket_pr(&project(), t.clone(), &r).await.unwrap();
+    assert_eq!(item.ticket.as_ref().map(|x| x.key.as_str()), Some("SHOP-141"));
+    assert_eq!((item.kind, item.state.clone()), (WorkKind::Ticket, WorkState::PrOpen), "{:?}", item.steps);
+    assert_eq!((item.branch.as_str(), item.pr_url.as_deref()), ("feat/outside", Some(r.url.as_str())));
+    assert_eq!(git(&item.worktree, &["rev-parse", "HEAD"]), head);
+    assert_eq!(fx.spawned_of(|k| *k == SessionKind::Claude).len(), claudes, "no Claude started");
+
+    let again = w.link_ticket_pr(&project(), t.clone(), &r).await.unwrap();
+    assert_eq!(again.id, item.id, "a second call is a no-op");
+    assert_eq!(w.list(None).await.unwrap().len(), 2);
+
+    let e = w.link_ticket_pr(&project(), ticket("SHOP-142"), &r).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Conflict);
+    assert!(e.message.contains(held.id.as_str()), "{}", e.message);
+
+    // The ticket reads Resume work: Resume runs the rest of the start, Claude included.
+    let resumed = w.resume(&item.id).await.unwrap();
+    assert_eq!(resumed.state, WorkState::PrOpen, "{:?}", resumed.steps);
+    assert_eq!(fx.spawned_of(|k| *k == SessionKind::Claude).len(), claudes + 1);
+}

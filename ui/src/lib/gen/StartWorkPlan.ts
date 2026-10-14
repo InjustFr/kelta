@@ -2,6 +2,7 @@
 import type { BranchExists } from "./BranchExists";
 import type { ClaudePlan } from "./ClaudePlan";
 import type { PlanOptions } from "./PlanOptions";
+import type { PrChoice } from "./PrChoice";
 import type { ProjectId } from "./ProjectId";
 import type { SideEffects } from "./SideEffects";
 import type { WorkItemId } from "./WorkItemId";
@@ -33,6 +34,10 @@ existing: WorkItemId | null,
  * this PR URL (FLOW §2.1).
  */
 adopt_pr?: string | null, 
+/**
+ * My open PRs naming the ticket (#453): `adopt_pr` is the first; the sheet picks among several.
+ */
+pr_choices: Array<PrChoice>, 
 /**
  * Options picked per ticket (#357), set by `Core::work_plan`; `claude.prompt` has them applied.
  */

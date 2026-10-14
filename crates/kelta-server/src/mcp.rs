@@ -375,6 +375,19 @@ pub(crate) fn tool_defs() -> Value {
             },
         },
         {
+            "name": "link_pr",
+            "description": "Link one of my open pull requests to a ticket after the fact (a PR opened before its ticket existed): Kelta tracks the ticket as a work item on the PR's head branch, in the worktree that has it checked out or a new one, without starting Claude; the ticket then reads Resume work. Linked already: no change. Fails with Conflict, naming the holder, when another work item holds the ticket or the PR.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "key": key, "account": account,
+                    "pr": { "type": "string", "description": "The PR's URL, or its number when only one of my open PRs has it" },
+                    "project": { "type": "string", "description": "Kelta project id (default: the PR's)" }
+                },
+                "required": ["key", "pr"], "additionalProperties": false
+            },
+        },
+        {
             "name": "get_setup",
             "description": "Kelta's configuration for setting it up: projects (repos, remotes, code host bindings), accounts (secrets are references, never values), ticket sources and their views, editor and terminal preferences, and `missing`: what still needs configuring.",
             "inputSchema": empty,
@@ -487,6 +500,7 @@ async fn call_tool(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, name: &str,
             core.work_release(key, opt_arg(args, "sha"), sid).await.map_err(coded)?;
             Ok(format!("{key} released ({outcome})."))
         }
+        "link_pr" => link_pr(core, sid, args).await,
         "list_review_requests" => list_review_requests(core).await,
         "get_setup" => Ok(setup_summary(&core.project_list(), &core.settings(None)).to_string()),
         "add_project" => {
@@ -712,6 +726,33 @@ async fn claim_ticket(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &V
         .await
         .map_err(coded)?;
     Ok(format!("Claimed {key}: work item {} on {} ({}).", w.id, w.branch, w.worktree.display()))
+}
+
+async fn link_pr(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &Value) -> ToolResult {
+    let pr = str_arg(args, "pr")?.trim();
+    let (ticket, projects) = ref_by_key(core, args).await?;
+    let number = pr.trim_start_matches('#').parse::<u64>().ok();
+    let mine = core.review_list(Scope::All, ReviewKind::Authored).await.map_err(coded)?;
+    let hits: Vec<_> =
+        mine.into_iter().filter(|i| i.review.url == pr || Some(i.review.r#ref.number) == number).collect();
+    let item = match hits.as_slice() {
+        [one] => one,
+        [] => return Err(format!("NotFound: {pr} is not one of your open pull requests")),
+        _ => {
+            return Err(format!(
+                "InvalidArgument: several of your open pull requests are #{pr}; pass its URL"
+            ));
+        }
+    };
+    let project = opt_arg(args, "project")
+        .map(ProjectId::new)
+        .or_else(|| item.project_ids.first().cloned())
+        .or_else(|| projects.into_iter().next())
+        .or_else(|| sid.and_then(|s| core.session_get(s)).map(|s| s.project_id))
+        .ok_or_else(|| format!("no Kelta project for {}; pass `project`", item.review.url))?;
+    let (key, url) = (ticket.key.clone(), item.review.url.clone());
+    let w = core.work_link_pr(&project, ticket, item.review.clone()).await.map_err(coded)?;
+    Ok(format!("Linked {key} to {url}: work item {} on {} ({}).", w.id, w.branch, w.worktree.display()))
 }
 
 /// Revision of a description: FNV-1a of its text, stable across restarts.

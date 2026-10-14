@@ -146,6 +146,7 @@ export type * from './PluginMethod';
 export type * from './PluginsSettings';
 export type * from './PollingSettings';
 export type * from './PortsSettings';
+export type * from './PrChoice';
 export type * from './PrCreate';
 export type * from './PrDraft';
 export type * from './PrLink';

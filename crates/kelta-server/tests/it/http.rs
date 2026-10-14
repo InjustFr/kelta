@@ -227,6 +227,7 @@ async fn mcp_initialize_list_and_call() {
             "claim_ticket",
             "report_progress",
             "release_ticket",
+            "link_pr",
             "get_setup",
             "add_project",
             "set_setting",
@@ -477,6 +478,7 @@ async fn global_mcp_serves_the_board_tools() {
             "claim_ticket",
             "report_progress",
             "release_ticket",
+            "link_pr",
             "get_setup",
             "add_project",
             "set_setting",
@@ -557,6 +559,7 @@ async fn global_mcp_serves_the_board_tools() {
             "claim_ticket",
             "report_progress",
             "release_ticket",
+            "link_pr",
             "get_setup",
             "add_project",
             "set_setting",
@@ -602,6 +605,45 @@ async fn list_tickets_filters_by_local_tag() {
     assert_eq!(keys(text), ["A-2"]);
     let (text, _) = global_call(port, "list_tickets", json!({})).await;
     assert_eq!(keys(text), ["A-1", "A-2"]);
+    e.server.release_http();
+}
+
+#[tokio::test]
+async fn link_pr_resolves_my_pr_and_passes_conflicts_on() {
+    let e = common::env();
+    e.server.set_install_token(Some("it"));
+    let port = e.server.ensure_http().await.unwrap();
+    let account = samples::ticket_ref().account;
+    let mut pr = samples::review();
+    pr.kind = kelta_proto::codehost::ReviewKind::Authored;
+    let url = pr.url.clone();
+    let number = pr.r#ref.number;
+    e.fake.respond(
+        "review_list",
+        json!([{ "review": pr, "project_ids": [samples::project_info().id], "waiting": [] }]),
+    );
+    let mut w = samples::work_item();
+    w.branch = pr.source_branch.clone();
+    e.fake.respond("work_link_pr", serde_json::to_value(&w).unwrap());
+    let link =
+        |pr: Value| global_call(port, "link_pr", json!({ "key": "SHOP-151", "account": account, "pr": pr }));
+
+    let (text, err) = link(json!(url)).await;
+    assert!(!err && text.starts_with(&format!("Linked SHOP-151 to {url}: work item {}", w.id)), "{text}");
+    let call = e.fake.calls().into_iter().rfind(|c| c.method == "work_link_pr").unwrap();
+    assert_eq!(
+        (call.args["pr"].as_str(), call.args["ticket"]["key"].as_str()),
+        (Some(url.as_str()), Some("SHOP-151"))
+    );
+    assert_eq!(call.args["project"], json!(samples::project_info().id));
+    let (text, err) = link(json!(format!("#{number}"))).await;
+    assert!(!err, "by number: {text}");
+
+    let (text, err) = link(json!("https://github.com/acme/shop-api/pull/1")).await;
+    assert!(err && text.starts_with("NotFound:"), "{text}");
+    e.fake.fail("work_link_pr", kelta_proto::error::KeltaError::conflict("SHOP-151 is held by work item w1"));
+    let (text, err) = link(json!(url)).await;
+    assert!(err && text == "Conflict: SHOP-151 is held by work item w1", "{text}");
     e.server.release_http();
 }
 

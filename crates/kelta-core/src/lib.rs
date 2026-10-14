@@ -894,6 +894,14 @@ impl CoreApi for Core {
     ) -> Result<WorkItem, KeltaError> {
         self.work.release(key, sha, caller).await
     }
+    async fn work_link_pr(
+        &self,
+        project: &ProjectId,
+        ticket: TicketRef,
+        pr: kelta_proto::codehost::Review,
+    ) -> Result<WorkItem, KeltaError> {
+        self.work.link_ticket_pr(project, ticket, &pr).await
+    }
     async fn editor_open(
         &self,
         target: EditorTarget,

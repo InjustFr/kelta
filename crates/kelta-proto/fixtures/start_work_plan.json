@@ -12,6 +12,7 @@
   },
   "existing": null,
   "options": null,
+  "pr_choices": [],
   "project_choices": [
     "shop"
   ],

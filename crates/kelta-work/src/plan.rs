@@ -308,6 +308,7 @@ pub fn assemble(
         side_effects,
         existing: existing.map(|w| w.id.clone()),
         adopt_pr: None,
+        pr_choices: Vec::new(),
         options: None,
     }
 }

@@ -1030,6 +1030,7 @@ export const startWorkPlan: StartWorkPlan = {
   },
   "existing": null,
   "options": null,
+  "pr_choices": [],
   "project_choices": [
     "shop"
   ],
