@@ -1141,6 +1141,8 @@ impl Core {
 
     pub(crate) fn remove_session(&self, id: &SessionId) {
         let Some(entry) = self.sessions.lock().remove(id) else { return };
+        // A closed session's id may be spawned again (a parked item's Claude resumes under it).
+        self.sid8_taken.lock().remove(&id.sid8());
         // Close it in the host too (frees the model; keltad drops the route). NotFound when Dormant.
         let _ = self.terminal.kill(id, KillSignal::Kill);
         entry.timers.cancel();

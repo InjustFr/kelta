@@ -664,6 +664,37 @@ async fn resume_respawns_exited_claude_with_continue_fallback() {
 }
 
 #[tokio::test]
+async fn resume_with_a_prompt_respawns_a_dormant_claude_with_resume() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let item = w.start(w.plan(&project(), ticket("SHOP-141")).await.unwrap()).await.unwrap();
+    let first = fx.spawned_of(|k| *k == SessionKind::Claude)[0].id.clone();
+    // A parked item after a restart: its Claude is Dormant.
+    let mut dormant = kelta_proto::api::CoreApi::session_get(fx.core.as_ref(), &first).unwrap();
+    dormant.lifecycle = kelta_proto::model::Lifecycle::Dormant;
+    fx.core.insert_session(dormant);
+
+    assert!(!w.deliver_prompt(&item.id, "go on").await.unwrap(), "not held");
+    let resumed = w.list(Some(&project())).await.unwrap().remove(0);
+    let spawns: Vec<Vec<String>> = fx
+        .core
+        .calls()
+        .into_iter()
+        .filter(|c| c.method == "session_spawn" && c.args["kind"]["type"] == "claude")
+        .map(|c| serde_json::from_value(c.args["args"].clone()).unwrap())
+        .collect();
+    assert_eq!(spawns.len(), 2);
+    assert_eq!(spawns[1][..2], ["--resume".to_owned(), item.claude_uuid.clone().unwrap()]);
+    assert!(spawns[1].iter().any(|a| a.contains("go on")), "{:?}", spawns[1]);
+    let live = fx.spawned_of(|k| *k == SessionKind::Claude);
+    assert_eq!(live.len(), 1, "the Dormant one is gone");
+    assert_eq!(live[0].lifecycle, kelta_proto::model::Lifecycle::Live);
+    assert_eq!(live[0].id, first, "respawned under the same id");
+    assert!(resumed.session_ids.contains(&first));
+}
+
+#[tokio::test]
 async fn claude_restore_request_regenerates_files() {
     need_git!();
     let fx = Fx::new();
