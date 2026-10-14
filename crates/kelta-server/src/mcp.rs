@@ -376,7 +376,7 @@ pub(crate) fn tool_defs() -> Value {
         },
         {
             "name": "link_pr",
-            "description": "Link one of my open pull requests to a ticket after the fact (a PR opened before its ticket existed): Kelta tracks the ticket as a work item on the PR's head branch, in the worktree that has it checked out or a new one, without starting Claude; the ticket then reads Resume work. Linked already: no change. Fails with Conflict, naming the holder, when another work item holds the ticket or the PR. With `status`, the ticket then moves (also when linked already); a failed move keeps the link and returns a warning.",
+            "description": "Link one of my open pull requests to a ticket after the fact (a PR opened before its ticket existed): Kelta tracks the ticket as a work item on the PR's head branch, in the worktree that has it checked out or a new one, without starting Claude; the ticket then reads Resume work. Linked already: no change. Fails with Conflict, naming the holder, when another work item holds the ticket or the PR. With `status` (needs `claude.mcp_board_writes`), the ticket then moves (also when linked already); a failed move keeps the link and returns a warning.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -730,6 +730,10 @@ async fn claim_ticket(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &V
 }
 
 async fn link_pr(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &Value) -> ToolResult {
+    // `status` moves any ticket to any status: it is a board write.
+    if opt_arg(args, "status").is_some() && !core.settings(None).claude.mcp_board_writes {
+        return Err("InvalidArgument: `status` needs claude.mcp_board_writes".into());
+    }
     let pr = str_arg(args, "pr")?.trim();
     let (ticket, projects) = ref_by_key(core, args).await?;
     let number = pr.trim_start_matches('#').parse::<u64>().ok();

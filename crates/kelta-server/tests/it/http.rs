@@ -695,6 +695,18 @@ async fn link_pr_moves_the_ticket_to_the_status_given() {
     let (text, err) = link(Some("review")).await;
     assert!(!err && text.ends_with("SHOP-141 is now In Review."), "{text}");
     assert_eq!(e.fake.calls().iter().filter(|c| c.method == "work_link_pr").count(), 4);
+
+    // Board writes off: `status` is refused before anything is linked or moved.
+    let mut s = kelta_proto::settings::Settings::defaults();
+    s.claude.mcp_board_writes = false;
+    e.fake.set_settings(s);
+    let before = (moves(), status());
+    let (text, err) = link(Some("Done")).await;
+    assert!(err && text.starts_with("InvalidArgument: `status` needs claude.mcp_board_writes"), "{text}");
+    assert_eq!((moves(), status()), before);
+    assert_eq!(e.fake.calls().iter().filter(|c| c.method == "work_link_pr").count(), 4);
+    let (text, err) = link(None).await;
+    assert!(!err && text.starts_with("Linked SHOP-141"), "{text}");
     e.server.release_http();
 }
 
