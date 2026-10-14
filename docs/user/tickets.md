@@ -90,7 +90,8 @@ Each view can be limited to the current iteration (Settings > Sources, or `curre
 ## Keys
 
 A letter means the same in the Tickets list, the Queue and Pull requests: `Enter` the next step, `s` work on it, `v` view
-changes, `o` open on the host, `m` move the ticket, `c` comment, `/` filter, `?` every key, `Cmd+Shift+R` refresh.
+changes, `o` open on the host, `m` move the ticket, `c` comment, `b` mark for a batch start, `Space` show or hide the
+side panel, `/` filter, `?` every key, `Cmd+Shift+R` refresh.
 
 | Key | Action |
 |---|---|
@@ -106,6 +107,7 @@ changes, `o` open on the host, `m` move the ticket, `c` comment, `/` filter, `?`
 | `Shift+g` | cycle the grouping (To start, Status, Flow, Priority, Sprint, Assignee, Source, Parent, None) |
 | `f` `s` | only the current sprint (press again to clear) |
 | `x` | add or remove the ticket from the selection |
+| `b` | mark the ticket for a batch start, in the list and on the board (`Cmd+Enter` starts the marked tickets) |
 | `Shift+j` `Shift+k` | extend the selection down or up |
 | `m` | move status (all selected tickets, when there is a selection) |
 | `s` | start or resume work (shows the plan sheet) |
@@ -116,7 +118,7 @@ changes, `o` open on the host, `m` move the ticket, `c` comment, `/` filter, `?`
 | `u` `!` | assign to someone else, change the priority (in the detail) |
 | `c` | comment |
 | `r` | refine with Claude: proposed acceptance criteria, open questions and sub-tasks to post, copy or discard; kept criteria go into Claude's first prompt when you start work (in the detail) |
-| `b` | block or unblock the ticket (in the detail; [blocked tickets](#blocked-tickets)) |
+| `b` (in the detail) | block or unblock the ticket ( [blocked tickets](#blocked-tickets)) |
 | `t` | put a local tag on the ticket, or take it off ([tags](#local-tags)) |
 | `w` | run a workflow on the ticket, in the background ([workflows](claude-code.md#workflows)) |
 | `y` | copy the branch name (in the detail) |

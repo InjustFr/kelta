@@ -108,8 +108,9 @@ actions" (`.`), Claude's last message and the facts.
 `j` `k` move, `Enter` runs the next step, `g` goes to its place without acting, `/` filters, `Cmd+Shift+R` refreshes,
 `?` lists every key. A letter means the same in the Queue, Tickets and Pull requests: `s` work on it (start a ticket,
 go to a work item's tab, review a pull request locally), `v` view changes (`Shift+V` the whole diff), `o` open on
-the host, `m` move the ticket, `c` comment, `e` expand Claude's message, `Shift+R` mark reviewed. `Esc` clears the
-filter, then goes back.
+the host, `m` move the ticket, `c` comment, `e` expand Claude's message, `Shift+R` mark reviewed, `b` mark a ticket
+for a batch start (`Cmd+Enter` starts the marked ones), `Space` show or hide the brief. `Esc` clears the filter, then
+the marks, then goes back.
 
 ## The sidebar
 

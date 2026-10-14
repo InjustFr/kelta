@@ -34,7 +34,7 @@ class Batch {
 
 export const batch = new Batch();
 
-/** Space marks the row's ticket, Mod+Enter opens the batch sheet; true when the key was handled. */
+/** `b` marks the row's ticket (#440), Mod+Enter opens the batch sheet; true when the key was handled. */
 export function batchKey(
   e: KeyboardEvent,
   ticket: { ref: TicketRef; projectId: ProjectId | null } | null,
@@ -43,7 +43,7 @@ export function batchKey(
     if (batch.list.length > 0) ui.openSheet('start_batch');
     return true;
   }
-  if (e.key !== ' ' || e.metaKey || e.ctrlKey || e.altKey || !ticket) return false;
+  if (e.key !== 'b' || e.metaKey || e.ctrlKey || e.altKey || !ticket) return false;
   batch.toggle(ticket.ref, ticket.projectId);
   return true;
 }
