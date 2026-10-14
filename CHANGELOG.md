@@ -2,6 +2,16 @@
 
 All notable changes are listed here, generated from the commit messages at each release. Versions follow semver.
 
+## [1.7.0](https://github.com/InjustFr/kelta/compare/v1.6.0...v1.7.0) (2026-10-14)
+
+### Features
+
+* **rail:** rows only for open tabs; live sessions without a tab go to a Background section ([#452](https://github.com/InjustFr/kelta/issues/452)) ([a5523d1](https://github.com/InjustFr/kelta/commit/a5523d190c9f9f3ca326f3b3b97055f7c0b7a04f))
+
+### Bug Fixes
+
+* **rail:** a work item's non-Claude background sessions name themselves; drop the dead rowLamp branch ([#452](https://github.com/InjustFr/kelta/issues/452)) ([1388c67](https://github.com/InjustFr/kelta/commit/1388c679bd77e8370d9129a09c46d57389527379))
+
 ## [1.6.0](https://github.com/InjustFr/kelta/compare/v1.5.0...v1.6.0) (2026-10-14)
 
 ### Features
