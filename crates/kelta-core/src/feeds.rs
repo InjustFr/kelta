@@ -1714,7 +1714,8 @@ impl Core {
     }
 
     /// Startup and Now open (FLOW §3.6): every unfinished work item whose PR is not in its
-    /// account's authored open list gets one `get`, so a merge while Kelta was closed is seen.
+    /// account's authored open list gets one `get`, so a merge while Kelta was closed is seen;
+    /// then claims no live run will release are finished (#444).
     pub async fn check_work_prs(&self) -> Result<(), KeltaError> {
         self.rt.capture();
         self.work.ensure_listener();
@@ -1738,7 +1739,7 @@ impl Core {
             let Some(number) = pr_number(url) else { continue };
             self.pr_left_open(&ReviewRef { account, repo, number }).await;
         }
-        Ok(())
+        self.work.finish_stale_claims().await
     }
 
     fn review_notify(&self, kind: NotifyKind, title: &'static str, r: &Review, project: Option<ProjectId>) {
