@@ -25,7 +25,7 @@
 
   /** The next step names itself; the other labels are the table's. */
   function label(h: PrefixHint): string {
-    return h.action === 'work.next' && item ? phaseNow(item).primaryLabel : t(h.label);
+    return h.action === 'work.next' && item ? phaseNow(item).primaryLabel || t('Go to work tab') : t(h.label);
   }
 
   function title(group: HintGroup): string {

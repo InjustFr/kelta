@@ -341,7 +341,7 @@ describe('prefix state machine', () => {
     const { manager, ids } = setup();
     for (const key of ['Enter', 'g', 'v', 'd', 'e']) {
       manager.handleKeyDown(prefix());
-      manager.handleKeyDown(press({ key }));
+      manager.handleKeyDown(press({ code: key === 'Enter' ? key : `Key${key.toUpperCase()}`, key }));
     }
     expect(ids()).toEqual([
       'work.next',

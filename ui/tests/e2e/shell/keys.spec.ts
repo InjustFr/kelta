@@ -132,6 +132,17 @@ test.describe('keys', () => {
     await expect(page.locator('[data-testid="settings-section"][data-section="keys"]')).toBeVisible();
   });
 
+  test('which-key panel: the next step is labelled by the phase (SHOP-155 to review)', async ({ page }) => {
+    await boot(page);
+    for (let i = 0; i < 3; i++) await dispatch(page, 'attention.next'); // billing, billing error, then SHOP-155
+    await expect(page.getByTestId('work-header')).toHaveAttribute('data-phase', 'to_review');
+    await page.locator('[data-testid="pane"][data-focused="true"] .xterm-helper-textarea').focus();
+    await page.keyboard.press('Control+Shift+Space');
+    await expect(page.getByTestId('which-key').locator('[data-group="work"] dd').first()).toHaveText(
+      'Review changes',
+    );
+  });
+
   test('prefix pane actions: split and zoom', async ({ page }) => {
     await boot(page);
     await page.locator('[data-testid="pane"][data-focused="true"] .xterm-helper-textarea').focus();
