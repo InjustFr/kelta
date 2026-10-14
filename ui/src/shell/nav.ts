@@ -16,6 +16,7 @@ import type {
   Tab,
   TabId,
   ToolInfo,
+  WorkItem,
 } from '$lib/gen';
 import { sessionSpawn, windowDetach, workCheckPrs } from '$lib/ipc/commands';
 import {
@@ -45,7 +46,8 @@ import {
 import { layout, projects, sessions, toasts, tools, ui, work, type GlobalView } from '$lib/stores';
 import { terminalPool } from '$lib/terminal';
 
-import { phaseNow } from '../views/work/live';
+import { phaseNow, unfinishedWork } from '../views/work/live';
+import { goToWork } from '../views/work/nav';
 import { maxLamp, type Lamp } from '../views/work/phase';
 
 import { confirms } from './confirm.svelte';
@@ -59,36 +61,71 @@ export function railProjects(): ProjectInfo[] {
   return [...open.filter((p) => !p.builtin), ...open.filter((p) => p.builtin)];
 }
 
-/** A rail row: one tab of an open project. */
+/**
+ * A rail row of an open project: an unfinished work item (with its tab, or none: a click resumes it),
+ * a Claude session without a work item (its tab, or none: live in the background), or a folded tab.
+ */
 export interface RailRow {
   project: ProjectId;
-  tab: Tab;
+  tab: Tab | null;
+  item?: WorkItem;
+  session?: SessionInfo;
 }
 
 /**
- * A band's tabs (#430): its work tabs by start time, so a phase change never moves a row, then every
- * other tab (shells, boards, lists), folded under "n more".
+ * A band (#435): its unfinished work items by start time, tab or not, so a phase change never moves a
+ * row; then its Claude sessions without a work item, shown in a tab or live in the background; then
+ * every other tab (shells, tools, lists), folded under "n more".
  */
-export function bandTabs(projectId: ProjectId): { work: Tab[]; more: Tab[] } {
-  const tabs = layout.get(projectId)?.tabs ?? [];
-  const started = (tab: Tab) => workItemOfTab(tab)?.created_at ?? '';
-  return {
-    work: tabs.filter((tab) => tab.work_item_id).sort((a, b) => started(a).localeCompare(started(b))),
-    more: tabs.filter((tab) => !tab.work_item_id),
-  };
+export function bandTabs(projectId: ProjectId): { work: RailRow[]; claude: RailRow[]; more: Tab[] } {
+  const l = layout.get(projectId);
+  const tabs = l?.tabs ?? [];
+  const work = unfinishedWork()
+    .filter((w) => w.project_id === projectId)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .map((item) => ({
+      project: projectId,
+      tab: tabs.find((tab) => tab.work_item_id === item.id) ?? null,
+      item,
+    }));
+  const claude = sessions
+    .forProject(projectId)
+    .filter((s) => s.kind.type === 'claude' && !s.work_item_id)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .flatMap((session) => {
+      const loc = l ? findSession(l, session.id) : null;
+      if (!loc && session.lifecycle !== 'live') return [];
+      return [{ project: projectId, tab: loc && l ? findTab(l, loc.tabId) : null, session }];
+    });
+  const shown = new Set([...work, ...claude].map((r) => r.tab?.id));
+  return { work, claude, more: tabs.filter((tab) => !shown.has(tab.id)) };
 }
 
-/** The rail's rows in rail order: each band's work rows, then its folded ones. */
+/** The rail's rows in rail order: each band's work rows, its Claude rows, then its folded tabs. */
 export function railRows(): RailRow[] {
   return railProjects().flatMap((p) => {
-    const { work, more } = bandTabs(p.id);
-    return [...work, ...more].map((tab) => ({ project: p.id, tab }));
+    const { work, claude, more } = bandTabs(p.id);
+    return [...work, ...claude, ...more.map((tab) => ({ project: p.id, tab }))];
   });
 }
 
 /** The work rows `project.goto.N` jumps to, across bands. */
 export function workRows(): RailRow[] {
-  return railRows().filter((r) => r.tab.work_item_id);
+  return railRows().filter((r) => r.item);
+}
+
+/** A rail row click: a session is revealed, a tab shown, a work item without one resumed (`work_resume`). */
+export function openRow(r: RailRow): void {
+  if (r.session) void revealSession(r.session.id);
+  else if (r.tab) selectRow(r.project, r.tab.id);
+  else if (r.item) void goToWork(r.item);
+}
+
+/** A row's lamp: its Claude session's, its tab's, else its work item's phase. */
+export function rowLamp(r: RailRow): Lamp {
+  if (r.session) return sessionLamp(r.session);
+  if (r.tab) return tabAttention(r.tab);
+  return r.item ? phaseNow(r.item).lamp : 'none';
 }
 
 // shortcut: the active project's tool list (Home's in a global view) until #237 slice 6 makes the
@@ -102,13 +139,19 @@ export function railTools(): ToolInfo[] {
   return tools.list(railToolsOf());
 }
 
-/** Live sessions of a project that no pane shows (tools aside): the dim rows at the end of its band. */
+/** Live sessions of a project that no pane shows (tools and plain Claude aside: rows of their own): the dim folded rows. */
 export function backgroundSessions(projectId: ProjectId): SessionInfo[] {
   const l = layout.get(projectId);
   if (!l) return [];
   return sessions
     .forProject(projectId)
-    .filter((s) => s.lifecycle === 'live' && s.kind.type !== 'tool' && !findSession(l, s.id));
+    .filter(
+      (s) =>
+        s.lifecycle === 'live' &&
+        s.kind.type !== 'tool' &&
+        !(s.kind.type === 'claude' && !s.work_item_id) &&
+        !findSession(l, s.id),
+    );
 }
 
 /** Rail label of a tab: `KEY title` for a work tab whose title lacks the key. */
@@ -168,7 +211,7 @@ export async function activateProject(id: ProjectId): Promise<void> {
 /** `project.goto.N`: work row N, counted across bands. */
 export function gotoRailRow(n: number): void {
   const row = workRows()[n - 1];
-  if (row) selectRow(row.project, row.tab.id);
+  if (row) openRow(row);
 }
 
 export function cycleProject(delta: 1 | -1): void {
@@ -501,9 +544,12 @@ export async function toggleFocusedPaneWindow(): Promise<void> {
   if (projectId && tab && p) await detachPaneToWindow(projectId, tab.id, p.id);
 }
 
-/** `tab.next/prev`: walks the rail rows across bands; from a global view, next is the first row. */
+/** `tab.next/prev`: walks the rail rows that show a tab, across bands; from a global view, next is the first. */
 export function cycleTab(delta: 1 | -1): void {
-  const rows = railRows();
+  // A tab shown by two rows (a plain Claude split into a work tab) is walked once.
+  const rows = railRows()
+    .flatMap((r) => (r.tab ? [{ project: r.project, tab: r.tab }] : []))
+    .filter((r, i, all) => all.findIndex((x) => x.tab.id === r.tab.id) === i);
   if (rows.length === 0) return;
   const cur = ui.view ? null : currentTab();
   const at = cur ? rows.findIndex((r) => r.project === projects.activeId && r.tab.id === cur.id) : -1;

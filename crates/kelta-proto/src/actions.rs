@@ -97,6 +97,7 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("project.switcher", "Switch project", ["cmd+p"], Some("p"), Global),
     // The switcher filtered to closed projects (#363).
     a!("project.open", "Open project", [], None, Global),
+    a!("project.new", "Add project", [], None, Global),
     // shortcut: `project.goto.N` selects rail row N (any project); the id is misnamed but keeps
     // `[keys.bindings]` overrides valid. Rename it with an alias in `lib/keys/manager.ts` if that matters.
     a!("project.goto.1", "Go to rail row 1", ["cmd+1"], Some("1"), Global),

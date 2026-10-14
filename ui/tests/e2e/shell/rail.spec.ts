@@ -128,6 +128,30 @@ test.describe('sidebar', () => {
     await expect.poll(() => railWidth(page)).toBe(64);
   });
 
+  test('every unfinished work item has a row, one without a tab resumes; the Queue folds to lamp tiles (#435)', async ({
+    page,
+  }) => {
+    await boot(page);
+    const shop = page.locator('[data-testid="rail-band"][data-project-id="shop"]');
+    await expect(shop.getByTestId('rail-resume').filter({ hasText: 'SHOP-120' })).toHaveCount(1);
+    const coupons = shop
+      .locator('[data-testid="rail-resume"], [data-testid="rail-row"]')
+      .filter({ hasText: 'SHOP-155' });
+    await expect(coupons).toHaveAttribute('data-testid', 'rail-resume');
+    await coupons.click();
+    await expect(coupons).toHaveAttribute('data-testid', 'rail-row');
+    await expect(coupons).toHaveAttribute('aria-current', 'page');
+    await expect(coupons.locator('.name')).toHaveText('Flaky test in cart service');
+    // Home has no band and nothing sits above the bands.
+    await expect(page.locator('[data-testid="rail-band"][data-project-id="home"]')).toHaveCount(0);
+    await expect(page.getByTestId('rail-add')).toHaveCount(0);
+
+    await dispatch(page, 'inbox.open');
+    await expect.poll(() => railWidth(page)).toBe(64);
+    for (const more of await page.getByTestId('rail-more').all()) await expect(more).toBeHidden();
+    await expect(coupons).toBeVisible();
+  });
+
   test('a narrow window starts with the icon column; the button opens it in full', async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 600 });
     await boot(page);
