@@ -307,10 +307,15 @@ impl CoreApi for FakeCore {
         if let Some(r) = self.overridden::<()>("session_kill") {
             return r;
         }
-        if !self.sessions.lock().contains_key(id) {
+        let Some(lifecycle) = self.sessions.lock().get(id).map(|s| s.lifecycle) else {
             return Err(KeltaError::not_found(format!("session {id}")));
+        };
+        // Like Core: killing a Dormant session removes it (nothing runs to exit).
+        if lifecycle == Lifecycle::Dormant {
+            self.sessions.lock().remove(id);
+        } else {
+            self.exit_session(id, -1);
         }
-        self.exit_session(id, -1);
         Ok(())
     }
 
