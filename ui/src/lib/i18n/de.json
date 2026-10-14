@@ -647,6 +647,7 @@
   "Comment ping": "Erinnerung per Kommentar",
   "Ping posted": "Erinnerung veröffentlicht",
   "Review re-requested": "Review erneut angefordert",
+  "Nudge {name}": "{name} erinnern",
   "Nudge": "Erinnern",
   "Other": "Andere",
   "Filter pull requests": "Pull Requests filtern",

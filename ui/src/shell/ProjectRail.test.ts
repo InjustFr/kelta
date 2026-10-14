@@ -73,15 +73,15 @@ describe('ProjectRail', () => {
       'kelta-tools',
     ]);
     expect(bandRows(r, 'shop')).toEqual(['shop-t1']);
-    // Every unfinished work item, tab or not, in start order; the caption counts them.
-    expect(workIds(r, 'shop')).toEqual(['a008', 'a007', 'a004', 'a001']);
-    expect(within(band(r, 'shop')).getByTestId('rail-count').textContent).toBe('4');
+    // Unfinished work in start order, tab or not, unless it waits on others (SHOP-120, #443); the caption counts them.
+    expect(workIds(r, 'shop')).toEqual(['a008', 'a004', 'a001']);
+    expect(within(band(r, 'shop')).getByTestId('rail-count').textContent).toBe('3');
     // Key, title without the key, stage word and ⌘N digit.
     const work = r.container.querySelector('[data-tab-id="shop-t1"]') as HTMLElement;
     expect(work.querySelector('.key')?.textContent).toBe('SHOP-142');
     expect(work.querySelector('.name')?.textContent).toBe('Rate-limit login');
     expect(work.querySelector('[data-testid="rail-stage"]')?.textContent).toBe('Claude');
-    expect(r.container.querySelector('[data-tab-id="kt-t1"] .index')?.textContent).toBe('8');
+    expect(r.container.querySelector('[data-tab-id="kt-t1"] .index')?.textContent).toBe('7');
     const more = within(band(r, 'shop')).getByTestId('rail-more');
     expect(more.textContent).toContain('2 more');
     expect(more.getAttribute('aria-expanded')).toBe('false');

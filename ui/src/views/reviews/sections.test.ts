@@ -5,7 +5,7 @@ import { reviewPage } from '$lib/gen/fixtures';
 
 import { beforeMerging } from './beforeMerging';
 import { areaOf, barOf, changeMap, filesByArea, kLines } from './changemap';
-import { openDays, reviewState, rowState, sectionItems, stackOrder } from './sections';
+import { openDays, ownStep, reviewState, rowState, sectionItems, stackOrder } from './sections';
 
 function pr(number: number, over: Partial<Review> = {}): ReviewItem {
   const s = reviewPage.items[0]!;
@@ -138,5 +138,15 @@ describe('beforeMerging', () => {
       '<p>Migrate first</p>',
     );
     expect(beforeMerging('<p>Nothing</p>')).toEqual({ before: null, rest: '<p>Nothing</p>' });
+  });
+});
+
+describe('ownStep', () => {
+  it("words my PR's next step as the Queue does", () => {
+    const rv: Parameters<typeof ownStep>[0] = { decision: null, ci: 'success', waiting_on: [] };
+    expect(ownStep({ ...rv, decision: 'changes_requested' })).toBe('Fix with Claude');
+    expect(ownStep({ ...rv, ci: 'failure' })).toBe('Send failures to Claude');
+    expect(ownStep({ ...rv, waiting_on: ['bob', 'carol'] })).toBe('Nudge bob');
+    expect(ownStep(rv)).toBe('');
   });
 });
