@@ -111,6 +111,16 @@
     plan.claude.prompt = applyOptions(o.prompt, o.declared, o.picked);
   }
 
+  /** Resumes another of my PRs naming the ticket (#453): its head branch, base and repository. */
+  function adopt(url: string): void {
+    const c = plan.pr_choices.find((p) => p.url === url);
+    if (!c) return;
+    plan.adopt_pr = c.url;
+    plan.branch = c.branch;
+    plan.base = c.base;
+    plan.repo_id = c.repo_id;
+  }
+
   const isTicket = $derived(plan.source.kind === 'ticket');
   const subject = $derived(
     plan.source.kind === 'ticket'
@@ -336,6 +346,22 @@
               </p>
             {/if}
           </div>
+        {/if}
+        {#if plan.adopt_pr && plan.pr_choices.length > 0}
+          <p class="note" data-testid="adopt-note">
+            {t('Your open PR names {subject}: the work item resumes its branch {branch}.', {
+              subject,
+              branch: plan.branch,
+            })}
+          </p>
+          {#if plan.pr_choices.length > 1}
+            <Select
+              label={t('Pull request')}
+              value={plan.adopt_pr}
+              options={plan.pr_choices.map((c) => ({ value: c.url, label: `#${c.number} ${c.title}` }))}
+              onchange={adopt}
+            />
+          {/if}
         {/if}
         {#if plan.repo_choices.length > 1}
           <Select

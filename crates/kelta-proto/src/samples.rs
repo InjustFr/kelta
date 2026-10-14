@@ -408,6 +408,7 @@ pub fn start_work_plan() -> StartWorkPlan {
         },
         existing: None,
         adopt_pr: None,
+        pr_choices: Vec::new(),
         options: None,
     }
 }

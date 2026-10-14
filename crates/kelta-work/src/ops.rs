@@ -61,6 +61,13 @@ impl WorkService {
                 }
                 self.run_saga_locked(id).await
             }
+            // Linked by MCP `link_pr` (#453): its saga stopped after the worktree, Resume runs the rest.
+            WorkState::Active | WorkState::PrOpen
+                if item.steps.iter().any(|s| s.step == "claude" && s.status == StepStatus::Pending)
+                    && self.load_journal(id).plan.is_some() =>
+            {
+                self.run_saga_locked(id).await
+            }
             WorkState::Active | WorkState::PrOpen | WorkState::Merged { .. } | WorkState::PrClosed => {
                 self.reopen(&mut item, prompt).await.map(|()| item)
             }

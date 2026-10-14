@@ -608,6 +608,19 @@ impl CoreApi for FakeCore {
         self.overridden("review").and_then(Result::ok)
     }
 
+    async fn work_link_pr(
+        &self,
+        project: &ProjectId,
+        ticket: TicketRef,
+        pr: crate::codehost::Review,
+    ) -> Result<WorkItem, KeltaError> {
+        self.record(
+            "work_link_pr",
+            serde_json::json!({ "project": project, "ticket": ticket, "pr": pr.url }),
+        );
+        self.overridden("work_link_pr").unwrap_or_else(|| Err(KeltaError::unsupported("work_link_pr")))
+    }
+
     async fn work_fix_checks(&self, review: &crate::codehost::Review) -> Result<String, KeltaError> {
         self.record("work_fix_checks", serde_json::json!({ "review": review }));
         self.overridden("work_fix_checks").unwrap_or_else(|| Ok("sent 1 failed check".into()))

@@ -12,15 +12,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use kelta_proto::api::{CoreApi, Tracker};
-use kelta_proto::codehost::{Review, ReviewKind};
+use kelta_proto::codehost::{PrLink, PrSource, PrState, Review, ReviewKind};
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::{BusEvent, Toast, ToastAction, ToastLevel, bus};
 use kelta_proto::ext::{BlockingOutcome, ToolHandle};
 use kelta_proto::ids::{ProjectId, SessionId, ToolId, WorkItemId};
 use kelta_proto::model::{
-    BranchChoice, CloseOnExit, Lifecycle, OpenPaneRequest, PORT_BLOCK, PaneContent, Placement, ProjectInfo,
-    RepoInfo, RestorePolicy, SessionInfo, SessionKind, SpawnRequest, StartWorkPlan, StepStatus, TemplateCtx,
-    WORK_STEPS, WorkItem, WorkKind, WorkSource, WorkState,
+    BranchChoice, CloseOnExit, Lifecycle, OpenPaneRequest, PORT_BLOCK, PaneContent, Placement, PrChoice,
+    ProjectInfo, RepoInfo, RestorePolicy, Scope, SessionInfo, SessionKind, SpawnRequest, StartWorkPlan,
+    StepStatus, TemplateCtx, WORK_STEPS, WorkItem, WorkKind, WorkSource, WorkState,
 };
 use kelta_proto::settings::{EditorOpenMode, EditorRestore, SessionTemplate, Settings, TransitionTarget};
 use kelta_proto::tracker::{Assignee, Status, TicketRef, Transition};
@@ -268,9 +268,16 @@ impl WorkService {
         match &source {
             WorkSource::Ticket { ticket } => {
                 let tracker = core.tracker_for(&ticket.account).await?;
-                let detail = tracker.get(ticket).await?;
+                // Core's detail: its `prs` name my open PRs on this ticket (`ticket_prs`).
+                let detail = core.ticket_get(ticket).await?;
                 let snap =
                     TicketSnap::from_ticket(&detail.ticket, tracker.branch_key(ticket), tracker.kind());
+                // No work item yet: Start work resumes the head branch of my PR naming it (#453).
+                let pr_choices = match &existing {
+                    None => self.pr_choices(&core, &project, &items, &detail.prs).await,
+                    Some(_) => Vec::new(),
+                };
+                let adopt = pr_choices.first();
                 let remembered = existing.as_ref().map(|w| w.repo_id.clone()).or_else(|| {
                     items
                         .iter()
@@ -278,7 +285,8 @@ impl WorkService {
                         .map(|w| w.repo_id.clone())
                         .next()
                 });
-                let repo_id = plan::select_repo(&project, repo_hint.as_deref(), remembered.as_deref())
+                let hint = adopt.map(|c| c.repo_id.as_str()).or(repo_hint.as_deref());
+                let repo_id = plan::select_repo(&project, hint, remembered.as_deref())
                     .ok_or_else(|| KeltaError::invalid("no repository"))?;
                 let repo = repo_of(&project, &repo_id)?;
                 let mut ctx = plan::base_ctx(&project, Some(&repo), &self.dirs);
@@ -289,11 +297,18 @@ impl WorkService {
                 let (branch, path, exists) = match &existing {
                     Some(w) => (w.branch.clone(), w.worktree.clone(), None),
                     None => {
-                        let raw = render(&settings.worktree.branch_template, &ctx, Mode::Strict)?;
+                        let raw = match adopt {
+                            Some(c) => c.branch.clone(),
+                            None => render(&settings.worktree.branch_template, &ctx, Mode::Strict)?,
+                        };
                         let branch = plan::valid_branch(&repo.path, &raw).await?;
                         ctx.set("branch", branch.clone());
                         let path = plan::worktree_path(&settings, &ctx)?;
-                        let exists = plan::branch_exists(&repo.path, &branch).await?;
+                        // The PR's branch is reused, never suffixed: a suffix would not update the PR.
+                        let exists = match adopt {
+                            Some(_) => None,
+                            None => plan::branch_exists(&repo.path, &branch).await?,
+                        };
                         (branch, path, exists)
                     }
                 };
@@ -302,11 +317,16 @@ impl WorkService {
                 let claude = plan::claude_plan(&settings, "default", "ticket", &ctx);
                 let mut side = plan::side_effects(&settings, &project, true, &ctx);
                 side.assign_me &= tracker.caps().assign;
-                Ok(plan::assemble(
+                let base = match (&existing, adopt) {
+                    (Some(w), _) => w.base.clone(),
+                    (None, Some(c)) => c.base.clone(),
+                    (None, None) => repo.base.clone(),
+                };
+                let mut plan = plan::assemble(
                     &project,
                     source.clone(),
                     &repo,
-                    existing.as_ref().map(|w| w.base.clone()).unwrap_or_else(|| repo.base.clone()),
+                    base,
                     branch,
                     exists,
                     path,
@@ -314,7 +334,10 @@ impl WorkService {
                     claude,
                     side,
                     existing.as_ref(),
-                ))
+                );
+                plan.adopt_pr = adopt.map(|c| c.url.clone());
+                plan.pr_choices = pr_choices;
+                Ok(plan)
             }
             WorkSource::Review { review } => {
                 let host = core.code_host_for(&review.account).await?;
@@ -448,6 +471,44 @@ impl WorkService {
         }
     }
 
+    /// My open PRs among a ticket's `prs` (key matches of the polled feeds) on a repo of `project`
+    /// that no work item owns yet (#453).
+    async fn pr_choices(
+        &self,
+        core: &Arc<dyn CoreApi>,
+        project: &ProjectInfo,
+        items: &[WorkItem],
+        prs: &[PrLink],
+    ) -> Vec<PrChoice> {
+        let named = |url: &str| {
+            prs.iter().any(|l| l.url == url && l.source == PrSource::KeyMatch && l.state == PrState::Open)
+        };
+        if !prs.iter().any(|l| named(&l.url)) {
+            return Vec::new();
+        }
+        let scope = Scope::Project { id: project.id.clone() };
+        // Not mine (a review request) or not listed: Start work plans a new branch as before.
+        let Ok(mine) = core.review_list(scope, ReviewKind::Authored).await else { return Vec::new() };
+        mine.into_iter()
+            .map(|i| i.review)
+            .filter(|r| named(&r.url) && plan::owner_of_pr(items, project, r).is_none())
+            .filter_map(|r| {
+                let repo = project
+                    .repos
+                    .iter()
+                    .find(|x| x.code_host.as_ref().is_some_and(|c| c.repo == r.r#ref.repo))?;
+                Some(PrChoice {
+                    url: r.url,
+                    number: r.r#ref.number,
+                    title: r.title,
+                    repo_id: repo.id.clone(),
+                    branch: r.source_branch,
+                    base: r.target_branch,
+                })
+            })
+            .collect()
+    }
+
     // ---- start -----------------------------------------------------------------------------
 
     pub(crate) async fn create_item(&self, mut plan: StartWorkPlan) -> Result<WorkItemId, KeltaError> {
@@ -510,7 +571,7 @@ impl WorkService {
     }
 
     pub(crate) async fn run_saga_locked(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
-        let r = self.run_saga(id).await;
+        let r = self.run_saga(id, None).await;
         self.release_slot(id);
         // A slot may have freed while this saga ran: re-check now that the item is in the queue.
         if r.as_ref().is_ok_and(|w| matches!(w.state, WorkState::Queued { .. })) {
@@ -519,7 +580,8 @@ impl WorkService {
         r
     }
 
-    async fn run_saga(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
+    /// `last`: stop once that step is done (MCP `link_pr` stops after `worktree`: no Claude yet).
+    pub(crate) async fn run_saga(&self, id: &WorkItemId, last: Option<&str>) -> Result<WorkItem, KeltaError> {
         let mut item = self.load(id).await?;
         let mut j = self.load_journal(id);
         if j.plan.is_none() {
@@ -570,6 +632,9 @@ impl WorkService {
                     if crash {
                         *self.crash_after.lock() = None;
                         return Err(KeltaError::internal(format!("simulated crash after {step}")));
+                    }
+                    if last == Some(*step) {
+                        break;
                     }
                 }
                 Err(e) => {

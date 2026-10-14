@@ -3,12 +3,15 @@
 
 use std::path::PathBuf;
 
+use kelta_proto::codehost::Review;
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
-use kelta_proto::model::{FinishOpts, Lifecycle, RunClaim, RunState, WorkItem, WorkKind, WorkState};
+use kelta_proto::model::{
+    FinishOpts, Lifecycle, RunClaim, RunState, WorkItem, WorkKind, WorkSource, WorkState,
+};
 use kelta_proto::tracker::{StatusCategory, TicketRef};
 
-use crate::{WorkService, git};
+use crate::{WorkService, git, plan};
 
 impl WorkService {
     /// `claim_ticket`: `worktree` defaults to the project's primary repo, `branch` to its checkout.
@@ -96,6 +99,66 @@ impl WorkService {
                 };
                 Err(KeltaError::conflict(format!("{key} is held by {who}")))
             }
+        }
+    }
+
+    /// MCP `link_pr` (#453): the work item of `ticket` on `pr`'s head branch, without Claude. The
+    /// scratch item adopting `pr` gets the ticket; else a new item runs Start work up to its
+    /// worktree (the one that has the branch checked out, or a new one) and Resume runs the rest.
+    /// Linked already: a no-op. `Conflict` names the item holding the ticket or the PR.
+    pub async fn link_ticket_pr(
+        &self,
+        project: &ProjectId,
+        ticket: TicketRef,
+        pr: &Review,
+    ) -> Result<WorkItem, KeltaError> {
+        self.ensure_listener();
+        let core = self.api()?;
+        let p = core.project(project).ok_or_else(|| KeltaError::not_found(format!("project {project}")))?;
+        let guard = self.start_lock.lock().await;
+        let all = self.store.list_items(None).await?;
+        let source = WorkSource::Ticket { ticket: ticket.clone() };
+        let named = |w: &WorkItem| format!("work item {} on {}", w.id, w.branch);
+        match (plan::existing_for(&all, &source), plan::owner_of_pr(&all, &p, pr)) {
+            (Some(h), Some(o)) if h.id == o.id => return self.load(&h.id).await,
+            (Some(h), _) => {
+                return Err(KeltaError::conflict(format!("{} is held by {}", ticket.key, named(h))));
+            }
+            (None, Some(o)) => {
+                if let Some(t) = &o.ticket {
+                    let who = format!("{} ({})", named(o), t.key);
+                    return Err(KeltaError::conflict(format!("{} is held by {who}", pr.url)));
+                }
+                let id = o.id.clone();
+                drop(guard);
+                return self.link(&id, ticket, false).await;
+            }
+            (None, None) => {}
+        }
+        let repo = p
+            .repos
+            .iter()
+            .find(|r| r.code_host.as_ref().is_some_and(|c| c.repo == pr.r#ref.repo))
+            .ok_or_else(|| KeltaError::invalid(format!("{} has no repository {}", p.name, pr.r#ref.repo)))?;
+        let mut plan = self.build_plan(project, source, Some(repo.id.clone())).await?;
+        if plan.adopt_pr.as_deref() != Some(pr.url.as_str()) {
+            // A PR that does not name the ticket (yet): its branch replaces the template's.
+            plan.repo_id = repo.id.clone();
+            plan.branch = pr.source_branch.clone();
+            plan.base = pr.target_branch.clone();
+            plan.branch_exists = None;
+            plan.adopt_pr = Some(pr.url.clone());
+        }
+        let id = self.create_item(plan).await?;
+        let lock = self.item_lock(&id);
+        let _item = lock.lock().await;
+        drop(guard);
+        let item = self.run_saga(&id, Some("worktree")).await?;
+        match &item.state {
+            WorkState::Failed { step, message } => {
+                Err(KeltaError::upstream(format!("work item {id} failed at {step}: {message}")))
+            }
+            _ => Ok(item),
         }
     }
 

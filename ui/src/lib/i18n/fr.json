@@ -2586,5 +2586,6 @@
   "Changes since you looked": "Changements depuis ton dernier coup d’œil",
   "Ship / Push": "Livrer / Pousser",
   "Note for later": "Note pour plus tard",
-  "Tools here": "Outils ici"
+  "Tools here": "Outils ici",
+  "Your open PR names {subject}: the work item resumes its branch {branch}.": "Votre PR ouverte cite {subject} : l’élément de travail reprend sa branche {branch}."
 }

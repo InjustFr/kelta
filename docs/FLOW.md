@@ -49,13 +49,20 @@ The loop runs through them: pick a ticket in the Library, start it (`s`), Claude
 
 | Kind | Created by | Branch | Title | Claude prompt |
 |---|---|---|---|---|
-| Ticket | Start work on a ticket | `worktree.branch_template` | ticket title | `claude.prompt_templates.ticket` |
+| Ticket | Start work on a ticket, MCP `link_pr` | `worktree.branch_template`, or the head branch of my open PR naming the ticket (below) | ticket title | `claude.prompt_templates.ticket` |
 | Scratch (`WorkKind::Branch`) | New work item (`⇧⌘N`), `kelta-ctl start --task` | `work.scratch_branch_template`, default `wip/{slug}` (slug of the task's first line) | first line of the task, 72 chars max | `standalone`, default now `"{task}"` |
 | Review | Review locally on someone else's PR | `kelta/pr-<n>` | PR title | `review` |
 
 A scratch item behaves like a ticket item in every way except tracker side effects. It can be linked to a ticket later (§4.3).
 
 Review locally on **my own** PR never creates a `kelta/pr-<n>` item: it resumes the work item that owns the PR, or, for a PR made outside Kelta, adopts the PR's head branch as a scratch item so pushes update the PR (§9, bug B2).
+
+PRs opened before their ticket existed (#453, a batch of fixes made in a terminal, tickets filed afterwards) join their ticket two ways:
+
+- **Start work on a ticket my open PR names.** A ticket with no work item whose `ticket_prs` key matches include open PRs of mine (the authored feed) that no work item owns plans on the first one's head branch instead of `worktree.branch_template`: `adopt_pr` is set, `base` is the PR's target branch, the repo is the one bound to the PR's repository, and the branch is reused, never suffixed. The Start sheet says it resumes that branch; with several such PRs (`StartWorkPlan.pr_choices`) it asks which one. The item is a ticket item in `pr_open`.
+- **MCP `link_pr{key, account?, pr, project?}`** (`pr`: a URL, or a number one of my open PRs has alone) for the agent that made the batch: a scratch item already adopting the PR gets the ticket (`work_link`); else a new ticket item on the PR's head branch runs Start work up to its `worktree` step, without Claude, and its ticket reads Resume work, which runs the rest of the start. A second call is a no-op. `Conflict` names the item holding the ticket or the PR.
+
+Either way, when the head branch is already checked out in a worktree of the repo (not the main checkout), the item adopts that worktree instead of adding a second one.
 
 Work items are git worktrees. Sapling is not a work-item backend (§11.2).
 

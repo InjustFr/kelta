@@ -159,6 +159,33 @@ describe('StartWorkSheet plan', () => {
     expect(sentPlan().branch_exists).toEqual({ has_worktree: true, choice: 'suffix' });
   });
 
+  it('resumes my PR naming the ticket and picks among several (#453)', async () => {
+    const pr = (n: number, repo_id: string) => ({
+      url: `https://github.com/acme/shop/pull/${n}`,
+      number: n,
+      title: `SHOP-151 fix ${n}`,
+      repo_id,
+      branch: `fix-${n}`,
+      base: `release-${n}`,
+    });
+    await mountSheet((p) => {
+      p.pr_choices = [pr(7, 'api'), pr(8, 'web')];
+      p.adopt_pr = pr(7, 'api').url;
+      p.branch = 'fix-7';
+    });
+    expect(screen.getByTestId('adopt-note').textContent).toContain('fix-7');
+    await fireEvent.change(screen.getByLabelText('Pull request'), { target: { value: pr(8, 'web').url } });
+    await fireEvent.click(start());
+    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_start')).toBe(true));
+    const sent = sentPlan();
+    expect([sent.adopt_pr, sent.branch, sent.base, sent.repo_id]).toEqual([
+      pr(8, 'web').url,
+      'fix-8',
+      'release-8',
+      'web',
+    ]);
+  });
+
   it('shows the repository picker only with several repos', async () => {
     await mountSheet((p) => {
       p.repo_choices = ['api', 'web'];
