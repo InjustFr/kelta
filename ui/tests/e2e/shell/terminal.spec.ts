@@ -51,7 +51,7 @@ test.describe('terminal pane', () => {
 
   test('exit banner: Enter restarts the session and re-attaches', async ({ page }) => {
     await boot(page);
-    await dispatch(page, 'project.goto.2'); // work row 2: billing's work tab
+    await dispatch(page, 'project.goto.6'); // work row 6: billing's work tab
     const pane = page.locator(`[data-session-id="${SESSIONS.billingExited}"]`);
     await expect(pane.getByTestId('exit-banner')).toContainText('Exited');
     await page.locator(`[data-pane-id="billing-p3"]`).click();
@@ -67,7 +67,7 @@ test.describe('terminal pane', () => {
 
   test('exit banner: x closes the pane without killing anything', async ({ page }) => {
     await boot(page);
-    await dispatch(page, 'project.goto.2'); // work row 2: billing's work tab
+    await dispatch(page, 'project.goto.6'); // work row 6: billing's work tab
     await expect(
       page.locator(`[data-session-id="${SESSIONS.billingExited}"]`).getByTestId('exit-banner'),
     ).toBeVisible();
@@ -172,7 +172,7 @@ test.describe('terminal pane', () => {
         message: '`claude` not found in your login PATH',
       }),
     );
-    await dispatch(page, 'project.goto.3'); // kelta-tools' work tab: its Claude pane attaches for the first time
+    await dispatch(page, 'project.goto.8'); // kelta-tools' work tab: its Claude pane attaches for the first time
     const error = page.getByTestId('terminal-error');
     await expect(error).toContainText('not found in your login PATH');
     await expect(error.getByRole('button', { name: 'Open diagnostics' })).toBeVisible();

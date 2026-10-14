@@ -55,10 +55,10 @@ test.describe('project switching', () => {
       page.evaluate(() =>
         document.querySelectorAll('.xterm').forEach((x) => x.setAttribute('data-warm', '')),
       );
-    await goto(2); // billing's work tab (work rows: shop's, then billing's)
+    await goto(6); // billing's work tab (work rows: shop's four, then billing's)
     await expect(page.locator('[data-testid="workspace"][data-project-id="billing"] .xterm')).toHaveCount(3);
     await tag();
-    await goto(1);
+    await goto(4); // shop's work tab, after its three items without a tab
     await expect(page.locator('[data-testid="workspace"][data-project-id="shop"] .xterm')).toHaveCount(2);
     await tag();
 
@@ -82,7 +82,7 @@ test.describe('project switching', () => {
         });
       const ms: number[] = [];
       for (let i = 0; i < 8; i += 1) {
-        window.__switchTo = i % 2 === 0 ? 'project.goto.2' : 'project.goto.1';
+        window.__switchTo = i % 2 === 0 ? 'project.goto.6' : 'project.goto.4';
         const sel =
           i % 2 === 0
             ? '[data-testid="workspace"][data-project-id="billing"] .xterm'
@@ -151,7 +151,7 @@ test.describe('project switching', () => {
           ),
         ),
       )
-      .toEqual(['billing', 'shop', 'kelta-tools', 'home']);
+      .toEqual(['billing', 'shop', 'kelta-tools']);
     expect((await callsOf(page, 'project_reorder')).length).toBe(1);
     expect((await callsOf(page, 'session_kill')).length).toBe(0);
   });
@@ -168,7 +168,7 @@ test.describe('project switching', () => {
           ),
         ),
       )
-      .toEqual(['kelta-tools', 'shop', 'billing', 'home']);
+      .toEqual(['kelta-tools', 'shop', 'billing']);
     const order = (await callsOf(page, 'project_reorder'))[0]!.args as { ids: string[] };
     expect(order.ids.indexOf('kelta-tools')).toBeLessThan(order.ids.indexOf('shop'));
     expect((await callsOf(page, 'session_kill')).length).toBe(0);
