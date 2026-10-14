@@ -134,6 +134,9 @@ test.describe('sidebar', () => {
     await boot(page);
     const shop = page.locator('[data-testid="rail-band"][data-project-id="shop"]');
     await expect(shop.getByTestId('rail-resume').filter({ hasText: 'SHOP-120' })).toHaveCount(1);
+    // A PR waiting on a reviewer, its tab closed, has no row (#443): the Queue still lists it.
+    const waiting = 'Cache headers for product images';
+    await expect(shop.getByText(waiting)).toHaveCount(0);
     const coupons = shop
       .locator('[data-testid="rail-resume"], [data-testid="rail-row"]')
       .filter({ hasText: 'SHOP-155' });
@@ -147,6 +150,7 @@ test.describe('sidebar', () => {
     await expect(page.getByTestId('rail-add')).toHaveCount(0);
 
     await dispatch(page, 'inbox.open');
+    await expect(page.getByTestId('inbox-pane')).toContainText(waiting);
     await expect.poll(() => railWidth(page)).toBe(64);
     for (const more of await page.getByTestId('rail-more').all()) await expect(more).toBeHidden();
     await expect(coupons).toBeVisible();

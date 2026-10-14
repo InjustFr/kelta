@@ -47,6 +47,7 @@ import { layout, projects, sessions, toasts, tools, ui, work, type GlobalView } 
 import { terminalPool } from '$lib/terminal';
 
 import { phaseNow, unfinishedWork } from '../views/work/live';
+import { zoneOf } from '../views/inbox/groups';
 import { goToWork } from '../views/work/nav';
 import { maxLamp, type Lamp } from '../views/work/phase';
 
@@ -73,9 +74,10 @@ export interface RailRow {
 }
 
 /**
- * A band (#435): its unfinished work items by start time, tab or not, so a phase change never moves a
- * row; then its Claude sessions without a work item, shown in a tab or live in the background; then
- * every other tab (shells, tools, lists), folded under "n more".
+ * A band (#435): its unfinished work items by start time, so a phase change never moves a row; an item
+ * waiting on others has a row only while its tab is open (#443); then its Claude sessions without a
+ * work item, shown in a tab or live in the background; then every other tab (shells, tools, lists),
+ * folded under "n more".
  */
 export function bandTabs(projectId: ProjectId): { work: RailRow[]; claude: RailRow[]; more: Tab[] } {
   const l = layout.get(projectId);
@@ -83,11 +85,13 @@ export function bandTabs(projectId: ProjectId): { work: RailRow[]; claude: RailR
   const work = unfinishedWork()
     .filter((w) => w.project_id === projectId)
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
-    .map((item) => ({
-      project: projectId,
-      tab: tabs.find((tab) => tab.work_item_id === item.id) ?? null,
-      item,
-    }));
+    .flatMap((item) => {
+      const tab = tabs.find((tab) => tab.work_item_id === item.id) ?? null;
+      const phase = phaseNow(item);
+      // In flight with Claude working is the Queue's Claude zone, not Waiting on others (#413).
+      const waits = zoneOf(phase.section) === 'waiting' && phase.lamp !== 'working';
+      return tab || !waits ? [{ project: projectId, tab, item }] : [];
+    });
   const claude = sessions
     .forProject(projectId)
     .filter((s) => s.kind.type === 'claude' && !s.work_item_id)

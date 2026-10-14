@@ -923,5 +923,104 @@
     "claude_replied": false,
     "title": null,
     "pr_title_needs_key": false
+  },
+  {
+    "id": "0199a6b2-0000-7000-8000-00000000a010",
+    "project_id": "shop",
+    "kind": "branch",
+    "ticket": null,
+    "review": null,
+    "repo_id": "api",
+    "worktree": "/Users/ada/code/shop-api.worktrees/image-cache-headers",
+    "branch": "feat/image-cache-headers",
+    "base": "main",
+    "claude_uuid": null,
+    "nvim_socket": null,
+    "session_ids": [],
+    "tab_id": null,
+    "pr_url": "https://github.com/acme/shop-api/pull/313",
+    "state": {
+      "kind": "pr_open",
+      "detail": null
+    },
+    "steps": [
+      {
+        "step": "before_start",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_ticket",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "fetch_base",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "worktree",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "include_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude_files",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "layout",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "setup",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "editor",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "claude",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "tracker_side_effects",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      },
+      {
+        "step": "persist",
+        "status": "done",
+        "detail": null,
+        "updated_at": "2026-10-09T08:00:00Z"
+      }
+    ],
+    "created_at": "2026-10-03T09:00:00Z",
+    "review_due": false,
+    "claude_replied": false,
+    "title": "Cache headers for product images",
+    "pr_title_needs_key": false
   }
 ]
