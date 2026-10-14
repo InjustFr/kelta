@@ -210,8 +210,6 @@
   },
   "Add project": "Projekt hinzufügen",
   "Close {name}": "{name} schließen",
-  "{name}: running in the background, click to show it": "{name}: läuft im Hintergrund, zum Anzeigen klicken",
-  "background": "Hintergrund",
   "No projects yet": "Noch keine Projekte",
   "Row actions": "Zeilenaktionen",
   "Project actions": "Projektaktionen",

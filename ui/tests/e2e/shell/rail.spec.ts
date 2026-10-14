@@ -128,23 +128,31 @@ test.describe('sidebar', () => {
     await expect.poll(() => railWidth(page)).toBe(64);
   });
 
-  test('every unfinished work item has a row, one without a tab resumes; the Queue folds to lamp tiles (#435)', async ({
+  test('a row is an open tab or a live process (#452): closed and kept, it moves to Background; the Queue folds to lamp tiles', async ({
     page,
   }) => {
     await boot(page);
     const shop = page.locator('[data-testid="rail-band"][data-project-id="shop"]');
-    await expect(shop.getByTestId('rail-resume').filter({ hasText: 'SHOP-120' })).toHaveCount(1);
-    // A PR waiting on a reviewer, its tab closed, has no row (#443): the Queue still lists it.
+    // No tab and no live session, whatever the phase: SHOP-120 waits on a reviewer, SHOP-155 is your move.
     const waiting = 'Cache headers for product images';
     await expect(shop.getByText(waiting)).toHaveCount(0);
-    const coupons = shop
-      .locator('[data-testid="rail-resume"], [data-testid="rail-row"]')
-      .filter({ hasText: 'SHOP-155' });
-    await expect(coupons).toHaveAttribute('data-testid', 'rail-resume');
-    await coupons.click();
-    await expect(coupons).toHaveAttribute('data-testid', 'rail-row');
-    await expect(coupons).toHaveAttribute('aria-current', 'page');
-    await expect(coupons.locator('.name')).toHaveText('Flaky test in cart service');
+    await expect(shop.getByText('SHOP-120')).toHaveCount(0);
+    await expect(shop.getByText('SHOP-155')).toHaveCount(0);
+    await expect(page.getByTestId('rail-background-section')).toHaveCount(0);
+
+    // Close tab, keep sessions: SHOP-142's Claude and nvim go to Background, once each.
+    const row = page.locator('li', { has: page.locator('[data-tab-id="shop-t1"]') });
+    await row.hover();
+    await row.locator('.close').click();
+    await page.getByRole('button', { name: 'Close tab, keep sessions' }).click();
+    const background = page.getByTestId('rail-background-section');
+    await expect(background.getByTestId('rail-background').filter({ hasText: 'SHOP-142' })).toHaveCount(2);
+    await expect(shop.getByText('SHOP-142')).toHaveCount(0);
+    // A click opens a tab on it: the work row is back in its band.
+    await background.getByTestId('rail-background').first().click();
+    const work = shop.getByTestId('rail-row').filter({ hasText: 'SHOP-142' });
+    await expect(work).toHaveAttribute('aria-current', 'page');
+    await expect(background.getByTestId('rail-background')).toHaveCount(1);
     // Home has no band and nothing sits above the bands.
     await expect(page.locator('[data-testid="rail-band"][data-project-id="home"]')).toHaveCount(0);
     await expect(page.getByTestId('rail-add')).toHaveCount(0);
@@ -153,7 +161,8 @@ test.describe('sidebar', () => {
     await expect(page.getByTestId('inbox-pane')).toContainText(waiting);
     await expect.poll(() => railWidth(page)).toBe(64);
     for (const more of await page.getByTestId('rail-more').all()) await expect(more).toBeHidden();
-    await expect(coupons).toBeVisible();
+    await expect(work).toBeVisible();
+    await expect(background.getByTestId('rail-background')).toBeVisible();
   });
 
   test('mockup metrics (#451): 44px views, 22px captions, 30px rows, no rules; ⌘ held shows the row digits', async ({
@@ -164,11 +173,7 @@ test.describe('sidebar', () => {
     const height = async (sel: string) => Math.round((await page.locator(sel).first().boundingBox())!.height);
     expect(await height('[data-testid="rail-inbox"]')).toBe(44);
     expect(await height('[data-testid="rail-project"]')).toBe(22);
-    expect(
-      await height(
-        '[data-testid="rail-band"] [data-testid="rail-resume"], [data-testid="rail-band"] [data-testid="rail-row"]',
-      ),
-    ).toBe(30);
+    expect(await height('[data-testid="rail-band"] [data-testid="rail-row"]')).toBe(30);
     await expect(page.getByTestId('rail-inbox').locator('.kbd')).toBeVisible();
     await expect(page.getByTestId('rail-settings').locator('.kbd')).toBeVisible();
     // No rule anywhere in the expanded sidebar (keycaps and buttons keep their outlines).

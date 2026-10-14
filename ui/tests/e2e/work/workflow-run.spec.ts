@@ -51,12 +51,10 @@ test('detail w: the run opens a background tab, the toast opens and peeks its se
   ).toHaveCount(1);
 
   // #272: the run's hooks show in the context bar; its pane lists phases and agents, live.
-  // #392: the run claimed the ticket, so the rail shows it on the ticket's row (#435), not on the session's.
+  // #392: the run claimed the ticket, whose row has no tab (#452), so the rail shows no run line:
+  // the run's own row names it and the context bar below opens its runs.
   await expect(tab).toHaveCount(1);
-  await expect(page.getByTestId('rail-run')).toHaveCount(1);
-  await expect(
-    page.locator('li', { has: page.getByTestId('rail-run') }).locator('xpath=preceding-sibling::li[1]'),
-  ).toContainText('SHOP-151');
+  await expect(page.getByTestId('rail-run')).toHaveCount(0);
   const chip = page.getByTestId('context-workflow');
   await expect(chip).toHaveText('⚙ kelta-ticket-pass · Pick');
   await chip.click();

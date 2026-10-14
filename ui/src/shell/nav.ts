@@ -47,8 +47,6 @@ import { layout, projects, sessions, toasts, tools, ui, work, type GlobalView } 
 import { terminalPool } from '$lib/terminal';
 
 import { phaseNow, unfinishedWork } from '../views/work/live';
-import { zoneOf } from '../views/inbox/groups';
-import { goToWork } from '../views/work/nav';
 import { maxLamp, type Lamp } from '../views/work/phase';
 
 import { confirms } from './confirm.svelte';
@@ -63,8 +61,8 @@ export function railProjects(): ProjectInfo[] {
 }
 
 /**
- * A rail row of an open project: an unfinished work item (with its tab, or none: a click resumes it),
- * a Claude session without a work item (its tab, or none: live in the background), or a folded tab.
+ * A rail row of an open project: an unfinished work item's tab, a Claude session without a work item
+ * in its tab, a folded tab, or (no tab) a live session in the Background section (#452).
  */
 export interface RailRow {
   project: ProjectId;
@@ -74,10 +72,9 @@ export interface RailRow {
 }
 
 /**
- * A band (#435): its unfinished work items by start time, so a phase change never moves a row; an item
- * waiting on others has a row only while its tab is open (#443); then its Claude sessions without a
- * work item, shown in a tab or live in the background; then every other tab (shells, tools, lists),
- * folded under "n more".
+ * A band (#435): its unfinished work items whose tab is open, by start time, so a phase change never
+ * moves a row; then its Claude sessions without a work item shown in a tab; then every other tab
+ * (shells, tools, lists), folded under "n more". Phase plays no part (#452): a closed tab drops its row.
  */
 export function bandTabs(projectId: ProjectId): { work: RailRow[]; claude: RailRow[]; more: Tab[] } {
   const l = layout.get(projectId);
@@ -86,11 +83,8 @@ export function bandTabs(projectId: ProjectId): { work: RailRow[]; claude: RailR
     .filter((w) => w.project_id === projectId)
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
     .flatMap((item) => {
-      const tab = tabs.find((tab) => tab.work_item_id === item.id) ?? null;
-      const phase = phaseNow(item);
-      // In flight with Claude working is the Queue's Claude zone, not Waiting on others (#413).
-      const waits = zoneOf(phase.section) === 'waiting' && phase.lamp !== 'working';
-      return tab || !waits ? [{ project: projectId, tab, item }] : [];
+      const tab = tabs.find((tab) => tab.work_item_id === item.id);
+      return tab ? [{ project: projectId, tab, item }] : [];
     });
   const claude = sessions
     .forProject(projectId)
@@ -98,14 +92,13 @@ export function bandTabs(projectId: ProjectId): { work: RailRow[]; claude: RailR
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
     .flatMap((session) => {
       const loc = l ? findSession(l, session.id) : null;
-      if (!loc && session.lifecycle !== 'live') return [];
-      return [{ project: projectId, tab: loc && l ? findTab(l, loc.tabId) : null, session }];
+      return loc && l ? [{ project: projectId, tab: findTab(l, loc.tabId), session }] : [];
     });
   const shown = new Set([...work, ...claude].map((r) => r.tab?.id));
   return { work, claude, more: tabs.filter((tab) => !shown.has(tab.id)) };
 }
 
-/** The rail's rows in rail order: each band's work rows, its Claude rows, then its folded tabs. */
+/** The rail's rows in rail order: each band's work rows, its Claude rows, then its folded tabs (not Background). */
 export function railRows(): RailRow[] {
   return railProjects().flatMap((p) => {
     const { work, claude, more } = bandTabs(p.id);
@@ -118,18 +111,16 @@ export function workRows(): RailRow[] {
   return railRows().filter((r) => r.item);
 }
 
-/** A rail row click: a session is revealed, a tab shown, a work item without one resumed (`work_resume`). */
+/** A rail row click: a session is revealed (a Background one in a new tab), else its tab shown. */
 export function openRow(r: RailRow): void {
   if (r.session) void revealSession(r.session.id);
   else if (r.tab) selectRow(r.project, r.tab.id);
-  else if (r.item) void goToWork(r.item);
 }
 
-/** A row's lamp: its Claude session's, its tab's, else its work item's phase. */
+/** A row's lamp: its session's (a Claude or Background row), else its tab's. */
 export function rowLamp(r: RailRow): Lamp {
   if (r.session) return sessionLamp(r.session);
-  if (r.tab) return tabAttention(r.tab);
-  return r.item ? phaseNow(r.item).lamp : 'none';
+  return r.tab ? tabAttention(r.tab) : 'none';
 }
 
 // shortcut: the active project's tool list (Home's in a global view) until #237 slice 6 makes the
@@ -143,19 +134,41 @@ export function railTools(): ToolInfo[] {
   return tools.list(railToolsOf());
 }
 
-/** Live sessions of a project that no pane shows (tools and plain Claude aside: rows of their own): the dim folded rows. */
+/** Live sessions of a project that no pane shows (tools aside), by start time. */
 export function backgroundSessions(projectId: ProjectId): SessionInfo[] {
   const l = layout.get(projectId);
   if (!l) return [];
   return sessions
     .forProject(projectId)
-    .filter(
-      (s) =>
-        s.lifecycle === 'live' &&
-        s.kind.type !== 'tool' &&
-        !(s.kind.type === 'claude' && !s.work_item_id) &&
-        !findSession(l, s.id),
-    );
+    .filter((s) => s.lifecycle === 'live' && s.kind.type !== 'tool' && !findSession(l, s.id))
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+}
+
+/** The Background section (#452): every project's background sessions in rail order, with their unfinished work item. */
+export function backgroundRows(): RailRow[] {
+  return railProjects().flatMap((p) =>
+    backgroundSessions(p.id).map((session) => {
+      const item = session.work_item_id ? work.get(session.work_item_id) : null;
+      return {
+        project: p.id,
+        tab: null,
+        session,
+        item: item && item.state.kind !== 'finished' ? item : undefined,
+      };
+    }),
+  );
+}
+
+/** A Background row's `×`: asks, then stops its session, as "Close and stop sessions" does. */
+export async function requestStopSession(s: SessionInfo): Promise<void> {
+  const answer = await confirms.ask({
+    title: t('Close “{name}”?', { name: s.name }),
+    body: tn('{n} running session will be terminated.', '{n} running sessions will be terminated.', 1),
+    tone: 'danger',
+    actions: [{ id: 'stop', label: t('Close and stop sessions'), variant: 'danger' }],
+  });
+  if (answer !== 'stop') return;
+  await sessions.kill(s.id).catch((err: unknown) => toasts.error(err, t('Stopping the session failed')));
 }
 
 /** Rail label of a tab: `KEY title` for a work tab whose title lacks the key. */

@@ -31,7 +31,7 @@
   import {
     activateProject,
     attachTab,
-    backgroundSessions,
+    backgroundRows,
     bandTabs,
     detachTab,
     openRuns,
@@ -41,7 +41,7 @@
     railProjects,
     railToolsOf,
     requestCloseTab,
-    revealSession,
+    requestStopSession,
     rowLabel,
     rowLamp,
     tabAttention,
@@ -71,9 +71,9 @@
   const home = $derived(rail.find((p) => p.builtin) ?? null);
   const homeBand = $derived(home ? bandTabs(home.id) : null);
   const homeRows = $derived(homeBand ? [...homeBand.work, ...homeBand.claude] : []);
-  const homeFolded = $derived(
-    home && homeBand ? homeBand.more.length + backgroundSessions(home.id).length : 0,
-  );
+  const homeFolded = $derived(homeBand?.more.length ?? 0);
+  // Live sessions with no tab, every project's (#452): one section above the footer.
+  const background = $derived(backgroundRows());
   // Bands whose "n more" row is open.
   let unfolded = $state<Record<ProjectId, boolean>>({});
   // The tool list behind the tool keys and the palette.
@@ -380,7 +380,8 @@
 {/snippet}
 
 <!-- A band row: a work item (lamp, key, title, stage word), a Claude session (lamp, ✻, name, status
-     word) or, unfolded, any other tab. Without a tab, a click resumes the item or reveals the session. -->
+     word) or, unfolded, any other tab. Without a tab it is a Background row (#452): dimmed, a click
+     reveals its session in a tab, `×` stops it. -->
 {#snippet row(p: ProjectInfo, r: RailRow)}
   {@const tab = r.tab}
   {@const item = r.item ?? null}
@@ -389,7 +390,7 @@
   {@const active = !!tab && isFront(p.id, tab.id)}
   {@const key = item ? workKey(item) : ''}
   {@const label = item ? `${key} ${itemTitle(item, tab, key)}` : s ? sessionTitle(s) : rowLabel(tab!)}
-  {@const n = item ? index.get(item.id) : undefined}
+  {@const n = item && tab ? index.get(item.id) : undefined}
   {@const live = s ? [s] : tab ? liveSessionsOfTab(tab) : []}
   {@const run = runLine(
     item?.run,
@@ -399,15 +400,17 @@
   <li
     class="row"
     class:pane-over={!!tab && rowOver === tab.id && paneDrag.current && paneDrag.current.tabId !== tab.id}
+    style:--project-color={tab ? undefined : (resolveProjectColor(p.color) ?? 'var(--k-border-strong)')}
   >
     <button
       type="button"
       class="item tab-row"
       class:active
+      class:background={!tab}
       class:lit={lvl === 'needs_input'}
       title={n ? tip(`${p.name} › ${label}`, `project.goto.${n}`) : `${p.name} › ${label}`}
       aria-current={active ? 'page' : undefined}
-      data-testid={tab ? 'rail-row' : 'rail-resume'}
+      data-testid={tab ? 'rail-row' : 'rail-background'}
       data-project-id={p.id}
       data-tab-id={tab?.id}
       data-work-id={item?.id}
@@ -457,9 +460,15 @@
           >{/if}
         <span class="key k-num">{key}</span>
         <span class="text"><span class="name">{itemTitle(item, tab, key)}</span></span>
-        <span class="stage" data-testid="rail-stage">{stageWord(item)}</span>
+        <!-- A work item's other background sessions (nvim, a shell) name themselves, so its rows differ. -->
+        <span class="stage" data-testid="rail-stage"
+          >{s && !tab && s.kind.type !== 'claude' ? sessionTitle(s) : stageWord(item)}</span
+        >
       {:else if s}
-        <span class="kind glyph" aria-hidden="true">✻</span>
+        {#if s.kind.type === 'claude'}<span class="kind glyph" aria-hidden="true">✻</span>{:else}<span
+            class="kind"
+            aria-hidden="true"><Icon name="terminal" size={14} /></span
+          >{/if}
         <span class="text"><span class="name">{sessionTitle(s)}</span></span>
         <span class="stage" data-testid="rail-stage">{statusLabel(s.status)}</span>
       {:else if tab}
@@ -476,15 +485,22 @@
         label={t('Close {name}', { name: label })}
         onclick={() => void requestCloseTab(p.id, tab.id)}
       />
+    {:else if s}
+      <IconButton
+        class="close"
+        size="sm"
+        icon="x"
+        label={t('Close {name}', { name: label })}
+        onclick={() => void requestStopSession(s)}
+      />
     {/if}
   </li>
   {#if run}{@render runRow(run, label)}{/if}
 {/snippet}
 
-<!-- A band's folded row: its other tabs and background sessions, opened in place; hidden when compact (#435). -->
+<!-- A band's folded row: its other tabs, opened in place; hidden when compact (#435). -->
 {#snippet fold(p: ProjectInfo, more: Tab[], name: (n: number) => string)}
-  {@const background = backgroundSessions(p.id)}
-  {@const folded = more.length + background.length}
+  {@const folded = more.length}
   {@const open = !!unfolded[p.id]}
   {#if folded > 0}
     {@const lvl = maxLamp(more.map((x) => tabAttention(x)))}
@@ -507,24 +523,6 @@
     </li>
     {#if open && !sidebar.compact}
       {#each more as tab (tab.id)}{@render row(p, { project: p.id, tab })}{/each}
-      {#each background as s (s.id)}
-        <li class="row">
-          <button
-            type="button"
-            class="item tab-row background"
-            title={`${p.name} › ${t('{name}: running in the background, click to show it', { name: sessionTitle(s) })}`}
-            data-testid="rail-background"
-            data-session-id={s.id}
-            onclick={() => void revealSession(s.id)}
-          >
-            <span class="socket" aria-hidden="true"></span>
-            <span class="kind" aria-hidden="true"><Icon name="terminal" size={14} /></span>
-            <span class="text"><span class="name">{sessionTitle(s)} · {t('background')}</span></span>
-          </button>
-        </li>
-        {@const run = runLine(null, sessions.runs[s.id] ?? [], claims)}
-        {#if run}{@render runRow(run, sessionTitle(s))}{/if}
-      {/each}
     {/if}
   {/if}
 {/snippet}
@@ -673,6 +671,18 @@
       {/if}
     </div>
   </div>
+
+  {#if background.length > 0}
+    <!-- Live sessions with no tab (#452), every project's in rail order; compact keeps the rows, not the caption. -->
+    <section class="background-section" aria-label={t('Background')} data-testid="rail-background-section">
+      <h2 class="tools-heading quiet">
+        {t('Background')} <span class="count k-num">{background.length}</span>
+      </h2>
+      <ul class="rows">
+        {#each background as r (r.session!.id)}{@render row(projects.byId(r.project)!, r)}{/each}
+      </ul>
+    </section>
+  {/if}
 
   <div class="footer">
     <button
@@ -1052,6 +1062,21 @@
 
   .instance .name {
     font-size: var(--k-font-size-sm);
+  }
+
+  /* Background (#452): pinned above the footer, scrolls on its own past 40% of the sidebar. */
+  .background-section {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    max-height: 40%;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  .tools-heading.quiet {
+    color: var(--k-fg-subtle);
+    font-weight: 400;
   }
 
   /* The quiet session row (`N more`, `N shells`): muted, terminal glyph, no chevron. */
