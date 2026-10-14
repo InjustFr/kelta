@@ -35,7 +35,6 @@ import {
   rebaseStep,
 } from './fixloop.svelte';
 import { workActionDisabled } from './common';
-import { CLAUDE, PR, TICKET, workStage } from './stage';
 import { batch } from './batch.svelte';
 import { askerOf, claudeOf, phaseNow, prOf } from './live';
 import { draftBlocked, draftLabel, toggleDraft } from '../reviews/draft';
@@ -64,14 +63,13 @@ export interface WorkAction {
   run: ((c: Ctx) => Promise<void>) | null;
   /** What it acts on: the menu groups by it (#405). */
   group: WorkGroup;
-  /** It belongs to one situation (a stopped rebase, a failed step, a scratch item): the menu leaves
-   *  it out, not under "Not available now", whenever it is blocked. */
-  situational?: true;
+  /** Blocked, it can still run soon in this phase (#439): the menu lists it under "Not available now".
+   *  Any other blocked action is ruled out for the phase (Claude already running, no PR…) and left out. */
+  soon?: true;
 }
 
-/** The work menu's groups, in order (#405), with the stage each sits nearest to. */
-type WorkGroup = 'work' | 'ticket' | 'branch';
-const GROUP_STAGE: Record<WorkGroup, number> = { work: CLAUDE, ticket: TICKET, branch: PR };
+/** The work menu's groups, in order (#405, #439). */
+type WorkGroup = 'work' | 'ticket' | 'branch' | 'pr';
 
 // A rebase is stopped while git has it open, also after Claude staged the last conflict.
 const stopped = (c: Ctx) =>
@@ -161,6 +159,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   {
     id: 'mark_reviewed',
     group: 'work',
+    soon: true,
     key: 'R',
     label: () => t('Mark reviewed'),
     blocked: (c) => (c.item.review_due ? null : t('Nothing to review')),
@@ -168,7 +167,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'fix',
-    group: 'branch',
+    group: 'pr',
     key: 'f',
     label: () => t('Fix with Claude'),
     blocked: (c) => (hasPr(c) ? null : t('Needs a PR')),
@@ -185,7 +184,6 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   {
     id: 'rebase_continue',
     group: 'branch',
-    situational: true,
     key: 'c',
     label: () => t('Continue rebase'),
     blocked: stopped,
@@ -194,7 +192,6 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   {
     id: 'rebase_abort',
     group: 'branch',
-    situational: true,
     key: 'a',
     label: () => t('Abort rebase'),
     blocked: stopped,
@@ -203,7 +200,6 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   {
     id: 'conflicts',
     group: 'branch',
-    situational: true,
     key: 'n',
     label: () => t('Open conflicts in nvim'),
     blocked: (c) => (c.item.rebase?.conflicts.length ? null : t('No conflicted files')),
@@ -212,7 +208,6 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   {
     id: 'skip_step',
     group: 'work',
-    situational: true,
     key: 's',
     label: (c) =>
       c.item.state.kind === 'failed' ? t('Skip {step}', { step: c.item.state.step }) : t('Skip step'),
@@ -256,7 +251,6 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   {
     id: 'link',
     group: 'ticket',
-    situational: true,
     key: 'l',
     label: () => t('Link to ticket…'),
     blocked: (c) => (c.item.kind !== 'branch' ? t('Already linked to a ticket') : null),
@@ -265,7 +259,6 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   {
     id: 'create_ticket',
     group: 'ticket',
-    situational: true,
     key: 'T',
     label: () => t('Create ticket…'),
     blocked: (c) => (c.item.kind !== 'branch' ? t('Already linked to a ticket') : null),
@@ -274,7 +267,6 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   {
     id: 'open_ticket',
     group: 'ticket',
-    situational: true,
     key: 't',
     label: () => t('Open ticket'),
     blocked: (c) => (c.item.ticket ? null : t('No ticket')),
@@ -282,7 +274,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'open_pr',
-    group: 'branch',
+    group: 'pr',
     key: 'o',
     label: () => t('Open PR'),
     blocked: (c) => (hasPr(c) ? null : t('No PR yet')),
@@ -293,7 +285,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'merge',
-    group: 'branch',
+    group: 'pr',
     key: 'M',
     label: (c) => (c.item.auto_finish ? t('Disarm merge when ready') : t('Merge when ready…')),
     blocked: (c) => (c.item.state.kind === 'pr_open' ? null : t('Needs an open PR')),
@@ -304,7 +296,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'set_draft',
-    group: 'branch',
+    group: 'pr',
     key: 'd',
     label: (c) => {
       const pr = prOf(c.item);
@@ -357,7 +349,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'fix_checks',
-    group: 'branch',
+    group: 'pr',
     key: null,
     label: (c) => c.phase.primaryLabel,
     blocked: (c) => (hasPr(c) ? null : t('Needs a PR')),
@@ -400,7 +392,7 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
   },
   {
     id: 'open_review',
-    group: 'branch',
+    group: 'pr',
     key: null,
     label: () => t('Open review'),
     blocked: (c) => (c.item.review ? null : t('No PR')),
@@ -434,22 +426,30 @@ export function blockedReason(
 const chordOf = (key: string): string => (key === key.toLowerCase() ? key : `shift+${key.toLowerCase()}`);
 
 /**
- * The work menu's entries (FLOW §2.5, #405): the next step first, then what can run now grouped by
- * object (the work item, its ticket, its branch or PR), then what cannot, nearest the phase's stage
- * first (`Menu` lists 5 of them). A situational action that cannot run is left out; every letter
- * still answers, the blocked ones with their reason.
+ * The work menu's entries (FLOW §2.5, #405, #439): the next step first, then what can run now grouped
+ * by object under a header (the work item, Ticket KEY, Branch name, Pull request #n), then the
+ * blocked `soon` ones. Other blocked actions are left out; every letter still answers, the blocked
+ * ones with their reason.
  */
 export function workMenu(item: WorkItem, phase: Phase = phaseNow(item)): MenuItem[] {
   const c = { item, phase };
-  const at = workStage(item, phase, null, false).at;
   const primary = phase.primary ? workAction(phase.primary) : null;
+  const behind = work.git[item.id]?.behind ?? 0;
+  const prNo = prOf(item)?.ref.number ?? item.pr_url?.match(/(\d+)\/?$/)?.[1];
+  const heads: Record<WorkGroup, string | undefined> = {
+    work: undefined,
+    ticket: item.ticket ? t('Ticket {key}', { key: item.ticket.key }) : t('Ticket'),
+    branch: t('Branch {branch}', { branch: item.branch }),
+    pr: prNo ? t('Pull request #{n}', { n: prNo }) : t('Pull request'),
+  };
   const entry = (a: WorkAction, reason: string | null): MenuItem => ({
     id: a.id,
     label: a.label(c),
     kbd: chordOf(a.key!),
     key: a.key!,
     reason,
-    hidden: !!reason && (a.situational || workActionDisabled(item, a.key!) !== null),
+    detail: a.id === 'rebase' && behind > 0 ? `↓${behind}` : undefined,
+    hidden: !!reason && (!a.soon || workActionDisabled(item, a.key!) !== null),
     danger: a.id === 'finish',
   });
   const now: MenuItem[] = [];
@@ -465,17 +465,17 @@ export function workMenu(item: WorkItem, phase: Phase = phaseNow(item)): MenuIte
     });
   }
   const off: MenuItem[] = [];
-  for (const g of ['work', 'ticket', 'branch'] as const) {
+  for (const g of ['work', 'ticket', 'branch', 'pr'] as const) {
     const start = now.length;
     for (const a of WORK_ACTIONS) {
       if (a.group !== g || !a.key || a.id === primary?.id) continue;
       const e = entry(a, blockedReason(a.id, item, phase));
       if (e.reason) off.push(e);
-      else now.push({ ...e, separator: now.length === start && start > 0 });
+      else if (now.length > start) now.push(e);
+      else now.push({ ...e, separator: start > 0, group: heads[g] });
     }
   }
-  const dist = (e: MenuItem) => Math.abs(GROUP_STAGE[workAction(e.id as WorkActionId).group] - at);
-  return [...now, ...off.sort((a, b) => dist(a) - dist(b))];
+  return [...now, ...off];
 }
 
 /** Runs a work action; a blocked one flashes its reason instead. */

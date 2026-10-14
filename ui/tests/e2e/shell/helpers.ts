@@ -16,8 +16,11 @@ export async function boot(page: Page, platform: Platform = 'linux'): Promise<vo
   await waitForAttached(page, 2);
 }
 
-/** Opens a rail band's "n more" row (#430): the project's tabs besides its work rows. */
+/** Opens a rail band's "n more" row (#430): the project's tabs besides its work rows. The compact
+ * sidebar has none (#435): it is opened first. */
 export async function unfold(page: Page, project: string): Promise<void> {
+  if (await page.getByTestId('rail').evaluate((e) => e.classList.contains('compact')))
+    await page.getByTestId('rail-toggle').click();
   const more = page.locator(`[data-testid="rail-more"][data-project-id="${project}"]`);
   if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
 }

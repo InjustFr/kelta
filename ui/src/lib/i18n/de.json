@@ -203,7 +203,10 @@
     "other": "{n} bitten um deine Prüfung"
   },
   "{n} more": "{n} weitere",
-  "Open or create a project": "Projekt öffnen oder erstellen",
+  "{n} shells": {
+    "one": "{n} Shell",
+    "other": "{n} Shells"
+  },
   "Add project": "Projekt hinzufügen",
   "Close {name}": "{name} schließen",
   "{name}: running in the background, click to show it": "{name}: läuft im Hintergrund, zum Anzeigen klicken",
@@ -1464,6 +1467,9 @@
   "Searching…": "Wird gesucht…",
   "No ticket matches.": "Kein passendes Ticket.",
   "Not available now ({n})": "Gerade nicht verfügbar ({n})",
+  "Ticket {key}": "Ticket {key}",
+  "Branch {branch}": "Branch {branch}",
+  "Pull request #{n}": "Pull Request #{n}",
   "Move to…": "Verschieben nach…",
   "PR": "PR",
   "Work menu": "Arbeitsmenü",
