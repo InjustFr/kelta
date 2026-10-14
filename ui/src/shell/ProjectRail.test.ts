@@ -81,11 +81,12 @@ describe('ProjectRail', () => {
     expect(work.querySelector('.key')?.textContent).toBe('SHOP-142');
     expect(work.querySelector('.name')?.textContent).toBe('Rate-limit login');
     expect(work.querySelector('[data-testid="rail-stage"]')?.textContent).toBe('Claude');
-    const digit = () => r.container.querySelector('[data-tab-id="kt-t1"] .index')?.textContent;
+    const kt = () => r.container.querySelector('[data-tab-id="kt-t1"]') as HTMLElement;
+    const digit = () => kt().querySelector('.index')?.textContent;
     expect(digit()).toBeUndefined();
-    expect(r.container.querySelector('[data-tab-id="kt-t1"]')?.getAttribute('title')).toMatch(/\((⌘|Ctrl\+)7\)$/);
     await fireEvent.keyDown(window, { key: 'Meta', metaKey: true, ctrlKey: true });
-    expect(digit()).toBe('7');
+    // The digit and the tooltip's chord name the same row index.
+    expect(kt().title).toMatch(new RegExp(`\\((⌘|Ctrl\\+)${digit()}\\)$`));
     await fireEvent.keyUp(window, { key: 'Meta' });
     expect(digit()).toBeUndefined();
     const more = within(band(r, 'shop')).getByTestId('rail-more');

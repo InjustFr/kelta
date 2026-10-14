@@ -365,7 +365,8 @@
 <!-- The muted `⌘N` index of a row, when that chord is bound and its modifier held. -->
 {#snippet digit(id: string, text: string)}
   {@const c = chordFor(id)}
-  {#if c && modHeld}<span class="index k-num" title={formatChord(c).join('')} aria-hidden="true">{text}</span>{/if}
+  {#if c && modHeld}<span class="index k-num" title={formatChord(c).join('')} aria-hidden="true">{text}</span
+    >{/if}
 {/snippet}
 
 {#snippet more(p: ProjectInfo)}
@@ -1120,7 +1121,11 @@
     visibility: hidden;
   }
 
+  /* The caption's `⋯` sits over its count, so the count keeps the right edge (#451). */
   .caption-row :global(.more) {
+    position: absolute;
+    top: calc((22px - var(--k-control-height-sm)) / 2);
+    right: 2px;
     visibility: hidden;
   }
 
@@ -1128,7 +1133,8 @@
     visibility: visible;
   }
 
-  .row:has(:global(.close)):is(:hover, :focus-within) :is(.index, .stage) {
+  .row:has(:global(.close)):is(:hover, :focus-within) :is(.index, .stage),
+  .caption-row:is(:hover, :focus-within) .count {
     visibility: hidden;
   }
 

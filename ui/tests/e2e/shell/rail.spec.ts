@@ -164,24 +164,33 @@ test.describe('sidebar', () => {
     const height = async (sel: string) => Math.round((await page.locator(sel).first().boundingBox())!.height);
     expect(await height('[data-testid="rail-inbox"]')).toBe(44);
     expect(await height('[data-testid="rail-project"]')).toBe(22);
-    expect(await height('[data-testid="rail-band"] [data-testid="rail-resume"], [data-testid="rail-band"] [data-testid="rail-row"]')).toBe(30);
+    expect(
+      await height(
+        '[data-testid="rail-band"] [data-testid="rail-resume"], [data-testid="rail-band"] [data-testid="rail-row"]',
+      ),
+    ).toBe(30);
     await expect(page.getByTestId('rail-inbox').locator('.kbd')).toBeVisible();
     await expect(page.getByTestId('rail-settings').locator('.kbd')).toBeVisible();
-    // No horizontal rule anywhere in the expanded sidebar.
-    const ruled = await page
-      .getByTestId('rail')
-      .evaluate((nav) =>
-        [nav, ...nav.querySelectorAll('*')].filter(
-          (e) => parseFloat(getComputedStyle(e).borderTopWidth) > 0 || parseFloat(getComputedStyle(e).borderRightWidth) > 0,
-        ).length,
-      );
-    expect(ruled).toBe(0);
+    // No rule anywhere in the expanded sidebar (keycaps and buttons keep their outlines).
+    const ruled = await page.getByTestId('rail').evaluate((nav) =>
+      [nav, ...nav.querySelectorAll('*')]
+        .filter((e) => {
+          const s = getComputedStyle(e);
+          const wide = e.getBoundingClientRect().width > nav.getBoundingClientRect().width / 2;
+          return (
+            (wide && parseFloat(s.borderTopWidth) > 0) || (parseFloat(s.borderRightWidth) > 0 && e === nav)
+          );
+        })
+        .map((e) => e.className),
+    );
+    expect(ruled).toEqual([]);
 
     const digits = page.getByTestId('rail').locator('.index');
     await expect(digits).toHaveCount(0);
-    await page.keyboard.down('ControlOrMeta');
+    // boot() pretends Linux: the row chords are Ctrl+N.
+    await page.keyboard.down('Control');
     await expect(digits.first()).toBeVisible();
-    await page.keyboard.up('ControlOrMeta');
+    await page.keyboard.up('Control');
     await expect(digits).toHaveCount(0);
   });
 
