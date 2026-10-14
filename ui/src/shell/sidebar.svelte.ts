@@ -3,7 +3,7 @@
 const KEY = 'kelta.rail.v1';
 export const SIDEBAR_MIN = 200;
 export const SIDEBAR_MAX = 480;
-export const SIDEBAR_DEFAULT = 288;
+export const SIDEBAR_DEFAULT = 272;
 /** Below this window width the rail starts as the icon column. */
 const NARROW = '(max-width: 1399px)';
 

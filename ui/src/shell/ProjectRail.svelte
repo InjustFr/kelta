@@ -258,6 +258,10 @@
     );
   }
 
+  // The `⌘1`–`⌘9` digits show only while the modifier is held (#451); the row tooltips always name the chord.
+  let modHeld = $state(false);
+  const onModKey = (e: KeyboardEvent) => (modHeld = currentPlatform() === 'macos' ? e.metaKey : e.ctrlKey);
+
   /** `label (Ctrl+K)`: the tooltip keeps the chord when its badge has no room (#362). */
   function tip(label: string, id: string): string {
     const c = chordFor(id);
@@ -306,7 +310,12 @@
   }
 </script>
 
-<svelte:window onfocus={() => void refreshNow()} />
+<svelte:window
+  onfocus={() => void refreshNow()}
+  onblur={() => (modHeld = false)}
+  onkeydowncapture={onModKey}
+  onkeyupcapture={onModKey}
+/>
 
 {#snippet chord(id: string)}
   {@const c = chordFor(id)}
@@ -314,7 +323,7 @@
 {/snippet}
 
 <!-- A global view (SPEC §1): shown outside any project; the active project stays as it is. -->
-{#snippet place(view: GlobalView, icon: string, id: string, sub: string, n: number)}
+{#snippet place(view: GlobalView, icon: string, id: string, sub: string, n: number, chordId?: string)}
   {@const name = VIEW_NAMES[view]}
   <button
     type="button"
@@ -330,13 +339,13 @@
       <span class="name">{name}</span>
       <span class="sub">{sub}</span>
     </span>
+    {#if chordId}{@render chord(chordId)}{/if}
     {#if n > 0}
       <span class="badge k-num" data-testid={`${id}-badge`}>{n > 99 ? '99+' : n}</span>
     {/if}
   </button>
 {/snippet}
 
-<!-- The muted `⌘N` index of a row, when that chord is bound. -->
 <!-- A row's workflow run (#392): opens the session's runs beside its terminal. -->
 {#snippet runRow(run: { text: string; sessionId: string }, label: string)}
   <li class="row">
@@ -353,9 +362,10 @@
   </li>
 {/snippet}
 
+<!-- The muted `⌘N` index of a row, when that chord is bound and its modifier held. -->
 {#snippet digit(id: string, text: string)}
   {@const c = chordFor(id)}
-  {#if c}<span class="index k-num" title={formatChord(c).join('')} aria-hidden="true">{text}</span>{/if}
+  {#if c && modHeld}<span class="index k-num" title={formatChord(c).join('')} aria-hidden="true">{text}</span>{/if}
 {/snippet}
 
 {#snippet more(p: ProjectInfo)}
@@ -394,8 +404,7 @@
       class="item tab-row"
       class:active
       class:lit={lvl === 'needs_input'}
-      class:background={!tab}
-      title={`${p.name} › ${label}`}
+      title={n ? tip(`${p.name} › ${label}`, `project.goto.${n}`) : `${p.name} › ${label}`}
       aria-current={active ? 'page' : undefined}
       data-testid={tab ? 'rail-row' : 'rail-resume'}
       data-project-id={p.id}
@@ -481,7 +490,7 @@
     <li class="row fold-row">
       <button
         type="button"
-        class="item tab-row fold"
+        class="item tab-row fold sess"
         class:active={!open && more.some((x) => isFront(p.id, x.id))}
         title={`${p.name} › ${name(folded)}`}
         aria-expanded={open}
@@ -491,9 +500,7 @@
         onclick={() => (unfolded[p.id] = !open)}
       >
         <span class="socket" aria-hidden="true"><Lamp level={lvl} /></span>
-        <span class="kind" aria-hidden="true"
-          ><Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} /></span
-        >
+        <span class="kind" aria-hidden="true"><Icon name="terminal" size={13} /></span>
         <span class="text"><span class="name">{name(folded)}</span></span>
       </button>
     </li>
@@ -529,7 +536,7 @@
   style:--k-rail-width="{sidebar.width}px"
   bind:this={nav}
 >
-  {@render place('now', 'inbox', 'inbox', t('{n} your move', { n: now.yours }), now.yours)}
+  {@render place('now', 'inbox', 'inbox', t('{n} your move', { n: now.yours }), now.yours, 'inbox.open')}
   {@render place('tickets', 'ticket', 'tickets', t('{n} assigned to you', { n: mine }), mine)}
   {@render place(
     'reviews',
@@ -677,7 +684,7 @@
       data-testid="rail-settings"
     >
       <span class="lead">
-        <span class="tile plain"><Icon name="settings" size={18} /></span>
+        <span class="tile plain"><Icon name="settings" size={16} /></span>
         <span class="text"><span class="name">{t('Settings')}</span></span>
       </span>
       {@render chord('settings.open')}
@@ -744,12 +751,11 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: var(--k-space-3);
+    gap: var(--k-space-1);
     width: var(--k-rail-width);
     flex: none;
     min-height: 0;
-    padding: var(--k-space-3);
-    border-right: 1px solid var(--k-border);
+    padding: var(--k-space-2) var(--k-space-3) var(--k-space-3);
     background: var(--k-rail);
   }
 
@@ -774,29 +780,24 @@
     height: 100%;
   }
 
-  /* Settings: the chord shows on hover and focus only (the tooltip names it too). */
+  /* Queue's `⌘0` and Settings' `⌘,` sit on the right (#451). */
   .kbd {
     display: inline-flex;
     align-items: center;
     flex: none;
     height: 100%;
-    visibility: hidden;
   }
 
-  button:is(:hover, :focus-visible) > .kbd {
-    visibility: visible;
-  }
-
-  /* Global views (44px, name over status word); session and tool rows are 32px, one line. */
+  /* Global views (44px, name over status word); work and session rows are 30px, one line. */
   .item {
     position: relative;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--k-space-3);
     width: 100%;
     height: var(--k-sidebar-row-height);
     flex: none;
-    padding: 0 var(--k-space-3);
+    padding: 0 10px;
     border: none;
     border-radius: var(--k-radius);
     background: transparent;
@@ -830,8 +831,8 @@
     align-items: center;
     justify-content: center;
     flex: none;
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     color: var(--k-fg-chrome);
   }
 
@@ -856,7 +857,12 @@
     font-weight: var(--k-weight-medium);
   }
 
+  .place .name {
+    font-weight: var(--k-weight-strong);
+  }
+
   .sub {
+    margin-top: -2px;
     color: var(--k-fg-muted);
     font-size: var(--k-font-size-xs);
   }
@@ -882,10 +888,6 @@
     flex-direction: column;
     flex: 1 1 auto;
     min-height: 0;
-    /* Section break: places above, projects below (#402). Items inside keep the smaller gaps. */
-    margin-top: var(--k-space-2);
-    padding-top: var(--k-space-4);
-    border-top: 1px solid var(--k-border);
   }
 
   .heading {
@@ -907,7 +909,7 @@
   .scroll {
     display: flex;
     flex-direction: column;
-    gap: var(--k-space-2);
+    gap: var(--k-space-1);
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
@@ -923,7 +925,7 @@
   .rows {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: var(--k-space-1);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -946,17 +948,20 @@
     box-shadow: inset 0 0 0 2px var(--k-accent);
   }
 
-  /* Band caption: the project's name, its menu and its drag handle. No lamp: its rows carry them. */
+  /* Band caption: the project's name, its menu and its drag handle. No lamp: its rows carry them.
+     No rules between bands: the 10px above each caption separates them (#451). */
   .caption-row {
     display: flex;
     align-items: center;
+    height: 22px;
+    margin-top: 10px;
   }
 
   .caption {
     flex: 1;
     min-width: 0;
-    height: var(--k-control-height-sm);
-    padding: 0 var(--k-space-3);
+    height: 22px;
+    padding: 0 10px;
     border: none;
     border-radius: var(--k-radius);
     background: transparent;
@@ -969,13 +974,18 @@
   .caption {
     display: flex;
     align-items: center;
-    gap: var(--k-space-2);
+    gap: var(--k-space-3);
+  }
+
+  .caption .name,
+  .tools-heading {
+    font-size: var(--k-font-size-xs);
+    font-weight: var(--k-weight-strong);
   }
 
   .caption .name {
     flex: 1;
     min-width: 0;
-    font-size: var(--k-font-size-sm);
   }
 
   .mark {
@@ -990,38 +1000,39 @@
     flex: none;
     color: var(--k-fg-subtle);
     font-size: var(--k-font-size-xs);
+    font-weight: 400;
   }
 
   .caption:hover {
     color: var(--k-fg);
   }
 
-  /* Other Claude sessions: its own section after the projects (#402). */
-  .tools {
-    margin-top: var(--k-space-3);
-    padding-top: var(--k-space-3);
-    border-top: 1px solid var(--k-border);
-  }
-
+  /* Other Claude sessions: its own section after the projects (#402), headed like a band. */
   .tools-heading {
-    padding: 0 var(--k-space-3);
-    line-height: var(--k-control-height-sm);
+    height: 22px;
+    margin-top: 10px;
+    padding: 0 10px;
+    line-height: 22px;
   }
 
-  /* Rows: [lamp socket][glyph][title], the project colour bar on the left (full height when selected). */
+  /* Rows: [lamp 14px][key or glyph][title][stage], a short project-colour tick on the left (#451). */
   .tab-row,
   .instance {
-    gap: var(--k-space-2);
+    gap: var(--k-space-3);
     height: var(--k-rail-item);
-    padding: 0 var(--k-space-2);
+    padding: 0 10px 0 12px;
   }
 
-  .tab-row {
-    box-shadow: inset 2px 0 0 color-mix(in oklab, var(--project-color) 55%, transparent);
-  }
-
-  .tab-row.active {
-    box-shadow: inset 3px 0 0 var(--project-color);
+  .tab-row::before {
+    content: '';
+    position: absolute;
+    top: 7px;
+    bottom: 7px;
+    left: 3px;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--project-color);
+    opacity: 0.6;
   }
 
   .tab-row.active .name {
@@ -1034,13 +1045,23 @@
     background-color: var(--k-lit);
   }
 
-  .tab-row .name,
+  .tab-row .name {
+    font-size: 13.5px;
+  }
+
   .instance .name {
     font-size: var(--k-font-size-sm);
   }
 
-  .background {
+  /* The quiet session row (`N more`, `N shells`): muted, terminal glyph, no chevron. */
+  .background,
+  .sess {
     color: var(--k-fg-muted);
+  }
+
+  .tab-row.sess .name {
+    font-size: 12.5px;
+    font-weight: 400;
   }
 
   .socket {
@@ -1048,7 +1069,7 @@
     align-items: center;
     justify-content: center;
     flex: none;
-    width: 10px;
+    width: 14px;
   }
 
   .glyph {
@@ -1068,8 +1089,16 @@
   .key,
   .stage {
     flex: none;
-    color: var(--k-fg-muted);
     font-size: var(--k-font-size-xs);
+  }
+
+  .key {
+    color: var(--k-info);
+    font-family: var(--k-font-mono);
+  }
+
+  .stage {
+    color: var(--k-fg-subtle);
   }
 
   .index {
@@ -1079,7 +1108,7 @@
   }
 
   .instance {
-    padding-left: calc(var(--k-space-2) * 2 + 10px);
+    padding-left: calc(12px + 14px + var(--k-space-3));
     color: var(--k-fg-muted);
   }
 
@@ -1115,15 +1144,23 @@
     align-items: center;
     gap: var(--k-space-1);
     flex: none;
-    padding-top: var(--k-space-3);
-    border-top: 1px solid var(--k-border);
   }
 
   .settings {
     flex: 1;
     min-width: 0;
-    height: 36px;
+    height: 32px;
     color: var(--k-fg-chrome);
+  }
+
+  .settings .tile {
+    width: 16px;
+    height: 16px;
+  }
+
+  .settings .name {
+    font-size: var(--k-font-size-sm);
+    font-weight: 400;
   }
 
   .settings:hover {

@@ -56,7 +56,7 @@ test.describe('sidebar', () => {
   }) => {
     await boot(page);
     const toggle = page.getByTestId('rail-toggle');
-    expect(await railWidth(page)).toBe(288);
+    expect(await railWidth(page)).toBe(272);
 
     const edge = page.getByTestId('rail-edge');
     const box = (await edge.boundingBox())!;
@@ -65,7 +65,7 @@ test.describe('sidebar', () => {
     await page.mouse.move(box.x + box.width / 2 + 100, box.y + 300, { steps: 5 });
     await page.mouse.up();
     // The edge follows the pointer (to the pixel).
-    await expect.poll(async () => Math.abs((await railWidth(page)) - 388)).toBeLessThanOrEqual(1);
+    await expect.poll(async () => Math.abs((await railWidth(page)) - 372)).toBeLessThanOrEqual(1);
     const dragged = await railWidth(page);
 
     await edge.focus();
@@ -110,17 +110,17 @@ test.describe('sidebar', () => {
     page,
   }) => {
     await boot(page);
-    expect(await railWidth(page)).toBe(288);
+    expect(await railWidth(page)).toBe(272);
     await dispatch(page, 'inbox.open');
     await expect.poll(() => railWidth(page)).toBe(64);
     await dispatch(page, 'tickets.open');
-    await expect.poll(() => railWidth(page)).toBe(288);
+    await expect.poll(() => railWidth(page)).toBe(272);
 
     // Expanded by hand on the Queue: it stays open there.
     await dispatch(page, 'inbox.open');
     await expect.poll(() => railWidth(page)).toBe(64);
     await dispatch(page, 'rail.toggle');
-    await expect.poll(() => railWidth(page)).toBe(288);
+    await expect.poll(() => railWidth(page)).toBe(272);
 
     // Collapsed by hand: Tickets keeps it collapsed.
     await dispatch(page, 'rail.toggle');
@@ -156,12 +156,41 @@ test.describe('sidebar', () => {
     await expect(coupons).toBeVisible();
   });
 
+  test('mockup metrics (#451): 44px views, 22px captions, 30px rows, no rules; ⌘ held shows the row digits', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await boot(page);
+    const height = async (sel: string) => Math.round((await page.locator(sel).first().boundingBox())!.height);
+    expect(await height('[data-testid="rail-inbox"]')).toBe(44);
+    expect(await height('[data-testid="rail-project"]')).toBe(22);
+    expect(await height('[data-testid="rail-band"] [data-testid="rail-resume"], [data-testid="rail-band"] [data-testid="rail-row"]')).toBe(30);
+    await expect(page.getByTestId('rail-inbox').locator('.kbd')).toBeVisible();
+    await expect(page.getByTestId('rail-settings').locator('.kbd')).toBeVisible();
+    // No horizontal rule anywhere in the expanded sidebar.
+    const ruled = await page
+      .getByTestId('rail')
+      .evaluate((nav) =>
+        [nav, ...nav.querySelectorAll('*')].filter(
+          (e) => parseFloat(getComputedStyle(e).borderTopWidth) > 0 || parseFloat(getComputedStyle(e).borderRightWidth) > 0,
+        ).length,
+      );
+    expect(ruled).toBe(0);
+
+    const digits = page.getByTestId('rail').locator('.index');
+    await expect(digits).toHaveCount(0);
+    await page.keyboard.down('ControlOrMeta');
+    await expect(digits.first()).toBeVisible();
+    await page.keyboard.up('ControlOrMeta');
+    await expect(digits).toHaveCount(0);
+  });
+
   test('a narrow window starts with the icon column; the button opens it in full', async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 600 });
     await boot(page);
     expect(await railWidth(page)).toBe(64);
     await page.getByTestId('rail-toggle').click();
-    await expect.poll(() => railWidth(page)).toBe(288);
+    await expect.poll(() => railWidth(page)).toBe(272);
     await expect(page.getByTestId('rail-settings')).toContainText('Settings');
     await page.getByTestId('rail-toggle').click();
     await expect.poll(() => railWidth(page)).toBe(64);
