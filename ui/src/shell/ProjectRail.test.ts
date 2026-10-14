@@ -250,6 +250,7 @@ describe('ProjectRail', () => {
       ...sessions.get(SHOP_CLAUDE)!,
       id: 'plain',
       name: 'claude 2',
+      title: null,
       work_item_id: null,
       status: 'needs_input',
       attention: 'needs_input',
@@ -267,6 +268,11 @@ describe('ProjectRail', () => {
     expect(row().querySelector('.kind')?.textContent).toBe('✻');
     expect(row().querySelector('.name')?.textContent).toBe('claude 2');
     expect(row().querySelector('[data-testid="rail-stage"]')?.textContent).toBe(statusLabel('needs_input'));
+    // #450: the conversation title names the row, minus its status glyph; spinner frames change nothing.
+    for (const title of ['✳ Kelta UI and IDE UX', '⠂ Kelta UI and IDE UX', '⠐ Kelta UI and IDE UX']) {
+      sessions.upsert({ ...sessions.get('plain')!, title });
+      await expect.poll(() => row().querySelector('.name')?.textContent).toBe('Kelta UI and IDE UX');
+    }
     expect(moreRow(r, 'shop').textContent).toContain('2 more');
     expect(within(band(r, 'shop')).getByTestId('rail-count').textContent).toBe('5');
   });

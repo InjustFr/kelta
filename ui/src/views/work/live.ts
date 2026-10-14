@@ -5,6 +5,7 @@ import { reviews, sessions, tickets, work } from '$lib/stores';
 import { reviewKey } from '$lib/stores/reducers';
 import { ticketKey } from '$lib/stores/tickets.svelte';
 
+import { sessionTitle } from '../../shell/labels';
 import { phaseOf, questionOf, workKey, type Phase } from './phase';
 
 const ALL = { kind: 'all' } as const;
@@ -81,5 +82,6 @@ export function workTitle(item: WorkItem): string {
 /** `KEY claude`, `KEY nvim` for sessions of a work item, so three `claude` rows tell apart. */
 export function sessionLabel(s: SessionInfo): string {
   const item = s.work_item_id ? work.get(s.work_item_id) : null;
-  return item ? `${workKey(item)} ${s.name}` : s.name;
+  const name = sessionTitle(s);
+  return item ? `${workKey(item)} ${name}` : name;
 }
