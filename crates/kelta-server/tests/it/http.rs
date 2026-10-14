@@ -648,6 +648,57 @@ async fn link_pr_resolves_my_pr_and_passes_conflicts_on() {
 }
 
 #[tokio::test]
+async fn link_pr_moves_the_ticket_to_the_status_given() {
+    let e = common::env();
+    let tracker = Arc::new(FakeTracker::new());
+    e.fake.add_tracker(samples::ticket_ref().account, tracker.clone());
+    e.fake.add_project(samples::project_info());
+    e.server.set_install_token(Some("it"));
+    let port = e.server.ensure_http().await.unwrap();
+    let account = samples::ticket_ref().account;
+    let mut pr = samples::review();
+    pr.kind = kelta_proto::codehost::ReviewKind::Authored;
+    let url = pr.url.clone();
+    e.fake.respond(
+        "review_list",
+        json!([{ "review": pr, "project_ids": [samples::project_info().id], "waiting": [] }]),
+    );
+    // A repeat call on a linked PR returns the same item: the fake answers every call alike.
+    e.fake.respond("work_link_pr", serde_json::to_value(samples::work_item()).unwrap());
+    let link = |status: Option<&str>| {
+        let mut args = json!({ "key": "SHOP-141", "account": account, "pr": url });
+        if let Some(s) = status {
+            args["status"] = json!(s);
+        }
+        global_call(port, "link_pr", args)
+    };
+    let status = || tracker.ticket("SHOP-141").unwrap().ticket.status.name;
+    let moves = || tracker.calls().iter().filter(|c| c.starts_with("transition:")).count();
+
+    let (text, err) = link(None).await;
+    assert!(!err && text.starts_with("Linked SHOP-141"), "{text}");
+    assert_eq!((status().as_str(), moves()), ("To Do", 0), "no status: the ticket stays");
+
+    // A literal status name goes to the tracker transition as is.
+    let (text, err) = link(Some("In Progress")).await;
+    assert!(!err && text.ends_with("SHOP-141 is now In Progress."), "{text}");
+    assert!(tracker.calls().contains(&"transition:SHOP-141:t3".to_owned()));
+
+    // A failed move keeps the link and warns; the retry moves it.
+    tracker.fail_next(kelta_proto::error::KeltaError::upstream("tracker down"));
+    let (text, err) = link(Some("review")).await;
+    assert!(!err && text.starts_with("Linked SHOP-141"), "{text}");
+    assert!(text.contains("Warning: SHOP-141 not moved to \"review\": tracker down"), "{text}");
+    assert_eq!(status(), "In Progress");
+
+    // `review` is the project's status_map.review ("In Review").
+    let (text, err) = link(Some("review")).await;
+    assert!(!err && text.ends_with("SHOP-141 is now In Review."), "{text}");
+    assert_eq!(e.fake.calls().iter().filter(|c| c.method == "work_link_pr").count(), 4);
+    e.server.release_http();
+}
+
+#[tokio::test]
 async fn global_mcp_sets_kelta_up() {
     let e = common::env();
     e.server.set_install_token(Some("it"));
