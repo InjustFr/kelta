@@ -23,11 +23,11 @@
   import { frames } from '$lib/terminal/raf';
 
   import { jumpOutside, nowSummary, refreshNow } from '../views/inbox/now';
-  import { phaseNow, prOf } from '../views/work/live';
+  import { phaseNow, prOf, workTitle } from '../views/work/live';
   import { maxLamp, outsidePhase, workKey } from '../views/work/phase';
   import { STAGES, workStage } from '../views/work/stage';
   import { confirms } from './confirm.svelte';
-  import { chordFor, runLine } from './labels';
+  import { chordFor, runLine, statusLabel } from './labels';
   import {
     activateProject,
     attachTab,
@@ -36,17 +36,18 @@
     detachTab,
     openRuns,
     liveSessionsOfTab,
+    openRow,
     openView,
     railProjects,
     railToolsOf,
     requestCloseTab,
     revealSession,
     rowLabel,
-    selectRow,
+    rowLamp,
     tabAttention,
     VIEW_NAMES,
-    workItemOfTab,
     workRows,
+    type RailRow,
   } from './nav';
   import { droppedOutside, paneDrag } from './paneDrag.svelte';
   import { peekHover, peekTarget } from './peek.svelte';
@@ -65,7 +66,11 @@
 
   const toolsOf = $derived(railToolsOf());
   // `project.goto.N` index of each work row.
-  const index = $derived(new Map(workRows().map((r, i) => [r.tab.id, i + 1])));
+  const index = $derived(new Map(workRows().map((r, i) => [r.item!.id, i + 1])));
+  // Home has no band (#435): its rows go under Other Claude sessions, its shells fold at the foot.
+  const home = $derived(rail.find((p) => p.builtin) ?? null);
+  const homeBand = $derived(home ? bandTabs(home.id) : null);
+  const homeRows = $derived(homeBand ? [...homeBand.work, ...homeBand.claude] : []);
   // Bands whose "n more" row is open.
   let unfolded = $state<Record<ProjectId, boolean>>({});
   // The tool list behind the tool keys and the palette.
@@ -96,7 +101,10 @@
 
   function menuItems(p: ProjectInfo): MenuItem[] {
     const index = reorderable.findIndex((x) => x.id === p.id);
-    const items: MenuItem[] = [{ id: 'settings', label: t('Project settings…'), icon: 'settings' }];
+    const items: MenuItem[] = [
+      { id: 'settings', label: t('Project settings…'), icon: 'settings' },
+      { id: 'add', label: t('Add project'), icon: 'plus' },
+    ];
     if (!p.builtin) {
       items.push(
         { id: 'up', label: t('Move up'), icon: 'arrow-up', disabled: index <= 0, separator: true },
@@ -114,6 +122,9 @@
       switch (id) {
         case 'settings':
           await dispatch('settings.open', { section: 'projects', project_id: p.id });
+          break;
+        case 'add':
+          await dispatch('project.new');
           break;
         case 'up':
         case 'down':
@@ -219,9 +230,11 @@
     else if (id === 'attach') void attachTab(project, tab.id);
   }
 
-  /** A work row's title: the tab's, without the key the row already shows. */
-  function workTitle(tab: Tab, key: string): string {
-    return tab.title.startsWith(key) ? tab.title.slice(key.length).trim() : t(tab.title);
+  /** A work row's title, however its tab was opened (#435): the ticket's or PR's, else its tab's after the key. */
+  function itemTitle(item: WorkItem, tab: Tab | null, key: string): string {
+    const title = workTitle(item);
+    if (title !== item.branch || !tab?.title.startsWith(key)) return title;
+    return tab.title.slice(key.length).trim() || title;
   }
 
   /** The stage word on the right of a work row: Claude, PR, Review, Merge or Deploy. */
@@ -352,38 +365,46 @@
   />
 {/snippet}
 
-<!-- A band row: a work tab (lamp, key, title, stage word) or, unfolded, any other tab. -->
-{#snippet row(p: ProjectInfo, tab: Tab)}
-  {@const lvl = tabAttention(tab)}
-  {@const active = isFront(p.id, tab.id)}
-  {@const label = rowLabel(tab)}
-  {@const item = workItemOfTab(tab)}
-  {@const n = index.get(tab.id)}
+<!-- A band row: a work item (lamp, key, title, stage word), a Claude session (lamp, ✻, name, status
+     word) or, unfolded, any other tab. Without a tab, a click resumes the item or reveals the session. -->
+{#snippet row(p: ProjectInfo, r: RailRow)}
+  {@const tab = r.tab}
+  {@const item = r.item ?? null}
+  {@const s = r.session ?? null}
+  {@const lvl = rowLamp(r)}
+  {@const active = !!tab && isFront(p.id, tab.id)}
+  {@const key = item ? workKey(item) : ''}
+  {@const label = item ? `${key} ${itemTitle(item, tab, key)}` : s ? s.name : rowLabel(tab!)}
+  {@const n = item ? index.get(item.id) : undefined}
+  {@const live = s ? [s] : tab ? liveSessionsOfTab(tab) : []}
   {@const run = runLine(
     item?.run,
-    liveSessionsOfTab(tab).flatMap((s) => sessions.runs[s.id] ?? []),
+    live.flatMap((x) => sessions.runs[x.id] ?? []),
     claims,
   )}
   <li
     class="row"
-    class:pane-over={rowOver === tab.id && paneDrag.current && paneDrag.current.tabId !== tab.id}
+    class:pane-over={!!tab && rowOver === tab.id && paneDrag.current && paneDrag.current.tabId !== tab.id}
   >
     <button
       type="button"
       class="item tab-row"
       class:active
       class:lit={lvl === 'needs_input'}
+      class:background={!tab}
       title={`${p.name} › ${label}`}
       aria-current={active ? 'page' : undefined}
-      data-testid="rail-row"
+      data-testid={tab ? 'rail-row' : 'rail-resume'}
       data-project-id={p.id}
-      data-tab-id={tab.id}
+      data-tab-id={tab?.id}
+      data-work-id={item?.id}
+      data-session-id={s?.id}
       data-attention={lvl}
-      use:peekHover={() => peekTarget(liveSessionsOfTab(tab))}
-      draggable="true"
-      onclick={() => selectRow(p.id, tab.id)}
+      use:peekHover={() => peekTarget(live)}
+      draggable={tab ? 'true' : undefined}
+      onclick={() => openRow(r)}
       onauxclick={(e) => {
-        if (e.button !== 1) return;
+        if (e.button !== 1 || !tab) return;
         e.preventDefault();
         void requestCloseTab(p.id, tab.id);
       }}
@@ -392,52 +413,109 @@
       }}
       oncontextmenu={(e) => {
         e.preventDefault();
-        rowMenu = { project: p.id, tab, x: e.clientX, y: e.clientY };
+        if (tab) rowMenu = { project: p.id, tab, x: e.clientX, y: e.clientY };
       }}
       ondragstart={(e) => {
+        if (!tab) return;
         rowDrag = { project: p.id, tab: tab.id };
         e.dataTransfer?.setData('text/plain', tab.id);
       }}
       ondragover={(e) => {
-        if (paneDrag.current?.projectId !== p.id) return;
+        if (!tab || paneDrag.current?.projectId !== p.id) return;
         e.preventDefault();
         rowOver = tab.id;
       }}
       ondragleave={() => (rowOver = null)}
       ondrop={(e) => {
+        if (!tab) return;
         e.preventDefault();
         rowOver = null;
         if (paneDrag.current) paneDrag.drop(p.id, { tabId: tab.id });
       }}
       ondragend={(e) => {
-        if (rowDrag && droppedOutside(e)) void detachTab(p.id, tab.id);
+        if (tab && rowDrag && droppedOutside(e)) void detachTab(p.id, tab.id);
         rowDrag = null;
         rowOver = null;
       }}
     >
       <span class="socket" aria-hidden="true"><Lamp level={lvl} /></span>
       {#if item}
-        {@const key = workKey(item)}
-        {#if tab.detached}<span class="kind" aria-hidden="true"><Icon name="app-window" size={14} /></span
+        {#if tab?.detached}<span class="kind" aria-hidden="true"><Icon name="app-window" size={14} /></span
           >{/if}
         <span class="key k-num">{key}</span>
-        <span class="text"><span class="name">{workTitle(tab, key)}</span></span>
+        <span class="text"><span class="name">{itemTitle(item, tab, key)}</span></span>
         <span class="stage" data-testid="rail-stage">{stageWord(item)}</span>
-      {:else}
+      {:else if s}
+        <span class="kind glyph" aria-hidden="true">✻</span>
+        <span class="text"><span class="name">{s.name}</span></span>
+        <span class="stage" data-testid="rail-stage">{statusLabel(s.status)}</span>
+      {:else if tab}
         <span class="kind" aria-hidden="true"><Icon name={rowIcon(tab)} size={14} /></span>
         <span class="text"><span class="name">{label}</span></span>
       {/if}
       {#if n}{@render digit(`project.goto.${n}`, `${n}`)}{/if}
     </button>
-    <IconButton
-      class="close"
-      size="sm"
-      icon="x"
-      label={t('Close {name}', { name: label })}
-      onclick={() => void requestCloseTab(p.id, tab.id)}
-    />
+    {#if tab}
+      <IconButton
+        class="close"
+        size="sm"
+        icon="x"
+        label={t('Close {name}', { name: label })}
+        onclick={() => void requestCloseTab(p.id, tab.id)}
+      />
+    {/if}
   </li>
   {#if run}{@render runRow(run, label)}{/if}
+{/snippet}
+
+<!-- A band's folded row: its other tabs and background sessions, opened in place; hidden when compact (#435). -->
+{#snippet fold(p: ProjectInfo, more: Tab[], name: (n: number) => string)}
+  {@const background = backgroundSessions(p.id)}
+  {@const folded = more.length + background.length}
+  {@const open = !!unfolded[p.id]}
+  {#if folded > 0}
+    {@const lvl = maxLamp(more.map((x) => tabAttention(x)))}
+    <li class="row fold-row">
+      <button
+        type="button"
+        class="item tab-row fold"
+        class:active={!open && more.some((x) => isFront(p.id, x.id))}
+        title={`${p.name} › ${name(folded)}`}
+        aria-expanded={open}
+        data-testid="rail-more"
+        data-project-id={p.id}
+        data-attention={lvl}
+        onclick={() => (unfolded[p.id] = !open)}
+      >
+        <span class="socket" aria-hidden="true"><Lamp level={lvl} /></span>
+        <span class="kind" aria-hidden="true"
+          ><Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} /></span
+        >
+        <span class="text"><span class="name">{name(folded)}</span></span>
+      </button>
+    </li>
+    {#if open && !sidebar.compact}
+      {#each more as tab (tab.id)}{@render row(p, { project: p.id, tab })}{/each}
+      {#each background as s (s.id)}
+        <li class="row">
+          <button
+            type="button"
+            class="item tab-row background"
+            title={`${p.name} › ${t('{name}: running in the background, click to show it', { name: s.name })}`}
+            data-testid="rail-background"
+            data-session-id={s.id}
+            onclick={() => void revealSession(s.id)}
+          >
+            <span class="socket" aria-hidden="true"></span>
+            <span class="kind" aria-hidden="true"><Icon name="terminal" size={14} /></span>
+            <span class="text"><span class="name">{s.name} · {t('background')}</span></span>
+          </button>
+        </li>
+        {@const run = runLine(null, sessions.runs[s.id] ?? [], claims)}
+        {#if run}{@render runRow(run, s.name)}{/if}
+      {/each}
+    {/if}
+  {/if}
 {/snippet}
 
 <nav
@@ -459,24 +537,9 @@
   )}
 
   <div class="group">
-    <div class="heading">
-      <h2>{t('Open')}</h2>
-      <Button
-        variant="ghost"
-        size="sm"
-        icon="plus"
-        title={t('Open or create a project')}
-        onclick={() => ui.openSheet('project_new')}
-        data-testid="rail-add">{t('Add project')}</Button
-      >
-    </div>
-
     <div class="scroll">
-      {#each rail as p (p.id)}
+      {#each reorderable as p (p.id)}
         {@const band = bandTabs(p.id)}
-        {@const background = backgroundSessions(p.id)}
-        {@const folded = band.more.length + background.length}
-        {@const open = !!unfolded[p.id]}
         <section
           class="band"
           class:pane-target={bandOver === p.id && paneDrag.current}
@@ -507,7 +570,7 @@
               title={p.name}
               data-testid="rail-project"
               data-project-id={p.id}
-              draggable={!p.builtin}
+              draggable="true"
               onclick={() => activateProject(p.id)}
               oncontextmenu={(e) => openMenu(e, p)}
               ondragstart={(e) => {
@@ -516,7 +579,7 @@
                 if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
               }}
               ondragover={(e) => {
-                if (!dragId || p.builtin) return;
+                if (!dragId) return;
                 e.preventDefault();
                 overId = p.id;
               }}
@@ -528,58 +591,18 @@
               ondragend={() => {
                 dragId = null;
                 overId = null;
-              }}><span class="name">{p.name}</span></button
+              }}
+              ><span class="mark" aria-hidden="true"></span><span class="name">{p.name}</span><span
+                class="count k-num"
+                data-testid="rail-count">{band.work.length + band.claude.length}</span
+              ></button
             >
             {@render more(p)}
           </div>
           <ul class="rows">
-            {#each band.work as tab (tab.id)}{@render row(p, tab)}{/each}
-            {#if folded > 0}
-              <!-- Shells, boards, lists and background sessions: one row that opens in place. -->
-              {@const lvl = maxLamp(band.more.map((x) => tabAttention(x)))}
-              <li class="row">
-                <button
-                  type="button"
-                  class="item tab-row fold"
-                  class:active={!open && band.more.some((x) => isFront(p.id, x.id))}
-                  title={`${p.name} › ${t('{n} more', { n: folded })}`}
-                  aria-expanded={open}
-                  data-testid="rail-more"
-                  data-project-id={p.id}
-                  data-attention={lvl}
-                  onclick={() => (unfolded[p.id] = !open)}
-                >
-                  <span class="socket" aria-hidden="true"><Lamp level={lvl} /></span>
-                  <span class="kind" aria-hidden="true"
-                    ><Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} /></span
-                  >
-                  <span class="text"><span class="name">{t('{n} more', { n: folded })}</span></span>
-                </button>
-              </li>
-              {#if open}
-                {#each band.more as tab (tab.id)}{@render row(p, tab)}{/each}
-                {#each background as s (s.id)}
-                  <li class="row">
-                    <button
-                      type="button"
-                      class="item tab-row background"
-                      title={`${p.name} › ${t('{name}: running in the background, click to show it', { name: s.name })}`}
-                      data-testid="rail-background"
-                      data-session-id={s.id}
-                      onclick={() => void revealSession(s.id)}
-                    >
-                      <span class="socket" aria-hidden="true"></span>
-                      <span class="kind" aria-hidden="true"
-                        ><Icon name={s.kind.type === 'claude' ? 'bot' : 'terminal'} size={14} /></span
-                      >
-                      <span class="text"><span class="name">{s.name} · {t('background')}</span></span>
-                    </button>
-                  </li>
-                  {@const run = runLine(null, sessions.runs[s.id] ?? [], claims)}
-                  {#if run}{@render runRow(run, s.name)}{/if}
-                {/each}
-              {/if}
-            {/if}
+            {#each band.work as r (r.item!.id)}{@render row(p, r)}{/each}
+            {#each band.claude as r (r.session!.id)}{@render row(p, r)}{/each}
+            {@render fold(p, band.more, (n) => t('{n} more', { n }))}
           </ul>
         </section>
       {:else}
@@ -600,11 +623,19 @@
         </div>
       {/if}
 
-      {#if sessions.elsewhere.length > 0}
-        <!-- Claude sessions Kelta did not start (#345): dimmed, Now lists them. -->
-        <section class="band tools" aria-label={t('Other Claude sessions')} data-testid="rail-elsewhere">
-          <h2 class="tools-heading">{t('Other Claude sessions')}</h2>
+      {#if home && homeBand}
+        <!-- Claude sessions Kelta did not start (#345, dimmed, Now lists them) and Home's (#435); Home's shells at the foot. -->
+        <section
+          class="band tools"
+          aria-label={t('Other Claude sessions')}
+          data-testid="rail-elsewhere"
+          style:--project-color={resolveProjectColor(home.color) ?? 'var(--k-border-strong)'}
+        >
+          {#if homeRows.length + sessions.elsewhere.length > 0}
+            <h2 class="tools-heading">{t('Other Claude sessions')}</h2>
+          {/if}
           <ul class="rows">
+            {#each homeRows as r (r.item?.id ?? r.session!.id)}{@render row(home, r)}{/each}
             {#each sessions.elsewhere as s (s.id)}
               {@const ph = outsidePhase(s)}
               <li class="row">
@@ -623,6 +654,7 @@
                 </button>
               </li>
             {/each}
+            {@render fold(home, homeBand.more, (n) => tn('{n} shell', '{n} shells', n))}
           </ul>
         </section>
       {/if}
@@ -928,9 +960,31 @@
     text-align: left;
   }
 
+  /* [colour mark][name][row count] (#435). */
+  .caption {
+    display: flex;
+    align-items: center;
+    gap: var(--k-space-2);
+  }
+
   .caption .name {
-    display: block;
+    flex: 1;
+    min-width: 0;
     font-size: var(--k-font-size-sm);
+  }
+
+  .mark {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background: var(--project-color);
+  }
+
+  .count {
+    flex: none;
+    color: var(--k-fg-subtle);
+    font-size: var(--k-font-size-xs);
   }
 
   .caption:hover {
@@ -990,6 +1044,11 @@
     justify-content: center;
     flex: none;
     width: 10px;
+  }
+
+  .glyph {
+    font-size: var(--k-font-size-sm);
+    line-height: 1;
   }
 
   .kind {
@@ -1164,6 +1223,9 @@
   }
 
   .compact .instance,
+  .compact .fold-row,
+  .compact .mark,
+  .compact .count,
   .compact .row :global(.close),
   .compact .caption-row :global(.more) {
     display: none;

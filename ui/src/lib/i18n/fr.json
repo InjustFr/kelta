@@ -198,6 +198,10 @@
     "other": "{n} demandent votre relecture"
   },
   "{n} more": "{n} de plus",
+  "{n} shells": {
+    "one": "{n} shell",
+    "other": "{n} shells"
+  },
   "Open or create a project": "Ouvrir ou créer un projet",
   "Add project": "Ajouter un projet",
   "Close {name}": "Fermer {name}",

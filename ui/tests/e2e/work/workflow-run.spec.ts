@@ -3,7 +3,7 @@
 // split beside the session's terminal in its own tab (#392).
 import { expect, test } from '@playwright/test';
 
-import { boot, callsOf, dispatch, unfold } from '../shell/helpers';
+import { boot, callsOf, dispatch } from '../shell/helpers';
 
 test('detail w: the run opens a background tab, the toast opens and peeks its session', async ({ page }) => {
   await boot(page);
@@ -28,8 +28,7 @@ test('detail w: the run opens a background tab, the toast opens and peeks its se
   const [run] = await callsOf(page, 'workflow_run');
   expect(run?.args).toMatchObject({ ticket: { key: 'SHOP-151' }, workflow: 'kelta-ticket-pass' });
   await expect(detail).toBeFocused();
-  // The run's tab is no work tab: it folds under shop's "n more" (#430).
-  await unfold(page, 'shop');
+  // The run's Claude has no work item: a row of its own (#435).
   const tab = page.locator('[data-testid="rail-row"]', { hasText: 'kelta-ticket-pass · SHOP-151' });
   await expect(tab).toHaveCount(1);
   // The row puts the run with Claude and names it in its tooltip (#400); the detail names it too.

@@ -198,6 +198,10 @@
     "other": "{n} bitten um deine Prüfung"
   },
   "{n} more": "{n} weitere",
+  "{n} shells": {
+    "one": "{n} Shell",
+    "other": "{n} Shells"
+  },
   "Open or create a project": "Projekt öffnen oder erstellen",
   "Add project": "Projekt hinzufügen",
   "Close {name}": "{name} schließen",
