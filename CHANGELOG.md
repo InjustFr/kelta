@@ -2,6 +2,24 @@
 
 All notable changes are listed here, generated from the commit messages at each release. Versions follow semver.
 
+## [1.6.0](https://github.com/InjustFr/kelta/compare/v1.5.0...v1.6.0) (2026-10-14)
+
+### Features
+
+* **rail:** match the mockup spacing, icons and separators ([#451](https://github.com/InjustFr/kelta/issues/451)) ([3bacc64](https://github.com/InjustFr/kelta/commit/3bacc64f387559361090135c7995a499443c1d88))
+* **reviews:** each pull request row shows its next step like the Queue ([#447](https://github.com/InjustFr/kelta/issues/447)) ([4d4654a](https://github.com/InjustFr/kelta/commit/4d4654a09438670831a6cfe581e998ec39e41e53))
+* **ui:** a session shows its conversation title in the sidebar, palette and pane ([#450](https://github.com/InjustFr/kelta/issues/450)) ([75802e2](https://github.com/InjustFr/kelta/commit/75802e2f98160a65aef5b8684849a4a599456fcd))
+* **ui:** compact sidebar shows a dim dot for a row with no lamp ([#446](https://github.com/InjustFr/kelta/issues/446)) ([6baf2da](https://github.com/InjustFr/kelta/commit/6baf2da87328b0574d4104eff72505eda71028c6))
+* **ui:** ticket detail makes Start work the primary, Assign to me moves under More ([#448](https://github.com/InjustFr/kelta/issues/448)) ([8f19799](https://github.com/InjustFr/kelta/commit/8f19799795d18eb2ade76e269f448234e3ece946))
+* **ui:** work waiting on others leaves the sidebar once its tab is closed ([#443](https://github.com/InjustFr/kelta/issues/443)) ([99c12f8](https://github.com/InjustFr/kelta/commit/99c12f886c0eb8f34a081f7938eaa54d019a9828))
+* **work:** desk header primary shows its chord and Leave focus shows the focus chord ([#445](https://github.com/InjustFr/kelta/issues/445)) ([c628e65](https://github.com/InjustFr/kelta/commit/c628e65b0afe3b2db34b3468468b3467f2de554b))
+* **work:** finish stale claims when their ticket closes or worktree is gone ([3651fb5](https://github.com/InjustFr/kelta/commit/3651fb52440bbda79b328753df8fa699c00036c6))
+
+### Bug Fixes
+
+* **core:** a closed session frees its id so a parked item's Claude can resume under it ([#449](https://github.com/InjustFr/kelta/issues/449)) ([06d8840](https://github.com/InjustFr/kelta/commit/06d884055b1a6d06fd5569b6b6f17d87284ca4fb))
+* **ui:** keep compact rail bands tight, 10px above captions, 272px in SPEC, lamp error diamond stays 9px ([#451](https://github.com/InjustFr/kelta/issues/451)) ([e6c42e3](https://github.com/InjustFr/kelta/commit/e6c42e3eb433edd8a92ec47d5f15001910cea3a2))
+
 ## [1.5.0](https://github.com/InjustFr/kelta/compare/v1.4.0...v1.5.0) (2026-10-14)
 
 ### Features
