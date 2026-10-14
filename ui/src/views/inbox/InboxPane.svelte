@@ -156,6 +156,8 @@
     reason: string;
     /** The row's line 2: the one detail that says why (Claude's words, failed checks, who asked). */
     hint: string;
+    /** The brief's why sentence when it says more than `reason` (#438): the phase and its detail. */
+    why?: string;
     /** Where it is on the way to deploy, and whose move (#399). */
     stage: Stage;
     /** The brief's facts: status and numbers. */
@@ -257,6 +259,7 @@
           color: p.color,
           reason,
           hint,
+          why: phase.detail && reason !== phase.detail ? `${reason}, ${phase.detail}` : reason,
           stage: workStage(item, phase, pr, yours, !!row.status),
           facts: [
             ...fact(t('Project'), p.name),
@@ -1054,8 +1057,10 @@
             <Brief
               bind:this={brief}
               id={v.id}
+              project={v.project}
               title={v.title}
-              where={asker ? '' : v.reason}
+              stage={v.stage}
+              where={asker ? t('Claude asks you to choose') : (v.why ?? v.reason)}
               primary={v.actions.filter((a) => a.key === 'enter').map(track)[0] ?? null}
               actions={v.actions.filter((a) => a.key !== 'enter').map(track)}
               bind:more={allActions}
