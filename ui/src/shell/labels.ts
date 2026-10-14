@@ -91,8 +91,16 @@ export function paneIcon(content: PaneContent, session: SessionInfo | null): str
   }
 }
 
+/**
+ * A session's one name: its terminal title (Claude Code sets the conversation's), else its spawn
+ * name. The leading status glyph (`✳`, a braille spinner frame) is dropped: the lamp shows that state.
+ */
+export function sessionTitle(s: Pick<SessionInfo, 'name' | 'title'>): string {
+  return s.title?.replace(/^[\p{So}\s]+/u, '').trim() || s.name;
+}
+
 export function paneTitle(content: PaneContent, session: SessionInfo | null): string {
-  if (content.kind === 'terminal') return session?.title?.trim() || session?.name || t('Terminal');
+  if (content.kind === 'terminal') return (session && sessionTitle(session)) || t('Terminal');
   return t(defaultTitle(content)); // stored English, shown translated
 }
 

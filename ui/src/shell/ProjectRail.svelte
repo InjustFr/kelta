@@ -27,7 +27,7 @@
   import { maxLamp, outsidePhase, workKey } from '../views/work/phase';
   import { STAGES, workStage } from '../views/work/stage';
   import { confirms } from './confirm.svelte';
-  import { chordFor, runLine, statusLabel } from './labels';
+  import { chordFor, runLine, sessionTitle, statusLabel } from './labels';
   import {
     activateProject,
     attachTab,
@@ -377,7 +377,7 @@
   {@const lvl = rowLamp(r)}
   {@const active = !!tab && isFront(p.id, tab.id)}
   {@const key = item ? workKey(item) : ''}
-  {@const label = item ? `${key} ${itemTitle(item, tab, key)}` : s ? s.name : rowLabel(tab!)}
+  {@const label = item ? `${key} ${itemTitle(item, tab, key)}` : s ? sessionTitle(s) : rowLabel(tab!)}
   {@const n = item ? index.get(item.id) : undefined}
   {@const live = s ? [s] : tab ? liveSessionsOfTab(tab) : []}
   {@const run = runLine(
@@ -450,7 +450,7 @@
         <span class="stage" data-testid="rail-stage">{stageWord(item)}</span>
       {:else if s}
         <span class="kind glyph" aria-hidden="true">✻</span>
-        <span class="text"><span class="name">{s.name}</span></span>
+        <span class="text"><span class="name">{sessionTitle(s)}</span></span>
         <span class="stage" data-testid="rail-stage">{statusLabel(s.status)}</span>
       {:else if tab}
         <span class="kind" aria-hidden="true"><Icon name={rowIcon(tab)} size={14} /></span>
@@ -504,18 +504,18 @@
           <button
             type="button"
             class="item tab-row background"
-            title={`${p.name} › ${t('{name}: running in the background, click to show it', { name: s.name })}`}
+            title={`${p.name} › ${t('{name}: running in the background, click to show it', { name: sessionTitle(s) })}`}
             data-testid="rail-background"
             data-session-id={s.id}
             onclick={() => void revealSession(s.id)}
           >
             <span class="socket" aria-hidden="true"></span>
             <span class="kind" aria-hidden="true"><Icon name="terminal" size={14} /></span>
-            <span class="text"><span class="name">{s.name} · {t('background')}</span></span>
+            <span class="text"><span class="name">{sessionTitle(s)} · {t('background')}</span></span>
           </button>
         </li>
         {@const run = runLine(null, sessions.runs[s.id] ?? [], claims)}
-        {#if run}{@render runRow(run, s.name)}{/if}
+        {#if run}{@render runRow(run, sessionTitle(s))}{/if}
       {/each}
     {/if}
   {/if}

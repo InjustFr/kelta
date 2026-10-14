@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ClaudeRun, RunClaim, RunState } from '$lib/gen';
+import type { ClaudeRun, RunClaim, RunState, SessionInfo } from '$lib/gen';
 
-import { runLine, toolIcon } from './labels';
+import { paneTitle, runLine, sessionTitle, toolIcon } from './labels';
 
 const tool = (id: string, icon: string | null = null, label = id) => ({ id, label, icon });
 
@@ -61,5 +61,20 @@ describe('runLine (#392)', () => {
     expect(runLine(null, [run('a')], [claim('running')])).toBeNull();
     expect(runLine(null, [run('a')], [claim('done')])?.text).toBe('pass · Implement');
     expect(runLine(null, [run('a', 's2')], [claim('running')])?.text).toBe('pass · Implement');
+  });
+});
+
+describe('sessionTitle (#450)', () => {
+  it('is the terminal title without its status glyph, else the name', () => {
+    expect(sessionTitle({ name: 'claude', title: '✳ Kelta UI and IDE UX' })).toBe('Kelta UI and IDE UX');
+    expect(sessionTitle({ name: 'claude', title: '⠂ Kelta UI and IDE UX' })).toBe('Kelta UI and IDE UX');
+    expect(sessionTitle({ name: 'claude', title: '⠐ Kelta UI and IDE UX' })).toBe('Kelta UI and IDE UX');
+    expect(sessionTitle({ name: 'claude', title: null })).toBe('claude');
+    expect(sessionTitle({ name: 'claude', title: '  ✳ ' })).toBe('claude');
+  });
+
+  it('names the pane too', () => {
+    const session = { name: 'claude', title: '✳ Kelta UI' } as SessionInfo;
+    expect(paneTitle({ kind: 'terminal', session_id: 's' }, session)).toBe('Kelta UI');
   });
 });
