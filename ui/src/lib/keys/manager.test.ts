@@ -337,6 +337,21 @@ describe('prefix state machine', () => {
     expect(ids()).toEqual(['project.switcher']);
   });
 
+  it('runs the work keys after the prefix (Enter is the next step)', () => {
+    const { manager, ids } = setup();
+    for (const key of ['Enter', 'g', 'v', 'd', 'e']) {
+      manager.handleKeyDown(prefix());
+      manager.handleKeyDown(press({ key }));
+    }
+    expect(ids()).toEqual([
+      'work.next',
+      'work.go_claude',
+      'work.review_delta',
+      'work.ship',
+      'work.edit_note',
+    ]);
+  });
+
   it('times out after prefix_timeout_ms', () => {
     vi.useFakeTimers();
     const { manager, ids } = setup({
