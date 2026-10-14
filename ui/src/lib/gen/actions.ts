@@ -96,7 +96,7 @@ export const ACTION_IDS = [
 export type BuiltinActionId = (typeof ACTION_IDS)[number];
 export type ActionId = BuiltinActionId | `plugin.command.${string}`;
 
-export type ActionContext = 'global' | 'ticket_views' | 'editor' | 'terminal' | 'external';
+export type ActionContext = 'global' | 'no_text_field' | 'editor' | 'terminal' | 'external';
 
 export interface ActionMeta {
   readonly id: BuiltinActionId;
@@ -155,7 +155,7 @@ export const ACTIONS: readonly ActionMeta[] = [
   { id: "attention.peek", label: "Peek waiting session", mac: ["cmd+shift+y"], linux: ["ctrl+shift+y"], prefix: "y", context: "global" },
   { id: "nav.back", label: "Go back", mac: ["cmd+ctrl+left"], linux: ["ctrl+alt+shift+left"], prefix: "-", context: "global" },
   { id: "nav.forward", label: "Go forward", mac: ["cmd+ctrl+right"], linux: ["ctrl+alt+shift+right"], prefix: "=", context: "global" },
-  { id: "work.start", label: "Start work", mac: ["cmd+enter"], linux: ["ctrl+enter"], prefix: "s", context: "ticket_views" },
+  { id: "work.start", label: "Start or continue work", mac: ["cmd+enter"], linux: ["ctrl+enter"], prefix: "s", context: "no_text_field" },
   { id: "toast.run_last", label: "Run last toast action", mac: ["cmd+shift+o"], linux: ["ctrl+shift+o"], prefix: "o", context: "global" },
   { id: "work.new", label: "New work item", mac: ["cmd+shift+n"], linux: ["ctrl+shift+n"], prefix: "w", context: "global" },
   { id: "editor.send_selection", label: "Send selection to Claude", mac: ["cmd+shift+l"], linux: ["ctrl+shift+l"], prefix: "@", context: "editor" },

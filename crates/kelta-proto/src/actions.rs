@@ -16,8 +16,8 @@ pub type ActionId = String;
 pub enum ActionContext {
     /// Anywhere, including terminals.
     Global,
-    /// Ticket views only (not in terminals).
-    TicketViews,
+    /// Anywhere but a text field: ticket views and terminals (`work.start`, #441).
+    NoTextField,
     /// Editor pane.
     Editor,
     /// Terminal pane.
@@ -146,7 +146,7 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("attention.peek", "Peek waiting session", ["cmd+shift+y"], Some("y"), Global),
     a!("nav.back", "Go back", ["cmd+ctrl+left"], linux["ctrl+alt+shift+left"], Some("-"), Global),
     a!("nav.forward", "Go forward", ["cmd+ctrl+right"], linux["ctrl+alt+shift+right"], Some("="), Global),
-    a!("work.start", "Start work", ["cmd+enter"], Some("s"), TicketViews),
+    a!("work.start", "Start or continue work", ["cmd+enter"], Some("s"), NoTextField),
     a!("toast.run_last", "Run last toast action", ["cmd+shift+o"], Some("o"), Global),
     a!("work.new", "New work item", ["cmd+shift+n"], Some("w"), Global),
     a!("editor.send_selection", "Send selection to Claude", ["cmd+shift+l"], Some("@"), Editor),

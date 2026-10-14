@@ -207,8 +207,8 @@ function contextAllows(context: ActionContext, ctx: KeyContext): boolean {
       return ctx.terminal;
     case 'editor':
       return ctx.terminal && ctx.kind === 'editor';
-    case 'ticket_views':
-      return !ctx.terminal && !ctx.textInput;
+    case 'no_text_field':
+      return !ctx.textInput;
     case 'external':
       return false;
   }

@@ -304,7 +304,7 @@ fn gen_actions() -> Result<String> {
     s.push_str("export type BuiltinActionId = (typeof ACTION_IDS)[number];\n");
     s.push_str("export type ActionId = BuiltinActionId | `plugin.command.${string}`;\n\n");
     s.push_str(
-        "export type ActionContext = 'global' | 'ticket_views' | 'editor' | 'terminal' | 'external';\n\n",
+        "export type ActionContext = 'global' | 'no_text_field' | 'editor' | 'terminal' | 'external';\n\n",
     );
     s.push_str(
         "export interface ActionMeta {\n  readonly id: BuiltinActionId;\n  readonly label: string;\n  \

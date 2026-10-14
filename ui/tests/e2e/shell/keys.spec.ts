@@ -143,6 +143,16 @@ test.describe('keys', () => {
     );
   });
 
+  test('⌘↵ in the Claude pane runs the next step (SHOP-155: Review changes, #441)', async ({ page }) => {
+    await boot(page);
+    for (let i = 0; i < 3; i++) await dispatch(page, 'attention.next'); // billing, billing error, then SHOP-155
+    await expect(page.getByTestId('work-header')).toHaveAttribute('data-phase', 'to_review');
+    await expect(page.locator('.work-header .primary')).toHaveAttribute('title', 'Review changes (Ctrl+Enter)');
+    await page.locator('[data-testid="pane"][data-focused="true"] .xterm-helper-textarea').focus();
+    await page.keyboard.press('Control+Enter');
+    await expect.poll(async () => (await callsOf(page, 'work_diff')).length).toBe(1);
+  });
+
   test('prefix pane actions: split and zoom', async ({ page }) => {
     await boot(page);
     await page.locator('[data-testid="pane"][data-focused="true"] .xterm-helper-textarea').focus();
