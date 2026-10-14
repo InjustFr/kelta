@@ -144,6 +144,47 @@ describe('L9 actions', () => {
     expect(ui.sheet?.key).toBe('start_work');
   });
 
+  describe('work.start on a work tab with no ticket runs the next step (#441)', () => {
+    const SHOP_155 = '0199a6b2-0000-7000-8000-00000000a004'; // to review in the mock
+    async function onWorkTab(patch: Partial<WorkItem> = {}): Promise<WorkItem> {
+      await work.load();
+      const item = { ...work.get(SHOP_155)!, ...patch };
+      work.upsert(item);
+      layout.update('shop', (l) => ({
+        ...l,
+        active_tab: l.tabs[0]!.id,
+        tabs: l.tabs.map((t, i) => (i === 0 ? { ...t, work_item_id: item.id } : t)),
+      }));
+      return item;
+    }
+
+    it('runs the primary: Review changes', async () => {
+      const item = await onWorkTab();
+      expect(phaseNow(item).primary).toBe('review_delta');
+      await dispatch('work.start');
+      expect(mock.calls.filter((c) => c.cmd === 'work_diff')).toHaveLength(1);
+      expect(mock.calls.some((c) => c.cmd === 'work_plan')).toBe(false);
+    });
+
+    it('a blocked primary toasts its reason and never runs', async () => {
+      const item = await onWorkTab({ kind: 'review', ticket: null, review: null });
+      expect(phaseNow(item).primary).toBe('open_review');
+      const before = mock.calls.length;
+      await dispatch('work.start');
+      expect(toasts.list.at(-1)?.toast.text).toBe('Open review: No PR');
+      expect(mock.calls.slice(before).map((c) => c.cmd)).toEqual([]);
+      expect(ui.view).toBeNull();
+    });
+
+    it('a selected ticket still starts work', async () => {
+      await onWorkTab();
+      selectTicket({ account: 'jira-acme', key: 'SHOP-151', id: '10151' }, 'shop');
+      await dispatch('work.start');
+      expect(ui.sheet?.key).toBe('start_work');
+      expect(mock.calls.some((c) => c.cmd === 'work_diff')).toBe(false);
+    });
+  });
+
   it('a failing plan is reported with a toast', async () => {
     mock.failNext('work_plan', { code: 'invalid_argument', message: 'no repo rule matches' });
     selectTicket({ account: 'jira-acme', key: 'SHOP-151', id: '10151' }, 'shop');

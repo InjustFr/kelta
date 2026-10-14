@@ -31,7 +31,7 @@ The loop runs through them: pick a ticket in the Library, start it (`s`), Claude
 ### 1.2 Rules
 
 - **The work item is the unit of parallel work.** One branch, one worktree, one Claude conversation, at most one PR, with or without a ticket. Everything Louis does to his own code goes through a work item.
-- **Every work item has exactly one next action**, derived from its state. The same action is `↵` on its row in the Queue, the primary button in its desk header, and `⌘.` `↵` from inside Claude or nvim. Learn one key, use it everywhere.
+- **Every work item has exactly one next action**, derived from its state. The same action is `↵` on its row in the Queue, the primary button in its desk header, and `⌘↵` (or `⌘.` `↵`) from inside Claude or nvim. Learn one key, use it everywhere.
 - **Five keys first.** `↵` the next step, `⌘.` the actions of whatever is selected, `⌘K` find anything, `⌘J` the next thing that needs you, `⌘0` the Queue and back (§7). A letter means the same in every list (§3.3). The prefix reaches every action, and its which-key panel lists them.
 - **One call signal (the attention budget).** In the window only a Claude blocked on you calls: the top bar's "needs you" chip, the lit sidebar row. Everything else waits in the Queue without asking: a finished Claude does not notify by default (`notifications.claude_done`), and an info toast closes when you leave the view that raised it. Focus mode (§7) holds the other desktop notifications (review requests, checks, merges) and background toasts too, never a blocked Claude.
 - **"Claude finished" is durable** until Louis acts on it. A glance at a tab never clears it.
@@ -143,7 +143,7 @@ Writes are field-level (§8): the hook listener never overwrites `pr_url` or `st
 | Queue | one row in its section's zone, with its stage track and next step; selected, the brief beside the list (§3.2). |
 | Palette | Work items group (§3.5), and Recent once you have been there. |
 
-No status strip segment. The ticket status, the PR and its CI, the branch, `behind` and the cost are in the Story panel's summaries. `⌘↵` does not run the primary: `work.start` holds that chord (start the marked or selected tickets), and one chord binds one action; `⌘.` `↵` runs the primary from any pane, terminals included. `views/work/WorkContext.svelte` is the header, `views/work/StoryPanel.svelte` the Story panel (sections in `views/work/story/`, the return brief in `story/ReturnBrief.svelte`).
+No status strip segment. The ticket status, the PR and its CI, the branch, `behind` and the cost are in the Story panel's summaries. `⌘↵` runs the primary from any pane, terminals included (#441): `work.start` ("Start or continue work") moves the work forward, one chord for one action. It submits an open sheet or dialog, starts the marked or selected tickets, and on a work tab with neither runs the item's next step, gated as the button: a blocked one toasts its reason and never runs. The button's tooltip shows the chord; `⌘.` `↵` stays the alternative. `views/work/WorkContext.svelte` is the header, `views/work/StoryPanel.svelte` the Story panel (sections in `views/work/story/`, the return brief in `story/ReturnBrief.svelte`).
 
 ### 2.5 The work menu (`⌘.`)
 
@@ -526,7 +526,7 @@ All follow DESIGN §6.13: one sentence saying what happened, one or two actions.
 
 | Key | macOS | Linux | Prefix | Action id | What it does |
 |---|---|---|---|---|---|
-| next step | `↵` | `Enter` | | (the list's or the header's primary) | the selected row's next step in any list; on the Desk `⌘.` `↵` from any pane, terminals included (§2.5) |
+| next step | `↵` | `Enter` | | (the list's or the header's primary) | the selected row's next step in any list; on the Desk `⌘↵` (or `⌘.` `↵`) from any pane, terminals included (§2.4, §2.5) |
 | actions | `⌘.` | `Ctrl+.` | `.` | `work.menu` | the menu of what has the keys: a selected row, a detail, the Desk (§2.5); else the palette |
 | find anything | `⌘K` | `Ctrl+K`, `Ctrl+Shift+K` | `:` | `palette.open` | the palette (§3.5) |
 | next that needs you | `⌘J` (`⇧⌘J` back) | `Ctrl+J` (`Ctrl+Shift+J`) | `u` (`U`) | `attention.next` | goes to the next waiting row's place (§3.4) |
@@ -546,7 +546,7 @@ The other window-level chords:
 | `attention.peek` ("Peek waiting session") | `⇧⌘Y` | `Ctrl+Shift+Y` | `y` | global, peek and reply without switching |
 | `work.new` | `⇧⌘N` | `Ctrl+Shift+N` | `w` | global |
 | `work.story` ("Work: Story panel") | `⌘I` | `Ctrl+I`, `Ctrl+Shift+I` | | global, on the Desk: shows or hides the Story panel |
-| `work.start` | `⌘↵` | `Ctrl+Enter` | `s` | ticket views; also submits every work sheet and dialog |
+| `work.start` ("Start or continue work") | `⌘↵` | `Ctrl+Enter` | `s` | anywhere but text fields, terminals included: submits the open work sheet or dialog, starts the marked or selected tickets, else on a work tab runs the next step (§2.4) |
 | `view.focus` ("Focus mode") | `⇧⌘F` | `Ctrl+Shift+F` | `f` | global (below) |
 | `rail.toggle` ("Toggle sidebar") | `⌘B` | `Ctrl+B` | `b` | global |
 | `project.goto.N` | `⌘1`–`⌘9` | `Ctrl+1`–`Ctrl+9` | `1`–`9` | global, the nth work row of the sidebar |

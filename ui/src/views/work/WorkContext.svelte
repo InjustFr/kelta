@@ -11,6 +11,7 @@
   import { terminalPool } from '$lib/terminal';
   import { resolveProjectColor } from '$lib/theme';
   import { Button, currentPlatform, Kbd, Menu, type MenuItem } from '$lib/ui';
+  import { formatChord } from '$lib/ui/format';
 
   import { focus } from '../../shell/focus.svelte';
   import { focusedSessionId } from '../../shell/nav';
@@ -35,6 +36,13 @@
   const menuChord = $derived(
     effectiveChords('work.menu', settings.value()?.keys ?? null, currentPlatform())[0],
   );
+  // ⌘↵ runs the primary from any pane (#441): its tooltip names the chord.
+  const primaryTip = $derived.by(() => {
+    const c = effectiveChords('work.start', settings.value()?.keys ?? null, currentPlatform())[0];
+    return c && phase
+      ? `${phase.primaryLabel} (${formatChord(c).join(currentPlatform() === 'macos' ? '' : '+')})`
+      : undefined;
+  });
 
   let workBtn = $state<HTMLElement>();
 
@@ -115,7 +123,7 @@
     <span class="stage"><StageTrack stage={head.stage} labels /></span>
     {#if phase.primary}
       <!-- The wrapper carries the blocked reason: a disabled button shows no tooltip in WebKit. -->
-      <span class="primary" title={primaryBlocked ?? (phase.id === 'failed' ? phase.detail : undefined)}>
+      <span class="primary" title={primaryBlocked ?? (phase.id === 'failed' ? phase.detail : primaryTip)}>
         <Button
           size="sm"
           variant="primary"

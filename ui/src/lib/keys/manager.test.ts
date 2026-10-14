@@ -235,19 +235,19 @@ describe('terminal passthrough', () => {
 });
 
 describe('context-dependent actions', () => {
-  it('terminal.* only fire inside terminals, work.start only outside', () => {
+  it('terminal.* only fire inside terminals, work.start anywhere but text fields (#441)', () => {
     const { manager, ids, setCtx } = setup();
     const copy = (): KeyboardEvent => ctrlShift('KeyC', 'C');
     expect(manager.handleKeyDown(copy())).toBe('pass');
     setCtx(TERMINAL);
     expect(manager.handleKeyDown(copy())).toBe('consumed');
     const start = (): KeyboardEvent => press({ code: 'Enter', key: 'Enter', ctrlKey: true });
-    expect(manager.handleKeyDown(start())).toBe('pass'); // terminal: Ctrl+Enter reaches the PTY
+    expect(manager.handleKeyDown(start())).toBe('consumed'); // terminal: the work tab's next step
     setCtx(GLOBAL);
     expect(manager.handleKeyDown(start())).toBe('consumed');
     setCtx({ ...GLOBAL, textInput: true });
     expect(manager.handleKeyDown(start())).toBe('pass');
-    expect(ids()).toEqual(['terminal.copy', 'work.start']);
+    expect(ids()).toEqual(['terminal.copy', 'work.start', 'work.start']);
   });
 
   it('editor.send_selection only fires in editor sessions', () => {

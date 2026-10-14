@@ -555,6 +555,9 @@ registerAction('work.start', async (args) => {
   // Marked tickets (#141): the chord starts them, as the key hints say ("Start marked").
   if (!args?.ticket && batch.list.length > 0) return void ui.openSheet('start_batch');
   const ticket = (args?.ticket as TicketRef | undefined) ?? selection.ticket;
+  // No ticket on a work tab (#441): the chord runs the next step, as the header's primary does.
+  const item = ticket ? null : focusedWorkItem();
+  if (item) return runPrimary(item);
   if (!ticket) {
     toasts.info(t('Select a ticket to start work'));
     return;
