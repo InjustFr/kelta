@@ -24,7 +24,7 @@ Kelta has three places and a sidebar (DESIGN §1.1):
 - **Queue** (§3): where all work waits, across projects, ranked by whose move it is: **Your move**, **Claude working**, **Waiting on others**. It answers both questions on one screen.
 - **Desk**: a work item's tab. Claude and nvim in panes, the desk header (key, title, why, the stage track, the next step, `Actions ⌘.`) and the Story panel, the item's story in stage order (§2.4).
 - **Library**: **Tickets** and **Pull requests**, the lists to pick work from, under the one project scope of the top bar (§3).
-- **Sidebar of work**: the three places, then each project's work items in a stable order (the order they started); every other tab folds into one **n more** row per project. It folds to its lamps while the Queue is shown.
+- **Sidebar of work**: the three places, then each project's work items in a stable order (the order they started); every other tab folds into one **n more** row per project.
 
 The loop runs through them: pick a ticket in the Library, start it (`s`), Claude works on the Desk, the Queue calls you back when it stops (`⌘J`), you review (`↵`), ship (`p`), and the pull request waits on others in the Queue until it merges.
 
@@ -202,7 +202,7 @@ Does not work, because Kelta cannot type into that Claude:
 
 ## 3. Queue: where all work waits
 
-The Queue is the first of the three places, in the order of the loop: **Queue** (`⌘0`, action id `inbox.open`, pane kind `inbox`), **Tickets** (`⌘⇧B`, pick a ticket from any source), **Pull requests** (`⌘⇧R`, review PRs). Tickets and Pull requests are the Library. All three sit at the top of the sidebar, render in `GlobalHost` outside any project, live in the built-in `global` layout (one tab per place, its active tab the place shown: polled like a visible pane, restored on relaunch), and follow the "leaves the Queue" rule of §3.3. They share one project scope (DESIGN §6.8): `All projects ▾` in the top bar narrows all three to one project, switching place keeps it, and it is restored on relaunch. A project's tickets or pull requests are that place scoped to it, never a tab. While the Queue is shown the sidebar folds to its lamps: the Queue lists the same work.
+The Queue is the first of the three places, in the order of the loop: **Queue** (`⌘0`, action id `inbox.open`, pane kind `inbox`), **Tickets** (`⌘⇧B`, pick a ticket from any source), **Pull requests** (`⌘⇧R`, review PRs). Tickets and Pull requests are the Library. All three sit at the top of the sidebar, render in `GlobalHost` outside any project, live in the built-in `global` layout (one tab per place, its active tab the place shown: polled like a visible pane, restored on relaunch), and follow the "leaves the Queue" rule of §3.3. They share one project scope (DESIGN §6.8): `All projects ▾` in the top bar narrows all three to one project, switching place keeps it, and it is restored on relaunch. A project's tickets or pull requests are that place scoped to it, never a tab.
 
 ### 3.1 Sections
 

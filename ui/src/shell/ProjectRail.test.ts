@@ -316,12 +316,12 @@ describe('ProjectRail', () => {
     const r = await setup();
     await unfold(r, 'shop');
     expect(bandRows(r, 'shop')).toEqual(['shop-t1', 'shop-t2', 'shop-t3']);
-    sidebar.fold(true);
+    sidebar.collapsed = true;
     try {
       await expect.poll(() => bandRows(r, 'shop')).toEqual(['shop-t1']);
       expect(moreRow(r, 'shop').closest('li')?.classList).toContain('fold-row');
     } finally {
-      sidebar.fold(false);
+      sidebar.collapsed = false;
     }
   });
 
