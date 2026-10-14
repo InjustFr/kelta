@@ -432,7 +432,7 @@ The sidebar lists work, not tabs: the three places, then each project's work ite
 - No title bar or close button: the 48px input (16px text) is the top edge, a hint line under the list names Move, Run and Close, Esc or the backdrop closes it. Query in mono. Results `--k-row-height` rows: 10px lamp slot (session and tab hits), 14px kind icon (no text label), title, meta, right-aligned kbd hint. Results are grouped, one header per group: with an empty query in the order Recent (the last places you were), Work items, Sessions, Projects, Actions, Tools, Commands, Tickets, Pull requests, Settings (every key, opening its section); with a query, groups in order of their best hit.
 - Prefixes narrow the groups: `#` Tickets, `!` Pull requests, `>` Actions, Commands and Tools, `,` Settings (`# 311`, `>split`).
 - Selected row: `--k-bg-selected` plus a 2px accent left bar.
-- **Which-key panel** (`shell/WhichKey.svelte`): after the prefix (`⌃⇧Space`) and a pause of `keys.prefix_hint_ms` (400ms) with no second key, a panel at the bottom of the window lists the keys that follow in groups: Go to, This work (`KEY`, on a work tab), Panes, Tools. The prefix stays armed until a key or `Esc`; `?` opens Settings › Keys.
+- **Which-key panel** (`shell/WhichKey.svelte`): after the prefix (`⌃⇧Space`) and a pause of `keys.prefix_hint_ms` (400ms) with no second key, a panel at the bottom of the window lists a curated few of the keys that follow, at most 6 per group in plain words: Go to, This work (`KEY`, on a work tab; `↵` carries the next step's label), Panes, Tools here. The table of groups and labels is `HINT_TABLE` in `lib/keys/manager.ts`. The prefix stays armed until a key or `Esc`; `?` opens Settings › Keys.
 
 ### 6.7 Sheets, dialogs, menus, toasts
 

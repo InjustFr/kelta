@@ -534,7 +534,7 @@ All follow DESIGN §6.13: one sentence saying what happened, one or two actions.
 
 `Esc` on the Queue clears what the list holds first (the filter, then the marks, then the brief's extra actions; an open menu closes itself) and, with nothing left to clear, goes back like `⌘0`.
 
-**The prefix** (`⌃⇧Space` on both, `keys.prefix`, then one key) reaches every action, terminals included. After `keys.prefix_hint_ms` (400ms) without a second key, the which-key panel lists the keys that follow: Go to, This work (on the Desk), Panes, Tools; the prefix stays armed until a key or `Esc`, and `?` opens Settings › Keys.
+**The prefix** (`⌃⇧Space` on both, `keys.prefix`, then one key) reaches every action, terminals included. After `keys.prefix_hint_ms` (400ms) without a second key, the which-key panel lists the curated keys that follow, at most 6 per group: Go to (Queue, next that needs you, Tickets, Pull requests, Search, `1–9` as one line), This work (on a work tab: `↵` with the next step's label, `g` `v` `d` `e`), Panes, Tools here (the tools with a key, Settings); every other prefix key stays bound, `?` lists them all; the prefix stays armed until a key or `Esc`, and `?` opens Settings › Keys.
 
 The other window-level chords:
 
