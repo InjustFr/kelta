@@ -134,7 +134,8 @@
         aria-label={t('Leave focus')}
         data-testid="work-leave-focus"
         onclick={() => void focus.leave()}
-        >{t('Leave focus')}<span class="esc" aria-hidden="true"><Kbd chord="escape" /><Kbd chord="escape" /></span
+        >{t('Leave focus')}<span class="esc" aria-hidden="true"
+          ><Kbd chord="escape" /><Kbd chord="escape" /></span
         ></Button
       >
     {/if}
