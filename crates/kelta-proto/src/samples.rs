@@ -636,6 +636,7 @@ pub fn ui_event_samples() -> Vec<(&'static str, UiEvent)> {
             },
         ),
         ("ui_event_ctl_command", UiEvent::CtlCommand { cmd: CtlCommand::Palette }),
+        ("ui_event_focus_held", UiEvent::FocusHeld { count: 2 }),
         (
             "ui_event_ui_open",
             UiEvent::UiOpen {

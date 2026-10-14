@@ -693,6 +693,16 @@ async fn focus_mode_holds_notifications_but_blocked_ones() {
     assert_eq!(h.ui.notifications().len(), 1);
     h.cfg.update(|s| s.notifications.focus_allow_blocked = false);
     h.core.notify(n("SHOP-3: Claude replied", Urgency::Critical)).await.unwrap();
+    let counts: Vec<u32> = h
+        .ui
+        .events()
+        .iter()
+        .filter_map(|ev| match ev {
+            UiEvent::FocusHeld { count } => Some(*count),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(counts, [1, 2]);
     assert_eq!(h.core.notify_focus(false), ["SHOP-1 ready to review", "SHOP-3: Claude replied"]);
     h.core.notify(n("SHOP-4 ready to review", Urgency::Normal)).await.unwrap();
     assert_eq!(h.ui.notifications().len(), 2);
