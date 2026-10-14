@@ -593,6 +593,16 @@ describe('Next up (#145)', () => {
 
     await nextWaitingTo(container, 'n:');
     const pane = screen.getByTestId('inbox-pane');
+    // #440: `b` marks the ticket for a batch start, Space hides and shows the brief.
+    batch.clear();
+    await fireEvent.keyDown(pane, { key: 'b' });
+    expect(batch.list).toHaveLength(1);
+    await fireEvent.keyDown(pane, { key: ' ' });
+    expect(batch.list).toHaveLength(1);
+    expect(screen.queryByTestId('now-brief')).toBeNull();
+    await fireEvent.keyDown(pane, { key: ' ' });
+    expect(screen.getByTestId('now-brief')).toBeTruthy();
+    batch.clear();
     await fireEvent.keyDown(pane, { key: 'J' });
     await waitFor(() => expect(order()).toEqual(['SHOP-160', 'SHOP-151', '4610']));
     await fireEvent.keyDown(pane, { key: 'K' });

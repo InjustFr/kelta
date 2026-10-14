@@ -216,6 +216,7 @@
 
   /** Enter: the brief beside the list (under it in a narrow pane) takes the keyboard. */
   async function focusDetail(): Promise<void> {
+    detailShown = true;
     await tick();
     side?.querySelector<HTMLElement>('[data-testid="review-detail"]')?.focus();
   }
@@ -329,6 +330,8 @@
   /** The full key list (`?`); the footer shows the first five. */
   let keysOpen = $state(false);
   const hints = reviewsKeys();
+  /** Space shows or hides the detail (#440); per mount, like the Tickets split. */
+  let detailShown = $state(true);
 
   function onkeydown(e: KeyboardEvent): void {
     const target = e.target as HTMLElement;
@@ -359,9 +362,11 @@
         if (itemRows.at(-1)) selId = itemRows.at(-1)!.id;
         break;
       case 'Enter':
-      case ' ':
         if (item && e.shiftKey) openDetail(item);
         else if (item) void focusDetail();
+        break;
+      case ' ':
+        detailShown = !detailShown;
         break;
       case '/':
         filterInput?.focus();
@@ -564,7 +569,7 @@
           >{/snippet}
       </EmptyState>
     {:else}
-      <div class="body">
+      <div class="body" class:solo={!detailShown}>
         <div class="main">
           <div class="cols grid" aria-hidden="true">
             <span></span><span></span>
@@ -660,37 +665,41 @@
             </VirtualList>
           </div>
         </div>
-        <aside class="side" bind:this={side} aria-label={t('Review detail')}>
-          {#if cur}
-            <!-- The PR's project runs its actions (fix, review locally); a PR no project binds uses the active one. -->
-            {@const pid = home ?? cur.s.item.project_ids[0] ?? projects.activeId}
-            {#if pid}
-              <!-- Keyed: the "PR changed" banner and an open dialog belong to one PR. -->
-              {#key cur.id}
-                <!-- A crash in one PR's detail stays in the side panel; the list keeps working. -->
-                <svelte:boundary onerror={(e) => console.error(`[kelta] review detail ${cur.id} crashed`, e)}>
-                  <ReviewDetailPane
-                    projectId={pid}
-                    {tabId}
-                    {paneId}
-                    content={{ kind: 'review_detail', review: cur.s.item.review.ref }}
-                    visible
-                    focused={false}
-                    embedded
-                  />
-                  {#snippet failed(error)}
-                    <ErrorState
-                      error={error instanceof Error ? error : String(error)}
-                      title={t('Could not show this pull request')}
+        {#if detailShown}
+          <aside class="side" bind:this={side} aria-label={t('Review detail')}>
+            {#if cur}
+              <!-- The PR's project runs its actions (fix, review locally); a PR no project binds uses the active one. -->
+              {@const pid = home ?? cur.s.item.project_ids[0] ?? projects.activeId}
+              {#if pid}
+                <!-- Keyed: the "PR changed" banner and an open dialog belong to one PR. -->
+                {#key cur.id}
+                  <!-- A crash in one PR's detail stays in the side panel; the list keeps working. -->
+                  <svelte:boundary
+                    onerror={(e) => console.error(`[kelta] review detail ${cur.id} crashed`, e)}
+                  >
+                    <ReviewDetailPane
+                      projectId={pid}
+                      {tabId}
+                      {paneId}
+                      content={{ kind: 'review_detail', review: cur.s.item.review.ref }}
+                      visible
+                      focused={false}
+                      embedded
                     />
-                  {/snippet}
-                </svelte:boundary>
-              {/key}
+                    {#snippet failed(error)}
+                      <ErrorState
+                        error={error instanceof Error ? error : String(error)}
+                        title={t('Could not show this pull request')}
+                      />
+                    {/snippet}
+                  </svelte:boundary>
+                {/key}
+              {/if}
+            {:else}
+              <p class="k-split-empty">{t('Select a pull request to see it here.')}</p>
             {/if}
-          {:else}
-            <p class="k-split-empty">{t('Select a pull request to see it here.')}</p>
-          {/if}
-        </aside>
+          </aside>
+        {/if}
       </div>
     {/if}
   {/if}
@@ -797,6 +806,10 @@
     min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr) 340px;
+  }
+
+  .body.solo {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .main {

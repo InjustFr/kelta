@@ -220,6 +220,8 @@
   "Create project from folder": "Créer un projet depuis un dossier",
   "Switch project": "Changer de projet",
   "Commands": "Commandes",
+  "Show or hide the brief": "Afficher ou masquer le résumé",
+  "Show or hide the detail": "Afficher ou masquer le détail",
   "Split": "Diviser",
   "done": "terminées",
   "Top sessions by spend": "Sessions les plus coûteuses",

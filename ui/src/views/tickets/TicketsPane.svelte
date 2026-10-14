@@ -748,7 +748,7 @@
       {
         id: 'mark',
         label: marked ? t('Unmark') : t('Mark for batch start'),
-        key: mode === 'board' ? 'space' : 'b',
+        key: 'b',
         run: () => batch.toggle(item.ticket.ref, item.project_ids[0] ?? null),
       },
       batch.list.length > 0 && {
@@ -785,9 +785,8 @@
   function onkeydown(e: KeyboardEvent): void {
     const target = e.target as HTMLElement;
     if (target.closest('input, textarea, select, [role="dialog"], [role="menu"]')) return;
-    // #141: Mod+Enter starts the marked tickets; Space marks on the board; `b` marks in either mode (the list's Space splits).
-    const mark =
-      mode === 'board' && cur ? { ref: cur.ticket.ref, projectId: cur.project_ids[0] ?? null } : null;
+    // #141: Mod+Enter starts the marked tickets; `b` marks in either mode (#440: Space shows or hides the detail).
+    const mark = cur ? { ref: cur.ticket.ref, projectId: cur.project_ids[0] ?? null } : null;
     if (!side?.contains(target) && batchKey(e, mark)) {
       e.preventDefault();
       return;
@@ -829,9 +828,6 @@
         break;
       case 'x':
         if (item && mode === 'list') togglePick(keyOf(item));
-        break;
-      case 'b':
-        if (item) batch.toggle(item.ticket.ref, item.project_ids[0] ?? null);
         break;
       case 'Escape':
         if (picked.length === 0) return;

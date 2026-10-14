@@ -429,7 +429,7 @@
                 ]
               : []),
             {
-              key: 'space',
+              key: 'b',
               label: batch.has(tk.ref) ? t('Unmark') : t('Mark ticket'),
               run: () => batch.toggle(tk.ref, row.ticket.project_ids[0] ?? null),
             },
@@ -644,6 +644,8 @@
   /** The full key list (`?`). */
   let keysOpen = $state(false);
   const hints = $derived(queueKeys());
+  /** Space shows or hides the brief (#440); per mount, like the Tickets split. */
+  let briefShown = $state(true);
 
   function onkeydown(e: KeyboardEvent): void {
     // The filter and the brief's reply field keep their keys.
@@ -695,6 +697,9 @@
         break;
       case '.':
         allActions = !allActions;
+        break;
+      case ' ':
+        briefShown = !briefShown;
         break;
       case 'Escape':
         // #415: clears what the list holds first (filter, marks, the brief's actions), then goes back.
@@ -911,7 +916,7 @@
         {/snippet}
       </EmptyState>
     {:else}
-      <div class="body">
+      <div class="body" class:solo={!briefShown}>
         <div class="main">
           <div class="cols grid" aria-hidden="true">
             <span></span><span></span>
@@ -1022,7 +1027,7 @@
             </VirtualList>
           </div>
         </div>
-        {#if cur && curView}
+        {#if cur && curView && briefShown}
           {@const row = cur}
           {@const v = curView}
           {@const track = (a: BriefAction): BriefAction => ({
@@ -1215,6 +1220,10 @@
     min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr) 340px;
+  }
+
+  .body.solo {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .main {
