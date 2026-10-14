@@ -106,29 +106,27 @@ test.describe('sidebar', () => {
     await expect.poll(() => railWidth(page)).toBe(416);
   });
 
-  test('the Queue folds the sidebar to its lamps; Tickets and Reviews keep it open; ⌘B wins', async ({
-    page,
-  }) => {
+  test('the Queue leaves the sidebar as it is (#454); ⌘B still collapses it there', async ({ page }) => {
     await boot(page);
     expect(await railWidth(page)).toBe(272);
     await dispatch(page, 'inbox.open');
-    await expect.poll(() => railWidth(page)).toBe(64);
+    await expect(page.getByTestId('inbox-pane')).toBeVisible();
+    expect(await railWidth(page)).toBe(272);
     await dispatch(page, 'tickets.open');
-    await expect.poll(() => railWidth(page)).toBe(272);
-
-    // Expanded by hand on the Queue: it stays open there.
     await dispatch(page, 'inbox.open');
+    expect(await railWidth(page)).toBe(272);
+
+    // Collapsed by hand: the Queue and back keep it collapsed.
+    await dispatch(page, 'rail.toggle');
     await expect.poll(() => railWidth(page)).toBe(64);
+    await dispatch(page, 'tickets.open');
+    await dispatch(page, 'inbox.open');
+    expect(await railWidth(page)).toBe(64);
     await dispatch(page, 'rail.toggle');
     await expect.poll(() => railWidth(page)).toBe(272);
-
-    // Collapsed by hand: Tickets keeps it collapsed.
-    await dispatch(page, 'rail.toggle');
-    await dispatch(page, 'tickets.open');
-    await expect.poll(() => railWidth(page)).toBe(64);
   });
 
-  test('a row is an open tab or a live process (#452): closed and kept, it moves to Background; the Queue folds to lamp tiles', async ({
+  test('a row is an open tab or a live process (#452): closed and kept, it moves to Background', async ({
     page,
   }) => {
     await boot(page);
@@ -159,8 +157,6 @@ test.describe('sidebar', () => {
 
     await dispatch(page, 'inbox.open');
     await expect(page.getByTestId('inbox-pane')).toContainText(waiting);
-    await expect.poll(() => railWidth(page)).toBe(64);
-    for (const more of await page.getByTestId('rail-more').all()) await expect(more).toBeHidden();
     await expect(work).toBeVisible();
     await expect(background.getByTestId('rail-background')).toBeVisible();
   });
