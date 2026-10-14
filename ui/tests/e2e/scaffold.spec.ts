@@ -36,7 +36,7 @@ test.describe('scaffold', () => {
       active: 'shop',
       sessions: 12,
       layoutTabs: 3,
-      work: 9,
+      work: 10,
       theme: 'system',
       mock: true,
     });

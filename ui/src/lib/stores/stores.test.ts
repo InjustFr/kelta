@@ -466,7 +466,7 @@ describe('WorkStore', () => {
   it('loads work items and finds them by ticket/session', async () => {
     const store = new WorkStore();
     await store.load();
-    expect(store.all).toHaveLength(9);
+    expect(store.all).toHaveLength(10);
     const w = store.all[0]!;
     expect(store.forTicket(w.ticket!)?.id).toBe(w.id);
     expect(store.forSession(w.session_ids[0]!)?.id).toBe(w.id);
