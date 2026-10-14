@@ -59,6 +59,16 @@ describe('work tab header', () => {
     await waitFor(() => expect(header.textContent).toContain('Rate-limit login attempts'));
     expect(header.dataset.phase).toBe('working');
     expect(header.querySelector('.track')?.getAttribute('data-mark')).toBe('wait');
+    // All six stages named, the current one bold (#438).
+    expect([...header.querySelectorAll('.track .name')].map((n) => n.textContent)).toEqual([
+      'Ticket',
+      'Claude',
+      'PR',
+      'Review',
+      'Merge',
+      'Deploy',
+    ]);
+    expect(header.querySelector('.track .name.now')?.textContent).toBe('Claude');
     expect(screen.getByTestId('work-why').textContent).toBe('Waiting on others: Claude working');
     // Status, PR, git and cost moved to the Story panel (#428).
     for (const id of ['work-status', 'work-phase', 'work-pr', 'ahead', 'work-branch'])

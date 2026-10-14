@@ -147,6 +147,16 @@ describe('Now', () => {
     expect(row.textContent).toContain('next: check the retry path against staging');
     expect(row.querySelector('.meta.warn')?.textContent).toBe('tests: none');
     const brief = screen.getByTestId('now-brief');
+    // Key and project, title, the labelled track, why, then the actions (#438).
+    const track = within(brief).getByRole('img');
+    expect(track.querySelectorAll('.name')).toHaveLength(6);
+    expect(track.querySelector('.name.now')?.textContent).toBe('Claude');
+    const where = brief.querySelector('.where')!;
+    expect(where.textContent).toBeTruthy();
+    expect(track.compareDocumentPosition(where) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      where.compareDocumentPosition(brief.querySelector('.actions')!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     const primary = brief.querySelector<HTMLElement>('.btn.primary')!;
     expect(primary.textContent).toMatch(/^Review changes/);
     expect(primary.querySelector('kbd')).not.toBeNull();

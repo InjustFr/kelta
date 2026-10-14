@@ -427,6 +427,7 @@
     "other": "nvim a gardé {n} tampons non enregistrés"
   },
   "Claude needs you": "Claude a besoin de vous",
+  "Claude asks you to choose": "Claude vous demande de choisir",
   "Ready for review": "Prêt pour la revue",
   "New for you": "Nouveau pour vous",
   "Review requests": "Demandes de revue",
