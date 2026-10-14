@@ -224,6 +224,8 @@
   "Create project from folder": "Projekt aus Ordner erstellen",
   "Switch project": "Projekt wechseln",
   "Commands": "Befehle",
+  "Show or hide the brief": "Kurzinfo ein- oder ausblenden",
+  "Show or hide the detail": "Details ein- oder ausblenden",
   "Split": "Teilen",
   "done": "fertig",
   "Top sessions by spend": "Teuerste Sitzungen",
