@@ -2569,5 +2569,12 @@
   "Start work on a ticket": "Arbeit an einem Ticket beginnen",
   "Review what Claude changed": "Prüfen, was Claude geändert hat",
   "No tickets?": "Keine Tickets?",
-  "starts a branch and a Claude from one sentence.": "startet aus einem Satz einen Branch und einen Claude."
+  "starts a branch and a Claude from one sentence.": "startet aus einem Satz einen Branch und einen Claude.",
+  "Next that needs you": "Das Nächste, das dich braucht",
+  "Work row": "Arbeitszeile",
+  "Claude pane": "Claude-Bereich",
+  "Changes since you looked": "Änderungen seit deinem letzten Blick",
+  "Ship / Push": "Ausliefern / Pushen",
+  "Note for later": "Notiz für später",
+  "Tools here": "Werkzeuge hier"
 }

@@ -66,7 +66,7 @@ Every action id, label and default chord per platform is in the ActionId catalog
 | ActionId | macOS | Linux | Prefix | Behaviour |
 |---|---|---|---|---|
 | `toast.run_last` (palette "Run last toast action") | `cmd+shift+o` (⇧⌘O) | `ctrl+shift+o` | `o` | runs the primary action of the most recent toast still shown (e.g. "Opened PR #13" → Open); the chord is printed on that toast's button. |
-| `work.ship` (palette "Work: Ship / Push") | none | none | none | Ship dialog for the focused tab's work item (push + PR); with a PR already open it is a plain push. |
+| `work.ship` (palette "Work: Ship / Push") | none | none | `d` | Ship dialog for the focused tab's work item (push + PR); with a PR already open it is a plain push. |
 | `work.finish` (palette "Work: Finish") | none | none | none | Finish dialog for the focused tab's work item, prefilled when its PR is merged or closed. |
 | `work.finish_merged` (palette "Finish all merged") | none | none | none | one dialog listing merged items with clean worktrees (dirty ones are listed as skipped); the only bulk destructive action. |
 

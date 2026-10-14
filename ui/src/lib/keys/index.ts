@@ -26,6 +26,7 @@ export {
   contextFromEvent,
   effectiveBindings,
   effectiveChords,
+  HINT_TABLE,
   isEditable,
   isWebviewDefault,
   KeyManager,
