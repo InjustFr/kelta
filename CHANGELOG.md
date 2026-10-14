@@ -2,6 +2,27 @@
 
 All notable changes are listed here, generated from the commit messages at each release. Versions follow semver.
 
+## [1.5.0](https://github.com/InjustFr/kelta/compare/v1.4.0...v1.5.0) (2026-10-14)
+
+### Features
+
+* **keys:** curated which-key groups instead of every prefix binding ([#436](https://github.com/InjustFr/kelta/issues/436)) ([adc4231](https://github.com/InjustFr/kelta/commit/adc42315eedc55dfd4fb5bf66eeb2c870bfc9823))
+* **rail:** a row per unfinished work item and per Claude session without one ([#435](https://github.com/InjustFr/kelta/issues/435)) ([ad31f9d](https://github.com/InjustFr/kelta/commit/ad31f9d951a14b4c43ffc35378c8922f4bc03ee2))
+* **shell:** focus mode quiets the top bar, adds Leave focus and a held-updates pill ([#442](https://github.com/InjustFr/kelta/issues/442)) ([cafeade](https://github.com/InjustFr/kelta/commit/cafeade55924adf1db474f0ec17557b952ef5ae5))
+* **ui:** add project.new to the action catalog so the palette lists Add project ([#435](https://github.com/InjustFr/kelta/issues/435)) ([8a9660e](https://github.com/InjustFr/kelta/commit/8a9660e13af80afda152995b9d11176bd624acbd))
+* **ui:** b marks for a batch start and Space shows or hides the side panel in every list ([#440](https://github.com/InjustFr/kelta/issues/440)) ([efd2532](https://github.com/InjustFr/kelta/commit/efd25328ff5c3dec63f175b49a4c2e737b997c37))
+* **ui:** lists drop the key hint line; ? opens their key panel ([#437](https://github.com/InjustFr/kelta/issues/437)) ([c191550](https://github.com/InjustFr/kelta/commit/c191550d434ef34fd3aaf40cd776a9fbba183473))
+* **ui:** stage track names all six stages in the desk header and the Queue brief ([#438](https://github.com/InjustFr/kelta/issues/438)) ([e45170c](https://github.com/InjustFr/kelta/commit/e45170cbb3588032ceabbd115b1e5d24fffde366))
+* **work:** ⌘. menu headed by ticket, branch and PR, and only what could run soon under Not available now ([#439](https://github.com/InjustFr/kelta/issues/439)) ([db675d5](https://github.com/InjustFr/kelta/commit/db675d56cf068f611cf5e80c68339370667c93bb))
+* **work:** ⌘↵ runs the next step on a work tab ([#441](https://github.com/InjustFr/kelta/issues/441)) ([ceef065](https://github.com/InjustFr/kelta/commit/ceef0659de6fe6a707de8701c012a1b8766c069a))
+
+### Bug Fixes
+
+* **rail:** Other Claude sessions shows without Home and hides when empty; tab cycling walks a shared tab once ([#435](https://github.com/InjustFr/kelta/issues/435)) ([57a2cd0](https://github.com/InjustFr/kelta/commit/57a2cd079003f126a6d3f1d1dc2a259dea520599))
+* **ui:** desk header stage track basis 300px so the text block keeps room above the 640px drop ([#438](https://github.com/InjustFr/kelta/issues/438)) ([b76e764](https://github.com/InjustFr/kelta/commit/b76e764d68a2a9c0e7fc3463746fb5b10fa50179))
+* **ui:** keep live Claude sessions with a work item but no tab as folded background rows ([#435](https://github.com/InjustFr/kelta/issues/435)) ([c2d96d6](https://github.com/InjustFr/kelta/commit/c2d96d67e9d5104a6327108284462b2741ddaaf1))
+* **ui:** prefix panel next-step label falls back to Go to work tab; test the label on SHOP-155 ([#436](https://github.com/InjustFr/kelta/issues/436)) ([7292ffe](https://github.com/InjustFr/kelta/commit/7292ffe105c1fcd315d6bf6c87d99e978d1fee77))
+
 ## [1.4.0](https://github.com/InjustFr/kelta/compare/v1.3.0...v1.4.0) (2026-10-13)
 
 ### Features
