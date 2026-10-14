@@ -17,7 +17,7 @@ use kelta_proto::ids::{AccountId, ProjectId, SessionId};
 use kelta_proto::model::{
     EditorTarget, Lifecycle, ProjectInfo, RunClaim, RunState, Scope, SessionKind, ShipOrigin, WorkItem,
 };
-use kelta_proto::settings::{AccountKind, ClaudeSettings, Layer, Settings};
+use kelta_proto::settings::{AccountKind, ClaudeSettings, Layer, Settings, TransitionTarget};
 use kelta_proto::tracker::{Ticket, TicketRef, Transition};
 use serde_json::{Value, json};
 
@@ -383,13 +383,14 @@ pub(crate) fn tool_defs() -> Value {
         },
         {
             "name": "link_pr",
-            "description": "Link one of my open pull requests to a ticket after the fact (a PR opened before its ticket existed): Kelta tracks the ticket as a work item on the PR's head branch, in the worktree that has it checked out or a new one, without starting Claude; the ticket then reads Resume work. Linked already: no change. Fails with Conflict, naming the holder, when another work item holds the ticket or the PR.",
+            "description": "Link one of my open pull requests to a ticket after the fact (a PR opened before its ticket existed): Kelta tracks the ticket as a work item on the PR's head branch, in the worktree that has it checked out or a new one, without starting Claude; the ticket then reads Resume work. Linked already: no change. Fails with Conflict, naming the holder, when another work item holds the ticket or the PR. With `status` (needs `claude.mcp_board_writes`), the ticket then moves (also when linked already); a failed move keeps the link and returns a warning.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "key": key, "account": account,
                     "pr": { "type": "string", "description": "The PR's URL, or its number when only one of my open PRs has it" },
-                    "project": { "type": "string", "description": "Kelta project id (default: the PR's)" }
+                    "project": { "type": "string", "description": "Kelta project id (default: the PR's)" },
+                    "status": { "type": "string", "description": "Move the ticket after linking: a role, `start`, `review` or `done`, mapped by the project's `tracker.status_map` (else `work.on_start` / `on_pr` / `on_merge.transition_to`), or a status or transition name of the tracker (e.g. \"In review\"). Omitted: the ticket stays" }
                 },
                 "required": ["key", "pr"], "additionalProperties": false
             },
@@ -736,6 +737,10 @@ async fn claim_ticket(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &V
 }
 
 async fn link_pr(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &Value) -> ToolResult {
+    // `status` moves any ticket to any status: it is a board write.
+    if opt_arg(args, "status").is_some() && !core.settings(None).claude.mcp_board_writes {
+        return Err("InvalidArgument: `status` needs claude.mcp_board_writes".into());
+    }
     let pr = str_arg(args, "pr")?.trim();
     let (ticket, projects) = ref_by_key(core, args).await?;
     let number = pr.trim_start_matches('#').parse::<u64>().ok();
@@ -757,9 +762,42 @@ async fn link_pr(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &Value)
         .or_else(|| projects.into_iter().next())
         .or_else(|| sid.and_then(|s| core.session_get(s)).map(|s| s.project_id))
         .ok_or_else(|| format!("no Kelta project for {}; pass `project`", item.review.url))?;
-    let (key, url) = (ticket.key.clone(), item.review.url.clone());
+    let (t, url) = (ticket.clone(), item.review.url.clone());
     let w = core.work_link_pr(&project, ticket, item.review.clone()).await.map_err(coded)?;
-    Ok(format!("Linked {key} to {url}: work item {} on {} ({}).", w.id, w.branch, w.worktree.display()))
+    let linked =
+        format!("Linked {} to {url}: work item {} on {} ({}).", t.key, w.id, w.branch, w.worktree.display());
+    let Some(status) = opt_arg(args, "status") else { return Ok(linked) };
+    let moved = async {
+        let to = role_target(core, &project, &status)?.unwrap_or_else(|| status.clone());
+        let tracker = core.tracker_for(&t.account).await.map_err(|e| e.message)?;
+        transition(core, &tracker, &t, &to, sid).await
+    }
+    .await;
+    Ok(match moved {
+        Ok(m) => format!("{linked} {m}"),
+        Err(e) => format!("{linked}\nWarning: {} not moved to {status:?}: {e}", t.key),
+    })
+}
+
+/// A `link_pr` role, `start` / `review` / `done`, as Start work, `on_pr` and the merge map it:
+/// the project's `tracker.status_map`, else `work.on_*.transition_to`. `None`: not a role.
+fn role_target(core: &Arc<dyn CoreApi>, project: &ProjectId, role: &str) -> Result<Option<String>, String> {
+    let map = core.project(project).and_then(|p| p.tracker).map(|b| b.status_map).unwrap_or_default();
+    let work = &core.settings(Some(project)).work;
+    let target = match role.trim().to_lowercase().as_str() {
+        "start" => map.start.or_else(|| work.on_start.transition_to.clone()),
+        "review" => map.review.or_else(|| work.on_pr.transition_to.clone()),
+        "done" => map.done.or_else(|| work.on_merge.transition_to.clone()),
+        _ => return Ok(None),
+    };
+    // A category goes by its snake_case name, which `pick_transition` matches.
+    match target {
+        Some(TransitionTarget::Name { name }) => Ok(Some(name)),
+        Some(TransitionTarget::Category { category }) => {
+            Ok(serde_json::to_value(category).ok().and_then(|v| v.as_str().map(str::to_owned)))
+        }
+        None => Err(format!("role {role:?} maps to no status in this project")),
+    }
 }
 
 /// Revision of a description: FNV-1a of its text, stable across restarts.
