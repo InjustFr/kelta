@@ -520,7 +520,6 @@
       {projectId}
       {mine}
       resume={workItem !== null}
-      open={workItem !== null && workItem.state.kind !== 'finished'}
       onrun={(a) => run(a)}
     />
     {#if preview}<p class="preview" data-testid="start-preview">{preview}</p>{/if}
