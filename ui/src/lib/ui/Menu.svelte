@@ -9,6 +9,8 @@
     danger?: boolean;
     /** Render a separator before this item. */
     separator?: boolean;
+    /** Header of the group this item starts (#439), shown before it with a separator. */
+    group?: string;
     /** Single key that runs the item while the menu is open (`d`, `F` = Shift+F). */
     key?: string;
     /** Tooltip (a disabled item's reason). */
@@ -164,6 +166,9 @@
         {#if i > 0}<div class="sep" role="separator"></div>{/if}
         <div class="group" role="presentation">{t('Not available now ({n})', { n: view.off.length })}</div>
       {/if}
+    {:else if item.group}
+      {#if i > 0}<div class="sep" role="separator"></div>{/if}
+      <div class="group" role="presentation">{item.group}</div>
     {:else if item.separator && i > 0}<div class="sep" role="separator"></div>{/if}
     <button
       type="button"

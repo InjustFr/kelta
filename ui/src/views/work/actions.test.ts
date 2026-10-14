@@ -10,10 +10,11 @@ import { menuView, type MenuItem } from '$lib/ui/Menu.svelte';
 import '../reviews/actions';
 import '../tickets/actions';
 import './actions';
-import { sessionInfo, workItem } from '$lib/gen/fixtures';
+import { gitStatus, sessionInfo, workItem } from '$lib/gen/fixtures';
 
 import { listScope } from '../../shell/scope.svelte';
 import { blockedReason, workMenu } from './actions';
+import { phaseNow } from './live';
 import { globalContent } from './nav';
 import { batch } from './batch.svelte';
 import { REVIEW_READONLY } from './common';
@@ -160,11 +161,11 @@ describe('L9 actions', () => {
   });
 });
 
-describe('work menu: what can run now, then Not available now (#405)', () => {
+describe('work menu: what can run now, then Not available now (#405, #439)', () => {
   type Patch = Partial<WorkItem> & { pr?: true };
   // Per phase: the item (`pr`: with my open PR), its Claude (null: exited), the next step; then the listed
-  // letters (⏎ the next step, `|` a new group) / the "Not available now" ones, nearest the phase first.
-  // Situational actions (c a n s, l ⇧T t without a ticket) and a review checkout's p r f ⇧M never show blocked.
+  // letters (⏎ the next step, `|` a new group: work, ticket, branch, PR) / the "Not available now" ones.
+  // Only a `soon` action (⇧R) shows blocked: the others are ruled out for the phase and left out.
   const pr: Patch = { pr: true };
   const review: Patch = {
     kind: 'review',
@@ -189,45 +190,45 @@ describe('work menu: what can run now, then Not available now (#405)', () => {
     total: 3,
   };
   const CASES: Record<PhaseId, [Patch, SessionStatus | null, WorkActionId | null, string]> = {
-    asking: [{}, 'needs_input', 'go_claude', '⏎ | v V b P F | t | p r / R C f o M'],
-    run: [{ run }, null, null, 'v V b g C F | t | p r / R P f o M'],
+    asking: [{}, 'needs_input', 'go_claude', '⏎ | v V b P F | t | p r / R'],
+    run: [{ run }, null, null, 'v V b g C F | t | p r / R'],
     failed: [
       { state: { kind: 'failed', step: 'setup', message: '1' } },
       null,
       'retry',
-      '⏎ | v V s b g F | t | p r / R C P f o',
+      '⏎ | v V s b g F | t | p r / R',
     ],
-    starting: [{ state: { kind: 'starting' } }, null, null, 'v V b g F | t | p r / R C P f o'],
-    queued: [{ state: { kind: 'queued', pos: 1 } }, null, 'start_now', '⏎ | v V b g F | t | p r / R C P f o'],
-    missing: [{}, null, 'recreate', '⏎ | b g C F | t | p r / v V R P f'],
-    rebase_stopped: [{ rebase } as Patch, 'done', 'resolve', '⏎ | v V b g P F | t | p r c a n / R C f o M'],
-    needs_you: [{}, 'needs_input', 'go_claude', '⏎ | v V b P F | t | p r / R C f o M'],
-    working: [{}, 'working', null, 'v V b g F | t | p r / R C P f o'],
+    starting: [{ state: { kind: 'starting' } }, null, null, 'v V b g F | t | p r / R'],
+    queued: [{ state: { kind: 'queued', pos: 1 } }, null, 'start_now', '⏎ | v V b g F | t | p r / R'],
+    missing: [{}, null, 'recreate', '⏎ | b g C F | t | p r / R'],
+    rebase_stopped: [{ rebase } as Patch, 'done', 'resolve', '⏎ | v V b g P F | t | p r c a n / R'],
+    needs_you: [{}, 'needs_input', 'go_claude', '⏎ | v V b P F | t | p r / R'],
+    working: [{}, 'working', null, 'v V b g F | t | p r / R'],
     merged: [
       { state: { kind: 'merged', detail: null } },
       null,
       'finish',
-      '⏎ | v V b g C | t | p r / f o M d R',
+      '⏎ | v V b g C | t | p r / R',
     ],
-    closed: [{ state: { kind: 'pr_closed' } }, null, 'finish', '⏎ | v V b g C | t | p r / f o M d R'],
-    to_review: [{ review_due: true }, 'done', 'review_delta', '⏎ | V R b g P F | t | p r / C f o M d'],
-    replied: [{ claude_replied: true }, 'done', 'go_claude', '⏎ | v V b P F | t | p r / R C f o M'],
-    remote_new: [pr, 'done', 'rebase', '⏎ | v V b g P F | t | p f o M d / R C'],
-    changes_requested: [pr, 'done', 'fix', '⏎ | v V b g P F | t | p r o M d / R C'],
-    checks_failed: [pr, 'done', 'fix_checks', '⏎ | v V b g P F | t | p f r o M d / R C'],
-    new_comments: [pr, 'done', 'fix', '⏎ | v V b g P F | t | p r o M d / R C'],
-    conflicts: [pr, 'done', 'rebase', '⏎ | v V b g P F | t | p f o M d / R C'],
-    rebased: [pr, 'done', 'ship', '⏎ | v V b g P F | t | f r o M d / R C'],
-    unpushed: [pr, 'done', 'ship', '⏎ | v V b g P F | t | f r o M d / R C'],
-    ready: [{}, 'done', 'ship', '⏎ | v V b g P F | t | r / f o M d R'],
-    approved: [pr, 'done', 'open_pr', '⏎ | v V b g P F | t | p f r M d / R C'],
-    draft: [pr, 'done', 'set_draft', '⏎ | v V b g P F | t | p f r o M / R C'],
-    in_review: [pr, 'done', 'open_pr', '⏎ | v V b g P F | t | p f r M d / R C'],
-    no_changes: [{}, 'done', 'go_claude', '⏎ | v V b P F | t | p r / R C f o M'],
-    reviewing: [review, null, 'open_review', '⏎ | V b g C F / o d v R P'],
-    reviewed: [review, null, 'finish', '⏎ | V b g C / o d v R P'],
-    updated: [review, null, 'open_review', '⏎ | V b g C F / o d v R P'],
-    elsewhere: [{}, null, null, 'v V b g C F | t | p r / R P f o M'],
+    closed: [{ state: { kind: 'pr_closed' } }, null, 'finish', '⏎ | v V b g C | t | p r / R'],
+    to_review: [{ review_due: true }, 'done', 'review_delta', '⏎ | V R b g P F | t | p r / '],
+    replied: [{ claude_replied: true }, 'done', 'go_claude', '⏎ | v V b P F | t | p r / R'],
+    remote_new: [pr, 'done', 'rebase', '⏎ | v V b g P F | t | p | f o M d / R'],
+    changes_requested: [pr, 'done', 'fix', '⏎ | v V b g P F | t | p r | o M d / R'],
+    checks_failed: [pr, 'done', 'fix_checks', '⏎ | v V b g P F | t | p r | f o M d / R'],
+    new_comments: [pr, 'done', 'fix', '⏎ | v V b g P F | t | p r | o M d / R'],
+    conflicts: [pr, 'done', 'rebase', '⏎ | v V b g P F | t | p | f o M d / R'],
+    rebased: [pr, 'done', 'ship', '⏎ | v V b g P F | t | r | f o M d / R'],
+    unpushed: [pr, 'done', 'ship', '⏎ | v V b g P F | t | r | f o M d / R'],
+    ready: [{}, 'done', 'ship', '⏎ | v V b g P F | t | r / R'],
+    approved: [pr, 'done', 'open_pr', '⏎ | v V b g P F | t | p r | f M d / R'],
+    draft: [pr, 'done', 'set_draft', '⏎ | v V b g P F | t | p r | f o M / R'],
+    in_review: [pr, 'done', 'open_pr', '⏎ | v V b g P F | t | p r | f M d / R'],
+    no_changes: [{}, 'done', 'go_claude', '⏎ | v V b P F | t | p r / R'],
+    reviewing: [review, null, 'open_review', '⏎ | V b g C F / R'],
+    reviewed: [review, null, 'finish', '⏎ | V b g C / R'],
+    updated: [review, null, 'open_review', '⏎ | V b g C F / R'],
+    elsewhere: [{}, null, null, 'v V b g C F | t | p r / R'],
   };
 
   const letters = (items: MenuItem[]) =>
@@ -255,7 +256,25 @@ describe('work menu: what can run now, then Not available now (#405)', () => {
       const { now, off } = menuView(workMenu(item, phase));
       expect(`${letters(now)} / ${off.map((e) => e.key).join(' ')}`, id).toBe(want);
       expect(off.every((e) => e.reason)).toBe(true);
+      // Start Claude, Park and Merge when ready never sit under "Not available now" (#439).
+      expect(off.filter((e) => ['C', 'P', 'M'].includes(e.key!)), id).toEqual([]);
     }
+  });
+
+  it('groups are headed by their object: Ticket KEY, Branch name with ↓n on Rebase, Pull request #n', async () => {
+    await reviews.load({ kind: 'all' }, 'authored', false);
+    const mine = reviews.items({ kind: 'all' }, 'authored').find((r) => !r.review.assigned)!.review;
+    const item: WorkItem = { ...workItem, pr_url: mine.url, state: { kind: 'pr_open' } };
+    work.git = { [item.id]: { ...gitStatus, behind: 3 } };
+    const phase = { ...phaseNow(item), id: 'in_review' as const, primary: 'open_pr' as const };
+    const { now } = menuView(workMenu(item, phase));
+    expect(now.flatMap((e) => e.group ?? [])).toEqual([
+      `Ticket ${item.ticket!.key}`,
+      `Branch ${item.branch}`,
+      `Pull request #${mine.ref.number}`,
+    ]);
+    expect(now.find((e) => e.id === 'rebase')?.detail).toBe('↓3');
+    work.git = {};
   });
 });
 
