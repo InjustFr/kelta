@@ -225,9 +225,9 @@
     color: var(--k-fg);
   }
 
-  /* Room for the six names in French and German (#438, DESIGN §6.14). */
+  /* Room for the six names in French and German (~240px, #438, DESIGN §6.14); 300px leaves the text block room above the 640px drop. */
   .stage {
-    flex: 0 1 340px;
+    flex: 0 1 300px;
     min-width: 140px;
   }
 
