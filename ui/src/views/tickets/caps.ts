@@ -70,7 +70,9 @@ export function blockedReason(
     case 'workflow':
       return workflowReason(workflows);
     case 'another':
-      return ticketWork(item.ticket.ref).length > 0 ? null : t('No work on this ticket yet. Start work first.');
+      return ticketWork(item.ticket.ref).length > 0
+        ? null
+        : t('No work on this ticket yet. Start work first.');
     default:
       return null;
   }

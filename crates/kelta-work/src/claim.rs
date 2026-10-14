@@ -121,7 +121,9 @@ impl WorkService {
         // A ticket held by other items gets one more (#456); only the PR's own item decides.
         if let Some(o) = plan::owner_of_pr(&all, &p, pr) {
             match &o.ticket {
-                Some(t) if t.account == ticket.account && t.key == ticket.key => return self.load(&o.id).await,
+                Some(t) if t.account == ticket.account && t.key == ticket.key => {
+                    return self.load(&o.id).await;
+                }
                 Some(t) => {
                     let who = format!("work item {} on {} ({})", o.id, o.branch, t.key);
                     return Err(KeltaError::conflict(format!("{} is held by {who}", pr.url)));

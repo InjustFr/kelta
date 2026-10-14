@@ -365,7 +365,14 @@ function ticketVerbs(hit: TicketItem): PaletteItem[] {
   return [
     verb('start', t('Start work on {key}', { key: ref.key }), 'play', () => void startWorkOnTicket(ref)),
     ...(ticketWork(ref).length > 0
-      ? [verb('another', t('Start another PR on {key}', { key: ref.key }), 'plus', () => void startAnotherPr(ref))]
+      ? [
+          verb(
+            'another',
+            t('Start another PR on {key}', { key: ref.key }),
+            'plus',
+            () => void startAnotherPr(ref),
+          ),
+        ]
       : []),
     verb('workflow', t('Run workflow on {key}…', { key: ref.key }), 'play', () => void pickWorkflow(ref)),
     verb('move', t('Move {key} to…', { key: ref.key }), 'arrow-right', () =>

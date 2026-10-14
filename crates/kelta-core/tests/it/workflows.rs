@@ -288,8 +288,11 @@ async fn a_pr_workflow_runs_in_its_work_items_worktree_unless_the_def_sets_a_cwd
     let (h, repo) = env(tmp.path());
     let shop = ProjectId::new("shop");
     let r = samples::review_ref();
-    let plan =
-        h.core.work_plan(Some(shop.clone()), WorkSource::Review { review: r.clone() }, None, false).await.unwrap();
+    let plan = h
+        .core
+        .work_plan(Some(shop.clone()), WorkSource::Review { review: r.clone() }, None, false)
+        .await
+        .unwrap();
     let plan = StartWorkPlan { worktree_path: tmp.path().join("wt/review-87"), ..plan };
     // The saga fetches the PR head from `origin`: the repo is its own remote.
     git(&repo, &["remote", "add", "origin", repo.to_str().unwrap()]);

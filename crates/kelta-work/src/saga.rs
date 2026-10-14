@@ -364,13 +364,13 @@ impl WorkService {
                         })
                     });
                     if let Some(w) = elsewhere {
-                        return Box::pin(self.build_plan(&w.project_id, source, None)).await;
+                        return Box::pin(self.build_plan(&w.project_id, source, None, false)).await;
                     }
                 }
                 if existing.is_none() && r.kind == ReviewKind::Authored {
                     // Made outside Kelta: adopt its head branch as a scratch item so pushes update it.
                     let source = WorkSource::Branch { name: r.source_branch.clone(), task: None, repo: None };
-                    let mut plan = Box::pin(self.build_plan(project_id, source, None)).await?;
+                    let mut plan = Box::pin(self.build_plan(project_id, source, None, false)).await?;
                     plan.base = r.target_branch.clone();
                     plan.adopt_pr = Some(r.url.clone());
                     return Ok(plan);

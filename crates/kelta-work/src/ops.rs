@@ -13,7 +13,7 @@ use kelta_proto::ids::{SessionId, WorkItemId};
 use kelta_proto::model::{
     CloseOnExit, EditorTarget, FinishMergedReport, FinishOpts, GitStatus, Lifecycle, OpenPaneRequest,
     PaneContent, Placement, RestorePolicy, SessionInfo, SessionKind, ShipOrigin, SkippedItem, SpawnRequest,
-    StepStatus, WorkItem, WorkKind, WorkSource, WorkState,
+    StepStatus, WorkItem, WorkKind, WorkState,
 };
 use kelta_proto::settings::{EditorOpenMode, EditorRestore, TransitionTarget};
 use kelta_proto::tracker::TicketRef;

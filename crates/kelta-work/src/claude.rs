@@ -302,8 +302,14 @@ mod tests {
         assert!(md.contains("Kelta MCP tools (server `kelta`): link_pr, report_progress."), "{md}");
         let md = context_md(&ContextInfo { own_pr: Some((url, None)), ..ContextInfo::default() });
         assert!(md.contains("- Pull request of this work: https://h/pull/7\n"), "{md}");
-        let md = context_md(&ContextInfo { siblings: vec!["https://h/pull/8 on feat/a-2".into()], ..ContextInfo::default() });
-        assert!(md.contains("each in its own work item and worktree:\n  - https://h/pull/8 on feat/a-2\n"), "{md}");
+        let md = context_md(&ContextInfo {
+            siblings: vec!["https://h/pull/8 on feat/a-2".into()],
+            ..ContextInfo::default()
+        });
+        assert!(
+            md.contains("each in its own work item and worktree:\n  - https://h/pull/8 on feat/a-2\n"),
+            "{md}"
+        );
     }
 
     #[test]

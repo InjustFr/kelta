@@ -2,7 +2,15 @@
   import { locale, t, tn } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
-  import type { Assignee, CiState, ProjectId, StartWorkPlan, TicketItem, TicketRef, WorkItem } from '$lib/gen';
+  import type {
+    Assignee,
+    CiState,
+    ProjectId,
+    StartWorkPlan,
+    TicketItem,
+    TicketRef,
+    WorkItem,
+  } from '$lib/gen';
   import {
     clipboardWrite,
     openExternal,

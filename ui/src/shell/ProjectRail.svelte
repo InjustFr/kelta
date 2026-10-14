@@ -389,7 +389,11 @@
   {@const lvl = rowLamp(r)}
   {@const active = !!tab && isFront(p.id, tab.id)}
   {@const key = item ? workKey(item) : ''}
-  {@const label = item ? `${siblingKey(item)} ${itemTitle(item, tab, key)}` : s ? sessionTitle(s) : rowLabel(tab!)}
+  {@const label = item
+    ? `${siblingKey(item)} ${itemTitle(item, tab, key)}`
+    : s
+      ? sessionTitle(s)
+      : rowLabel(tab!)}
   {@const n = item && tab ? index.get(item.id) : undefined}
   {@const live = s ? [s] : tab ? liveSessionsOfTab(tab) : []}
   {@const run = runLine(

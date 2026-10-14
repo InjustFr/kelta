@@ -113,6 +113,7 @@ describe('TicketDetail', () => {
       'Copy branch',
       'Open in browser',
       'Tags…',
+      'Start another PR',
     ]);
     await fireEvent.keyDown(more, { key: 'Escape' });
     const meta = screen.getByTestId('ticket-detail').querySelector('dl')!;
