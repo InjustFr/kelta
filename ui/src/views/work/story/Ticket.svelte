@@ -9,6 +9,7 @@
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import { Button, Icon } from '$lib/ui';
 
+  import { prLabel, reviewWord } from '../../tickets/prs';
   import { readCriteria } from '../../tickets/spec';
   import StatusChip from '../../tickets/StatusChip.svelte';
   import StatusPicker from '../../tickets/StatusPicker.svelte';
@@ -69,6 +70,18 @@
         </Button>
       </div>
       <div class="title">{detail.ticket.title}</div>
+      {#if detail.prs.length > 1}
+        <!-- Every PR of the ticket, each in its own work item (#456). -->
+        <ul class="criteria" aria-label={t('Pull requests')} data-testid="story-ticket-prs">
+          {#each detail.prs as pr (pr.url)}
+            <li>
+              <span class="key num">{prLabel(pr)}</span>
+              <span>{pr.title || pr.repo}</span>
+              <span class="src">{reviewWord(pr)}</span>
+            </li>
+          {/each}
+        </ul>
+      {/if}
       {#if criteria?.items.length}
         <ul class="criteria" aria-label={t('Acceptance criteria')} data-testid="story-criteria">
           {#each criteria.items as c, i (i)}

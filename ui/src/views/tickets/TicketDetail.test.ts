@@ -156,6 +156,17 @@ describe('TicketDetail', () => {
     expect(action('Resume work').classList.contains('primary')).toBe(true);
   });
 
+  it('Resume work picks among the work items of a ticket worked in several (#456)', async () => {
+    await work.load();
+    const first = work.all.find((w) => w.ticket?.key === 'SHOP-142')!;
+    work.upsert({ ...first, id: 'w-second', branch: `${first.branch}-2`, pr_url: null });
+    const detail = mount('SHOP-142');
+    await fireEvent.keyDown(detail, { key: 's' });
+    const menu = await screen.findByRole('menu', { name: 'Resume work on SHOP-142' });
+    expect(within(menu).getAllByRole('menuitem')).toHaveLength(2);
+    expect(mock.calls.some((c) => c.cmd === 'work_plan')).toBe(false);
+  });
+
   it('says what Start work will do, from the plan its sheet opens on; with work, its stage and next step (#418)', async () => {
     const detail = mount('SHOP-151');
     const preview = await screen.findByTestId('start-preview');

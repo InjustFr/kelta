@@ -314,7 +314,7 @@ impl Core {
                 }
                 let tref = tref.unwrap_or(TicketRef { account: first, key: key.clone(), id: key });
                 let asked = project.clone();
-                let plan = self.work_plan(project, WorkSource::Ticket { ticket: tref.clone() }, None).await?;
+                let plan = self.work_plan(project, WorkSource::Ticket { ticket: tref.clone() }, None, false).await?;
                 // An explicit --project that cannot host the start is an error, not a silent switch.
                 if let Some(p) = asked.filter(|p| plan.existing.is_none() && *p != plan.project_id) {
                     return Err(KeltaError::invalid(format!("project {p} is closed or has no repository")));

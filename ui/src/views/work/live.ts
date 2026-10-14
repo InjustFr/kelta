@@ -79,6 +79,22 @@ export function workTitle(item: WorkItem): string {
   return prOf(item)?.title ?? item.title ?? item.branch;
 }
 
+/** `KEY`, or `KEY #12` / `KEY feat/x-2` while the ticket has other unfinished items (#456). */
+export function siblingKey(item: WorkItem): string {
+  const key = workKey(item);
+  const t = item.ticket;
+  const others = work.all.some(
+    (w) =>
+      w.id !== item.id &&
+      w.state.kind !== 'finished' &&
+      w.ticket?.account === t?.account &&
+      w.ticket?.key === t?.key,
+  );
+  if (!t || !others) return key;
+  const n = prOf(item)?.ref.number ?? item.pr_url?.match(/(\d+)\/?$/)?.[1];
+  return n ? `${key} #${n}` : `${key} ${item.branch}`;
+}
+
 /** `KEY claude`, `KEY nvim` for sessions of a work item, so three `claude` rows tell apart. */
 export function sessionLabel(s: SessionInfo): string {
   const item = s.work_item_id ? work.get(s.work_item_id) : null;

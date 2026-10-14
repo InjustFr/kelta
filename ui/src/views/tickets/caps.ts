@@ -4,6 +4,7 @@
 import { t } from '$lib/i18n/index.svelte';
 import type { TicketItem, WorkflowInfo } from '$lib/gen';
 
+import { ticketWork } from '../work/startWork';
 import { workflowReason } from './workflow.svelte';
 
 export type TicketAction =
@@ -18,7 +19,8 @@ export type TicketAction =
   | 'workflow'
   | 'branch'
   | 'browser'
-  | 'tag';
+  | 'tag'
+  | 'another';
 
 /** Action bar order, with the key that runs each one in the detail. */
 export const TICKET_ACTIONS: readonly { id: TicketAction; key: string }[] = [
@@ -34,6 +36,7 @@ export const TICKET_ACTIONS: readonly { id: TicketAction; key: string }[] = [
   { id: 'branch', key: 'y' },
   { id: 'browser', key: 'o' },
   { id: 'tag', key: 't' },
+  { id: 'another', key: 'N' },
 ];
 
 /** Opens the detail's More menu (Cmd+. on macOS, Ctrl+. on Linux). */
@@ -66,6 +69,8 @@ export function blockedReason(
       return branch ? null : t('No branch yet. Start work first.');
     case 'workflow':
       return workflowReason(workflows);
+    case 'another':
+      return ticketWork(item.ticket.ref).length > 0 ? null : t('No work on this ticket yet. Start work first.');
     default:
       return null;
   }

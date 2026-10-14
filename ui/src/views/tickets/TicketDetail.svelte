@@ -2,7 +2,7 @@
   import { locale, t, tn } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
-  import type { Assignee, CiState, ProjectId, StartWorkPlan, TicketItem, TicketRef } from '$lib/gen';
+  import type { Assignee, CiState, ProjectId, StartWorkPlan, TicketItem, TicketRef, WorkItem } from '$lib/gen';
   import {
     clipboardWrite,
     openExternal,
@@ -34,7 +34,8 @@
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { onActions, onRefresh } from '../work/ui.svelte';
   import { STAGES } from '../work/stage';
-  import { startPreview, startWorkOnTicket } from '../work/startWork';
+  import { siblingKey } from '../work/live';
+  import { resumeWork, startAnotherPr, startPreview, startWorkOnTicket, ticketWork } from '../work/startWork';
   import ActionBar from './ActionBar.svelte';
   import { blockedReason, TICKET_ACTIONS, type TicketAction } from './caps';
   import PickMenu from './PickMenu.svelte';
@@ -158,6 +159,8 @@
   let picker = $state<HTMLElement | null>(null);
   let prMenu = $state<{ x: number; y: number; browser: boolean } | null>(null);
   let tagMenu = $state<{ x: number; y: number } | null>(null);
+  /** Resume work with several items on the ticket (#456): which one. */
+  let resumeMenu = $state<{ x: number; y: number; items: WorkItem[] } | null>(null);
   /** The assignee (`u`) or priority (`!`) picker, under its meta row (TICKETS.md T8). */
   let field = $state<{ kind: 'assignee' | 'priority'; x: number; y: number } | null>(null);
   let comment = $state('');
@@ -338,12 +341,22 @@
     const reason = blockedReason(action, item, branch, workflows[key]);
     if (reason) return void toasts.info(reason);
     switch (action) {
-      case 'start':
+      case 'start': {
+        const items = ticketWork(ref);
+        if (items.length > 1) {
+          const r = root?.querySelector('[data-action="start"]')?.getBoundingClientRect();
+          resumeMenu = { x: r?.left ?? 40, y: (r?.bottom ?? 40) + 2, items };
+          break;
+        }
         // The backend picks the project (SPEC §3.1): the account's project is no pick.
         void startWorkOnTicket(ref, null, {
           source: item.source_ids[0] ?? null,
           ...(browser ? { preview: false } : {}),
         });
+        break;
+      }
+      case 'another':
+        void startAnotherPr(ref, workItem?.project_id ?? null);
         break;
       case 'move':
         picker = statusBtn ?? null;
@@ -768,6 +781,22 @@
     }}
     onclose={() => {
       prMenu = null;
+      root?.focus();
+    }}
+  />
+{/if}
+{#if resumeMenu}
+  <Menu
+    items={resumeMenu.items.map((w) => ({ id: w.id, label: siblingKey(w), detail: w.branch }))}
+    x={resumeMenu.x}
+    y={resumeMenu.y}
+    label={t('Resume work on {key}', { key: ref.key })}
+    onselect={(id) => {
+      const w = resumeMenu?.items.find((x) => x.id === id);
+      if (w) void resumeWork(w);
+    }}
+    onclose={() => {
+      resumeMenu = null;
       root?.focus();
     }}
   />

@@ -21,7 +21,7 @@ import { configWorkflows, pickWorkflow, runWorkflowOn } from '../../views/ticket
 import { focusedWorkItem } from '../../views/work/actions';
 import { phaseNow, sessionLabel, unfinishedWork, workTitle } from '../../views/work/live';
 import { goToWork } from '../../views/work/nav';
-import { startWorkOnTicket } from '../../views/work/startWork';
+import { startAnotherPr, startWorkOnTicket, ticketWork } from '../../views/work/startWork';
 import { workKey } from '../../views/work/phase';
 import { recentPlaces } from '../jumplist';
 import { sessionIcon, sessionKindName, statusLabel, toolIcon } from '../labels';
@@ -364,6 +364,9 @@ function ticketVerbs(hit: TicketItem): PaletteItem[] {
   });
   return [
     verb('start', t('Start work on {key}', { key: ref.key }), 'play', () => void startWorkOnTicket(ref)),
+    ...(ticketWork(ref).length > 0
+      ? [verb('another', t('Start another PR on {key}', { key: ref.key }), 'plus', () => void startAnotherPr(ref))]
+      : []),
     verb('workflow', t('Run workflow on {key}…', { key: ref.key }), 'play', () => void pickWorkflow(ref)),
     verb('move', t('Move {key} to…', { key: ref.key }), 'arrow-right', () =>
       ui.openSheet('tickets.move', { ticket: hit.ticket, project_id: project }),

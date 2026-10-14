@@ -41,7 +41,7 @@ import { draftBlocked, draftLabel, toggleDraft } from '../reviews/draft';
 import { goToWork, openReview, showZoomedInWorkTab } from './nav';
 import type { Phase, WorkActionId } from './phase';
 import { selection } from './selection.svelte';
-import { startWorkOnTicket } from './startWork';
+import { startAnotherPr, startWorkOnTicket } from './startWork';
 import { story } from './story/panel.svelte';
 import { ACTIONS_EVENT, askFocused, workUi } from './ui.svelte';
 
@@ -271,6 +271,14 @@ export const WORK_ACTIONS: readonly WorkAction[] = [
     label: () => t('Open ticket'),
     blocked: (c) => (c.item.ticket ? null : t('No ticket')),
     run: openTicket,
+  },
+  {
+    id: 'start_another',
+    group: 'ticket',
+    key: 'N',
+    label: () => t('Start another PR'),
+    blocked: (c) => (c.item.ticket ? null : t('No ticket')),
+    run: async ({ item }) => void (item.ticket && startAnotherPr(item.ticket, item.project_id)),
   },
   {
     id: 'open_pr',

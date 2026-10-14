@@ -383,7 +383,7 @@ pub(crate) fn tool_defs() -> Value {
         },
         {
             "name": "link_pr",
-            "description": "Link one of my open pull requests to a ticket after the fact (a PR opened before its ticket existed): Kelta tracks the ticket as a work item on the PR's head branch, in the worktree that has it checked out or a new one, without starting Claude; the ticket then reads Resume work. Linked already: no change. Fails with Conflict, naming the holder, when another work item holds the ticket or the PR. With `status` (needs `claude.mcp_board_writes`), the ticket then moves (also when linked already); a failed move keeps the link and returns a warning.",
+            "description": "Link one of my open pull requests to a ticket after the fact (a PR opened before its ticket existed): Kelta tracks the ticket as a work item on the PR's head branch, in the worktree that has it checked out or a new one, without starting Claude; the ticket then reads Resume work. Linked already: no change. A ticket that has work items gets one more for this PR. Fails with Conflict, naming the holder, when a work item of another ticket holds the PR. With `status` (needs `claude.mcp_board_writes`), the ticket then moves (also when linked already); a failed move keeps the link and returns a warning.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

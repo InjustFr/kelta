@@ -2587,5 +2587,9 @@
   "Ship / Push": "Ausliefern / Pushen",
   "Note for later": "Notiz für später",
   "Tools here": "Werkzeuge hier",
-  "Your open PR names {subject}: the work item resumes its branch {branch}.": "Dein offener PR nennt {subject}: das Arbeitselement setzt seinen Branch {branch} fort."
+  "Your open PR names {subject}: the work item resumes its branch {branch}.": "Dein offener PR nennt {subject}: das Arbeitselement setzt seinen Branch {branch} fort.",
+  "Start another PR": "Weiteren PR starten",
+  "No work on this ticket yet. Start work first.": "Noch keine Arbeit an diesem Ticket. Starte zuerst die Arbeit.",
+  "Resume work on {key}": "Arbeit an {key} fortsetzen",
+  "Start another PR on {key}": "Weiteren PR für {key} starten"
 }

@@ -118,29 +118,27 @@ impl WorkService {
         let guard = self.start_lock.lock().await;
         let all = self.store.list_items(None).await?;
         let source = WorkSource::Ticket { ticket: ticket.clone() };
-        let named = |w: &WorkItem| format!("work item {} on {}", w.id, w.branch);
-        match (plan::existing_for(&all, &source), plan::owner_of_pr(&all, &p, pr)) {
-            (Some(h), Some(o)) if h.id == o.id => return self.load(&h.id).await,
-            (Some(h), _) => {
-                return Err(KeltaError::conflict(format!("{} is held by {}", ticket.key, named(h))));
-            }
-            (None, Some(o)) => {
-                if let Some(t) = &o.ticket {
-                    let who = format!("{} ({})", named(o), t.key);
+        // A ticket held by other items gets one more (#456); only the PR's own item decides.
+        if let Some(o) = plan::owner_of_pr(&all, &p, pr) {
+            match &o.ticket {
+                Some(t) if t.account == ticket.account && t.key == ticket.key => return self.load(&o.id).await,
+                Some(t) => {
+                    let who = format!("work item {} on {} ({})", o.id, o.branch, t.key);
                     return Err(KeltaError::conflict(format!("{} is held by {who}", pr.url)));
                 }
-                let id = o.id.clone();
-                drop(guard);
-                return self.link(&id, ticket, false).await;
+                None => {
+                    let id = o.id.clone();
+                    drop(guard);
+                    return self.link(&id, ticket, false).await;
+                }
             }
-            (None, None) => {}
         }
         let repo = p
             .repos
             .iter()
             .find(|r| r.code_host.as_ref().is_some_and(|c| c.repo == pr.r#ref.repo))
             .ok_or_else(|| KeltaError::invalid(format!("{} has no repository {}", p.name, pr.r#ref.repo)))?;
-        let mut plan = self.build_plan(project, source, Some(repo.id.clone())).await?;
+        let mut plan = self.build_plan(project, source, Some(repo.id.clone()), true).await?;
         if plan.adopt_pr.as_deref() != Some(pr.url.as_str()) {
             // A PR that does not name the ticket (yet): its branch replaces the template's.
             plan.repo_id = repo.id.clone();

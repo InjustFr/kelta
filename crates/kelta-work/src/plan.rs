@@ -196,6 +196,15 @@ pub fn existing_for<'a>(items: &'a [WorkItem], source: &WorkSource) -> Option<&'
     })
 }
 
+/// The other unfinished work items of `item`'s ticket: a ticket can hold several (#456).
+pub fn siblings<'a>(items: &'a [WorkItem], item: &'a WorkItem) -> impl Iterator<Item = &'a WorkItem> {
+    let same = |w: &WorkItem| match (&w.ticket, &item.ticket) {
+        (Some(a), Some(b)) => a.account == b.account && a.key == b.key,
+        _ => false,
+    };
+    items.iter().filter(move |w| w.id != item.id && w.state != WorkState::Finished && same(w))
+}
+
 /// Unfinished own work item behind `pr` (B2): linked by URL, or on its head branch in the repo
 /// bound to the PR's repository (a PR Claude opened with `gh`).
 pub fn owner_of_pr<'a>(items: &'a [WorkItem], project: &ProjectInfo, pr: &Review) -> Option<&'a WorkItem> {
@@ -309,6 +318,7 @@ pub fn assemble(
         existing: existing.map(|w| w.id.clone()),
         adopt_pr: None,
         pr_choices: Vec::new(),
+        another: false,
         options: None,
     }
 }

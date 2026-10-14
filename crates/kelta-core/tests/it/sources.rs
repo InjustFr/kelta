@@ -258,7 +258,7 @@ async fn work_plan_routes_a_ticket_by_its_source_and_remembers_the_source() {
         ..samples::ticket_ref()
     };
     // no row (CLI): the first source using the account
-    let plan = h.core.work_plan(None, WorkSource::Ticket { ticket: ticket.clone() }, None).await.unwrap();
+    let plan = h.core.work_plan(None, WorkSource::Ticket { ticket: ticket.clone() }, None, false).await.unwrap();
     assert_eq!(plan.ticket_source.as_deref(), Some("product"));
     assert_eq!(plan.project_id, ProjectId::new("blog"));
     assert_eq!(plan.project_choices, [ProjectId::new("blog"), ProjectId::new("shop")]);
@@ -267,15 +267,15 @@ async fn work_plan_routes_a_ticket_by_its_source_and_remembers_the_source() {
     assert_eq!((o.key.as_str(), o.prompt.as_str()), ("route:product:0", "/pass SHOP-141 {options}"));
     assert_eq!(plan.claude.prompt, "/pass SHOP-141 ");
     let other = |key: &str| kelta_proto::tracker::TicketRef { key: key.into(), ..ticket.clone() };
-    let plan2 = h.core.work_plan(None, WorkSource::Ticket { ticket: other("SHOP-142") }, None).await.unwrap();
+    let plan2 = h.core.work_plan(None, WorkSource::Ticket { ticket: other("SHOP-142") }, None, false).await.unwrap();
     let picked = vec!["--mode=skip".into(), "--auto".into()];
     // the saga may fail later in this bare repo: the picks are kept first
     let _ = h.core.work_start(StartWorkPlan { options: Some(PlanOptions { picked, ..o }), ..plan2 }).await;
-    let plan3 = h.core.work_plan(None, WorkSource::Ticket { ticket: other("SHOP-143") }, None).await.unwrap();
+    let plan3 = h.core.work_plan(None, WorkSource::Ticket { ticket: other("SHOP-143") }, None, false).await.unwrap();
     assert_eq!(plan3.options.unwrap().picked, ["--auto", "--mode=skip"]);
     assert_eq!(plan3.claude.prompt, "/pass SHOP-143 --auto --mode=skip");
     // the clicked row's source wins over that guess (#264)
-    let plan = h.core.work_plan(None, WorkSource::Ticket { ticket }, Some("tech".into())).await.unwrap();
+    let plan = h.core.work_plan(None, WorkSource::Ticket { ticket }, Some("tech".into()), false).await.unwrap();
     assert_eq!(plan.ticket_source.as_deref(), Some("tech"));
     assert_eq!(plan.project_id, ProjectId::new("shop"));
     assert_eq!((plan.options, plan.claude.prompt.as_str()), (None, "/pass SHOP-141 "), "no route here");

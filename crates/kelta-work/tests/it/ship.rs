@@ -200,6 +200,29 @@ async fn push_after_link_adds_the_ticket_key_to_the_pr_title_once() {
 }
 
 #[tokio::test]
+async fn merge_moves_the_ticket_to_done_on_the_last_open_pr_of_the_ticket() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    w.ensure_listener();
+    let first = started(&fx, &w, "SHOP-141").await;
+    let mut t = samples::ticket_ref();
+    t.key = "SHOP-141".into();
+    let plan = w.plan_with_repo(&project(), WorkSource::Ticket { ticket: t }, None, true).await.unwrap();
+    let second = w.start(plan).await.unwrap();
+    let (a, b) = (with_pr(&fx, &first, 91).await, with_pr(&fx, &second, 92).await);
+
+    publish_end(&fx, bus::PR_MERGED, &a);
+    let got = wait_state(&fx, &first, |s| matches!(s, WorkState::Merged { .. })).await;
+    assert_eq!(got.state, WorkState::Merged { detail: None });
+    assert_ne!(fx.tracker.ticket("SHOP-141").unwrap().ticket.status.name, "Done", "#92 is still open");
+
+    publish_end(&fx, bus::PR_MERGED, &b);
+    wait_state(&fx, &second, |s| matches!(s, WorkState::Merged { .. })).await;
+    assert_eq!(fx.tracker.ticket("SHOP-141").unwrap().ticket.status.name, "Done");
+}
+
+#[tokio::test]
 async fn merge_moves_the_ticket_to_done_once_and_close_is_pr_closed() {
     need_git!();
     let fx = Fx::new();

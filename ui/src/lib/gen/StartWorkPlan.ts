@@ -39,6 +39,10 @@ adopt_pr?: string | null,
  */
 pr_choices: Array<PrChoice>, 
 /**
+ * Start another PR (#456): a new item beside the ticket's unfinished ones, never a Resume.
+ */
+another: boolean, 
+/**
  * Options picked per ticket (#357), set by `Core::work_plan`; `claude.prompt` has them applied.
  */
 options?: PlanOptions | null, };

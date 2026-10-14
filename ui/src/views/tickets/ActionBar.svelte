@@ -43,6 +43,7 @@
     branch: t('Copy branch'),
     browser: t('Open in browser'),
     tag: t('Tags…'),
+    another: t('Start another PR'),
   });
   /** The row; the rest of TICKET_ACTIONS goes under More. Open PR only joins it when the ticket has a PR. */
   const ROW: readonly TicketAction[] = ['start', 'move', 'pr', 'comment'];
@@ -63,7 +64,7 @@
               ? t('Unblock ticket')
               : LABELS[a.id],
       reason: blockedReason(a.id, item, branch, workflows[ticketKey(item.ticket.ref)]),
-      chord: a.key === 'A' ? 'shift+a' : a.key,
+      chord: a.key === a.key.toLowerCase() ? a.key : `shift+${a.key.toLowerCase()}`,
     })),
   );
   const row = $derived(actions.filter((a) => ROW.includes(a.id) && (a.id !== 'pr' || item.prs.length > 0)));
@@ -87,7 +88,7 @@
       chord={a.chord}
       class={a.reason ? 'off' : ''}
       aria-label={a.label}
-      aria-keyshortcuts={a.key === 'A' ? 'Shift+A' : a.key}
+      aria-keyshortcuts={a.key === a.key.toLowerCase() ? a.key : `Shift+${a.key}`}
       aria-disabled={a.reason ? 'true' : undefined}
       title={a.reason ?? `${a.label} (${chordText(a.chord)})`}
       data-action={a.id}

@@ -241,11 +241,13 @@ impl WorkService {
         project_id: &ProjectId,
         source: WorkSource,
         repo_hint: Option<String>,
+        another: bool,
     ) -> Result<StartWorkPlan, KeltaError> {
-        // A ticket or PR has one work item across projects: resume it where it lives. Branch sources
-        // stay per project, the same `wip/` name can exist in two repos.
+        // A ticket or PR resumes its work item where it lives, across projects. Branch sources
+        // stay per project, the same `wip/` name can exist in two repos. `another` (a ticket only,
+        // #456) plans a new item beside the ticket's unfinished ones.
         let core = self.api()?;
-        if !matches!(source, WorkSource::Branch { .. }) {
+        if !another && !matches!(source, WorkSource::Branch { .. }) {
             let all = self.store.list_items(None).await?;
             // Skip a work item whose project was removed (or has no repository): start in the requested one.
             let hosts = |w: &&WorkItem| core.project(&w.project_id).is_some_and(|p| !p.repos.is_empty());
@@ -253,7 +255,7 @@ impl WorkService {
                 plan::existing_for(&all, &source).filter(|w| &w.project_id != project_id).filter(hosts)
             {
                 // The route's repo belongs to the planned project: dropped here.
-                return Box::pin(self.build_plan(&w.project_id, source, None)).await;
+                return Box::pin(self.build_plan(&w.project_id, source, None, false)).await;
             }
         }
         let project = project_of(&core, project_id)?;
@@ -262,7 +264,7 @@ impl WorkService {
         }
         let settings = core.settings(Some(project_id));
         let items = self.store.list_items(Some(project_id)).await?;
-        let existing = plan::existing_for(&items, &source).cloned();
+        let existing = plan::existing_for(&items, &source).cloned().filter(|_| !another);
         let slug_max = settings.worktree.slug_max as usize;
 
         match &source {
@@ -309,7 +311,14 @@ impl WorkService {
                             Some(_) => None,
                             None => plan::branch_exists(&repo.path, &branch).await?,
                         };
-                        (branch, path, exists)
+                        // Another PR: the template's branch is a sibling's, take the next free suffix.
+                        match exists {
+                            Some(_) if another => {
+                                let (branch, path) = plan::suffixed(&repo.path, &branch, &path).await?;
+                                (branch, path, None)
+                            }
+                            _ => (branch, path, exists),
+                        }
                     }
                 };
                 ctx.set("branch", branch.clone());
@@ -337,6 +346,7 @@ impl WorkService {
                 );
                 plan.adopt_pr = adopt.map(|c| c.url.clone());
                 plan.pr_choices = pr_choices;
+                plan.another = another;
                 Ok(plan)
             }
             WorkSource::Review { review } => {
@@ -1057,6 +1067,14 @@ impl WorkService {
         let commits =
             git::log_since(&item.worktree, &base, claude::CONTEXT_LIST_MAX + 1).await.unwrap_or_default();
         let dirty = git::dirty_files(&item.worktree).await.unwrap_or_default();
+        // The ticket's other work items (#456): each Claude knows the rest of the ticket's work.
+        let all = self.store.list_items(None).await.unwrap_or_default();
+        let siblings = plan::siblings(&all, item)
+            .map(|w| match &w.pr_url {
+                Some(url) => format!("{url} on {}", w.branch),
+                None => format!("{} (no pull request yet)", w.branch),
+            })
+            .collect();
         let mcp_tools = match (&mcp, self.host()) {
             (Some(_), Some(h)) => h.mcp_tools(),
             _ => Vec::new(),
@@ -1070,6 +1088,7 @@ impl WorkService {
             ticket_file: j.ticket.as_ref().map(|_| run.join(claude::TICKET_FILE)),
             pr: j.review.as_ref().map(|r| (r.url.clone(), r.target_branch.clone())),
             own_pr,
+            siblings,
             commits,
             dirty,
             mcp_tools,

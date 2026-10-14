@@ -151,17 +151,19 @@ impl WorkService {
 
     /// `work_plan`.
     pub async fn plan(&self, project: &ProjectId, source: WorkSource) -> Result<StartWorkPlan, KeltaError> {
-        self.build_plan(project, source, None).await
+        self.build_plan(project, source, None, false).await
     }
 
     /// `work_plan` with a source route's `repo` for a ticket, used when the plan stays in `project`.
+    /// `another`: Start another PR on the ticket (#456), a new item even when it has one.
     pub async fn plan_with_repo(
         &self,
         project: &ProjectId,
         source: WorkSource,
         repo: Option<String>,
+        another: bool,
     ) -> Result<StartWorkPlan, KeltaError> {
-        self.build_plan(project, source, repo).await
+        self.build_plan(project, source, repo, another).await
     }
 
     /// `work_start` (progress via `work.updated`).
@@ -179,7 +181,8 @@ impl WorkService {
             },
             other => other.clone(),
         };
-        let found = plan::existing_for(&items, &source).map(|w| w.id.clone());
+        // Start another PR: the ticket's items are siblings, not this start's item.
+        let found = plan::existing_for(&items, &source).filter(|_| !plan.another).map(|w| w.id.clone());
         // The repo was switched after planning: the plan's item is the old repo's, the new one's is `found`.
         let stale = |id: &WorkItemId| items.iter().any(|w| &w.id == id && w.repo_id != plan.repo_id);
         let existing = match plan.existing.clone() {

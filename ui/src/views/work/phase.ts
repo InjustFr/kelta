@@ -53,6 +53,7 @@ export type WorkActionId =
   | 'link'
   | 'create_ticket'
   | 'open_ticket'
+  | 'start_another'
   | 'open_pr'
   | 'open_review'
   | 'merge'

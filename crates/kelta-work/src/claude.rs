@@ -57,6 +57,8 @@ pub struct ContextInfo {
     pub pr: Option<(String, String)>,
     /// The item's own PR: URL, and the review feed's copy of it when cached.
     pub own_pr: Option<(String, Option<Review>)>,
+    /// The ticket's other unfinished work items: PR URL and branch, or the branch alone.
+    pub siblings: Vec<String>,
     /// `git log --oneline` of the branch's commits not in the base, newest first.
     pub commits: Vec<String>,
     /// Uncommitted files (`git status`).
@@ -129,6 +131,7 @@ pub fn context_md(c: &ContextInfo) -> String {
     if let Some((url, r)) = &c.own_pr {
         s.push_str(&own_pr_line(url, r.as_ref()));
     }
+    list(&mut s, "- Other work on this ticket, each in its own work item and worktree:", &c.siblings);
     list(&mut s, &format!("- Commits on the branch not in {}, newest first:", c.base), &c.commits);
     list(&mut s, "- Uncommitted changes:", &c.dirty);
     if !c.mcp_tools.is_empty() {
@@ -299,6 +302,8 @@ mod tests {
         assert!(md.contains("Kelta MCP tools (server `kelta`): link_pr, report_progress."), "{md}");
         let md = context_md(&ContextInfo { own_pr: Some((url, None)), ..ContextInfo::default() });
         assert!(md.contains("- Pull request of this work: https://h/pull/7\n"), "{md}");
+        let md = context_md(&ContextInfo { siblings: vec!["https://h/pull/8 on feat/a-2".into()], ..ContextInfo::default() });
+        assert!(md.contains("each in its own work item and worktree:\n  - https://h/pull/8 on feat/a-2\n"), "{md}");
     }
 
     #[test]
