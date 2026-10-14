@@ -543,7 +543,10 @@ export async function toggleFocusedPaneWindow(): Promise<void> {
 
 /** `tab.next/prev`: walks the rail rows that show a tab, across bands; from a global view, next is the first. */
 export function cycleTab(delta: 1 | -1): void {
-  const rows = railRows().flatMap((r) => (r.tab ? [{ project: r.project, tab: r.tab }] : []));
+  // A tab shown by two rows (a plain Claude split into a work tab) is walked once.
+  const rows = railRows()
+    .flatMap((r) => (r.tab ? [{ project: r.project, tab: r.tab }] : []))
+    .filter((r, i, all) => all.findIndex((x) => x.tab.id === r.tab.id) === i);
   if (rows.length === 0) return;
   const cur = ui.view ? null : currentTab();
   const at = cur ? rows.findIndex((r) => r.project === projects.activeId && r.tab.id === cur.id) : -1;

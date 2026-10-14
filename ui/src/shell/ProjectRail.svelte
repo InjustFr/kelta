@@ -71,6 +71,9 @@
   const home = $derived(rail.find((p) => p.builtin) ?? null);
   const homeBand = $derived(home ? bandTabs(home.id) : null);
   const homeRows = $derived(homeBand ? [...homeBand.work, ...homeBand.claude] : []);
+  const homeFolded = $derived(
+    home && homeBand ? homeBand.more.length + backgroundSessions(home.id).length : 0,
+  );
   // Bands whose "n more" row is open.
   let unfolded = $state<Record<ProjectId, boolean>>({});
   // The tool list behind the tool keys and the palette.
@@ -623,19 +626,19 @@
         </div>
       {/if}
 
-      {#if home && homeBand}
+      {#if homeRows.length + sessions.elsewhere.length + homeFolded > 0}
         <!-- Claude sessions Kelta did not start (#345, dimmed, Now lists them) and Home's (#435); Home's shells at the foot. -->
         <section
           class="band tools"
           aria-label={t('Other Claude sessions')}
           data-testid="rail-elsewhere"
-          style:--project-color={resolveProjectColor(home.color) ?? 'var(--k-border-strong)'}
+          style:--project-color={resolveProjectColor(home?.color) ?? 'var(--k-border-strong)'}
         >
           {#if homeRows.length + sessions.elsewhere.length > 0}
             <h2 class="tools-heading">{t('Other Claude sessions')}</h2>
           {/if}
           <ul class="rows">
-            {#each homeRows as r (r.item?.id ?? r.session!.id)}{@render row(home, r)}{/each}
+            {#each homeRows as r (r.item?.id ?? r.session!.id)}{@render row(home!, r)}{/each}
             {#each sessions.elsewhere as s (s.id)}
               {@const ph = outsidePhase(s)}
               <li class="row">
@@ -654,7 +657,9 @@
                 </button>
               </li>
             {/each}
-            {@render fold(home, homeBand.more, (n) => tn('{n} shell', '{n} shells', n))}
+            {#if home && homeBand}
+              {@render fold(home, homeBand.more, (n) => tn('{n} shell', '{n} shells', n))}
+            {/if}
           </ul>
         </section>
       {/if}
