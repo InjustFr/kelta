@@ -137,7 +137,14 @@ describe('projects', () => {
     }));
     const order = () => workRows().map(rowId).slice(0, 4);
     expect(order()).toEqual(['a008', 'a007', 'shop-t4', 'shop-t1']);
-    expect(railRows().map(rowId).slice(0, 6)).toEqual(['a008', 'a007', 'shop-t4', 'shop-t1', 'shop-t2', 'shop-t3']);
+    expect(railRows().map(rowId).slice(0, 6)).toEqual([
+      'a008',
+      'a007',
+      'shop-t4',
+      'shop-t1',
+      'shop-t2',
+      'shop-t3',
+    ]);
     work.apply({ type: 'work.updated', work: { ...work.get(started)!, state: { kind: 'pr_open' } } });
     expect(order()).toEqual(['a008', 'a007', 'shop-t4', 'shop-t1']);
     gotoRailRow(3);

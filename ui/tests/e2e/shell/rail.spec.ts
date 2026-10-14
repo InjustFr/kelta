@@ -134,7 +134,9 @@ test.describe('sidebar', () => {
     await boot(page);
     const shop = page.locator('[data-testid="rail-band"][data-project-id="shop"]');
     await expect(shop.getByTestId('rail-resume').filter({ hasText: 'SHOP-120' })).toHaveCount(1);
-    const coupons = shop.locator('[data-testid="rail-resume"], [data-testid="rail-row"]').filter({ hasText: 'SHOP-155' });
+    const coupons = shop
+      .locator('[data-testid="rail-resume"], [data-testid="rail-row"]')
+      .filter({ hasText: 'SHOP-155' });
     await expect(coupons).toHaveAttribute('data-testid', 'rail-resume');
     await coupons.click();
     await expect(coupons).toHaveAttribute('data-testid', 'rail-row');

@@ -54,7 +54,9 @@ const moreRow = (r: { container: HTMLElement }, project: string) =>
 /** Opens a band's "n more" row (Home's "n shells"). */
 const unfold = (r: { container: HTMLElement }, project: string) => fireEvent.click(moreRow(r, project));
 const workIds = (r: { container: HTMLElement }, project: string) =>
-  [...band(r, project).querySelectorAll<HTMLElement>('[data-work-id]')].map((e) => e.dataset.workId!.slice(-4));
+  [...band(r, project).querySelectorAll<HTMLElement>('[data-work-id]')].map((e) =>
+    e.dataset.workId!.slice(-4),
+  );
 const A = (n: string) => `0199a6b2-0000-7000-8000-00000000${n}`;
 
 describe('ProjectRail', () => {
@@ -167,10 +169,9 @@ describe('ProjectRail', () => {
     expect(shop().textContent).toContain('kelta-ticket-pass · Implement +1');
     expect(sub('0199a6b2-0000-7000-8000-000000000008')?.textContent).toContain('kelta-ticket-pass · Review');
     // Its run is on its ticket's row, not on the billing tab.
-    expect(sub(BILLING_CLAUDE)?.closest('li')?.previousElementSibling?.querySelector('[data-work-id]')).toHaveProperty(
-      'dataset.workId',
-      A('a004'),
-    );
+    expect(
+      sub(BILLING_CLAUDE)?.closest('li')?.previousElementSibling?.querySelector('[data-work-id]'),
+    ).toHaveProperty('dataset.workId', A('a004'));
 
     const runsPanes = () =>
       allPanes(layout.get('shop')!.tabs.find((t) => t.id === 'shop-t1')!.root).filter(

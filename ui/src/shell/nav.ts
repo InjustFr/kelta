@@ -83,7 +83,11 @@ export function bandTabs(projectId: ProjectId): { work: RailRow[]; claude: RailR
   const work = unfinishedWork()
     .filter((w) => w.project_id === projectId)
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
-    .map((item) => ({ project: projectId, tab: tabs.find((tab) => tab.work_item_id === item.id) ?? null, item }));
+    .map((item) => ({
+      project: projectId,
+      tab: tabs.find((tab) => tab.work_item_id === item.id) ?? null,
+      item,
+    }));
   const claude = sessions
     .forProject(projectId)
     .filter((s) => s.kind.type === 'claude' && !s.work_item_id)
@@ -142,7 +146,8 @@ export function backgroundSessions(projectId: ProjectId): SessionInfo[] {
   return sessions
     .forProject(projectId)
     .filter(
-      (s) => s.lifecycle === 'live' && s.kind.type !== 'tool' && s.kind.type !== 'claude' && !findSession(l, s.id),
+      (s) =>
+        s.lifecycle === 'live' && s.kind.type !== 'tool' && s.kind.type !== 'claude' && !findSession(l, s.id),
     );
 }
 

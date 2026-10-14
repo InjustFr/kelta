@@ -202,7 +202,6 @@
     "one": "{n} shell",
     "other": "{n} shells"
   },
-  "Open or create a project": "Ouvrir ou créer un projet",
   "Add project": "Ajouter un projet",
   "Close {name}": "Fermer {name}",
   "{name}: running in the background, click to show it": "{name} : tourne en arrière-plan, cliquez pour l’afficher",
