@@ -22,6 +22,7 @@ import {
   openView,
   railProjects,
   railRows,
+  backgroundSessions,
   bandTabs,
   openRow,
   rowLamp,
@@ -190,6 +191,20 @@ describe('projects', () => {
     // In the background: a click shows it in a new tab.
     openRow(band.claude[1]!);
     await expect.poll(() => bandTabs('shop').claude[1]!.tab).not.toBeNull();
+  });
+
+  it('a live Claude whose work item is finished, tab closed, stays a folded background row', () => {
+    const item = work.get('0199a6b2-0000-7000-8000-00000000a004')!;
+    work.apply({ type: 'work.updated', work: { ...item, state: { kind: 'finished' } } as typeof item });
+    sessions.upsert({
+      ...sessions.get(SHOP_CLAUDE)!,
+      id: 'orphan',
+      work_item_id: item.id,
+      lifecycle: 'live',
+      attention: 'needs_input',
+    });
+    expect(backgroundSessions('shop').map((s) => s.id)).toContain('orphan');
+    expect(bandTabs('shop').claude.map((r) => r.session!.id)).not.toContain('orphan');
   });
 
   it('project cycling follows the rail order and wraps around', async () => {

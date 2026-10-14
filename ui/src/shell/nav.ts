@@ -139,7 +139,7 @@ export function railTools(): ToolInfo[] {
   return tools.list(railToolsOf());
 }
 
-/** Live sessions of a project that no pane shows (tools and Claude aside: rows of their own): the dim folded rows. */
+/** Live sessions of a project that no pane shows (tools and plain Claude aside: rows of their own): the dim folded rows. */
 export function backgroundSessions(projectId: ProjectId): SessionInfo[] {
   const l = layout.get(projectId);
   if (!l) return [];
@@ -147,7 +147,10 @@ export function backgroundSessions(projectId: ProjectId): SessionInfo[] {
     .forProject(projectId)
     .filter(
       (s) =>
-        s.lifecycle === 'live' && s.kind.type !== 'tool' && s.kind.type !== 'claude' && !findSession(l, s.id),
+        s.lifecycle === 'live' &&
+        s.kind.type !== 'tool' &&
+        !(s.kind.type === 'claude' && !s.work_item_id) &&
+        !findSession(l, s.id),
     );
 }
 
