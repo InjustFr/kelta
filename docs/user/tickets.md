@@ -166,8 +166,8 @@ diamond: something broke, a small dot once done). It follows the ticket's work i
 request. A ticket in a status its source lists as waiting for a deploy, with no branch or pull request found, gets a
 dotted line labelled "per the tracker": Kelta did not see the stages before. Hover the row for where it stands.
 
-`Enter` on a ticket with work under way runs the phase's next action, as `Enter` does in the Queue (the key hints
-name it); `g` opens the reading pane instead.
+`Enter` on a ticket with work under way runs the phase's next action, as `Enter` does in the Queue (the row's
+button and `?`'s key panel name it); `g` opens the reading pane instead.
 
 ## The reading pane
 

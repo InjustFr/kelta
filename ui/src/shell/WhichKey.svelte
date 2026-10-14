@@ -9,6 +9,7 @@
   import { focusedWorkItem } from '../views/work/actions';
   import { phaseNow } from '../views/work/live';
   import { workKey } from '../views/work/phase';
+  import KeyPanel from './KeyPanel.svelte';
 
   const item = focusedWorkItem();
   const { prefix, groups } = keyManager.prefixHints(item !== null);
@@ -40,96 +41,17 @@
         return t('Tools here');
     }
   }
+
+  const panel = groups.map(({ group, hints }) => ({
+    id: group,
+    title: title(group),
+    lines: lines(group, hints).map((h) => ({ key: h.key, chord: h.chord, label: label(h) })),
+  }));
 </script>
 
-<div class="wk" role="status" aria-label={t('Prefix keys')} data-testid="which-key">
-  <div class="head"><Kbd chord={prefix} /> <b>{t('then one key')}</b></div>
-  <div class="cols">
-    {#each groups as { group, hints } (group)}
-      <section data-group={group}>
-        <h5>{title(group)}</h5>
-        <dl>
-          {#each lines(group, hints) as h (h.action + h.key)}
-            <dt class="key">
-              {#if h.chord}<Kbd chord={h.key} />{:else}{h.key}{/if}
-            </dt>
-            <dd>{label(h)}</dd>
-          {/each}
-        </dl>
-      </section>
-    {/each}
-  </div>
-  <div class="foot">
-    <span>{t('Esc cancels')}</span><span>{t('? lists every key')}</span><span
+<KeyPanel label={t('Prefix keys')} groups={panel} data-testid="which-key">
+  {#snippet head()}<Kbd chord={prefix} /> <b>{t('then one key')}</b>{/snippet}
+  {#snippet foot()}<span>{t('Esc cancels')}</span><span>{t('? lists every key')}</span><span
       >{t('Rebind in Settings › Keys')}</span
-    >
-  </div>
-</div>
-
-<style>
-  .wk {
-    position: absolute;
-    left: 50%;
-    bottom: calc(var(--k-statusbar-height) + var(--k-space-3));
-    transform: translateX(-50%);
-    z-index: var(--k-z-toast);
-    display: flex;
-    flex-direction: column;
-    gap: var(--k-space-3);
-    max-width: calc(100% - 2 * var(--k-space-5));
-    max-height: 70%;
-    overflow: auto;
-    padding: var(--k-space-4) var(--k-space-5);
-    border-radius: var(--k-radius-lg);
-    background: var(--k-bg-float);
-    box-shadow: var(--k-shadow);
-    color: var(--k-fg);
-    font-size: var(--k-font-size-sm);
-    pointer-events: none;
-  }
-
-  .head {
-    display: flex;
-    gap: var(--k-space-3);
-    align-items: center;
-  }
-
-  .cols {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--k-space-4) var(--k-space-6);
-  }
-
-  h5 {
-    margin: 0 0 var(--k-space-2);
-    color: var(--k-fg-muted);
-    font-size: var(--k-font-size-xs);
-    font-weight: var(--k-weight-strong);
-  }
-
-  dl {
-    display: grid;
-    grid-template-columns: auto auto;
-    gap: var(--k-space-1) var(--k-space-3);
-    margin: 0;
-  }
-
-  dd {
-    margin: 0;
-    white-space: nowrap;
-  }
-
-  .key {
-    min-width: 18px;
-    color: var(--k-accent);
-    font-family: var(--k-font-mono);
-    text-align: center;
-  }
-
-  .foot {
-    display: flex;
-    gap: var(--k-space-5);
-    color: var(--k-fg-subtle);
-    font-size: var(--k-font-size-xs);
-  }
-</style>
+    >{/snippet}
+</KeyPanel>

@@ -1,23 +1,24 @@
 <script lang="ts">
-  // Keyboard hints under a list: the first five keys and `?`, one line, most important first; a narrow
-  // pane drops the hints that no longer fit, whole. `keys.hints = false` hides the line.
-  // With `onclose` it is the `?` dialog instead: every key of the view, then the global chords. Render
-  // that one outside the pane's key handler, so keys typed in the dialog do not reach the list.
+  // A list's keys (#437): `?` opens the floating panel of the prefix (KeyPanel) with the list's keys
+  // in the groups of the verb table (keymap.ts); its `? All keys` opens the dialog instead.
+  // With `onclose` it is that `?` dialog: every key of the view, then the global chords. Render the
+  // dialog outside the pane's key handler, so keys typed in it do not reach the list; the panel inside
+  // the pane, which places it.
   import { msg, t } from '$lib/i18n/index.svelte';
-  import { settings } from '$lib/stores';
   import { Dialog, Kbd } from '$lib/ui';
 
+  import KeyPanel from '../../../shell/KeyPanel.svelte';
   import { chordFor } from '../../../shell/labels';
+  import { panelGroups, type ListKey } from './keymap';
 
-  // A third entry (the list's verb, keymap.ts) is not shown.
   type Hint = readonly [string, string, ...unknown[]];
 
   interface Props {
     /** `[keys, label]`, most useful first; alternative keys are separated by a space (`'j k'`), a sequence by `then` (`'f then s'`). */
-    hints: readonly Hint[];
+    hints: readonly ListKey[];
     /** Shows the full key list as a dialog, closed by this. */
     onclose?: () => void;
-    /** The line's `?` is a button opening the dialog (#397): the keys are taught, not required. */
+    /** The panel's `? All keys` button: opens the dialog. */
     onopen?: () => void;
   }
 
@@ -36,7 +37,13 @@
       return chord ? [[chord, label]] : [];
     }),
   );
-  const line = $derived<Hint[]>(hints.slice(0, 5));
+  const panel = $derived(
+    panelGroups(hints).map(({ title, keys }) => ({
+      id: title,
+      title: t(title),
+      lines: keys.map(([k, label]) => ({ key: k, chord: true, label: t(label) })),
+    })),
+  );
 </script>
 
 {#snippet keys(k: string)}
@@ -57,46 +64,22 @@
       </dl>
     {/each}
   </Dialog>
-{:else if settings.value()?.keys.hints !== false}
-  <footer class="hints">
-    <span class="line" aria-hidden="true"
-      >{#each line as [k, label] (k)}<span class="hint">{@render keys(k)} {t(label)}</span>{/each}</span
-    >
-    <button type="button" class="hint all" tabindex="-1" onclick={onopen}
-      ><Kbd chord="?" /> {t('All keys')}</button
-    >
-  </footer>
+{:else}
+  <KeyPanel label={t('Keys')} groups={panel} data-testid="list-keys">
+    {#snippet foot()}<span>{t('Esc closes')}</span><button
+        type="button"
+        class="all"
+        tabindex="-1"
+        onclick={onopen}><Kbd chord="?" /> {t('All keys')}</button
+      >{/snippet}
+  </KeyPanel>
 {/if}
 
 <style>
-  .hints {
-    display: flex;
-    align-items: center;
-    gap: var(--k-space-5);
-    flex: none;
-    margin-top: auto; /* bottom of the pane even above an empty, error or loading state */
-    height: var(--k-statusbar-height);
-    overflow: hidden;
-    padding: 0 var(--k-space-3);
-    background: var(--k-bezel-raised);
-    font-size: var(--k-font-size-xs);
-    color: var(--k-fg-muted);
-    white-space: nowrap;
-  }
-
-  /* One line tall: hints that wrap fall out of view whole; `All keys` after them always shows. */
-  .line {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0 var(--k-space-5);
-    min-width: 0;
-    height: var(--k-statusbar-height);
-    overflow: hidden;
-  }
-
   .all {
-    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
     padding: 0 var(--k-space-1);
     border: 0;
     border-radius: var(--k-radius-sm);
@@ -109,13 +92,6 @@
   .all:hover {
     background: var(--k-bg-active);
     color: var(--k-fg);
-  }
-
-  .hint {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    height: var(--k-statusbar-height);
   }
 
   .then {

@@ -408,7 +408,8 @@ pub struct KeysSettings {
     pub prefix_bindings: BTreeMap<String, String>,
     /// Single-key shortcuts in lists/boards.
     pub list_keys: bool,
-    /// The key hint line under lists; `?` still lists every key.
+    /// Deprecated and ignored: lists no longer have a key hint line, `?` opens their key panel.
+    #[schemars(extend("deprecated" = true))]
     pub hints: bool,
     /// Linux, focused terminal: who gets a plain `ctrl+<letter>` bound in Kelta.
     pub linux_terminal: LinuxTerminalKeys,

@@ -1,5 +1,5 @@
 // One verb per letter across the Queue, Tickets and Reviews (#417, #440, FLOW §3.3): each list's keys, as its
-// `?` dialog and hint line show them, tagged with the verb of the shared table. keymap.test.ts holds
+// `?` panel and dialog show them, tagged with the verb of the shared table. keymap.test.ts holds
 // every list to that table, so a letter learned in one list means the same in the next.
 import { msg } from '$lib/i18n/index.svelte';
 
@@ -41,7 +41,21 @@ export const VERB_OF: Readonly<Record<string, Verb>> = {
 /** `[keys, label, verb]`: alternatives split by a space (`'s shift+s'`), a sequence by `then`. */
 export type ListKey = readonly [keys: string, label: string, verb?: Verb];
 
-const startMarked = (): ListKey => [chordFor('work.start') ?? 'mod+enter', msg('Start marked')];
+const START_MARKED = msg('Start marked');
+const startMarked = (): ListKey => [chordFor('work.start') ?? 'mod+enter', START_MARKED];
+
+/** The groups of a list's `?` panel (#437), in order; a key in none of them is in the `? All keys` dialog only. */
+const ON_ROW: readonly Verb[] = ['next', 'work', 'view', 'open', 'move', 'comment'];
+const PANEL_GROUPS: readonly [title: string, has: (k: ListKey) => boolean][] = [
+  [msg('Move'), ([keys]) => keys === 'j k'],
+  [msg('Act on the row'), ([, , verb]) => verb !== undefined && ON_ROW.includes(verb)],
+  [msg('Select'), ([keys, label, verb]) => verb === 'mark' || keys === 'x' || label === START_MARKED],
+  [msg('Filter'), ([keys, , verb]) => verb === 'filter' || keys === '1 2 3' || keys.startsWith('f then ')],
+];
+
+export function panelGroups(keys: readonly ListKey[]): { title: string; keys: ListKey[] }[] {
+  return PANEL_GROUPS.map(([title, has]) => ({ title, keys: keys.filter(has) })).filter((g) => g.keys.length);
+}
 
 /** The Queue: tickets, my work and others' PRs in one list. */
 export const queueKeys = (): ListKey[] => [

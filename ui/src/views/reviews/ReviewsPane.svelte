@@ -31,7 +31,7 @@
   import ReviewDetailPane from './ReviewDetailPane.svelte';
   import ActionMenu, { below, under, type RowAction } from '../work/shared/ActionMenu.svelte';
   import { onActions, onRefresh } from '../work/ui.svelte';
-  import KeyHints from '../work/shared/KeyHints.svelte';
+  import ListKeys from '../work/shared/ListKeys.svelte';
   import { reviewsKeys } from '../work/shared/keymap';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
@@ -327,8 +327,13 @@
     }
   }
 
-  /** The full key list (`?`); the footer shows the first five. */
+  /** `?` opens the key panel, `?` again or its button the full key list (#437). */
+  let keysPanel = $state(false);
   let keysOpen = $state(false);
+  function allKeys(): void {
+    keysPanel = false;
+    keysOpen = true;
+  }
   const hints = reviewsKeys();
   /** Space shows or hides the detail (#440); per mount, like the Tickets split. */
   let detailShown = $state(true);
@@ -336,6 +341,14 @@
   function onkeydown(e: KeyboardEvent): void {
     const target = e.target as HTMLElement;
     if (target.closest('input, textarea, select, [role="dialog"]')) return;
+    // `?`'s key panel goes with the next key (#437); Esc only closes it.
+    if (keysPanel && e.key !== '?' && e.key !== 'Shift') {
+      keysPanel = false;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        return;
+      }
+    }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     // The brief runs its own keys; Esc hands the keyboard back to the list.
     if (side?.contains(target)) {
@@ -372,7 +385,8 @@
         filterInput?.focus();
         break;
       case '?':
-        keysOpen = true;
+        if (keysPanel) allKeys();
+        else keysPanel = true;
         break;
       case 'v':
         if (item) viewChanges(item);
@@ -704,11 +718,11 @@
     {/if}
   {/if}
 
-  <KeyHints {hints} onopen={() => (keysOpen = true)} />
+  {#if keysPanel}<ListKeys {hints} onopen={allKeys} />{/if}
 </div>
 
 {#if keysOpen}
-  <KeyHints
+  <ListKeys
     {hints}
     onclose={() => {
       keysOpen = false;
@@ -755,6 +769,7 @@
 <style>
   .pane {
     container: reviews / inline-size;
+    position: relative; /* places the key panel */
     display: flex;
     flex-direction: column;
     height: 100%;
