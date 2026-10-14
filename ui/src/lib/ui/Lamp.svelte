@@ -95,8 +95,8 @@
 
   .error {
     --c: var(--k-lamp-error);
-    width: 8px;
-    height: 8px;
+    width: 9px;
+    height: 9px;
     border-radius: 0;
     transform: rotate(45deg);
   }

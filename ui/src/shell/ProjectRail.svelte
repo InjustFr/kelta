@@ -950,12 +950,12 @@
   }
 
   /* Band caption: the project's name, its menu and its drag handle. No lamp: its rows carry them.
-     No rules between bands: the 10px above each caption separates them (#451). */
+     No rules between bands: 8px margin plus the 2px `.scroll` gap put 10px above each caption (#451). */
   .caption-row {
     display: flex;
     align-items: center;
     height: 22px;
-    margin-top: 10px;
+    margin-top: 8px;
   }
 
   .caption {
@@ -1264,6 +1264,11 @@
     overflow: hidden;
     clip: rect(0 0 0 0);
     white-space: nowrap;
+  }
+
+  .compact .caption-row {
+    height: auto;
+    margin-top: 0;
   }
 
   .compact .caption {
