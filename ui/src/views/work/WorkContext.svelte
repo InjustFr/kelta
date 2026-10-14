@@ -10,10 +10,11 @@
   import { layout, projects, settings, tickets, work } from '$lib/stores';
   import { terminalPool } from '$lib/terminal';
   import { resolveProjectColor } from '$lib/theme';
-  import { Button, currentPlatform, Kbd, Menu, type MenuItem } from '$lib/ui';
+  import { Button, currentPlatform, Menu, type MenuItem } from '$lib/ui';
   import { formatChord } from '$lib/ui/format';
 
   import { focus } from '../../shell/focus.svelte';
+  import { chordFor } from '../../shell/labels';
   import { focusedSessionId } from '../../shell/nav';
   import { pluginActions, runPluginAction, workCtx } from '../plugins/actions';
   import { blockedReason, runPrimary, runWorkAction, workMenu, type WorkAction } from './actions';
@@ -36,13 +37,15 @@
   const menuChord = $derived(
     effectiveChords('work.menu', settings.value()?.keys ?? null, currentPlatform())[0],
   );
-  // ⌘↵ runs the primary from any pane (#441): its tooltip names the chord.
-  const primaryTip = $derived.by(() => {
-    const c = effectiveChords('work.start', settings.value()?.keys ?? null, currentPlatform())[0];
-    return c && phase
-      ? `${phase.primaryLabel} (${formatChord(c).join(currentPlatform() === 'macos' ? '' : '+')})`
-      : undefined;
-  });
+  // ⌘↵ runs the primary from any pane (#441): the button shows the chord, its tooltip spells it out.
+  const startChord = $derived(chordFor('work.start'));
+  const primaryTip = $derived(
+    startChord && phase
+      ? `${phase.primaryLabel} (${formatChord(startChord).join(currentPlatform() === 'macos' ? '' : '+')})`
+      : undefined,
+  );
+  // ⇧⌘F works from any pane; Esc Esc only outside terminals and fields, so it is the tooltip's fallback.
+  const focusChord = $derived(chordFor('view.focus'));
 
   let workBtn = $state<HTMLElement>();
 
@@ -128,6 +131,7 @@
           size="sm"
           variant="primary"
           disabled={primaryBlocked !== null}
+          chord={startChord}
           data-testid="work-primary"
           onclick={() => void runPrimary(item)}
         >
@@ -140,11 +144,10 @@
         size="sm"
         variant="ghost"
         aria-label={t('Leave focus')}
+        title={`${t('Leave focus')} ${t('or Esc Esc outside a terminal')}`}
         data-testid="work-leave-focus"
-        onclick={() => void focus.leave()}
-        >{t('Leave focus')}<span class="esc" aria-hidden="true"
-          ><Kbd chord="escape" /><Kbd chord="escape" /></span
-        ></Button
+        chord={focusChord}
+        onclick={() => void focus.leave()}>{t('Leave focus')}</Button
       >
     {/if}
     <span class="menu" bind:this={workBtn}>
@@ -267,12 +270,6 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .esc {
-    display: inline-flex;
-    gap: var(--k-space-1);
-    margin-left: var(--k-space-2);
   }
 
   .muted {
