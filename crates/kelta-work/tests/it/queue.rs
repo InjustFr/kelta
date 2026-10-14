@@ -97,7 +97,15 @@ async fn queue_survives_a_restart_in_order() {
         (b.state.clone(), c.state.clone()),
         (WorkState::Queued { pos: 0 }, WorkState::Queued { pos: 1 })
     );
+    let old = std::sync::Arc::downgrade(&w);
     drop(w);
+    // A queue kick of the old service may still be in flight: it must end before the "restart".
+    for _ in 0..100 {
+        if old.strong_count() == 0 {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
 
     // Restart: Claude is gone (the fake keeps it live; exit it without a listener), one slot frees.
     let sid = live_claude(&fx).into_iter().find(|s| s.work_item_id.as_ref() == Some(&a.id)).unwrap().id;
