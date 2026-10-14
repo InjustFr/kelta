@@ -95,6 +95,27 @@ describe('ReviewsPane keys (#417)', () => {
   });
 });
 
+describe('ReviewsPane next step column (#447)', () => {
+  it('a row not mine has an Open review button; Yours shows the step as text', async () => {
+    mountGlobal();
+    await waitFor(() => expect(document.querySelectorAll('.row').length).toBeGreaterThan(0));
+    const all = [...document.querySelectorAll<HTMLElement>('button.row')];
+    expect(all.length).toBeGreaterThan(0);
+    for (const row of all) {
+      const dim = row.classList.contains('dim');
+      expect(row.querySelector('[data-next]') === null).toBe(dim);
+      if (!dim) expect(within(row).getByRole('button', { name: 'Open review' })).toBeTruthy();
+      else expect(row.querySelector('.next [role="button"]')).toBeNull();
+    }
+    expect(document.querySelector('.row.dim [data-next-text]')?.textContent).toMatch(/\S/);
+    // A click selects that row and moves the keys into its detail, as Enter does.
+    const target = all.find((r) => !r.classList.contains('dim'))!;
+    await fireEvent.click(within(target).getByRole('button', { name: 'Open review' }));
+    expect(document.querySelector('.row.selected')).toBe(target);
+    await waitFor(() => expect(document.activeElement).toBe(detail()));
+  });
+});
+
 describe('ReviewsPane filters', () => {
   it('a filter that hides every PR says which filters are on; Clear all brings them back (#370)', async () => {
     const { container } = mountReviews();
@@ -263,13 +284,13 @@ describe('ReviewsPane nudge (#240)', () => {
   it('the nudge menu opens on my PRs only', async () => {
     mountReviews();
     await waitFor(() => expect(selectedKey()).toBeTruthy());
-    const asked = [...document.querySelectorAll<HTMLElement>('.row')].find((r) =>
+    const asked = [...document.querySelectorAll<HTMLElement>('button.row')].find((r) =>
       r.dataset.key?.endsWith('acme/shop-api#311'),
     )!;
     await fireEvent.click(asked);
     await fireEvent.keyDown(pane(), { key: 'n' });
     expect(screen.queryByRole('menu', { name: 'Nudge reviewers' })).toBeNull();
-    const mine = [...document.querySelectorAll<HTMLElement>('.row')].find((r) =>
+    const mine = [...document.querySelectorAll<HTMLElement>('button.row')].find((r) =>
       r.dataset.key?.endsWith('acme/shop-api#305'),
     )!;
     await fireEvent.click(mine);
