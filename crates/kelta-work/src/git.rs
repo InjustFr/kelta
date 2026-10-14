@@ -397,6 +397,13 @@ pub async fn changes_merged(worktree: &Path, target: &str) -> Result<bool, Kelta
     Ok(out.stdout.lines().next() == Some(tree.stdout.trim()))
 }
 
+/// `git log --oneline` of HEAD's commits not in `base`, newest first, at most `max`.
+pub async fn log_since(worktree: &Path, base: &str, max: usize) -> Result<Vec<String>, KeltaError> {
+    let (n, range) = (format!("-{max}"), format!("{base}..HEAD"));
+    let out = run_ok(worktree, &["log", "--oneline", "--no-decorate", &n, &range], LOCAL_TIMEOUT).await?;
+    Ok(out.stdout.lines().map(str::to_owned).collect())
+}
+
 /// `(ahead, behind)` of HEAD relative to `upstream`.
 pub async fn ahead_behind(worktree: &Path, upstream: &str) -> Result<(u32, u32), KeltaError> {
     let range = format!("HEAD...{upstream}");

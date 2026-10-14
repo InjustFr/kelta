@@ -24,6 +24,8 @@ mod ide;
 mod mcp;
 mod serve;
 
+pub use mcp::session_tool_names;
+
 struct CtlRunning {
     path: PathBuf,
     task: AbortHandle,

@@ -17,7 +17,7 @@ use kelta_proto::ids::{AccountId, ProjectId, SessionId};
 use kelta_proto::model::{
     EditorTarget, Lifecycle, ProjectInfo, RunClaim, RunState, Scope, SessionKind, ShipOrigin, WorkItem,
 };
-use kelta_proto::settings::{AccountKind, Layer, Settings, TransitionTarget};
+use kelta_proto::settings::{AccountKind, ClaudeSettings, Layer, Settings, TransitionTarget};
 use kelta_proto::tracker::{Ticket, TicketRef, Transition};
 use serde_json::{Value, json};
 
@@ -161,11 +161,18 @@ fn listed(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, name: &str) -> bool 
     if sid.is_none() && SESSION_TOOLS.contains(&name) {
         return false;
     }
-    if BOARD_WRITES.contains(&name) {
-        let c = &core.settings(None).claude;
-        return c.mcp && c.mcp_board_writes;
-    }
-    true
+    !BOARD_WRITES.contains(&name) || board_writes(&core.settings(None).claude)
+}
+
+fn board_writes(c: &ClaudeSettings) -> bool {
+    c.mcp && c.mcp_board_writes
+}
+
+/// The tools `tools/list` gives a Kelta-started session (`context.md` names them).
+pub fn session_tool_names(c: &ClaudeSettings) -> Vec<String> {
+    let defs = tool_defs();
+    let names = defs.as_array().into_iter().flatten().filter_map(|d| d["name"].as_str());
+    names.filter(|n| !BOARD_WRITES.contains(n) || board_writes(c)).map(str::to_owned).collect()
 }
 
 pub(crate) fn tool_defs() -> Value {
@@ -1060,6 +1067,30 @@ mod tests {
             initialize(&json!({"protocolVersion": "1999-01-01"}))["protocolVersion"],
             PROTOCOL_VERSIONS[0]
         );
+    }
+
+    #[tokio::test]
+    async fn context_md_tool_names_are_what_a_session_lists() {
+        let fake = kelta_proto::testing::FakeCore::new();
+        let core: Arc<dyn CoreApi> = fake.clone();
+        let sid = SessionId::new("s");
+        for writes in [false, true] {
+            let mut s = Settings::default();
+            s.claude.mcp = true;
+            s.claude.mcp_board_writes = writes;
+            fake.set_settings(s);
+            let msg = json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" });
+            let r = handle_message(&core, Some(&sid), msg).await.unwrap();
+            let listed: Vec<String> = r["result"]["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|t| t["name"].as_str().unwrap().to_owned())
+                .collect();
+            assert_eq!(session_tool_names(&core.settings(None).claude), listed);
+            assert!(["link_pr", "report_progress", "ask"].iter().all(|n| listed.iter().any(|l| l == n)));
+            assert_eq!(listed.iter().any(|l| l == "close_ticket"), writes);
+        }
     }
 
     #[test]

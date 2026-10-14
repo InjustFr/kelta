@@ -1026,8 +1026,9 @@ impl WorkService {
         }
     }
 
-    /// (Re)write `claude-settings.json`, `mcp.json`, `context.md` for `sid` / `port`.
-    pub(crate) fn write_claude_files(
+    /// (Re)write `claude-settings.json`, `mcp.json`, `context.md` for `sid` / `port`. Every launch
+    /// (start, resume, `--continue`) calls it, so `context.md` holds the item's current state.
+    pub(crate) async fn write_claude_files(
         &self,
         env: &Env,
         item: &WorkItem,
@@ -1039,15 +1040,39 @@ impl WorkService {
         let cfg = &env.settings.claude;
         let settings = claude::settings_json(&self.dirs, cfg, port.map(|p| (p, sid.as_str())));
         let mcp = port.filter(|_| cfg.mcp).map(|p| claude::mcp_json(p, sid.as_str()));
+        // The review feed's copy only: no network call on a launch.
+        let own_pr = match item.pr_url.clone().filter(|u| j.review.as_ref().is_none_or(|r| &r.url != u)) {
+            Some(url) => {
+                let cached = env.core.cached_review(&url).await;
+                Some((url, cached))
+            }
+            None => None,
+        };
+        let remote_base = format!("{}/{}", env.repo.remote, item.base);
+        let base = match git::rev(&item.worktree, &remote_base).await {
+            Ok(Some(_)) => remote_base,
+            _ => item.base.clone(),
+        };
+        // A worktree git cannot read (gone after a reboot, mid-rebase) just leaves these out.
+        let commits =
+            git::log_since(&item.worktree, &base, claude::CONTEXT_LIST_MAX + 1).await.unwrap_or_default();
+        let dirty = git::dirty_files(&item.worktree).await.unwrap_or_default();
+        let mcp_tools = match (&mcp, self.host()) {
+            (Some(_), Some(h)) => h.mcp_tools(),
+            _ => Vec::new(),
+        };
         let info = ContextInfo {
             project: env.project.name.clone(),
             worktree: item.worktree.clone(),
             branch: item.branch.clone(),
-            base: item.base.clone(),
+            base,
             ticket: j.ticket.as_ref().map(|t| (t.key.clone(), t.title.clone(), t.url.clone())),
             ticket_file: j.ticket.as_ref().map(|_| run.join(claude::TICKET_FILE)),
             pr: j.review.as_ref().map(|r| (r.url.clone(), r.target_branch.clone())),
-            mcp: mcp.is_some(),
+            own_pr,
+            commits,
+            dirty,
+            mcp_tools,
             append: cfg.append_system_prompt.clone(),
         };
         claude::write_files(run, &settings, mcp.as_ref(), &claude::context_md(&info))
@@ -1073,7 +1098,7 @@ impl WorkService {
         // The Claude step takes its own consumer; this one only learned the port.
         self.release_port(port);
         j.http_port = port;
-        self.write_claude_files(env, item, j, &run, &sid, port)?;
+        self.write_claude_files(env, item, j, &run, &sid, port).await?;
         Ok(Some(format!("{}", run.display())))
     }
 
@@ -1476,7 +1501,7 @@ impl WorkService {
             None => j.claude_sid_hint.insert(SessionId::generate()).clone(),
         };
         let port = self.http_port(&env.settings).await;
-        if let Err(e) = self.write_claude_files(env, item, j, &run, &hint, port) {
+        if let Err(e) = self.write_claude_files(env, item, j, &run, &hint, port).await {
             self.release_port(port);
             return Err(e);
         }

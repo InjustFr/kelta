@@ -430,6 +430,10 @@ pub trait CoreApi: Send + Sync {
     async fn review(&self, _r: &ReviewRef) -> Option<Review> {
         None
     }
+    /// A PR from the review feed cache by URL, never fetched (`context.md`); `None` when not cached.
+    async fn cached_review(&self, _url: &str) -> Option<Review> {
+        None
+    }
     /// Review feedback of the work item's PR (MCP `get_review_feedback`).
     async fn work_feedback(&self, id: &WorkItemId) -> Result<Feedback, KeltaError>;
     /// The `fix_checks` trigger action (#252): `review`'s failed checks to the Claude of the work item

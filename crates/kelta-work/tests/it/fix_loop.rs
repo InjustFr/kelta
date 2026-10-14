@@ -804,7 +804,21 @@ async fn start_work_on_a_ticket_my_pr_names_plans_on_the_pr_head_branch() {
     assert_eq!(plan.adopt_pr.as_deref(), Some(r.url.as_str()));
     assert_eq!((plan.base.as_str(), plan.branch_exists.as_ref()), (r.target_branch.as_str(), None));
     assert_eq!(plan.pr_choices.len(), 1);
+    // The review feed's copy of the PR goes into context.md.
+    let mut cached = r.clone();
+    cached.draft = true;
+    cached.ci = kelta_proto::codehost::CiState::Failure;
+    cached.failed_check_names = vec!["lint".into()];
+    cached.decision = Some(kelta_proto::codehost::ReviewDecision::ChangesRequested);
+    fx.core.respond("cached_review", serde_json::to_value(&cached).unwrap());
     let item = w.start(plan).await.unwrap();
+    let md = fx.context_md();
+    let line = format!(
+        "- Pull request of this work: #96 {} ({}), target {}, draft, checks failure (failed: lint), review changes_requested\n",
+        r.title, r.url, r.target_branch
+    );
+    assert!(md.contains(&line), "{md}");
+    assert!(md.contains("outside work"), "the PR's commit is listed: {md}");
     assert_eq!((item.kind, item.state.clone()), (WorkKind::Ticket, WorkState::PrOpen), "{:?}", item.steps);
     assert_eq!(item.pr_url.as_deref(), Some(r.url.as_str()));
     assert_eq!(git(&item.worktree, &["rev-parse", "HEAD"]), head, "checked out the PR head");

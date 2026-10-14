@@ -137,6 +137,20 @@ impl Fx {
         self.core.sessions()
     }
 
+    /// `context.md` of the last Claude spawned.
+    pub fn context_md(&self) -> String {
+        let spawn = self
+            .core
+            .calls()
+            .into_iter()
+            .rfind(|c| c.method == "session_spawn" && c.args["kind"]["type"] == "claude")
+            .expect("a Claude spawn");
+        let args: Vec<String> = serde_json::from_value(spawn.args["args"].clone()).unwrap();
+        let f =
+            args.windows(2).find(|a| a[0] == "--append-system-prompt-file").map(|a| a[1].clone()).unwrap();
+        std::fs::read_to_string(f).unwrap()
+    }
+
     pub fn spawned_of(&self, pred: impl Fn(&SessionKind) -> bool) -> Vec<SessionInfo> {
         self.core.sessions().into_iter().filter(|s| pred(&s.kind)).collect()
     }
