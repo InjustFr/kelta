@@ -59,6 +59,8 @@ pub trait WorkHost: Send + Sync {
     async fn ensure_http(&self) -> Result<u16, KeltaError>;
     /// `kelta_server::Server::release_http` (consumer refcount −1).
     fn release_http(&self);
+    /// `kelta_server::session_tool_names`: the MCP tools a work item's Claude lists (`context.md`).
+    fn mcp_tools(&self) -> Vec<String>;
     /// `kelta_plugins::PluginHost::run_blocking` for `*.before_*` events.
     async fn run_blocking(&self, ev: &BusEvent) -> Result<BlockingOutcome, KeltaError>;
 }

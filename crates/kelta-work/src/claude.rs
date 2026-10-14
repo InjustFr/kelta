@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use kelta_proto::codehost::{CiState, Review};
 use kelta_proto::dirs::Dirs;
 use kelta_proto::error::KeltaError;
 use kelta_proto::settings::{ClaudeEffort, ClaudeSettings, PermissionMode};
@@ -40,6 +41,9 @@ pub fn mcp_json(port: u16, sid: &str) -> Value {
     })
 }
 
+/// Lines past which `context.md` lists only a count (commits, uncommitted files).
+pub const CONTEXT_LIST_MAX: usize = 20;
+
 /// Facts rendered into `context.md`.
 #[derive(Debug, Clone, Default)]
 pub struct ContextInfo {
@@ -49,9 +53,58 @@ pub struct ContextInfo {
     pub base: String,
     pub ticket: Option<(String, String, String)>,
     pub ticket_file: Option<PathBuf>,
+    /// The PR under review: URL, target branch.
     pub pr: Option<(String, String)>,
-    pub mcp: bool,
+    /// The item's own PR: URL, and the review feed's copy of it when cached.
+    pub own_pr: Option<(String, Option<Review>)>,
+    /// `git log --oneline` of the branch's commits not in the base, newest first.
+    pub commits: Vec<String>,
+    /// Uncommitted files (`git status`).
+    pub dirty: Vec<String>,
+    /// Kelta MCP tools this session lists; empty = no MCP.
+    pub mcp_tools: Vec<String>,
     pub append: String,
+}
+
+/// The item's own PR line: what the review feed knows of it, else its URL alone.
+fn own_pr_line(url: &str, r: Option<&Review>) -> String {
+    let Some(r) = r else { return format!("- Pull request of this work: {url}\n") };
+    let mut l = format!(
+        "- Pull request of this work: #{} {} ({url}), target {}, {}",
+        r.r#ref.number,
+        r.title,
+        r.target_branch,
+        if r.draft { "draft" } else { "ready for review" }
+    );
+    if r.ci != CiState::None {
+        l.push_str(&format!(", checks {}", enum_str(&r.ci)));
+    }
+    if !r.failed_check_names.is_empty() {
+        l.push_str(&format!(" (failed: {})", r.failed_check_names.join(", ")));
+    }
+    if let Some(d) = &r.decision {
+        l.push_str(&format!(", review {}", enum_str(d)));
+    }
+    if let Some(n) = r.unresolved_threads.filter(|n| *n > 0) {
+        l.push_str(&format!(", {n} unresolved review threads"));
+    }
+    l.push('\n');
+    l
+}
+
+/// `title` then one `  - ` line per entry, the ones past `CONTEXT_LIST_MAX` counted.
+fn list(s: &mut String, title: &str, items: &[String]) {
+    if items.is_empty() {
+        return;
+    }
+    s.push_str(title);
+    s.push('\n');
+    for i in items.iter().take(CONTEXT_LIST_MAX) {
+        s.push_str(&format!("  - {i}\n"));
+    }
+    if items.len() > CONTEXT_LIST_MAX {
+        s.push_str("  - …\n");
+    }
 }
 
 /// `context.md` (passed with `--append-system-prompt-file`).
@@ -73,13 +126,18 @@ pub fn context_md(c: &ContextInfo) -> String {
     if let Some((url, base)) = &c.pr {
         s.push_str(&format!("- Pull request under review: {url} (target {base})\n"));
     }
-    if c.mcp {
-        s.push_str(
-            "\nKelta MCP tools (server `kelta`): get_ticket, transition_ticket, add_ticket_comment, \
-             open_in_editor, create_pr, list_review_requests, get_review_feedback, add_review_comment, notify. Prefer `create_pr` \
-             over pushing and opening pull requests by hand; when reviewing a pull request, leave findings \
-             with `add_review_comment` (pending until the user submits).\n",
-        );
+    if let Some((url, r)) = &c.own_pr {
+        s.push_str(&own_pr_line(url, r.as_ref()));
+    }
+    list(&mut s, &format!("- Commits on the branch not in {}, newest first:", c.base), &c.commits);
+    list(&mut s, "- Uncommitted changes:", &c.dirty);
+    if !c.mcp_tools.is_empty() {
+        s.push_str(&format!(
+            "\nKelta MCP tools (server `kelta`): {}. Prefer `create_pr` over pushing and opening pull \
+             requests by hand; when reviewing a pull request, leave findings with `add_review_comment` \
+             (pending until the user submits).\n",
+            c.mcp_tools.join(", ")
+        ));
     }
     if !c.append.trim().is_empty() {
         s.push('\n');
@@ -211,6 +269,37 @@ pub fn write_files(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn context_lists_only_what_is_known() {
+        let bare = context_md(&ContextInfo { base: "main".into(), ..ContextInfo::default() });
+        assert!(
+            !bare.contains("Pull request") && !bare.contains("Commits") && !bare.contains("MCP"),
+            "{bare}"
+        );
+        let r = Review {
+            title: "Fix cart".into(),
+            target_branch: "release".into(),
+            ci: CiState::Failure,
+            failed_check_names: vec!["lint".into()],
+            unresolved_threads: Some(2),
+            ..Review::default()
+        };
+        let url = "https://h/pull/7".to_owned();
+        let c = ContextInfo {
+            base: "origin/main".into(),
+            own_pr: Some((url.clone(), Some(r))),
+            commits: (0..25).map(|i| format!("c{i} msg")).collect(),
+            mcp_tools: vec!["link_pr".into(), "report_progress".into()],
+            ..ContextInfo::default()
+        };
+        let md = context_md(&c);
+        assert!(md.contains("(https://h/pull/7), target release, ready for review, checks failure (failed: lint), 2 unresolved review threads\n"), "{md}");
+        assert!(md.contains("  - c19 msg\n  - …\n") && !md.contains("c20"), "{md}");
+        assert!(md.contains("Kelta MCP tools (server `kelta`): link_pr, report_progress."), "{md}");
+        let md = context_md(&ContextInfo { own_pr: Some((url, None)), ..ContextInfo::default() });
+        assert!(md.contains("- Pull request of this work: https://h/pull/7\n"), "{md}");
+    }
 
     #[test]
     fn versions() {

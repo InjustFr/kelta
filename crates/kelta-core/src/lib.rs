@@ -862,6 +862,9 @@ impl CoreApi for Core {
             None => self.review_get(r).await.ok().map(|d| d.review),
         }
     }
+    async fn cached_review(&self, url: &str) -> Option<kelta_proto::codehost::Review> {
+        self.cached_reviews().await.into_iter().find(|rv| rv.url == url)
+    }
     async fn work_fix_checks(&self, review: &kelta_proto::codehost::Review) -> Result<String, KeltaError> {
         self.work.fix_checks(review).await
     }
@@ -974,6 +977,12 @@ impl WorkHost for CoreWorkHost {
         if let Some(core) = self.0.upgrade() {
             core.server.release_http();
         }
+    }
+    fn mcp_tools(&self) -> Vec<String> {
+        self.0
+            .upgrade()
+            .map(|c| kelta_server::session_tool_names(&c.settings(None).claude))
+            .unwrap_or_default()
     }
     async fn run_blocking(&self, ev: &BusEvent) -> Result<BlockingOutcome, KeltaError> {
         let core = self.0.upgrade().ok_or_else(|| KeltaError::internal("core is shutting down"))?;

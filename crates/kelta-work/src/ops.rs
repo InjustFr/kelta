@@ -336,7 +336,7 @@ impl WorkService {
         let mut j = self.load_journal(&item.id);
         let run = self.ensure_claude_run(&item, &mut j)?;
         let port = self.http_port(&env.settings).await;
-        if let Err(e) = self.write_claude_files(&env, &item, &j, &run, session, port) {
+        if let Err(e) = self.write_claude_files(&env, &item, &j, &run, session, port).await {
             self.release_port(port);
             return Err(e);
         }

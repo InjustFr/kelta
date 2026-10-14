@@ -608,6 +608,11 @@ impl CoreApi for FakeCore {
         self.overridden("review").and_then(Result::ok)
     }
 
+    async fn cached_review(&self, url: &str) -> Option<crate::codehost::Review> {
+        self.record("cached_review", serde_json::json!({ "url": url }));
+        self.overridden("cached_review").and_then(Result::ok)
+    }
+
     async fn work_link_pr(
         &self,
         project: &ProjectId,

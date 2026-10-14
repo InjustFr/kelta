@@ -483,6 +483,9 @@ impl WorkHost for Host {
         Ok(4242)
     }
     fn release_http(&self) {}
+    fn mcp_tools(&self) -> Vec<String> {
+        Vec::new()
+    }
     async fn run_blocking(&self, ev: &BusEvent) -> Result<BlockingOutcome, KeltaError> {
         assert_eq!(ev.name, "ticket.before_start");
         Ok(if self.veto {
@@ -629,8 +632,18 @@ async fn resume_respawns_exited_claude_with_continue_fallback() {
     let item = w.start(plan).await.unwrap();
     let first = fx.spawned_of(|k| *k == SessionKind::Claude)[0].id.clone();
     fx.core.exit_session(&first, 0);
+    assert!(!fx.context_md().contains("Commits on the branch"), "nothing ahead at start");
+    // Since the last session: one commit, one uncommitted file.
+    std::fs::write(item.worktree.join("done.txt"), "x\n").unwrap();
+    git(&item.worktree, &["add", "done.txt"]);
+    git(&item.worktree, &["commit", "-q", "-m", "since last session"]);
+    std::fs::write(item.worktree.join("wip.txt"), "y\n").unwrap();
 
     let resumed = w.resume(&item.id).await.unwrap();
+    let md = fx.context_md();
+    assert!(md.contains("- Commits on the branch not in origin/main, newest first:\n  - "), "{md}");
+    assert!(md.contains(" since last session\n"), "{md}");
+    assert!(md.contains("- Uncommitted changes:\n  - wip.txt\n"), "{md}");
     let claude_args = |fx: &Fx| -> Vec<Vec<String>> {
         fx.core
             .calls()
@@ -878,8 +891,19 @@ async fn link_scratch_item_to_a_ticket() {
         .find(|c| c.method == "session_spawn" && c.args["kind"]["type"] == "claude");
     let argv: Vec<String> = serde_json::from_value(spawn.unwrap().args["args"].clone()).unwrap();
     let settings = argv.windows(2).find(|w| w[0] == "--settings").map(|w| w[1].clone()).unwrap();
-    let md = std::fs::read_to_string(std::path::Path::new(&settings).with_file_name("ticket.md")).unwrap();
+    let ticket_md = std::path::Path::new(&settings).with_file_name("ticket.md");
+    let md = std::fs::read_to_string(&ticket_md).unwrap();
     assert!(md.starts_with("# SHOP-141"), "{md}");
+    // Resumed after its Claude exited: context.md names the linked ticket and its ticket.md.
+    assert!(!fx.context_md().contains("- Ticket:"), "a scratch start has no ticket line");
+    fx.core.exit_session(&fx.spawned_of(|k| *k == SessionKind::Claude)[0].id, 0);
+    w.resume(&a.id).await.unwrap();
+    let ctx = fx.context_md();
+    assert!(ctx.contains("- Ticket: SHOP-141 — "), "{ctx}");
+    assert!(
+        ctx.contains(&format!("- Full ticket (description and recent comments): {}", ticket_md.display())),
+        "{ctx}"
+    );
 
     // With a PR and side effects: on_start (assign + In Progress) then on_pr (In Review).
     let b = w.start(w.plan(&project(), scratch("Speed up search")).await.unwrap()).await.unwrap();
