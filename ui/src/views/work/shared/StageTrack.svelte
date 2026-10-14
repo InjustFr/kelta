@@ -1,6 +1,7 @@
 <script lang="ts">
   // The stage track (#399): Ticket to Deploy. The line runs to the furthest stage reached, the mark sits
-  // where the item is now and its shape says whose move it is. Now, Tickets and Reviews rows share it.
+  // where the item is now and its shape says whose move it is. Now, Tickets and Reviews rows share it;
+  // `labels` names every stage under its dot (#438).
   import { msg, t } from '$lib/i18n/index.svelte';
 
   import { STAGES, type Mark, type Stage } from '../stage';
@@ -9,9 +10,11 @@
     stage: Stage;
     /** The selected row names its stage under the mark. */
     named?: boolean;
+    /** The desk header and the Queue brief name all six stages, the current one bold (#438). */
+    labels?: boolean;
   }
 
-  let { stage, named = false }: Props = $props();
+  let { stage, named = false, labels = false }: Props = $props();
 
   const WHOSE: Record<Mark, string> = {
     you: msg('your move'),
@@ -34,21 +37,41 @@
   );
 </script>
 
-<span class="track" class:named role="img" aria-label={label} title={label} data-mark={stage.mark}>
-  <span class="line" class:unconfirmed={stage.unconfirmed} style:width={pct(stage.reached)}></span>
-  {#each STAGES as _, i (i)}<i class:past={!stage.unconfirmed && i <= stage.reached} style:left={pct(i)}
-    ></i>{/each}
-  <span class="mark {stage.mark}" style:left={pct(stage.at)}></span>
-  {#if named}<span
-      class="here"
-      class:first={stage.at === 0}
-      class:last={stage.at === last}
-      style:left={pct(stage.at)}
-      >{stage.unconfirmed
-        ? t('{stage}, per the tracker', { stage: t(STAGES[stage.at]!) })
-        : t(STAGES[stage.at]!)}</span
-    >{/if}
-</span>
+{#if labels}
+  <!-- One column per stage: a long name widens its column instead of running into the next (#438). -->
+  <span class="track labelled" role="img" aria-label={label} title={label} data-mark={stage.mark}>
+    {#each STAGES as name, i (i)}<span class="stop"
+        ><span class="dot"
+          >{#if i > 0}<span
+              class="seg l"
+              class:past={i <= stage.reached}
+              class:unconfirmed={stage.unconfirmed}
+            ></span>{/if}{#if i < last}<span
+              class="seg r"
+              class:past={i < stage.reached}
+              class:unconfirmed={stage.unconfirmed}
+            ></span>{/if}<i class:past={!stage.unconfirmed && i <= stage.reached} style:left="50%"
+          ></i>{#if i === stage.at}<span class="mark {stage.mark}" style:left="50%"></span>{/if}</span
+        ><span class="name" class:now={i === stage.at}>{t(name)}</span></span
+      >{/each}
+  </span>
+{:else}
+  <span class="track" class:named role="img" aria-label={label} title={label} data-mark={stage.mark}>
+    <span class="line" class:unconfirmed={stage.unconfirmed} style:width={pct(stage.reached)}></span>
+    {#each STAGES as _, i (i)}<i class:past={!stage.unconfirmed && i <= stage.reached} style:left={pct(i)}
+      ></i>{/each}
+    <span class="mark {stage.mark}" style:left={pct(stage.at)}></span>
+    {#if named}<span
+        class="here"
+        class:first={stage.at === 0}
+        class:last={stage.at === last}
+        style:left={pct(stage.at)}
+        >{stage.unconfirmed
+          ? t('{stage}, per the tracker', { stage: t(STAGES[stage.at]!) })
+          : t(STAGES[stage.at]!)}</span
+      >{/if}
+  </span>
+{/if}
 
 <style>
   .track {
@@ -158,5 +181,74 @@
 
   .here.last {
     translate: -100% 0;
+  }
+
+  .labelled {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    height: auto;
+    margin-inline: 0;
+    container-type: inline-size;
+  }
+
+  .labelled::before {
+    content: none;
+  }
+
+  .stop {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+  }
+
+  .dot {
+    position: relative;
+    align-self: stretch;
+    height: 18px;
+  }
+
+  .seg {
+    position: absolute;
+    top: 50%;
+    width: 50%;
+    border-top: 1px dashed var(--k-border-strong);
+  }
+
+  .seg.l {
+    left: 0;
+  }
+
+  .seg.r {
+    right: 0;
+  }
+
+  .seg.past {
+    margin-top: -1px;
+    border-top: 2px solid var(--k-fg-subtle);
+  }
+
+  .seg.past.unconfirmed {
+    border-top-style: dotted;
+  }
+
+  .name {
+    padding-inline: 2px;
+    font-size: var(--k-font-size-xs);
+    line-height: 1;
+    white-space: nowrap;
+    color: var(--k-fg-subtle);
+  }
+
+  .name.now {
+    color: var(--k-fg);
+    font-weight: var(--k-weight-strong);
+  }
+
+  /* Narrow: the other names go before the dots do; the current one stays. */
+  @container (max-width: 260px) {
+    .name:not(.now) {
+      display: none;
+    }
   }
 </style>

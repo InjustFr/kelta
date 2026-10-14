@@ -21,9 +21,16 @@
   import { t, tn } from '$lib/i18n/index.svelte';
   import { Button, Kbd, Spinner } from '$lib/ui';
 
+  import type { Stage } from '../stage';
+  import StageTrack from './StageTrack.svelte';
+
   interface Props {
     id?: string;
+    /** Next to the id. */
+    project?: string | null;
     title: string;
+    /** The labelled stage track under the title (#438). */
+    stage?: Stage;
     /** Where it stands, in a sentence. */
     where?: string;
     /** Filled, first. */
@@ -49,7 +56,9 @@
 
   let {
     id,
+    project = null,
     title,
+    stage,
     where = '',
     primary = null,
     quiet = false,
@@ -84,8 +93,12 @@
 
 <aside class="brief" aria-label={title} data-testid={testid}>
   <div class="head">
-    {#if id}<span class="id">{id}</span>{/if}
+    {#if id || project}<span class="id"
+        >{#if id}<span class="key">{id}</span>{/if}{#if project}<span class="project">{project}</span
+          >{/if}</span
+      >{/if}
     <h3>{title}</h3>
+    {#if stage}<div class="track"><StageTrack {stage} labels /></div>{/if}
     {#if where}<p class="where">{where}</p>{/if}
     {@render sub?.()}
   </div>
@@ -149,11 +162,21 @@
   }
 
   .id {
-    display: block;
+    display: flex;
+    gap: var(--k-space-3);
     margin-bottom: var(--k-space-1);
-    font-family: var(--k-font-mono);
     font-size: var(--k-font-size-sm);
     color: var(--k-fg-muted);
+  }
+
+  .key {
+    font-family: var(--k-font-mono);
+  }
+
+  .track {
+    margin-block: var(--k-space-3) var(--k-space-2);
+    /* The mark's halo takes the brief's background. */
+    --track-bg: var(--k-bg-elev);
   }
 
   h3 {
