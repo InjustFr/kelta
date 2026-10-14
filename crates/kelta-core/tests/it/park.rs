@@ -115,6 +115,31 @@ async fn park_frees_claude_and_reopen_resumes_the_conversation() {
     panic!("parked_at not cleared after the resume");
 }
 
+#[tokio::test]
+async fn a_closed_dormant_claude_frees_its_id_but_live_sessions_keep_theirs() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let item = seed(&h, tmp.path()).await;
+    h.core.session_apply_hook(&SessionId::new(SID), ch(S::Done)).await.unwrap();
+    h.core.work_park(&item.id, false).await.unwrap();
+    let sid = SessionId::new(SID);
+    assert_eq!(lifecycle(&h, SID), Lifecycle::Dormant);
+
+    h.core.session_kill(&sid, false).await.unwrap();
+    assert!(h.core.session_get(&sid).is_none());
+    let spawn = || req(SID, SessionKind::Claude, "claude", &["--resume", CLAUDE_UUID], RestorePolicy::None);
+    h.core.session_spawn(spawn()).await.expect("the closed session's id is free again");
+    assert_eq!(lifecycle(&h, SID), Lifecycle::Live);
+
+    // Two live sessions never share an id, nor a sid8 (same last 8 hex chars).
+    let e = h.core.session_spawn(spawn()).await.unwrap_err();
+    assert!(e.message.contains("already in use"), "{}", e.message);
+    let same_sid8 =
+        req("01928f6e-0000-7a10-9c3d-5e6f70819203", SessionKind::Claude, "claude", &[], RestorePolicy::None);
+    let e = h.core.session_spawn(same_sid8).await.unwrap_err();
+    assert!(e.message.contains("already in use"), "{}", e.message);
+}
+
 #[tokio::test(start_paused = true)]
 async fn auto_park_only_after_done_and_seen_and_input_restarts_it() {
     let tmp = tempfile::tempdir().unwrap();
