@@ -42,6 +42,18 @@ test('hides the rail, holds background toasts and restores the layout with one s
   await expect(bar.getByTestId('tab-plus')).toBeVisible();
 });
 
+test('Leave focus shows the focus chord and that chord leaves from a focused pane', async ({ page }) => {
+  await boot(page);
+  await dispatch(page, 'view.focus');
+  const leave = page.getByTestId('work-leave-focus');
+  await expect(leave.locator('kbd')).toHaveCount(1);
+  await expect(leave.locator('kbd')).toHaveAttribute('aria-label', /shift\+f$/);
+  await expect(leave).toHaveAttribute('title', /Esc Esc outside a terminal/);
+  await page.keyboard.press('Control+Shift+F');
+  await expect(page.getByTestId('work-leave-focus')).toHaveCount(0);
+  await expect(page.getByTestId('rail')).toBeVisible();
+});
+
 test('Leave focus in the work header leaves it', async ({ page }) => {
   await boot(page);
   await dispatch(page, 'view.focus');

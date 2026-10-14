@@ -9,6 +9,8 @@ import { findContent } from '$lib/layout';
 import { layout, plugins, projects, reviews, sessions, tickets, toasts, ui, work } from '$lib/stores';
 import { idle } from '$lib/stores/loadable';
 
+import { focus } from '../../shell/focus.svelte';
+import { chordFor } from '../../shell/labels';
 import { story } from './story/panel.svelte';
 import { workUi } from './ui.svelte';
 import WorkContext from './WorkContext.svelte';
@@ -73,6 +75,24 @@ describe('work tab header', () => {
     // Status, PR, git and cost moved to the Story panel (#428).
     for (const id of ['work-status', 'work-phase', 'work-pr', 'ahead', 'work-branch'])
       expect(screen.queryByTestId(id)).toBeNull();
+  });
+
+  it('the primary shows the work.start chord; Leave focus shows the view.focus chord, not Esc Esc (#445)', async () => {
+    mountHeader(item(3));
+    const primary = await screen.findByTestId('work-primary');
+    expect(chordFor('work.start')).toBeTruthy();
+    expect(primary.querySelector('kbd')?.getAttribute('aria-label')).toBe(chordFor('work.start'));
+    expect(screen.queryByTestId('work-leave-focus')).toBeNull();
+
+    focus.on = true;
+    try {
+      const leave = await screen.findByTestId('work-leave-focus');
+      const keys = [...leave.querySelectorAll('kbd')].map((k) => k.getAttribute('aria-label'));
+      expect(keys).toEqual([chordFor('view.focus')]);
+      expect(leave.title).toContain('or Esc Esc outside a terminal');
+    } finally {
+      focus.on = false;
+    }
   });
 
   it('the mark follows the phase: to review is my move, a failed start is broken', async () => {
