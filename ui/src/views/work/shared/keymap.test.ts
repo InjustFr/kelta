@@ -29,4 +29,11 @@ describe('one verb per letter (#417)', () => {
     }
     expect(wrong).toEqual([]);
   });
+
+  it('b marks in every list that starts tickets, Space is the side panel in every list (#440)', () => {
+    const verbOf = (list: string, key: string) =>
+      LISTS[list]!.find(([keys]) => keysOf(keys).includes(key))?.[2];
+    for (const list of ['queue', 'tickets']) expect(verbOf(list, 'b')).toBe('mark');
+    for (const list of Object.keys(LISTS)) expect(verbOf(list, 'space')).toBe('panel');
+  });
 });

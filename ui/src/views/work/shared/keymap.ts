@@ -1,4 +1,4 @@
-// One verb per letter across the Queue, Tickets and Reviews (#417, FLOW §3.3): each list's keys, as its
+// One verb per letter across the Queue, Tickets and Reviews (#417, #440, FLOW §3.3): each list's keys, as its
 // `?` dialog and hint line show them, tagged with the verb of the shared table. keymap.test.ts holds
 // every list to that table, so a letter learned in one list means the same in the next.
 import { msg } from '$lib/i18n/index.svelte';
@@ -16,7 +16,9 @@ export type Verb =
   | 'filter'
   | 'keys'
   | 'mark_reviewed'
-  | 'refresh';
+  | 'refresh'
+  | 'mark'
+  | 'panel';
 
 /** The table: what each of these keys means in every list (a list may leave one unbound). */
 export const VERB_OF: Readonly<Record<string, Verb>> = {
@@ -32,6 +34,8 @@ export const VERB_OF: Readonly<Record<string, Verb>> = {
   '?': 'keys',
   'shift+r': 'mark_reviewed',
   'mod+shift+r': 'refresh',
+  b: 'mark',
+  space: 'panel',
 };
 
 /** `[keys, label, verb]`: alternatives split by a space (`'s shift+s'`), a sequence by `then`. */
@@ -53,7 +57,8 @@ export const queueKeys = (): ListKey[] => [
   ['e', msg("Expand Claude's message"), 'expand'],
   ['shift+r', msg('Mark reviewed'), 'mark_reviewed'],
   ['g', msg('Go to')],
-  ['space', msg('Mark ticket')],
+  ['b', msg('Mark ticket'), 'mark'],
+  ['space', msg('Show or hide the brief'), 'panel'],
   startMarked(),
   ['mod+shift+r', msg('Refresh'), 'refresh'],
 ];
@@ -67,12 +72,12 @@ export const ticketsKeys = (enter: string): ListKey[] => [
   ['/', msg('Filter'), 'filter'],
   ['g', msg('Open detail')],
   ['w', msg('Run workflow')],
-  ['space', msg('Split')],
+  ['space', msg('Split'), 'panel'],
   ['shift+enter', msg('Own pane')],
   ['1 2 3', msg('Who')],
   startMarked(),
   ['x', msg('Select')],
-  ['b', msg('Mark for batch start')],
+  ['b', msg('Mark for batch start'), 'mark'],
   ['p shift+p', msg('Pull request, in browser')],
   ['f then s', msg('Current sprint')],
   ['f then v', msg('Source')],
@@ -92,6 +97,7 @@ export const reviewsKeys = (): ListKey[] => [
   ['v', msg('View changes'), 'view'],
   ['/', msg('Filter'), 'filter'],
   ['c', msg('Comment'), 'comment'],
+  ['space', msg('Show or hide the detail'), 'panel'],
   ['shift+enter', msg('Own pane')],
   ['n', msg('Nudge (my PRs)')],
   ['d', msg('Mark ready / draft (my PRs)')],

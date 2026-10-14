@@ -226,7 +226,9 @@ describe('TicketsPane board', () => {
     // a ticket whose source maps to no project, as the backend lists them
     for (const l of Object.values(tickets.lists))
       for (const i of l.data?.items ?? []) if (i.ticket.ref.key === 'SHOP-151') i.project_ids = [];
-    await press(' ');
+    await press(' '); // #440: Space is the side panel's, `b` marks
+    expect(batch.list).toEqual([]);
+    await press('b');
     expect(batch.list.map((m) => [m.ref.key, m.projectId])).toEqual([['SHOP-151', null]]);
   });
 });

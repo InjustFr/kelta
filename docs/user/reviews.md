@@ -47,7 +47,7 @@ In the list:
 | `j` `k` | move the selection |
 | `Enter` | focus the detail |
 | `Shift+Enter` | open the detail as its own pane |
-| `Space` | focus the detail |
+| `Space` | show or hide the detail |
 | `/` | filter by title, repository, number, author, branch or ticket |
 | `s` | review locally |
 | `v` | view the changes: someone else's pull request, the whole diff of its local review (review it locally first); yours, the changes since your last look |
