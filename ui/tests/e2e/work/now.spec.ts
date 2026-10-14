@@ -88,8 +88,8 @@ test('the work menu opens from a terminal with its chord; letters never move', a
   await page.keyboard.press('Control+Period');
   const menu = page.getByRole('menu', { name: 'Work' });
   await expect(menu).toBeVisible();
-  // 8 runnable entries headed by object, and Mark reviewed under "Not available now" (#439).
-  await expect(menu.getByRole('menuitem')).toHaveCount(9);
+  // 9 runnable entries headed by object (incl. Start another PR, #456), and Mark reviewed under "Not available now" (#439).
+  await expect(menu.getByRole('menuitem')).toHaveCount(10);
   await expect(menu.getByText('Ticket SHOP-142')).toBeVisible();
   await expect(menu.getByText('Not available now (1)')).toBeVisible();
   await expect(menu.locator('[aria-disabled="true"]')).toHaveCount(1);

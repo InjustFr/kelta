@@ -77,6 +77,8 @@ pub struct WorkService {
     item_locks: Mutex<HashMap<WorkItemId, Arc<tokio::sync::Mutex<()>>>>,
     /// Items whose PR Claude is creating through MCP (names the holder of a busy item lock).
     shipping: Mutex<HashSet<WorkItemId>>,
+    /// Serializes `pr_ended` across items, so the last merged PR of a ticket sees the others as done.
+    merge_lock: tokio::sync::Mutex<()>,
     /// Serializes the existing-item check + insert of `start` (no twin items for one source).
     start_lock: tokio::sync::Mutex<()>,
     /// Serializes store writes; held only around load-modify-save (`save`, `update`).
@@ -108,6 +110,7 @@ impl WorkService {
             versions: Mutex::new(HashMap::new()),
             item_locks: Mutex::new(HashMap::new()),
             shipping: Mutex::new(HashSet::new()),
+            merge_lock: tokio::sync::Mutex::new(()),
             start_lock: tokio::sync::Mutex::new(()),
             write_lock: tokio::sync::Mutex::new(()),
             fetched: Mutex::new(HashMap::new()),

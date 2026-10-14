@@ -99,5 +99,5 @@ export function siblingKey(item: WorkItem): string {
 export function sessionLabel(s: SessionInfo): string {
   const item = s.work_item_id ? work.get(s.work_item_id) : null;
   const name = sessionTitle(s);
-  return item ? `${workKey(item)} ${name}` : name;
+  return item ? `${siblingKey(item)} ${name}` : name;
 }

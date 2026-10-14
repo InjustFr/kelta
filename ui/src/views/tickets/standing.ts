@@ -7,6 +7,7 @@ import { sessions, tickets, work } from '$lib/stores';
 import { ticketKey } from '$lib/stores/tickets.svelte';
 
 import { waits, zoneOf } from '../inbox/groups';
+import { ticketWork } from '../work/startWork';
 import { waitingStatuses } from '../inbox/nextUp.svelte';
 import { phaseNow, prOf } from '../work/live';
 import { outsidePhase, type Phase } from '../work/phase';
@@ -75,7 +76,13 @@ export function assignedToMe(item: Pick<TicketItem, 'ticket'>, mine: readonly Ti
 /** `standing` from the stores: the ticket's live work item and its source's waiting statuses; without
  *  work, a Claude session Kelta did not start on the ticket (#345) puts it with Claude. */
 export function standingNow(item: TicketItem, mine: boolean): Standing {
-  const w = work.forTicket(item.ticket.ref) ?? (item.work_item_id ? work.get(item.work_item_id) : null);
+  // The ticket sits at its least advanced item (#456).
+  const at = (w: WorkItem): number => workStage(w, phaseNow(w), prOf(w), false).at;
+  const lagging = ticketWork(item.ticket.ref).reduce<WorkItem | null>(
+    (a, w) => (!a || at(w) < at(a) ? w : a),
+    null,
+  );
+  const w = lagging ?? (item.work_item_id ? work.get(item.work_item_id) : null);
   const live = w && w.state.kind !== 'finished' ? w : null;
   const key = ticketKey(item.ticket.ref);
   const outside = live ? null : sessions.elsewhere.find((o) => o.ticket && ticketKey(o.ticket) === key);
