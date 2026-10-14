@@ -23,7 +23,9 @@ export class ToastsStore {
   list = $state<ToastEntry[]>([]);
   #nextId = 1;
   /** Focus mode (#421): the background info toasts held for its summary; `null` = not focused. */
-  held: string[] | null = null;
+  held = $state<string[] | null>(null);
+  /** The desktop notifications the backend held meanwhile (`focus.held`, #442). */
+  heldRemote = $state(0);
   /** The view on screen, stamped on each toast (wired by ToastHost: the stores know no layout). */
   where: () => string | null = () => null;
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- non-reactive bookkeeping
@@ -113,5 +115,6 @@ export class ToastsStore {
   apply(ev: UiEvent): void {
     // A toast asking a choice stays until answered.
     if (ev.type === 'toast') this.push(ev.toast, { view: null, ...(ev.toast.secondary && { timeoutMs: 0 }) });
+    else if (ev.type === 'focus.held') this.heldRemote = ev.count;
   }
 }

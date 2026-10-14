@@ -106,6 +106,8 @@ test.describe('keys', () => {
     await expect(panel).toBeVisible();
     await expect(panel.locator('[data-group="work"] h5')).toHaveText('This work: SHOP-142');
     await expect(panel.locator('[data-group="panes"]')).toContainText('Split right');
+    await expect(panel.locator('[data-group="work"] dt').first()).toHaveText('↵');
+    await expect(panel.locator('[data-group="goto"] dt')).toContainText(['0', '1–9']);
     await page.waitForTimeout(1200);
     await expect(page.getByTestId('status-prefix')).toBeVisible();
     await page.keyboard.press('Escape');
@@ -123,11 +125,22 @@ test.describe('keys', () => {
     await page.keyboard.press('Control+Shift+Space');
     const panel = page.getByTestId('which-key');
     await expect(panel).toBeVisible();
-    await expect(panel.locator('[data-group="goto"]')).toContainText('Open tickets');
+    await expect(panel.locator('[data-group="goto"]')).toContainText('Tickets');
     await expect(panel.locator('[data-group="work"]')).toHaveCount(0);
     await page.keyboard.press('?');
     await expect(panel).toHaveCount(0);
     await expect(page.locator('[data-testid="settings-section"][data-section="keys"]')).toBeVisible();
+  });
+
+  test('which-key panel: the next step is labelled by the phase (SHOP-155 to review)', async ({ page }) => {
+    await boot(page);
+    for (let i = 0; i < 3; i++) await dispatch(page, 'attention.next'); // billing, billing error, then SHOP-155
+    await expect(page.getByTestId('work-header')).toHaveAttribute('data-phase', 'to_review');
+    await page.locator('[data-testid="pane"][data-focused="true"] .xterm-helper-textarea').focus();
+    await page.keyboard.press('Control+Shift+Space');
+    await expect(page.getByTestId('which-key').locator('[data-group="work"] dd').first()).toHaveText(
+      'Review changes',
+    );
   });
 
   test('prefix pane actions: split and zoom', async ({ page }) => {

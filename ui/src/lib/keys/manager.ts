@@ -15,6 +15,7 @@
 
 import type { KeysSettings } from '$lib/gen';
 import { ACTIONS, type ActionContext } from '$lib/gen/actions';
+import { msg } from '$lib/i18n/index.svelte';
 import { currentPlatform } from '$lib/ui/format';
 
 import {
@@ -88,8 +89,10 @@ export type HintGroup = 'goto' | 'work' | 'panes' | 'tools';
 export interface PrefixHint {
   key: string;
   action: string;
-  /** Catalog label (untranslated), the action id for plugin commands. */
+  /** Untranslated, from `HINT_TABLE`. */
   label: string;
+  /** `key` is a chord (a tool's), not a key after the prefix. */
+  chord?: true;
 }
 
 const DEFAULT_PREFIX = 'ctrl+shift+space';
@@ -98,14 +101,39 @@ const DEFAULT_HINT_MS = 400;
 /** `?` in the which-key panel, when no prefix binding takes it: Settings › Keys lists every key. */
 const KEY_LIST: Binding = { action: 'settings.open', context: 'global', args: { section: 'keys' } };
 const HINT_GROUPS: readonly HintGroup[] = ['goto', 'work', 'panes', 'tools'];
-const NOT_THIS_WORK = new Set(['work.new', 'work.start', 'work.finish_merged']);
 
-function hintGroup(action: string): HintGroup {
-  if (/^(project|inbox|tab|tickets|reviews|attention|nav)\./.test(action)) return 'goto';
-  if (/^(pane|session|terminal|editor)\./.test(action)) return 'panes';
-  if (action.startsWith('work.') && !NOT_THIS_WORK.has(action)) return 'work';
-  return 'tools';
-}
+/**
+ * The which-key panel (#436): per group at most 6 lines in plain words. A line is the actions that
+ * share it (several: one `first–last` key range) and its label; the key comes from the effective prefix
+ * binding, so a rebind keeps its place. Every other prefix binding stays bound but is not listed (`?`).
+ * `tools` has the configured tools (WhichKey) before these.
+ */
+export const HINT_TABLE: Record<HintGroup, readonly { actions: readonly string[]; label: string }[]> = {
+  goto: [
+    { actions: ['inbox.open'], label: msg('Queue') },
+    { actions: ['attention.next'], label: msg('Next that needs you') },
+    { actions: ['tickets.open'], label: msg('Tickets') },
+    { actions: ['reviews.open'], label: msg('Pull requests') },
+    { actions: ['palette.open'], label: msg('Search') },
+    { actions: Array.from({ length: 9 }, (_, i) => `project.goto.${i + 1}`), label: msg('Work row') },
+  ],
+  work: [
+    { actions: ['work.next'], label: msg('Next step') },
+    { actions: ['work.go_claude'], label: msg('Claude pane') },
+    { actions: ['work.review_delta'], label: msg('Changes since you looked') },
+    { actions: ['work.ship'], label: msg('Ship / Push') },
+    { actions: ['work.edit_note'], label: msg('Note for later') },
+  ],
+  panes: [
+    { actions: ['pane.split_right'], label: msg('Split right') },
+    { actions: ['pane.split_down'], label: msg('Split down') },
+    { actions: ['pane.zoom'], label: msg('Zoom pane') },
+    { actions: ['pane.close'], label: msg('Close pane') },
+    { actions: ['view.focus'], label: msg('Focus mode') },
+  ],
+  tools: [{ actions: ['settings.open'], label: msg('Settings') }],
+};
+
 const ARROW_PREFIX_KEYS: Record<string, string> = {
   'pane.focus_left': 'ArrowLeft',
   'pane.focus_down': 'ArrowDown',
@@ -229,20 +257,23 @@ export class KeyManager {
   prefixHints(onWork: boolean): { prefix: string; groups: { group: HintGroup; hints: PrefixHint[] }[] } {
     const compiled = this.#compile();
     const ctx = this.#armedCtx;
-    const by = new Map<HintGroup, PrefixHint[]>();
-    for (const [key, binding] of compiled.prefixKeys) {
-      if (key.startsWith('Arrow')) continue; // twins of h/j/k/l
-      if (ctx && !this.#runnable(binding, ctx)) continue;
-      const group = hintGroup(binding.action);
-      if (group === 'work' && !onWork) continue;
-      const label = ACTIONS.find((a) => a.id === binding.action)?.label ?? binding.action;
-      by.set(group, [...(by.get(group) ?? []), { key, action: binding.action, label }]);
-    }
-    const groups = HINT_GROUPS.flatMap((group) => {
-      const hints = by.get(group);
-      return hints ? [{ group, hints }] : [];
-    });
-    return { prefix: compiled.prefixText, groups };
+    const keyOf = (action: string): string | undefined => {
+      for (const [key, b] of compiled.prefixKeys) {
+        if (b.action !== action || key.startsWith('Arrow')) continue; // Arrows: twins of h/j/k/l
+        if (!ctx || this.#runnable(b, ctx)) return key === 'Enter' ? '↵' : key;
+      }
+      return undefined;
+    };
+    const groups = HINT_GROUPS.filter((g) => g !== 'work' || onWork).map((group) => ({
+      group,
+      hints: HINT_TABLE[group].flatMap(({ actions, label }) => {
+        const keys = actions.flatMap((a) => keyOf(a) ?? []);
+        if (keys.length === 0) return [];
+        const key = keys.length > 1 ? `${keys[0]}–${keys.at(-1)}` : keys[0]!;
+        return [{ key, action: actions[0]!, label }];
+      }),
+    }));
+    return { prefix: compiled.prefixText, groups: groups.filter((g) => g.hints.length > 0) };
   }
 
   /** Drops the compiled bindings (call when `[keys]`, tools or plugins change). */

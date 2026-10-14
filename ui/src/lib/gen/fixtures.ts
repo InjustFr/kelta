@@ -2219,8 +2219,13 @@ export const settingsDefault: Settings = {
       "tickets.open": "t",
       "toast.run_last": "o",
       "view.focus": "f",
+      "work.edit_note": "e",
+      "work.go_claude": "g",
       "work.menu": ".",
       "work.new": "w",
+      "work.next": "Enter",
+      "work.review_delta": "v",
+      "work.ship": "d",
       "work.start": "s"
     },
     "prefix_hint_ms": 400,
@@ -3918,6 +3923,11 @@ export const uiEventCtlCommand: UiEvent = {
   "type": "ctl.command"
 };
 
+export const uiEventFocusHeld: UiEvent = {
+  "count": 2,
+  "type": "focus.held"
+};
+
 export const uiEventUiOpen: UiEvent = {
   "project_id": "shop",
   "request": {
@@ -4109,6 +4119,7 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "ui_event_toast": uiEventToast,
   "ui_event_plugin_event": uiEventPluginEvent,
   "ui_event_ctl_command": uiEventCtlCommand,
+  "ui_event_focus_held": uiEventFocusHeld,
   "ui_event_ui_open": uiEventUiOpen,
   "ui_event_workflow_updated": uiEventWorkflowUpdated,
   "ui_event_quit_requested": uiEventQuitRequested,

@@ -188,6 +188,11 @@
   "Toggle sidebar": "Afficher ou masquer la barre latérale",
   "Focus mode": "Mode concentration",
   "While you were focused: {what}": "Pendant votre concentration : {what}",
+  "Leave focus": "Quitter la concentration",
+  "{n} updates held until you leave focus": {
+    "one": "{n} mise à jour en attente jusqu’à la fin de la concentration",
+    "other": "{n} mises à jour en attente jusqu’à la fin de la concentration"
+  },
   "Collapse sidebar": "Réduire la barre latérale",
   "Expand sidebar": "Déplier la barre latérale",
   "Sidebar width": "Largeur de la barre latérale",
@@ -2565,5 +2570,12 @@
   "Start work on a ticket": "Commencer le travail sur un ticket",
   "Review what Claude changed": "Relire ce que Claude a modifié",
   "No tickets?": "Pas de tickets ?",
-  "starts a branch and a Claude from one sentence.": "démarre une branche et un Claude à partir d’une phrase."
+  "starts a branch and a Claude from one sentence.": "démarre une branche et un Claude à partir d’une phrase.",
+  "Next that needs you": "Le prochain qui t’attend",
+  "Work row": "Ligne de travail",
+  "Claude pane": "Panneau Claude",
+  "Changes since you looked": "Changements depuis ton dernier coup d’œil",
+  "Ship / Push": "Livrer / Pousser",
+  "Note for later": "Note pour plus tard",
+  "Tools here": "Outils ici"
 }

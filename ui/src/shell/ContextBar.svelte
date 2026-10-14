@@ -2,7 +2,8 @@
   // The window's top bar (#248, #429, DESIGN §6.3): `‹ ›` (the jumplist), the breadcrumb of the selected
   // rail row (a drag region; none on a work tab, whose header above its panes names it,
   // views/work/WorkContext.svelte, #428), the search field opening the palette, the project scope of the
-  // global lists, the "needs you" chip and `+ New`. Custom decorations: it is also the window's title
+  // global lists, the "needs you" chip and `+ New`. Focus mode (#442) keeps `‹ ›`, the search field and a
+  // quiet chip. Custom decorations: it is also the window's title
   // bar (macOS traffic-light inset, or Kelta's own controls and resize handles). Native decorations: the
   // breadcrumb is the window title.
   import { t, tn } from '$lib/i18n/index.svelte';
@@ -19,6 +20,7 @@
   import { workTitle } from '../views/work/live';
   import { workKey } from '../views/work/phase';
   import { backTarget, type JumpLoc } from './jumplist';
+  import { focus } from './focus.svelte';
   import { chordFor, currentRun, runPhase } from './labels';
   import {
     activateProject,
@@ -181,7 +183,7 @@
     onclick={() => void dispatch('nav.forward')}
   />
 
-  {#if ui.settings || view || !item}
+  {#if !focus.on && (ui.settings || view || !item)}
     <span class="crumb" data-tauri-drag-region data-testid="context-crumb">
       {#if ui.settings}
         <span class="here" data-tauri-drag-region><Icon name="settings" size={14} /> {t('Settings')}</span>
@@ -214,7 +216,9 @@
     {#if searchChord}<span aria-hidden="true"><Kbd chord={searchChord} /></span>{/if}
   </button>
   <span class="spacer" data-tauri-drag-region></span>
-  {#if view && project && !ui.settings}
+  {#if focus.on}
+    <!-- Focus mode: only the search field and the call signal. -->
+  {:else if view && project && !ui.settings}
     <Button
       size="sm"
       variant="ghost"
@@ -231,7 +235,7 @@
     >
   {/if}
 
-  {#if runChip && session}
+  {#if runChip && session && !focus.on}
     {@const sid = session.id}
     <Button
       size="sm"
@@ -243,13 +247,13 @@
     >
   {/if}
 
-  <ScopeSelect />
+  {#if !focus.on}<ScopeSelect />{/if}
 
   {#if asking.length > 0}
     <Button
       size="sm"
       variant="ghost"
-      class="chip"
+      class="chip {focus.on ? 'quiet' : ''}"
       chord={chordFor('attention.next')}
       title={t('Claude needs you')}
       aria-haspopup={asking.length > 1 ? 'menu' : undefined}
@@ -259,18 +263,20 @@
     >
   {/if}
 
-  <Button
-    variant="ghost"
-    size="sm"
-    icon="plus"
-    class="plus"
-    aria-haspopup="menu"
-    data-testid="tab-plus"
-    onclick={(e) => {
-      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      plusMenu = { x: r.right - 220, y: r.bottom + 2 };
-    }}>{t('New')}</Button
-  >
+  {#if !focus.on}
+    <Button
+      variant="ghost"
+      size="sm"
+      icon="plus"
+      class="plus"
+      aria-haspopup="menu"
+      data-testid="tab-plus"
+      onclick={(e) => {
+        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        plusMenu = { x: r.right - 220, y: r.bottom + 2 };
+      }}>{t('New')}</Button
+    >
+  {/if}
 
   {#if custom && !mac}
     <span class="controls">
@@ -381,6 +387,16 @@
 
   .meta .sep {
     margin: 0 var(--k-space-2);
+  }
+
+  /* Focus mode's quiet chip: the lamp drawn as an outline, without its halo or pulse. */
+  .contextbar :global(.chip.quiet .lamp) {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--c);
+  }
+
+  .contextbar :global(.chip.quiet .lamp::after) {
+    display: none;
   }
 
   .spacer {

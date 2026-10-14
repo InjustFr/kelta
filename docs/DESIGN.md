@@ -23,7 +23,7 @@ Three places, one sidebar, five keys. Every screen is one of them; FLOW §1 says
 - **Sidebar of work** (`shell/ProjectRail.svelte`, §6.2): the three places, then each project's work items in the order they started; every other tab of a project folds into one row. It folds to its lamps while the Queue is shown, which lists the same work.
 - **Five keys** before any other: `↵` the next step, `⌘.` the actions of whatever is selected, `⌘K` find anything, `⌘J` the next thing that needs you, `⌘0` the Queue and back. The prefix (`⌃⇧Space`) reaches every action and, after a pause, shows the which-key panel (§6.6).
 - **Attention budget**: one call signal. The top bar's "needs you" chip counts only Claudes blocked on you, with `⌘J`; lit sidebar rows and lamps say the rest without asking. By default a finished Claude does not notify, a blocked one does (FLOW §2.3), and an info toast closes when you leave the view that raised it.
-- **Focus mode** (`view.focus`, `⇧⌘F`): the sidebar and the Story panel hide and the notifications about other work wait; a blocked Claude still calls. Leaving it sums up what waited in one toast.
+- **Focus mode** (`view.focus`, `⇧⌘F`): the sidebar and the Story panel hide and the notifications about other work wait; a blocked Claude still calls. The top bar keeps only `‹ ›`, the search field and the "needs you" chip in its quiet form (the lamp as an outline); the scope, `+ New` and the breadcrumb hide (§6.3). The work header adds a ghost **Leave focus** `Esc` `Esc` beside Actions. A pill at the bottom right counts what waits ("2 updates held until you leave focus"); leaving (`Esc` `Esc` or the button) sums it up in one toast and the pill goes.
 
 ## 2. Tokens
 
@@ -383,7 +383,7 @@ The sidebar lists work, not tabs: the three places, then each project's work ite
 - Breadcrumb: `▌project › row`: a 3px project-colour bar, the project name in `--k-fg-muted` 500, `›` in `--k-fg-subtle`, the row in `--k-fg` 600 (ellipsis). It is a pure drag region (double-click zooms the window), never clickable.
 - Search field: `search` icon, "Search or run…" and the `palette.open` chord, on `--k-well` with a 1px `--k-border` (`--k-border-strong` on hover), up to 320px; a click opens the palette (§6.6).
 - Scope: `All projects ▾` (`shell/ScopeSelect.svelte`), the one scope of the Queue, Tickets and Pull requests (§6.8). The lists' toolbars do not carry it.
-- "Needs you" chip, the one call signal: the Claudes blocked on you (the Queue's Claude needs you rows that are sessions), `n needs you` with its lamp and `⌘J` (`attention.next`); hidden at 0. One waiting: a click goes to it; several: a menu of them. Focus mode never hides it.
+- "Needs you" chip, the one call signal: the Claudes blocked on you (the Queue's Claude needs you rows that are sessions), `n needs you` with its lamp and `⌘J` (`attention.next`); hidden at 0. One waiting: a click goes to it; several: a menu of them. Focus mode never hides it: it goes quiet, the lamp drawn as an outline with no pulse.
 - `+ New`: a menu of **New work item** (`work.new`) and **New session** (`session.new`).
 - Claude session: `✻ name`, then the cwd and the model on the right. Terminal: `❯ title` (OSC 2) and the cwd. Home: `Home › ❯ zsh` and the cwd (`Home` alone on the welcome screen). A session running workflows adds a `⚙` chip that opens its runs.
 - A place (Queue, Tickets, Pull requests): its name, and on the right the "underneath" chip `‹ project › row` that leaves it. The place's own 40px `.k-toolbar` (filters) stays under the bar.
@@ -432,7 +432,7 @@ The sidebar lists work, not tabs: the three places, then each project's work ite
 - No title bar or close button: the 48px input (16px text) is the top edge, a hint line under the list names Move, Run and Close, Esc or the backdrop closes it. Query in mono. Results `--k-row-height` rows: 10px lamp slot (session and tab hits), 14px kind icon (no text label), title, meta, right-aligned kbd hint. Results are grouped, one header per group: with an empty query in the order Recent (the last places you were), Work items, Sessions, Projects, Actions, Tools, Commands, Tickets, Pull requests, Settings (every key, opening its section); with a query, groups in order of their best hit.
 - Prefixes narrow the groups: `#` Tickets, `!` Pull requests, `>` Actions, Commands and Tools, `,` Settings (`# 311`, `>split`).
 - Selected row: `--k-bg-selected` plus a 2px accent left bar.
-- **Which-key panel** (`shell/WhichKey.svelte`): after the prefix (`⌃⇧Space`) and a pause of `keys.prefix_hint_ms` (400ms) with no second key, a panel at the bottom of the window lists the keys that follow in groups: Go to, This work (`KEY`, on a work tab), Panes, Tools. The prefix stays armed until a key or `Esc`; `?` opens Settings › Keys.
+- **Which-key panel** (`shell/WhichKey.svelte`): after the prefix (`⌃⇧Space`) and a pause of `keys.prefix_hint_ms` (400ms) with no second key, a panel at the bottom of the window lists a curated few of the keys that follow, at most 6 per group in plain words: Go to, This work (`KEY`, on a work tab; `↵` carries the next step's label), Panes, Tools here. The table of groups and labels is `HINT_TABLE` in `lib/keys/manager.ts`. The prefix stays armed until a key or `Esc`; `?` opens Settings › Keys.
 
 ### 6.7 Sheets, dialogs, menus, toasts
 
