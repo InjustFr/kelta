@@ -4,9 +4,9 @@
 use std::path::PathBuf;
 
 use kelta_proto::error::KeltaError;
-use kelta_proto::ids::{ProjectId, SessionId};
+use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{FinishOpts, Lifecycle, RunClaim, RunState, WorkItem, WorkKind, WorkState};
-use kelta_proto::tracker::TicketRef;
+use kelta_proto::tracker::{StatusCategory, TicketRef};
 
 use crate::{WorkService, git};
 
@@ -133,7 +133,11 @@ impl WorkService {
         caller: Option<&SessionId>,
     ) -> Result<WorkItem, KeltaError> {
         let id = self.claimed(key, caller).await?.id;
-        self.update(&id, |w| {
+        self.end_claim(&id, sha).await
+    }
+
+    async fn end_claim(&self, id: &WorkItemId, sha: Option<String>) -> Result<WorkItem, KeltaError> {
+        self.update(id, |w| {
             let Some(r) = w.run.as_mut() else { return false };
             r.state = RunState::Done;
             r.sha = sha.or(r.sha.take());
@@ -142,7 +146,36 @@ impl WorkService {
         .await?;
         let opts =
             FinishOpts { remove_worktree: false, delete_branch: false, force: false, transition_to: None };
-        self.finish_impl(&id, opts).await
+        self.finish_impl(id, opts).await
+    }
+
+    /// Startup and Queue open (FLOW §3.6, #444): a claim no live run drives whose worktree is gone or
+    /// whose ticket is done in its tracker is released as `release_ticket` would, so it stops showing.
+    pub async fn finish_stale_claims(&self) -> Result<(), KeltaError> {
+        let core = self.api()?;
+        for w in self.store.list_items(None).await? {
+            let Some(r) = w.run.as_ref().filter(|_| w.state != WorkState::Finished) else { continue };
+            if r.state == RunState::Running && r.session_id.is_some() && !self.orphaned(r) {
+                continue;
+            }
+            let gone = !w.worktree.exists();
+            let done = !gone
+                && match &w.ticket {
+                    Some(t) => match core.tracker_for(&t.account).await {
+                        Ok(tr) => {
+                            tr.get(t).await.is_ok_and(|d| d.ticket.status.category == StatusCategory::Done)
+                        }
+                        Err(_) => false, // account error: the next check retries
+                    },
+                    None => false,
+                };
+            if (gone || done)
+                && let Err(e) = self.end_claim(&w.id, None).await
+            {
+                tracing::warn!(work = %w.id, error = %e.message, "stale claim not finished");
+            }
+        }
+        Ok(())
     }
 
     /// The claim's owner session is not Live (exited, Dormant after a restart, or gone): computed at

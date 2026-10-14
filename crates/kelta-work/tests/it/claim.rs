@@ -4,11 +4,12 @@
 use std::path::PathBuf;
 
 use crate::common::{Fx, git, has_git, project};
-use kelta_proto::api::WorkStore;
+use kelta_proto::api::{Tracker, WorkStore};
 use kelta_proto::error::ErrorCode;
 use kelta_proto::ids::{SessionId, WorkItemId};
 use kelta_proto::model::{Lifecycle, RunClaim, RunState, SessionInfo, WorkState};
 use kelta_proto::samples;
+use kelta_proto::tracker::TicketRef;
 
 fn run(sid: &str) -> RunClaim {
     RunClaim {
@@ -334,4 +335,51 @@ async fn the_callers_claim_wins_over_an_unowned_one_and_orphans_are_open_to_all(
     w.release("SHOP-142", None, None).await.unwrap(); // the unowned one
     let done = w.release("SHOP-142", None, Some(&SessionId::new("orch-b"))).await.unwrap();
     assert_eq!((done.id, done.state), (mine.id, WorkState::Finished));
+}
+
+#[tokio::test]
+async fn the_check_finishes_claims_no_live_run_will_release() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    session(&fx, "orch-a", "kelta-a6");
+    session(&fx, "orch-b", "kelta-b2");
+    let w = fx.service();
+    let p = project();
+    let tref = |n: u32| TicketRef { key: format!("SHOP-{n}"), id: format!("10{n}"), ..samples::ticket_ref() };
+
+    // Closed ticket, live owner: the run is still going, untouched.
+    let wt_closed = run_worktree(&fx, "feat/closed");
+    let closed = w.claim(&p, tref(142), Some(wt_closed.clone()), None, run("orch-a")).await.unwrap();
+    fx.tracker.close(&tref(142)).await.unwrap();
+    // No owner, worktree gone (ticket open).
+    let wt_gone = run_worktree(&fx, "feat/gone");
+    let unowned = RunClaim { session_id: None, ..run("x") };
+    let gone = w.claim(&p, tref(141), Some(wt_gone.clone()), None, unowned).await.unwrap();
+    git(&fx.repo, &["worktree", "remove", wt_gone.to_str().unwrap()]);
+    // Orphaned on an open ticket: stays, reads orphaned.
+    let wt_open = run_worktree(&fx, "feat/open");
+    let open = w.claim(&p, tref(143), Some(wt_open), None, run("orch-b")).await.unwrap();
+    fx.core.exit_session(&SessionId::new("orch-b"), 0);
+
+    w.finish_stale_claims().await.unwrap();
+    let state = |id: WorkItemId| {
+        let store = fx.store.clone();
+        async move { store.get_item(&id).await.unwrap().unwrap().state }
+    };
+    assert_eq!(state(closed.id.clone()).await, WorkState::Active, "live owner");
+    assert_eq!(run_state(&fx, &closed.id).await, RunState::Running);
+    assert_eq!(state(gone.id.clone()).await, WorkState::Finished, "worktree gone");
+    assert_eq!(state(open.id.clone()).await, WorkState::Active, "open ticket");
+    assert_eq!(shown(&w, &open.id).await.state, RunState::Orphaned);
+
+    // The owner dies without releasing: its closed ticket's claim is finished, worktree and branch kept.
+    fx.core.exit_session(&orch_a(), 0);
+    w.finish_stale_claims().await.unwrap();
+    assert_eq!(state(closed.id.clone()).await, WorkState::Finished);
+    assert_eq!(run_state(&fx, &closed.id).await, RunState::Done);
+    assert!(wt_closed.join("README.md").exists());
+    assert!(git(&fx.repo, &["branch", "--list", "feat/closed"]).contains("feat/closed"));
+    assert_eq!(state(open.id).await, WorkState::Active);
 }
