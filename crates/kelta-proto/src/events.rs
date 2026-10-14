@@ -135,6 +135,9 @@ pub enum UiEvent {
     /// It ended (`SessionEnd`) or its process is gone.
     #[serde(rename = "outside.removed")]
     OutsideRemoved { id: String },
+    /// Focus mode (#442): how many desktop notifications it holds so far, for the UI's held pill.
+    #[serde(rename = "focus.held")]
+    FocusHeld { count: u32 },
 }
 
 impl UiEvent {
@@ -160,6 +163,7 @@ impl UiEvent {
             Self::QuitRequested { .. } => "app.quit_requested",
             Self::OutsideUpdated { .. } => "outside.updated",
             Self::OutsideRemoved { .. } => "outside.removed",
+            Self::FocusHeld { .. } => "focus.held",
         }
     }
 }

@@ -188,6 +188,11 @@
   "Toggle sidebar": "Seitenleiste ein-/ausblenden",
   "Focus mode": "Fokusmodus",
   "While you were focused: {what}": "Während des Fokusmodus: {what}",
+  "Leave focus": "Fokusmodus verlassen",
+  "{n} updates held until you leave focus": {
+    "one": "{n} Update wartet, bis Sie den Fokusmodus verlassen",
+    "other": "{n} Updates warten, bis Sie den Fokusmodus verlassen"
+  },
   "Collapse sidebar": "Seitenleiste einklappen",
   "Expand sidebar": "Seitenleiste ausklappen",
   "Sidebar width": "Breite der Seitenleiste",

@@ -61,10 +61,15 @@ describe('focus mode (#421)', () => {
     toasts.push({ level: 'info', text: 'Install?', action: { label: 'Install', command: 'x', args: null } });
     toasts.info('Copied', { view: 'project:p' });
     expect(toasts.list.map((e) => e.toast.text)).toEqual(['Disk almost full', 'Install?', 'Copied']);
+    // The held pill (#442): the toasts held here plus the desktop notifications the backend counts.
+    expect(focus.held).toBe(1);
+    toasts.apply({ type: 'focus.held', count: 2 });
+    expect(focus.held).toBe(3);
 
     await dispatch('view.unfocus');
     expect(focus.on).toBe(false);
     expect(hasAction('view.unfocus')).toBe(false);
+    expect(focus.held).toBe(0);
     expect(calls).toEqual([{ on: true }, { on: false }]);
     expect(toasts.list.at(-1)?.toast.text).toBe(
       'While you were focused: PR approved, SHOP-1 ready to review',
