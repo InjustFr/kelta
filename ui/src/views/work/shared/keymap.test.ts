@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { VERB_OF, queueKeys, reviewsKeys, ticketsKeys, type ListKey } from './keymap';
+import { chordFor } from '../../../shell/labels';
+
+import { VERB_OF, panelGroups, queueKeys, reviewsKeys, ticketsKeys, type ListKey } from './keymap';
 
 const LISTS: Record<string, ListKey[]> = {
   queue: queueKeys(),
@@ -35,5 +37,27 @@ describe('one verb per letter (#417)', () => {
       LISTS[list]!.find(([keys]) => keysOf(keys).includes(key))?.[2];
     for (const list of ['queue', 'tickets']) expect(verbOf(list, 'b')).toBe('mark');
     for (const list of Object.keys(LISTS)) expect(verbOf(list, 'space')).toBe('panel');
+  });
+});
+
+describe('the `?` panel (#437)', () => {
+  const panel = (list: string) =>
+    Object.fromEntries(panelGroups(LISTS[list]!).map((g) => [g.title, g.keys.map(([k]) => k)]));
+
+  it('groups a list by the verb table: Move, Act on the row, Select, Filter', () => {
+    const marked = chordFor('work.start') ?? 'mod+enter';
+    expect(panel('queue')).toEqual({
+      Move: ['j k'],
+      'Act on the row': ['enter', 's', 'v shift+v', 'o', 'm', 'c'],
+      Select: ['b', marked],
+      Filter: ['/'],
+    });
+    expect(panel('tickets')).toEqual({
+      Move: ['j k'],
+      'Act on the row': ['enter', 's shift+s', 'm', 'c', 'o'],
+      Select: [marked, 'x', 'b'],
+      Filter: ['/', '1 2 3', 'f then s', 'f then v'],
+    });
+    expect(Object.keys(panel('reviews'))).toEqual(['Move', 'Act on the row', 'Filter']);
   });
 });

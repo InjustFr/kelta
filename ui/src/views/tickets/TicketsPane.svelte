@@ -36,7 +36,7 @@
   import { columnFor, initials, isAuthError } from '../work/common';
   import { openFrom, persistPaneContent } from '../work/nav';
   import ActionMenu, { below, under, type RowAction } from '../work/shared/ActionMenu.svelte';
-  import KeyHints from '../work/shared/KeyHints.svelte';
+  import ListKeys from '../work/shared/ListKeys.svelte';
   import { ticketsKeys } from '../work/shared/keymap';
   import Loading from '../work/shared/Loading.svelte';
   import StateBanner from '../work/shared/StateBanner.svelte';
@@ -522,8 +522,13 @@
   let sourceMenu = $state<{ x: number; y: number } | null>(null);
   let commenting = $state<TicketItem | null>(null);
   let tagMenu = $state<{ x: number; y: number; key: string } | null>(null);
-  /** The full key list (`?`); the footer shows the first five. */
+  /** `?` opens the key panel, `?` again or its button the full key list (#437). */
+  let keysPanel = $state(false);
   let keysOpen = $state(false);
+  function allKeys(): void {
+    keysPanel = false;
+    keysOpen = true;
+  }
   const hints = $derived(ticketsKeys(enterLabel));
 
   // ---- split view (T3): the selected ticket's detail in a column on the right ---------------
@@ -785,6 +790,14 @@
   function onkeydown(e: KeyboardEvent): void {
     const target = e.target as HTMLElement;
     if (target.closest('input, textarea, select, [role="dialog"], [role="menu"]')) return;
+    // `?`'s key panel goes with the next key (#437); Esc only closes it.
+    if (keysPanel && e.key !== '?' && e.key !== 'Shift') {
+      keysPanel = false;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        return;
+      }
+    }
     // #141: Mod+Enter starts the marked tickets; `b` marks in either mode (#440: Space shows or hides the detail).
     const mark = cur ? { ref: cur.ticket.ref, projectId: cur.project_ids[0] ?? null } : null;
     if (!side?.contains(target) && batchKey(e, mark)) {
@@ -872,7 +885,8 @@
         else if (item) openDetail(item);
         break;
       case '?':
-        keysOpen = true;
+        if (keysPanel) allKeys();
+        else keysPanel = true;
         break;
       case '/':
         filterInput?.focus();
@@ -1268,7 +1282,7 @@
     {/if}
   {/if}
 
-  <KeyHints {hints} onopen={() => (keysOpen = true)} />
+  {#if keysPanel}<ListKeys {hints} onopen={allKeys} />{/if}
 </div>
 
 {#if picker}
@@ -1336,7 +1350,7 @@
   />
 {/if}
 {#if keysOpen}
-  <KeyHints
+  <ListKeys
     {hints}
     onclose={() => {
       keysOpen = false;

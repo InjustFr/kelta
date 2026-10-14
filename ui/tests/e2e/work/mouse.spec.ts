@@ -67,9 +67,11 @@ test('ship from Now: the Ship button opens the dialog, its Ship button opens the
   await expect(page.getByTestId('toasts').getByText(/Opened PR #\d+/)).toBeVisible();
 });
 
-test('the key list opens from the line under the list', async ({ page }) => {
+test('the key list opens from the ? panel of the list (#437)', async ({ page }) => {
   await boot(page);
   await page.getByTestId('rail-reviews').click();
-  await page.getByTestId('reviews-pane').getByRole('button', { name: 'All keys' }).click();
+  await page.getByTestId('reviews-pane').focus();
+  await page.keyboard.press('?');
+  await page.getByTestId('list-keys').getByRole('button', { name: 'All keys' }).click();
   await expect(page.getByRole('dialog', { name: 'All keys' })).toContainText('Merge when ready');
 });
