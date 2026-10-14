@@ -147,7 +147,10 @@ test.describe('keys', () => {
     await boot(page);
     for (let i = 0; i < 3; i++) await dispatch(page, 'attention.next'); // billing, billing error, then SHOP-155
     await expect(page.getByTestId('work-header')).toHaveAttribute('data-phase', 'to_review');
-    await expect(page.locator('.work-header .primary')).toHaveAttribute('title', 'Review changes (Ctrl+Enter)');
+    await expect(page.locator('.work-header span.primary')).toHaveAttribute(
+      'title',
+      'Review changes (Ctrl+Enter)',
+    );
     await page.locator('[data-testid="pane"][data-focused="true"] .xterm-helper-textarea').focus();
     await page.keyboard.press('Control+Enter');
     await expect.poll(async () => (await callsOf(page, 'work_diff')).length).toBe(1);

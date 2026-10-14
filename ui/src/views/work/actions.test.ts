@@ -19,7 +19,6 @@ import { globalContent } from './nav';
 import { batch } from './batch.svelte';
 import { REVIEW_READONLY } from './common';
 import type { Phase, PhaseId, WorkActionId } from './phase';
-import { phaseNow } from './live';
 import { selectTicket } from './selection.svelte';
 import { onActions, REFRESH_EVENT, workUi } from './ui.svelte';
 

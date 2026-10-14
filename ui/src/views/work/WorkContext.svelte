@@ -39,7 +39,9 @@
   // ⌘↵ runs the primary from any pane (#441): its tooltip names the chord.
   const primaryTip = $derived.by(() => {
     const c = effectiveChords('work.start', settings.value()?.keys ?? null, currentPlatform())[0];
-    return c && phase ? `${phase.primaryLabel} (${formatChord(c).join(currentPlatform() === 'macos' ? '' : '+')})` : undefined;
+    return c && phase
+      ? `${phase.primaryLabel} (${formatChord(c).join(currentPlatform() === 'macos' ? '' : '+')})`
+      : undefined;
   });
 
   let workBtn = $state<HTMLElement>();
