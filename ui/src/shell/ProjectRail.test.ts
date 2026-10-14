@@ -7,6 +7,7 @@ import { setTransport } from '$lib/ipc/transport';
 import { allPanes } from '$lib/layout';
 import { layout, projects, sessions, tools, ui, work } from '$lib/stores';
 
+import { confirms } from './confirm.svelte';
 import { statusLabel } from './labels';
 import { sidebar } from './sidebar.svelte';
 
@@ -73,9 +74,10 @@ describe('ProjectRail', () => {
       'kelta-tools',
     ]);
     expect(bandRows(r, 'shop')).toEqual(['shop-t1']);
-    // Unfinished work in start order, tab or not, unless it waits on others (SHOP-120, #443); the caption counts them.
-    expect(workIds(r, 'shop')).toEqual(['a008', 'a004', 'a001']);
-    expect(within(band(r, 'shop')).getByTestId('rail-count').textContent).toBe('3');
+    // Unfinished work whose tab is open (#452), whatever its phase; the caption counts them.
+    expect(workIds(r, 'shop')).toEqual(['a001']);
+    expect(within(band(r, 'shop')).getByTestId('rail-count').textContent).toBe('1');
+    expect(r.queryByTestId('rail-background-section')).toBeNull();
     // Key, title without the key, stage word; the ⌘N digit only while the modifier is held (#451).
     const work = r.container.querySelector('[data-tab-id="shop-t1"]') as HTMLElement;
     expect(work.querySelector('.key')?.textContent).toBe('SHOP-142');
@@ -122,14 +124,16 @@ describe('ProjectRail', () => {
     expect(layout.get('billing')?.active_tab).toBe('billing-t2');
   });
 
-  it('no Tools band (#412): a tool-only tab is a band row; a session in no pane is a dim row that reveals it', async () => {
+  it('no Tools band (#412): a tool-only tab is a band row; a shell in no pane is a Background row, not in "n more"', async () => {
     const r = await setup(true);
     await unfold(r, 'shop');
     expect(r.queryByTestId('rail-tools')).toBeNull();
     expect(bandRows(r, 'shop')).toEqual(['shop-t1', 'shop-t2', 'shop-t3']);
+    expect(within(band(r, 'shop')).queryByTestId('rail-background')).toBeNull();
 
     const bg = r.getByTestId('rail-background');
     expect(bg.dataset.sessionId).toBe(SHOP_SHELL);
+    expect(bg.title).toMatch(/^Shop › /);
     await fireEvent.click(bg);
     await expect.poll(() => bandRows(r, 'shop').length).toBe(4);
     expect(r.queryByTestId('rail-background')).toBeNull();
@@ -165,7 +169,7 @@ describe('ProjectRail', () => {
       };
       work.apply({ type: 'work.updated', work: { ...work.get(id)!, run } });
     };
-    claim(A('a004'), BILLING_CLAUDE, 'Pick'); // a ticket with no tab: on its row all the same (#435)
+    claim(A('a002'), BILLING_CLAUDE, 'Pick');
     claim(A('a003'), '0199a6b2-0000-7000-8000-000000000008', 'Review');
 
     await expect.poll(() => r.queryAllByTestId('rail-run').length).toBe(3);
@@ -178,7 +182,7 @@ describe('ProjectRail', () => {
     // Its run is on its ticket's row, not on the billing tab.
     expect(
       sub(BILLING_CLAUDE)?.closest('li')?.previousElementSibling?.querySelector('[data-work-id]'),
-    ).toHaveProperty('dataset.workId', A('a004'));
+    ).toHaveProperty('dataset.workId', A('a002'));
 
     const runsPanes = () =>
       allPanes(layout.get('shop')!.tabs.find((t) => t.id === 'shop-t1')!.root).filter(
@@ -230,19 +234,44 @@ describe('ProjectRail', () => {
     );
   });
 
-  it('a work item without a tab (#435): its lamp, key, title and stage; a click resumes it', async () => {
+  it('Background (#452): a closed tab whose sessions keep running; a click brings it back, × stops it', async () => {
     const r = await setup();
-    const row = () => band(r, 'shop').querySelector(`[data-work-id="${A('a004')}"]`) as HTMLElement;
-    expect(row().dataset.testid).toBe('rail-resume');
-    expect(row().querySelector('.key')?.textContent).toBe('SHOP-155');
-    await expect.poll(() => row().querySelector('.name')?.textContent).toBe('Flaky test in cart service');
-    expect(row().querySelector('[data-testid="rail-stage"]')?.textContent).toBeTruthy();
-    expect(row().parentElement!.querySelector('.close')).toBeNull();
-    await fireEvent.click(row());
-    await expect.poll(() => m.calls.filter((c) => c.cmd === 'work_resume').length).toBe(1);
-    await expect.poll(() => row().dataset.testid).toBe('rail-row');
-    // The tab work_resume opened is titled by the key alone: the row keeps the ticket's title.
-    expect(row().querySelector('.name')?.textContent).toBe('Flaky test in cart service');
+    const keep = r.container
+      .querySelector('[data-tab-id="shop-t1"]')!
+      .parentElement!.querySelector('.close')!;
+    await fireEvent.click(keep);
+    confirms.answer('keep');
+    const section = () => r.queryByTestId('rail-background-section');
+    await expect.poll(() => section()).not.toBeNull();
+    expect(section()!.querySelector('h2')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Background 2');
+    expect(workIds(r, 'shop')).toEqual([]);
+    const rows = () => within(section()!).queryAllByTestId('rail-background');
+    expect(rows().map((e) => [e.dataset.sessionId, e.dataset.workId])).toEqual([
+      [SHOP_CLAUDE, A('a001')],
+      ['0199a6b2-0000-7000-8000-000000000002', A('a001')],
+    ]);
+    // Like a work row, dimmed, its project named; no ⌘N digit, no duplicate under "n more".
+    const first = rows()[0]!;
+    expect(first.classList).toContain('background');
+    expect(first.querySelector('.key')?.textContent).toBe('SHOP-142');
+    expect(first.title).toBe(`Shop › SHOP-142 ${first.querySelector('.name')?.textContent}`);
+    await fireEvent.keyDown(window, { key: 'Meta', metaKey: true, ctrlKey: true });
+    expect(section()!.querySelector('.index')).toBeNull();
+    await fireEvent.keyUp(window, { key: 'Meta' });
+    await unfold(r, 'shop');
+    expect(within(band(r, 'shop')).queryAllByTestId('rail-background')).toHaveLength(0);
+
+    // A click opens a tab on the session: the work row is back in its band.
+    await fireEvent.click(first);
+    await expect.poll(() => workIds(r, 'shop')).toEqual(['a001']);
+    expect(rows()).toHaveLength(1);
+    // × asks, then stops the session: the row and the section leave.
+    await fireEvent.click(rows()[0]!.parentElement!.querySelector('.close')!);
+    expect(confirms.current?.actions.map((a) => a.id)).toEqual(['stop']);
+    confirms.answer('stop');
+    await expect.poll(() => m.calls.filter((c) => c.cmd === 'session_kill').length).toBe(1);
+    sessions.apply({ type: 'session.removed', id: rows()[0]!.dataset.sessionId! }); // the backend's answer
+    await expect.poll(() => section()).toBeNull();
   });
 
   it('a Claude session without a work item (#435): its own row, lit when it needs you; not in "n more"', async () => {
@@ -275,7 +304,7 @@ describe('ProjectRail', () => {
       await expect.poll(() => row().querySelector('.name')?.textContent).toBe('Kelta UI and IDE UX');
     }
     expect(moreRow(r, 'shop').textContent).toContain('2 more');
-    expect(within(band(r, 'shop')).getByTestId('rail-count').textContent).toBe('5');
+    expect(within(band(r, 'shop')).getByTestId('rail-count').textContent).toBe('2');
   });
 
   it('compact (#435): no "n more" rows and no unfolded tabs, only the work and Claude rows', async () => {

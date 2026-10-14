@@ -74,7 +74,7 @@ describe('shell actions', () => {
 
   it('project.goto.N (rail row N), project.next and inbox.open navigate', async () => {
     await layout.ensure('billing');
-    await dispatch('project.goto.6'); // work rows: shop's four, then billing's
+    await dispatch('project.goto.2'); // work rows: one per open work tab
     expect(projects.activeId).toBe('billing');
     await dispatch('project.next');
     expect(projects.activeId).toBe('kelta-tools');

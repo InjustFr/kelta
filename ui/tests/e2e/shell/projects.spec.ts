@@ -55,10 +55,10 @@ test.describe('project switching', () => {
       page.evaluate(() =>
         document.querySelectorAll('.xterm').forEach((x) => x.setAttribute('data-warm', '')),
       );
-    await goto(6); // billing's work tab (work rows: shop's four, then billing's)
+    await goto(2); // billing's work tab (work rows: one per open work tab)
     await expect(page.locator('[data-testid="workspace"][data-project-id="billing"] .xterm')).toHaveCount(3);
     await tag();
-    await goto(4); // shop's work tab, after its three items without a tab
+    await goto(1); // shop's work tab
     await expect(page.locator('[data-testid="workspace"][data-project-id="shop"] .xterm')).toHaveCount(2);
     await tag();
 
@@ -82,7 +82,7 @@ test.describe('project switching', () => {
         });
       const ms: number[] = [];
       for (let i = 0; i < 8; i += 1) {
-        window.__switchTo = i % 2 === 0 ? 'project.goto.6' : 'project.goto.4';
+        window.__switchTo = i % 2 === 0 ? 'project.goto.2' : 'project.goto.1';
         const sel =
           i % 2 === 0
             ? '[data-testid="workspace"][data-project-id="billing"] .xterm'

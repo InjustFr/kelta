@@ -23,11 +23,13 @@ import {
   openView,
   railProjects,
   railRows,
+  backgroundRows,
   backgroundSessions,
   bandTabs,
   openRow,
   rowLamp,
   requestCloseTab,
+  requestStopSession,
   revealSession,
   selectRow,
   splitFocused,
@@ -42,6 +44,7 @@ const SHOP_CLAUDE = '0199a6b2-0000-7000-8000-000000000001';
 const BILLING_CLAUDE = '0199a6b2-0000-7000-8000-000000000005';
 
 let mock: MockControls;
+const A = (n: string) => `0199a6b2-0000-7000-8000-00000000${n}`;
 
 beforeEach(async () => {
   const created = createMockTransport();
@@ -81,25 +84,21 @@ describe('projects', () => {
 
   it('rail rows: goto N counts work rows across bands, tab next/prev walk every row and wrap around', async () => {
     await Promise.all(['billing', 'kelta-tools', 'home'].map((id) => layout.ensure(id)));
-    // Unfinished work items in start order, tab or not (#435) unless waiting on others (#443); then the folded tabs.
+    // Unfinished work items with a tab, in start order (#452); then the folded tabs.
     expect(railRows().map(rowId)).toEqual([
-      'a008',
-      'a004',
       'shop-t1',
       'shop-t2',
       'shop-t3',
-      'a006',
       'billing-t1',
-      'a005',
       'billing-t2',
       'kt-t1',
       'kt-t2',
       'home-t1',
       'home-t2',
     ]);
-    expect(workRows().map(rowId)).toEqual(['a008', 'a004', 'shop-t1', 'a006', 'billing-t1', 'a005', 'kt-t1']);
+    expect(workRows().map(rowId)).toEqual(['shop-t1', 'billing-t1', 'kt-t1']);
     const at = () => [projects.activeId, currentTab()!.id];
-    gotoRailRow(6);
+    gotoRailRow(2);
     expect(at()).toEqual(['billing', 'billing-t1']);
     gotoRailRow(10); // no such work row: unchanged
     expect(at()).toEqual(['billing', 'billing-t1']);
@@ -126,41 +125,76 @@ describe('projects', () => {
       ...l,
       tabs: [...l.tabs, { ...l.tabs[2]!, id: 'shop-t4', title: 'SHOP-155 Coupons', work_item_id: started }],
     }));
-    const order = () => workRows().map(rowId).slice(0, 3);
-    expect(order()).toEqual(['a008', 'shop-t4', 'shop-t1']);
-    expect(railRows().map(rowId).slice(0, 5)).toEqual(['a008', 'shop-t4', 'shop-t1', 'shop-t2', 'shop-t3']);
+    const order = () => workRows().map(rowId).slice(0, 2);
+    expect(order()).toEqual(['shop-t4', 'shop-t1']);
+    expect(railRows().map(rowId).slice(0, 4)).toEqual(['shop-t4', 'shop-t1', 'shop-t2', 'shop-t3']);
     work.apply({ type: 'work.updated', work: { ...work.get(started)!, state: { kind: 'pr_open' } } });
-    expect(order()).toEqual(['a008', 'shop-t4', 'shop-t1']);
-    gotoRailRow(2);
+    expect(order()).toEqual(['shop-t4', 'shop-t1']);
+    gotoRailRow(1);
     expect(currentTab()!.id).toBe('shop-t4');
   });
 
-  it('a work item without a tab is a row (#435): its lamp is its phase, goto N resumes it', async () => {
-    const row = workRows()[1]!; // SHOP-155: its tab is closed
-    expect([row.item!.ticket?.key, row.tab]).toEqual(['SHOP-155', null]);
-    expect(rowLamp(row)).toBe(phaseNow(row.item!).lamp);
-    gotoRailRow(2);
-    await expect.poll(() => calls('work_resume').length).toBe(1);
-    await expect.poll(() => workRows()[1]!.tab?.work_item_id).toBe(row.item!.id);
-  });
-
-  it('work waiting on others has a row only while its tab is open (#443), and comes back in its slot', async () => {
-    const id = '0199a6b2-0000-7000-8000-00000000a007'; // SHOP-120: PR in review, its tab closed
-    const rows = () => bandTabs('shop').work.map((r) => r.tab?.id ?? r.item!.id.slice(-4));
-    expect(zoneOf(phaseNow(work.get(id)!).section)).toBe('waiting');
-    // The fixture's other PR waiting on a reviewer (a010) has no row either.
-    expect(rows()).toEqual(['a008', 'a004', 'shop-t1']);
+  it('no tab, no main row, whatever the phase (#452): live sessions go to Background, dormant ones nowhere', async () => {
+    await layout.ensure('home');
+    const rows = () => bandTabs('shop').work.map((r) => r.tab!.id);
+    const bg = () => backgroundRows().map((r) => [r.session!.id.slice(-4), r.item?.id.slice(-4)]);
+    // SHOP-155 is your move (dormant Claude), SHOP-120 waits on a reviewer: no tab, no row anywhere.
+    expect(zoneOf(phaseNow(work.get(A('a007'))!).section)).toBe('waiting');
+    expect(rows()).toEqual(['shop-t1']);
+    expect(bg()).toEqual([]);
     layout.update('shop', (l) => ({
       ...l,
-      tabs: [...l.tabs, { ...l.tabs[2]!, id: 'shop-t4', title: 'SHOP-120 Payment SDK', work_item_id: id }],
+      tabs: [
+        ...l.tabs,
+        { ...l.tabs[2]!, id: 'shop-t4', title: 'SHOP-120 Payment SDK', work_item_id: A('a007') },
+      ],
     }));
-    expect(rows()).toEqual(['a008', 'shop-t4', 'a004', 'shop-t1']);
+    expect(rows()).toEqual(['shop-t4', 'shop-t1']);
     layout.update('shop', (l) => closeTab(l, 'shop-t4'));
-    expect(rows()).toEqual(['a008', 'a004', 'shop-t1']);
-    // The reviewer requests changes (the mock's PR #305): its move again, the row is back in its slot.
+    // The reviewer requests changes (the mock's PR #305): its move, still no tab, still no row.
     await reviews.load({ kind: 'all' }, 'authored');
-    expect(phaseNow(work.get(id)!).id).toBe('changes_requested');
-    expect(rows()).toEqual(['a008', 'a007', 'a004', 'shop-t1']);
+    expect(phaseNow(work.get(A('a007'))!).id).toBe('changes_requested');
+    expect(rows()).toEqual(['shop-t1']);
+
+    // Close tab, keep sessions: SHOP-142's Claude and nvim leave the band for Background, once each.
+    const keep = requestCloseTab('shop', 'shop-t1');
+    await Promise.resolve();
+    confirms.answer('keep');
+    await keep;
+    expect(rows()).toEqual([]);
+    expect(bg()).toEqual([
+      ['0001', 'a001'],
+      ['0002', 'a001'],
+    ]);
+    expect(railRows().some((r) => r.session)).toBe(false);
+    // A click opens a tab on the session: the work row is back in its band.
+    openRow(backgroundRows()[0]!);
+    await expect.poll(() => rows().length).toBe(1);
+    expect(bg()).toEqual([['0002', 'a001']]);
+    // Close and stop sessions: gone from the sidebar.
+    const stop = requestCloseTab('shop', rows()[0]!);
+    await Promise.resolve();
+    confirms.answer('stop');
+    await stop;
+    expect(rows()).toEqual([]);
+    expect(calls('session_kill').map((c) => (c.args as { id: string }).id)).toEqual([SHOP_CLAUDE]);
+    sessions.apply({ type: 'session.removed', id: SHOP_CLAUDE }); // the backend's answer to the kill
+    expect(bg()).toEqual([['0002', 'a001']]);
+  });
+
+  it("a Background row's × stops its session after the confirm (#452)", async () => {
+    const shell = sessions.get('0199a6b2-0000-7000-8000-000000000003')!;
+    const cancel = requestStopSession(shell);
+    await Promise.resolve();
+    expect(confirms.current?.actions.map((a) => a.id)).toEqual(['stop']);
+    confirms.answer(null);
+    await cancel;
+    expect(calls('session_kill')).toEqual([]);
+    const stop = requestStopSession(shell);
+    await Promise.resolve();
+    confirms.answer('stop');
+    await stop;
+    expect(calls('session_kill').map((c) => (c.args as { id: string }).id)).toEqual([shell.id]);
   });
 
   it('a Claude session without a work item is a row of its own (#435), not a folded tab', async () => {
@@ -184,18 +218,19 @@ describe('projects', () => {
       work_item_id: null,
     });
     const band = bandTabs('shop');
-    expect(band.claude.map((r) => [r.session!.id, !!r.tab])).toEqual([
-      ['plain-tab', true],
-      ['plain-bg', false],
-    ]);
+    expect(band.claude.map((r) => [r.session!.id, !!r.tab])).toEqual([['plain-tab', true]]);
     expect(band.more.map((t) => t.id)).toEqual(['shop-t2', 'shop-t3']);
     expect(rowLamp(band.claude[0]!)).toBe('needs_input');
-    // In the background: a click shows it in a new tab.
-    openRow(band.claude[1]!);
-    await expect.poll(() => bandTabs('shop').claude[1]!.tab).not.toBeNull();
+    // Live with no tab: a Background row (#452), its lamp live; a click shows it in a new tab.
+    const bg = backgroundRows().find((r) => r.session!.id === 'plain-bg')!;
+    expect([bg.tab, bg.item, rowLamp(bg)]).toEqual([null, undefined, 'needs_input']);
+    expect(backgroundRows().map((r) => r.session!.id)).not.toContain('plain-gone');
+    openRow(bg);
+    await expect.poll(() => bandTabs('shop').claude.map((r) => r.session!.id)).toContain('plain-bg');
+    expect(backgroundRows().map((r) => r.session!.id)).not.toContain('plain-bg');
   });
 
-  it('a live Claude whose work item is finished, tab closed, stays a folded background row', () => {
+  it('a live Claude whose work item is finished, tab closed, is a Background row without its item', () => {
     const item = work.get('0199a6b2-0000-7000-8000-00000000a004')!;
     work.apply({ type: 'work.updated', work: { ...item, state: { kind: 'finished' } } as typeof item });
     sessions.upsert({
@@ -206,6 +241,7 @@ describe('projects', () => {
       attention: 'needs_input',
     });
     expect(backgroundSessions('shop').map((s) => s.id)).toContain('orphan');
+    expect(backgroundRows().find((r) => r.session!.id === 'orphan')?.item).toBeUndefined();
     expect(bandTabs('shop').claude.map((r) => r.session!.id)).not.toContain('orphan');
   });
 
