@@ -301,8 +301,9 @@ export interface Commands {
   // ---- work --------------------------------------------------------------------------------
   /** `project_id` null: the backend picks the default project (SPEC §3.1). */
   work_plan: {
-    /** `source_id`: the ticket's source as its row lists it (`TicketItem.source_ids`). */
-    args: { project_id: ProjectId | null; source: WorkSource; source_id?: string | null };
+    /** `source_id`: the ticket's source as its row lists it (`TicketItem.source_ids`); `another`: Start
+     *  another PR on a ticket that has work (#456). */
+    args: { project_id: ProjectId | null; source: WorkSource; source_id?: string | null; another?: boolean };
     result: StartWorkPlan;
   };
   work_start: { args: { plan: StartWorkPlan }; result: WorkItem };

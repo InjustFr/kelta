@@ -1018,6 +1018,7 @@ export const reviewDetail: ReviewDetail = {
 
 export const startWorkPlan: StartWorkPlan = {
   "adopt_pr": null,
+  "another": false,
   "base": "main",
   "branch": "feat/SHOP-142-rate-limit-login",
   "branch_exists": null,

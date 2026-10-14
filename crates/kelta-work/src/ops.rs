@@ -13,7 +13,7 @@ use kelta_proto::ids::{SessionId, WorkItemId};
 use kelta_proto::model::{
     CloseOnExit, EditorTarget, FinishMergedReport, FinishOpts, GitStatus, Lifecycle, OpenPaneRequest,
     PaneContent, Placement, RestorePolicy, SessionInfo, SessionKind, ShipOrigin, SkippedItem, SpawnRequest,
-    StepStatus, WorkItem, WorkKind, WorkSource, WorkState,
+    StepStatus, WorkItem, WorkKind, WorkState,
 };
 use kelta_proto::settings::{EditorOpenMode, EditorRestore, TransitionTarget};
 use kelta_proto::tracker::TicketRef;
@@ -504,6 +504,8 @@ impl WorkService {
         for it in ours {
             let lock = self.item_lock(&it.id);
             let guard = lock.lock().await;
+            // After the item lock: a busy item (Ship/Finish) must not stall every other merge.
+            let merging = self.merge_lock.lock().await;
             let mut item = self.load(&it.id).await?;
             if item.state.pr_done() || matches!(item.state, WorkState::Finished | WorkState::Failed { .. }) {
                 continue;
@@ -527,6 +529,7 @@ impl WorkService {
                 env.core.toast(Toast::warn(format!("{key} merged · auto-finish skipped: {why}")));
             }
             // Finish takes the item lock itself.
+            drop(merging);
             drop(guard);
             self.auto_finish(&item).await;
         }
@@ -553,6 +556,7 @@ impl WorkService {
                 }
                 let done = env.project.tracker.as_ref().and_then(|b| b.status_map.done.clone());
                 if item.ticket.is_some()
+                    && !self.open_sibling_pr(item).await
                     && let Some(t) = done.or_else(|| env.settings.work.on_merge.transition_to.clone())
                 {
                     parts.push(match t {
@@ -581,10 +585,19 @@ impl WorkService {
         }
     }
 
+    /// Another PR of `item`'s ticket is still open (#456): the ticket waits for the last one's merge.
+    async fn open_sibling_pr(&self, item: &WorkItem) -> bool {
+        let all = self.store.list_items(None).await.unwrap_or_default();
+        plan::siblings(&all, item).any(|w| w.pr_url.is_some() && !w.state.pr_done())
+    }
+
     /// On merge, move the ticket to Done only when exactly one transition fits and needs no
     /// fields (FLOW §4.6). Returns why it was not moved, for the phase detail.
     async fn move_done(&self, item: &WorkItem) -> Option<String> {
         let t = item.ticket.as_ref()?;
+        if self.open_sibling_pr(item).await {
+            return None;
+        }
         let env = match self.env(&item.project_id, &item.repo_id) {
             Ok(e) => e,
             Err(e) => return Some(format!("ticket not moved: {}", e.message)),
@@ -695,6 +708,11 @@ impl WorkService {
     /// `work.on_pr`: transition (status_map.review overrides) + comment; non-fatal.
     pub(crate) async fn on_pr(&self, env: &Env, item: &WorkItem, j: &Journal, review: &Review) {
         let Some(t) = &item.ticket else { return };
+        // The ticket's first PR only (#456): a sibling with a PR already moved it.
+        let all = self.store.list_items(None).await.unwrap_or_default();
+        if plan::siblings(&all, item).any(|w| w.pr_url.is_some()) {
+            return;
+        }
         let Ok(tracker) = env.core.tracker_for(&t.account).await else { return };
         let on = &env.settings.work.on_pr;
         let target = env
@@ -806,13 +824,8 @@ impl WorkService {
         ticket: TicketRef,
         apply_side_effects: bool,
     ) -> Result<WorkItem, KeltaError> {
+        // A ticket held by other items takes this one too (#456).
         let id = &item.id.clone();
-        let items = self.store.list_items(Some(&item.project_id)).await?;
-        if plan::existing_for(&items, &WorkSource::Ticket { ticket: ticket.clone() })
-            .is_some_and(|w| w.id != item.id)
-        {
-            return Err(KeltaError::conflict(format!("{} already has a work item", ticket.key)));
-        }
         let env = self.env(&item.project_id, &item.repo_id)?;
         let tracker = env.core.tracker_for(&ticket.account).await?;
         let detail = tracker.get(&ticket).await?;
@@ -959,7 +972,7 @@ impl WorkService {
         if let Some(t) = item.ticket.as_ref().filter(|_| !adopted) {
             // Merged / closed: the merge listener already made the unambiguous move; any other
             // Done status is an explicit choice, never a default.
-            let target = if item.state.pr_done() {
+            let target = if item.state.pr_done() || self.open_sibling_pr(&item).await {
                 opts.transition_to.clone()
             } else {
                 opts.transition_to

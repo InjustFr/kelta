@@ -67,6 +67,8 @@ export function startPreview(plan: StartWorkPlan, editor: string | null): string
 export interface StartOpts {
   preview?: boolean;
   source?: string | null;
+  /** Start another PR (#456): a new work item beside the ticket's, never a Resume. */
+  another?: boolean;
 }
 
 /** Requests a plan and shows the sheet, or starts/resumes directly when previews are off.
@@ -77,7 +79,12 @@ export async function beginStartWork(
   opts: StartOpts = {},
 ): Promise<WorkItem | null> {
   try {
-    const plan = await ipc.workPlan({ project_id: projectId, source, source_id: opts.source ?? null });
+    const plan = await ipc.workPlan({
+      project_id: projectId,
+      source,
+      source_id: opts.source ?? null,
+      ...(opts.another ? { another: true } : {}),
+    });
     if (source.kind === 'ticket') withCriteria(plan, source.ticket);
     const preview = opts.preview ?? settings.value()?.work.plan_preview ?? true;
     // Unfinished work to list (#354) shows the sheet even with previews off.
@@ -113,6 +120,30 @@ export function startWorkOnTicket(
   opts: StartOpts = {},
 ): Promise<WorkItem | null> {
   return beginStartWork(projectId ?? null, { kind: 'ticket', ticket: ref }, opts);
+}
+
+/** Start another PR on a ticket that has work (#456): the Start sheet for a new item and branch. */
+export function startAnotherPr(ref: TicketRef, projectId?: ProjectId | null): Promise<WorkItem | null> {
+  return beginStartWork(projectId ?? null, { kind: 'ticket', ticket: ref }, { another: true, preview: true });
+}
+
+/** The ticket's unfinished work items: several once Start another PR ran (#456). */
+export function ticketWork(ref: TicketRef): WorkItem[] {
+  return work.all.filter(
+    (w) => w.ticket?.account === ref.account && w.ticket.key === ref.key && w.state.kind !== 'finished',
+  );
+}
+
+/** Resume work on one item (the picker of a ticket with several). */
+export async function resumeWork(item: WorkItem): Promise<void> {
+  try {
+    const resumed = await ipc.workResume({ id: item.id });
+    work.upsert(resumed);
+    toasts.info(t('Resumed {branch}', { branch: resumed.branch }), { view: null });
+    void activateProject(resumed.project_id);
+  } catch (err) {
+    toasts.error(err, t('Resume work'));
+  }
 }
 
 /** "Review locally": work_plan with a Review source, same sheet as start work. */

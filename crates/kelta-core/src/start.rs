@@ -35,11 +35,13 @@ struct SourceHint {
 impl Core {
     /// `work_plan`: the plan in the default project (`project` is an explicit pick), with the choices.
     /// `source_id` is the ticket's source as the clicked row lists it (`TicketItem.source_ids`).
+    /// `another`: Start another PR on a ticket that has work (#456).
     pub async fn work_plan(
         &self,
         project: Option<ProjectId>,
         source: WorkSource,
         source_id: Option<String>,
+        another: bool,
     ) -> Result<StartWorkPlan, KeltaError> {
         if matches!(source, WorkSource::Branch { .. }) {
             let project = project.unwrap_or_else(|| self.active_project());
@@ -50,7 +52,7 @@ impl Core {
         let (target, choices, hint) =
             self.plan_target(project.as_ref(), &source, source_id.as_deref()).await?;
         let (project, repo, guessed) = target;
-        let mut plan = self.work.plan_with_repo(&project, source, repo).await?;
+        let mut plan = self.work.plan_with_repo(&project, source, repo, another).await?;
         plan.project_choices = choices;
         // The route's options follow its project, like its repo.
         let route_options = hint

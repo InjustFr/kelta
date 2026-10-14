@@ -239,7 +239,7 @@ async fn route_repo_sets_the_plan_repo_unless_an_item_or_the_project_says_otherw
     p.repos.push(web);
     fx.core.add_project(p.clone());
     let w = fx.service();
-    let plan = |repo: Option<&str>| w.plan_with_repo(&p.id, ticket("SHOP-141"), repo.map(Into::into));
+    let plan = |repo: Option<&str>| w.plan_with_repo(&p.id, ticket("SHOP-141"), repo.map(Into::into), false);
     assert_eq!(plan(Some("web")).await.unwrap().repo_id, "web", "the route's repo");
     assert_eq!(plan(Some("gone")).await.unwrap().repo_id, "api", "not in the project: primary");
     w.start(plan(None).await.unwrap()).await.unwrap();
@@ -866,6 +866,29 @@ async fn create_ticket_files_then_links_a_scratch_item() {
 }
 
 #[tokio::test]
+async fn start_another_pr_adds_an_item_with_its_own_branch_and_worktree() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let first = w.start(w.plan(&project(), ticket("SHOP-141")).await.unwrap()).await.unwrap();
+    // Start work keeps resuming the first item.
+    assert_eq!(w.plan(&project(), ticket("SHOP-141")).await.unwrap().existing, Some(first.id.clone()));
+
+    let plan = w.plan_with_repo(&project(), ticket("SHOP-141"), None, true).await.unwrap();
+    assert_eq!((plan.existing.as_ref(), plan.branch_exists.as_ref()), (None, None));
+    assert_eq!(plan.branch, format!("{}-2", first.branch), "the template's branch, suffixed");
+    let second = w.start(plan).await.unwrap();
+    assert_ne!(second.id, first.id);
+    assert_eq!(second.state, WorkState::Active, "{:?}", second.steps);
+    assert_eq!(second.branch, format!("{}-2", first.branch));
+    assert_ne!(second.worktree, first.worktree);
+    assert!(second.worktree.is_dir() && first.worktree.is_dir());
+    assert_eq!(second.ticket, first.ticket);
+    let md = fx.context_md();
+    assert!(md.contains(&format!("  - {} (no pull request yet)\n", first.branch)), "the sibling: {md}");
+}
+
+#[tokio::test]
 async fn link_scratch_item_to_a_ticket() {
     need_git!();
     use kelta_proto::api::{CodeHost, WorkStore};
@@ -907,9 +930,6 @@ async fn link_scratch_item_to_a_ticket() {
 
     // With a PR and side effects: on_start (assign + In Progress) then on_pr (In Review).
     let b = w.start(w.plan(&project(), scratch("Speed up search")).await.unwrap()).await.unwrap();
-    // `a` still holds SHOP-141: a second open item for it is refused.
-    let e = w.link(&b.id, t.clone(), false).await.unwrap_err();
-    assert!(e.code == ErrorCode::Conflict && e.message.contains("SHOP-141"), "{}", e.message);
     let mut done = fx.store.get_item(&a.id).await.unwrap().unwrap();
     done.state = WorkState::Finished;
     fx.store.put_item(&done).await.unwrap();

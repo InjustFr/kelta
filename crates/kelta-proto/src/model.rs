@@ -1208,6 +1208,9 @@ pub struct StartWorkPlan {
     /// My open PRs naming the ticket (#453): `adopt_pr` is the first; the sheet picks among several.
     #[serde(default)]
     pub pr_choices: Vec<PrChoice>,
+    /// Start another PR (#456): a new item beside the ticket's unfinished ones, never a Resume.
+    #[serde(default)]
+    pub another: bool,
     /// Options picked per ticket (#357), set by `Core::work_plan`; `claude.prompt` has them applied.
     #[serde(default)]
     #[ts(optional = nullable)]

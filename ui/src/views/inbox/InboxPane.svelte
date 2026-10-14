@@ -56,7 +56,8 @@
   import { isAuthError } from '../work/common';
   import { sendToClaude } from '../work/fixloop.svelte';
   import AskBar from '../work/AskBar.svelte';
-  import { askerOf, claudeOf, prOf, sessionLabel, workTitle } from '../work/live';
+  import { askerOf, claudeOf, phaseNow, prOf, sessionLabel, siblingKey, workTitle } from '../work/live';
+  import { ticketWork } from '../work/startWork';
   import { loadGlobalLayout, persistPaneContent } from '../work/nav';
   import {
     deltaParts,
@@ -64,7 +65,6 @@
     questionOf,
     reviewOf,
     testsMissing,
-    workKey,
     type NowSection,
     type WorkActionId,
   } from '../work/phase';
@@ -253,7 +253,7 @@
             ? `+${git.insertions} −${git.deletions}${git.dirty ? ` ${t('uncommitted')}` : ''}`
             : null;
         return {
-          id: workKey(item),
+          id: siblingKey(item),
           title: workTitle(item),
           project: p.name,
           color: p.color,
@@ -269,6 +269,13 @@
               delta && testsMissing(delta) ? 'warn' : undefined,
             ),
             ...fact(t('Pull request'), pr ? `#${pr.ref.number}` : null),
+            ...fact(
+              t('Pull requests'),
+              (item.ticket ? ticketWork(item.ticket) : [])
+                .filter((w) => w.id !== item.id)
+                .map((w) => `${siblingKey(w)} ${phaseNow(w).label}`)
+                .join(' · '),
+            ),
             ...fact(
               t('Behind {base}', { base: item.base }),
               git?.behind ? tn('{n} commit', '{n} commits', git.behind) : null,

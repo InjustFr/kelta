@@ -17,8 +17,9 @@ pub async fn work_plan(
     project_id: Option<ProjectId>,
     source: WorkSource,
     source_id: Option<String>,
+    another: Option<bool>,
 ) -> Res<StartWorkPlan> {
-    core.work_plan(project_id, source, source_id).await
+    core.work_plan(project_id, source, source_id, another.unwrap_or(false)).await
 }
 
 #[tauri::command(rename_all = "snake_case")]

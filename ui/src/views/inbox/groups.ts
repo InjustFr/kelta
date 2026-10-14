@@ -5,7 +5,8 @@ import { msg, t } from '$lib/i18n/index.svelte';
 import type { OutsideSession, ReviewItem, SessionInfo, TicketItem, WorkItem } from '$lib/gen';
 
 import { reviewPhase } from '../work/common';
-import { questionOf, workKey, type Lamp, type NowSection, type Phase, type PhaseId } from '../work/phase';
+import { siblingKey } from '../work/live';
+import { questionOf, type Lamp, type NowSection, type Phase, type PhaseId } from '../work/phase';
 
 export interface WorkEntry {
   item: WorkItem;
@@ -378,7 +379,7 @@ function waitingSince(row: NowRow): string {
 export function rowKey(row: NowRow): string {
   switch (row.type) {
     case 'work':
-      return workKey(row.item);
+      return siblingKey(row.item);
     case 'session':
       return row.session.name;
     case 'outside':

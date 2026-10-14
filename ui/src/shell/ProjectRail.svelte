@@ -23,7 +23,7 @@
   import { frames } from '$lib/terminal/raf';
 
   import { jumpOutside, nowSummary, refreshNow } from '../views/inbox/now';
-  import { phaseNow, prOf, workTitle } from '../views/work/live';
+  import { phaseNow, prOf, siblingKey, workTitle } from '../views/work/live';
   import { maxLamp, outsidePhase, workKey } from '../views/work/phase';
   import { STAGES, workStage } from '../views/work/stage';
   import { confirms } from './confirm.svelte';
@@ -389,7 +389,11 @@
   {@const lvl = rowLamp(r)}
   {@const active = !!tab && isFront(p.id, tab.id)}
   {@const key = item ? workKey(item) : ''}
-  {@const label = item ? `${key} ${itemTitle(item, tab, key)}` : s ? sessionTitle(s) : rowLabel(tab!)}
+  {@const label = item
+    ? `${siblingKey(item)} ${itemTitle(item, tab, key)}`
+    : s
+      ? sessionTitle(s)
+      : rowLabel(tab!)}
   {@const n = item && tab ? index.get(item.id) : undefined}
   {@const live = s ? [s] : tab ? liveSessionsOfTab(tab) : []}
   {@const run = runLine(

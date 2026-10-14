@@ -846,7 +846,7 @@ async fn a_pr_branch_checked_out_in_another_worktree_is_adopted_not_added_again(
 }
 
 #[tokio::test]
-async fn link_pr_links_once_without_claude_and_conflicts_on_a_held_ticket() {
+async fn link_pr_links_once_without_claude_and_adds_an_item_to_a_held_ticket() {
     need_git!();
     let fx = Fx::new();
     git(&fx.repo, &["checkout", "-q", "-b", "feat/outside"]);
@@ -869,9 +869,27 @@ async fn link_pr_links_once_without_claude_and_conflicts_on_a_held_ticket() {
     assert_eq!(again.id, item.id, "a second call is a no-op");
     assert_eq!(w.list(None).await.unwrap().len(), 2);
 
+    // The PR is SHOP-141's: another ticket cannot take it.
     let e = w.link_ticket_pr(&project(), ticket("SHOP-142"), &r).await.unwrap_err();
     assert_eq!(e.code, ErrorCode::Conflict);
-    assert!(e.message.contains(held.id.as_str()), "{}", e.message);
+    assert!(e.message.contains(item.id.as_str()), "{}", e.message);
+
+    // SHOP-142 is held by `held`: a second PR of it becomes a second item (#456), once.
+    git(&fx.repo, &["checkout", "-q", "-b", "feat/outside-2"]);
+    commit(&fx.repo, "two.txt", "x\n", "second part");
+    git(&fx.repo, &["push", "-q", "origin", "feat/outside-2"]);
+    git(&fx.repo, &["checkout", "-q", "main"]);
+    let mut r2 = r.clone();
+    r2.r#ref.number = 97;
+    r2.url = "https://github.com/acme/shop-api/pull/97".into();
+    r2.source_branch = "feat/outside-2".into();
+    let second = w.link_ticket_pr(&project(), ticket("SHOP-142"), &r2).await.unwrap();
+    assert_ne!(second.id, held.id);
+    assert_eq!(second.ticket, held.ticket);
+    assert_eq!((second.branch.as_str(), second.pr_url.as_deref()), ("feat/outside-2", Some(r2.url.as_str())));
+    let again = w.link_ticket_pr(&project(), ticket("SHOP-142"), &r2).await.unwrap();
+    assert_eq!(again.id, second.id, "the same PR again is a no-op");
+    assert_eq!(w.list(None).await.unwrap().len(), 3);
 
     // The ticket reads Resume work: Resume runs the rest of the start, Claude included.
     let resumed = w.resume(&item.id).await.unwrap();
