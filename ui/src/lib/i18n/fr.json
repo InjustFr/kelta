@@ -189,6 +189,7 @@
   "Focus mode": "Mode concentration",
   "While you were focused: {what}": "Pendant votre concentration : {what}",
   "Leave focus": "Quitter la concentration",
+  "or Esc Esc outside a terminal": "ou Échap Échap hors d’un terminal",
   "{n} updates held until you leave focus": {
     "one": "{n} mise à jour en attente jusqu’à la fin de la concentration",
     "other": "{n} mises à jour en attente jusqu’à la fin de la concentration"

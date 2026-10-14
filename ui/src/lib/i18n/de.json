@@ -189,6 +189,7 @@
   "Focus mode": "Fokusmodus",
   "While you were focused: {what}": "Während des Fokusmodus: {what}",
   "Leave focus": "Fokusmodus verlassen",
+  "or Esc Esc outside a terminal": "oder Esc Esc außerhalb eines Terminals",
   "{n} updates held until you leave focus": {
     "one": "{n} Update wartet, bis Sie den Fokusmodus verlassen",
     "other": "{n} Updates warten, bis Sie den Fokusmodus verlassen"
