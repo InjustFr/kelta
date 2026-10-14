@@ -70,7 +70,7 @@
   } from '../work/phase';
   import ActionMenu, { under, type RowAction } from '../work/shared/ActionMenu.svelte';
   import Brief, { type BriefAction, type Fact } from '../work/shared/Brief.svelte';
-  import KeyHints from '../work/shared/KeyHints.svelte';
+  import ListKeys from '../work/shared/ListKeys.svelte';
   import { queueKeys } from '../work/shared/keymap';
   import Loading from '../work/shared/Loading.svelte';
   import StageTrack from '../work/shared/StageTrack.svelte';
@@ -644,8 +644,13 @@
     openView('tickets');
   }
 
-  /** The full key list (`?`). */
+  /** `?` opens the key panel, `?` again or its button the full key list (#437). */
+  let keysPanel = $state(false);
   let keysOpen = $state(false);
+  function allKeys(): void {
+    keysPanel = false;
+    keysOpen = true;
+  }
   const hints = $derived(queueKeys());
   /** Space shows or hides the brief (#440); per mount, like the Tickets split. */
   let briefShown = $state(true);
@@ -653,6 +658,14 @@
   function onkeydown(e: KeyboardEvent): void {
     // The filter and the brief's reply field keep their keys.
     if (e.target instanceof HTMLInputElement) return;
+    // `?`'s key panel goes with the next key (#437); Esc only closes it.
+    if (keysPanel && e.key !== '?' && e.key !== 'Shift') {
+      keysPanel = false;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        return;
+      }
+    }
     // A section header keeps its own keys (Enter, Space); they must not act on the selected row.
     if (e.target instanceof HTMLButtonElement && e.target.classList.contains('fold')) return;
     // A brief button pressed with the keyboard runs itself, not the row's next action too. (The row itself is a button: don't match it.)
@@ -692,7 +705,8 @@
         if (cur) void goToRow(cur);
         break;
       case '?':
-        keysOpen = true;
+        if (keysPanel) allKeys();
+        else keysPanel = true;
         break;
       case '/':
         filtering = true;
@@ -1106,10 +1120,11 @@
       </div>
     {/if}
   {/if}
+  {#if keysPanel}<ListKeys {hints} onopen={allKeys} />{/if}
 </div>
 
 {#if keysOpen}
-  <KeyHints
+  <ListKeys
     {hints}
     onclose={() => {
       keysOpen = false;
@@ -1166,6 +1181,7 @@
 <style>
   .pane {
     container: now / inline-size;
+    position: relative; /* places the key panel */
     display: flex;
     flex-direction: column;
     height: 100%;

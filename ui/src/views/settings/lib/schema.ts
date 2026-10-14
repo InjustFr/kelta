@@ -17,6 +17,7 @@ export interface SchemaNode {
   anyOf?: SchemaNode[];
   oneOf?: SchemaNode[];
   description?: string;
+  deprecated?: boolean;
   title?: string;
   default?: JsonValue;
   minimum?: number;
@@ -153,14 +154,16 @@ export function fieldKind(input: SchemaNode): FieldKind {
   }
 }
 
-/** Child property schemas of a group, scalars first, then nested structures; each alphabetical. */
+/** Child property schemas of a group, scalars first, then nested structures; each alphabetical. Deprecated keys still load, unshown. */
 export function childEntries(node: SchemaNode): [string, SchemaNode][] {
   const props = resolve(node).node.properties ?? {};
   const weight = (n: SchemaNode): number => {
     const k = fieldKind(n);
     return k === 'group' || k === 'object-map' || k === 'keyed-list' ? 1 : 0;
   };
-  return Object.entries(props).sort(([ka, a], [kb, b]) => weight(a) - weight(b) || ka.localeCompare(kb));
+  return Object.entries(props)
+    .filter(([, n]) => !n.deprecated)
+    .sort(([ka, a], [kb, b]) => weight(a) - weight(b) || ka.localeCompare(kb));
 }
 
 /** Schema of a map's values / a list's items. */

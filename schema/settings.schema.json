@@ -2330,7 +2330,8 @@
         },
         "hints": {
           "default": true,
-          "description": "The key hint line under lists; `?` still lists every key.",
+          "deprecated": true,
+          "description": "Deprecated and ignored: lists no longer have a key hint line, `?` opens their key panel.",
           "type": "boolean"
         },
         "linux_terminal": {

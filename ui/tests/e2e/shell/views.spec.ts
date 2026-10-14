@@ -70,7 +70,7 @@ test('p on a ticket lands on its PR in Reviews, and its linked ticket leads back
   expect(await activeProject(page)).toBe('shop');
 });
 
-test('Now, Reviews and Tickets fill the window: their hint bar sits at the bottom, even above an empty state', async ({
+test('Now, Reviews and Tickets fill the window: the pane reaches the bottom, even above an empty state', async ({
   page,
 }) => {
   await boot(page);
@@ -80,9 +80,8 @@ test('Now, Reviews and Tickets fill the window: their hint bar sits at the botto
     for (const view of ['inbox', 'reviews', 'tickets']) {
       await page.getByTestId(`rail-${view}`).click();
       const pane = host.getByTestId(`${view}-pane`);
-      // Now has no footer key bar (#399): its pane itself must reach the bottom.
-      const foot = view === 'inbox' ? pane : pane.locator('footer');
-      await expect(foot).toBeVisible();
+      // No list has a key hints line any more (#399, #437): the pane itself must reach the bottom.
+      await expect(pane).toBeVisible();
       for (const filter of ['', 'no-such-item-zzz']) {
         if (filter) {
           await page.keyboard.press('/');
@@ -95,7 +94,6 @@ test('Now, Reviews and Tickets fill the window: their hint bar sits at the botto
         const want = await bottom(host);
         const msg = `${view} at ${height}px, filter "${filter}"`;
         await expect.poll(async () => Math.abs((await bottom(pane)) - want), msg).toBeLessThanOrEqual(1);
-        await expect.poll(async () => Math.abs((await bottom(foot)) - want), msg).toBeLessThanOrEqual(1);
       }
     }
   }

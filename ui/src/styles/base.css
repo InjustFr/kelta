@@ -121,6 +121,7 @@ pre,
   min-height: 0;
   container-type: inline-size; /* rows drop low-value chips in narrow panes */
   outline: none;
+  position: relative; /* places the `?` key panel (ListKeys) */
   background: var(--k-well);
   color: var(--k-fg);
 }

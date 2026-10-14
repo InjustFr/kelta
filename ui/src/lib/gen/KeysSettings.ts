@@ -24,7 +24,7 @@ prefix_bindings: { [key in string]: string },
  */
 list_keys: boolean, 
 /**
- * The key hint line under lists; `?` still lists every key.
+ * Deprecated and ignored: lists no longer have a key hint line, `?` opens their key panel.
  */
 hints: boolean, 
 /**

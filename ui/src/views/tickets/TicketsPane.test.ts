@@ -554,30 +554,27 @@ describe('TicketsPane workbench', () => {
     expect(ui.sheet).toBeNull();
   });
 
-  it('the footer shows five keys and ?, which lists them all and the global chords', async () => {
+  it('no key hint line; ? opens the key panel, Esc closes it, ? again lists every key (#437)', async () => {
     const { container } = mountBoard('list');
     await ready(container);
-    expect(container.querySelectorAll('.hints .hint')).toHaveLength(6);
+    expect(container.querySelector('.hints')).toBeNull();
     await press('?');
+    const panel = screen.getByTestId('list-keys');
+    expect([...panel.querySelectorAll('h5')].map((h) => h.textContent)).toEqual([
+      'Move',
+      'Act on the row',
+      'Select',
+      'Filter',
+    ]);
+    await press('Escape');
+    expect(screen.queryByTestId('list-keys')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await press('?');
+    await press('?');
+    expect(screen.queryByTestId('list-keys')).toBeNull();
     const keys = await screen.findByRole('dialog', { name: 'All keys' });
     expect(keys.textContent).toContain('Current sprint');
     expect(keys.textContent).toContain('Next waiting');
-  });
-
-  it('keys.hints = false hides the footer', async () => {
-    const { container } = mountBoard('list');
-    await ready(container);
-    await waitFor(() => expect(settings.value()).not.toBeNull());
-    const global = settings.effective[''];
-    const value = settings.value()!;
-    settings.effective = {
-      '': {
-        ...global!,
-        data: { ...global!.data!, value: { ...value, keys: { ...value.keys, hints: false } } },
-      },
-    };
-    await tick();
-    expect(container.querySelector('.hints')).toBeNull();
   });
 
   it('names the PR of a ticket linked by a review and its state under the title (#400)', async () => {
@@ -961,7 +958,9 @@ describe('TicketsPane split view', () => {
     expect(row(container, 'SHOP-151').querySelector('[role="img"]')?.getAttribute('aria-label')).toMatch(
       /^At Ticket/,
     );
-    expect(container.querySelector('.hints')?.textContent).toContain('Review changes'); // named before Enter
+    await press('?');
+    expect(screen.getByTestId('list-keys').textContent).toContain('Review changes'); // named before Enter
+    await press('Escape');
     vi.mocked(runPrimary).mockClear();
     await press('Enter', { metaKey: true }); // #141's batch start, not the phase action
     expect(vi.mocked(runPrimary)).not.toHaveBeenCalled();
@@ -972,7 +971,9 @@ describe('TicketsPane split view', () => {
     await fireEvent.keyDown(detail()!, { key: 'Escape' });
     // No work: Enter starts it, through the start sheet.
     await ready(container, 'SHOP-151');
-    expect(container.querySelector('.hints')?.textContent).toContain('Start work');
+    await press('?');
+    expect(screen.getByTestId('list-keys').textContent).toContain('Start work');
+    await press('Escape');
     await press('Enter');
     await waitFor(() => expect(ui.sheet?.key).toBe('start_work'));
   });
@@ -985,7 +986,9 @@ describe('TicketsPane split view', () => {
     const { container } = mountBoard();
     await ready(container, 'SHOP-142');
     await press('l'); // SHOP-142 sits in the next lane
-    expect(container.querySelector('.hints')?.textContent).toContain('Review changes');
+    await press('?');
+    expect(screen.getByTestId('list-keys').textContent).toContain('Review changes');
+    await press('Escape');
     await press('Enter');
     expect(vi.mocked(runPrimary)).toHaveBeenCalledWith(expect.objectContaining({ id: w.id }));
   });

@@ -655,6 +655,16 @@ fn prompt_template_overrides_accept_the_shipped_placeholders() {
     assert!(e.load().issues().iter().any(|i| i.issue.message.contains("{nope}")));
 }
 
+/// #437: `keys.hints` is deprecated and ignored; a config that still sets it loads with no issue.
+#[test]
+fn deprecated_keys_hints_still_loads() {
+    let e = env();
+    e.global("[keys]\nhints = false\nlist_keys = false\n");
+    let svc = e.load();
+    assert!(svc.issues().is_empty(), "{:?}", svc.issues());
+    assert!(!svc.effective(None).keys.list_keys);
+}
+
 /// #433: `claude_done` turns off by default, an explicit value is kept, and the old
 /// `claude_needs_input` key reads as `claude_blocked` (the new key wins when both are set).
 #[test]
