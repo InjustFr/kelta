@@ -76,12 +76,19 @@ describe('ProjectRail', () => {
     // Unfinished work in start order, tab or not, unless it waits on others (SHOP-120, #443); the caption counts them.
     expect(workIds(r, 'shop')).toEqual(['a008', 'a004', 'a001']);
     expect(within(band(r, 'shop')).getByTestId('rail-count').textContent).toBe('3');
-    // Key, title without the key, stage word and ⌘N digit.
+    // Key, title without the key, stage word; the ⌘N digit only while the modifier is held (#451).
     const work = r.container.querySelector('[data-tab-id="shop-t1"]') as HTMLElement;
     expect(work.querySelector('.key')?.textContent).toBe('SHOP-142');
     expect(work.querySelector('.name')?.textContent).toBe('Rate-limit login');
     expect(work.querySelector('[data-testid="rail-stage"]')?.textContent).toBe('Claude');
-    expect(r.container.querySelector('[data-tab-id="kt-t1"] .index')?.textContent).toBe('7');
+    const kt = () => r.container.querySelector('[data-tab-id="kt-t1"]') as HTMLElement;
+    const digit = () => kt().querySelector('.index')?.textContent;
+    expect(digit()).toBeUndefined();
+    await fireEvent.keyDown(window, { key: 'Meta', metaKey: true, ctrlKey: true });
+    // The digit and the tooltip's chord name the same row index.
+    expect(kt().title).toMatch(new RegExp(`\\((⌘|Ctrl\\+)${digit()}\\)$`));
+    await fireEvent.keyUp(window, { key: 'Meta' });
+    expect(digit()).toBeUndefined();
     const more = within(band(r, 'shop')).getByTestId('rail-more');
     expect(more.textContent).toContain('2 more');
     expect(more.getAttribute('aria-expanded')).toBe('false');
