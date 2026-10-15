@@ -2,6 +2,6 @@
 import type { TransitionTarget } from "./TransitionTarget";
 
 /**
- * `start` / `review` / `done` → TransitionTarget; overrides `work.on_*` targets.
+ * Deprecated: use `pipeline`; still read as its fallback. `start` / `review` / `done` → TransitionTarget; overrides `work.on_*` targets.
  */
 export type StatusMap = { start: TransitionTarget | null, review: TransitionTarget | null, done: TransitionTarget | null, };

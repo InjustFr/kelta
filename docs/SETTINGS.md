@@ -210,9 +210,10 @@ Multi-line inline tables are TOML 1.1 (parsed by `toml` 1.1.8 / `toml_edit` 0.25
 | `default_template` | str | `"claude+editor"` | the session template Start work uses; a project's `[project] default_template` overrides it for that project |
 | `review_template` | str | `"review"` | |
 | `scratch_branch_template` | Template | `"wip/{slug}"` | branch of a New work item (`⇧⌘N`, `kelta-ctl start --task`); `{slug}` = slug of the task's first line (`worktree.slug_max`). Validated like `git check-ref-format`; an existing branch or item is refused, never adopted |
-| `on_start` | {assign_me: bool = true, transition_to: TransitionTarget? = {category = "in_progress"}, comment: Template? = none} | | TransitionTarget = `{category = "todo"\|"in_progress"\|"in_review"\|"done"}` or `{name = "In Progress"}` |
-| `on_pr` | {transition_to: TransitionTarget? = {category="in_review"}, comment: Template? = "PR: {pr.url}"} | | |
-| `on_merge` | {transition_to: TransitionTarget? = {category="done"}, offer_cleanup: bool = true} | | applied on `pr.merged` (also for merges while Kelta was closed, found on the next launch) only when unambiguous: a `name` target, or a single `category` match, and no required fields. Otherwise the ticket stays as is, the item reads "Merged: choose Done status" and the Finish dialog asks. The project's `status_map.done` wins over it. |
+| `on_start` | {assign_me: bool = true, transition_to: TransitionTarget? = {category = "in_progress"}, comment: Template? = none} | | TransitionTarget = `{category = "todo"\|"in_progress"\|"in_review"\|"done"}` or `{name = "In Progress"}`. `transition_to` / `comment` deprecated: use `pipeline` (still read; a settings warning). |
+| `on_pr` | {transition_to: TransitionTarget? = {category="in_review"}, comment: Template? = "PR: {pr.url}"} | | `transition_to` / `comment` deprecated: use `pipeline` (still read; a settings warning). |
+| `on_merge` | {transition_to: TransitionTarget? = {category="done"}, offer_cleanup: bool = true} | | applied on `pr.merged` (also for merges while Kelta was closed, found on the next launch) only when unambiguous: a `name` target, or a single `category` match, and no required fields. Otherwise the ticket stays as is, the item reads "Merged: choose Done status" and the Finish dialog asks. The project's `status_map.done` wins over it. `transition_to` deprecated: use `pipeline` (still read; a settings warning). |
+| `pipeline` | [StepDef] | `[]` | the steps of a ticket's flow when its source sets no `tracker.pipeline` (see `[[sources]]`); empty = built from `status_map` and `on_*` |
 | `pr.title_template` | Template | `"{ticket.key}: {ticket.title}"` | prefills the Ship dialog title for ticket items; other items use the last commit subject |
 | `pr.merge_method` | `"squash"` \| `"merge"` \| `"rebase"` | `"squash"` | default of the Merge when ready picker (`M`); GitLab takes squash or merge |
 | `pr.body_template` | Template | `"{ticket.url}\n\n{closes}"` | `{closes}` = `Closes #n` for GitHub issues |
@@ -358,9 +359,26 @@ options = [{ label = "Auto", values = ["--auto"] }, { label = "Mode", values = [
 
 `waiting_statuses` names statuses (as the tracker spells them, exact match) where your part is over and the ticket waits on something else, such as a deployment. The Queue moves a ticket of this source in one of them, and its work item unless Claude needs you or it needs a fix, to the collapsed **Waiting to deploy** section, after Up next: it leaves Up next, New for you and Next up, even when another view (a follow-up view with `who = "anyone"`) lists it, and a ticket leaves the Queue once its status is Done (its work item goes back to its phase section, Ship and clean up for a merged one). Settings → Sources sets them per source (**Waiting to deploy**, one switch per status of the source's columns). Tickets and the views that ask for these statuses still show it.
 
+`pipeline` (`[[sources.tracker.pipeline]]`, else the global `[work].pipeline`) lists the steps of a ticket's flow. A step is `{ id, label, enter, transition_to?, comment? }`: `id` is non-empty and unique in the list, `enter` lists what enters the step, `transition_to` (a TransitionTarget) is the tracker status the ticket moves to on entry and `comment` a template posted then. `enter` is empty for a manual-only step, else events (`work_started`, `pr_opened`, `pr_ready`, `review_requested`, `changes_requested`, `approved`, `merged`) and statuses (`{ status = { name = "PO Review" } }` or `{ status = { category = "in_review" } }`, the ticket reaching that status). This is config only: nothing runs the steps yet. Unset, the steps are built from `status_map` and `work.on_*` (a `status_map` key wins over its `on_*` target):
+
+| Step | Entered on | Side effect |
+|---|---|---|
+| Implementing | `work_started` | `status_map.start` / `on_start.transition_to`, and its `comment` (`assign_me` stays in `on_start`) |
+| PR | `pr_opened` | `status_map.review` / `on_pr.transition_to`, and its `comment` |
+| Review | `pr_ready`, `review_requested` | none |
+| Merge | `approved` | none |
+| Done | `merged` | `status_map.done` / `on_merge.transition_to` |
+
+```toml
+[[sources.tracker.pipeline]]
+id = "po_review"
+label = "PO Review"
+enter = [{ status = { name = "PO Review" } }]
+```
+
 A route is the first one in order whose `match` fits the ticket; an empty `match` never fits. `component` is compared with the ticket's labels (tickets carry no component field), `label` with its labels, `type` with its issue type. `options` are the route's Start options (see `[[session_templates]]`).
 
-Errors that reject the file: an empty or duplicate `id`; no `tracker.account`; duplicate view or column ids within a source; a non-empty `tracker.repo_rules` (use `routes`); a route whose `project` is not in `projects`; `sources` in a project or repo file. An unknown project id or account is not a file error: queries skip the project, and fetching reports the account. A `status_colors` value that is not a theme colour or hex, or a `fields` entry without an `id`, is a warning: that entry is dropped, the rest applies (IPC writes reject it).
+Errors that reject the file: an empty or duplicate `id`; no `tracker.account`; duplicate view or column ids within a source; an empty or duplicate step `id` in a `pipeline`, or a status trigger with an empty `name`; a non-empty `tracker.repo_rules` (use `routes`); a route whose `project` is not in `projects`; `sources` in a project or repo file. An unknown project id or account is not a file error: queries skip the project, and fetching reports the account. A `status_colors` value that is not a theme colour or hex, or a `fields` entry without an `id`, is a warning: that entry is dropped, the rest applies (IPC writes reject it). A non-empty `status_map`, or a set `work.on_*.transition_to` / `comment`, is a deprecation warning (nothing is dropped; the keys are still read).
 
 `ProjectInfo.tracker` is the first source listing the project, with its routes for that project as `repo_rules` (`project_update` with a `tracker` still writes that source).
 
@@ -499,7 +517,7 @@ Tracker view schema per kind (`views[]` entries; `id`, `label` always). Keys val
 
 The onboarding sheet writes one view `{ id = "mine", who = "mine", ... }` with no assignee clause; the Tickets pane then offers Unassigned and Team without editing. Settings > Sources lists each source's views (label, account, who, current iteration, Remove) and **Add view…** opens the picker.
 
-`status_map` keys: `start`, `review`, `done` → TransitionTarget. Overrides `work.on_*` targets for this project.
+Deprecated: use `pipeline` (still read as its fallback; a settings warning when non-empty). `status_map` keys: `start`, `review`, `done` → TransitionTarget. Overrides `work.on_*` targets for this project.
 
 **`[project.tracker]` is deprecated** (still read; kept for one release); the binding schema above is the one of `[sources.tracker]` (§2). At startup Kelta moves every block to the global `[[sources]]`:
 - each project file is first copied to `projects/.trash/<id>-tracker-<secs>.toml`, then the global file is written, then the block is removed from the project file; a failure stops there, logs and shows an error toast;

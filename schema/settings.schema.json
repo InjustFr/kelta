@@ -3283,6 +3283,142 @@
                 },
                 "type": "array"
               },
+              "pipeline": {
+                "description": "Steps of this board's tickets; empty takes `work.pipeline`, else the steps built from\n`status_map` and `work.on_*` ([`effective_pipeline`]).",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "One step of a ticket's flow. An empty `enter` makes the step manual only.",
+                  "properties": {
+                    "comment": {
+                      "default": null,
+                      "description": "Template posted on the ticket when the step is entered.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "enter": {
+                      "default": [],
+                      "items": {
+                        "anyOf": [
+                          {
+                            "description": "What enters a pipeline step (`[[…pipeline]] enter`).",
+                            "enum": [
+                              "work_started",
+                              "pr_opened",
+                              "pr_ready",
+                              "review_requested",
+                              "changes_requested",
+                              "approved",
+                              "merged"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "properties": {
+                              "status": {
+                                "anyOf": [
+                                  {
+                                    "properties": {
+                                      "category": {
+                                        "description": "Status category; serialized `todo | in_progress | in_review | done | unknown` (also used in config).",
+                                        "enum": [
+                                          "todo",
+                                          "in_progress",
+                                          "in_review",
+                                          "done",
+                                          "unknown"
+                                        ],
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "category"
+                                    ],
+                                    "type": "object"
+                                  },
+                                  {
+                                    "properties": {
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "name"
+                                    ],
+                                    "type": "object"
+                                  }
+                                ],
+                                "description": "`{ category = \"in_progress\" }` or `{ name = \"In Progress\" }`."
+                              }
+                            },
+                            "required": [
+                              "status"
+                            ],
+                            "type": "object"
+                          }
+                        ],
+                        "description": "`\"pr_ready\"` (an event) or `{ status = { name = \"PO Review\" } }` (the ticket reaching a status)."
+                      },
+                      "type": "array"
+                    },
+                    "id": {
+                      "default": "",
+                      "type": "string"
+                    },
+                    "label": {
+                      "default": "",
+                      "type": "string"
+                    },
+                    "transition_to": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "properties": {
+                                "category": {
+                                  "description": "Status category; serialized `todo | in_progress | in_review | done | unknown` (also used in config).",
+                                  "enum": [
+                                    "todo",
+                                    "in_progress",
+                                    "in_review",
+                                    "done",
+                                    "unknown"
+                                  ],
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "category"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name"
+                              ],
+                              "type": "object"
+                            }
+                          ],
+                          "description": "`{ category = \"in_progress\" }` or `{ name = \"In Progress\" }`."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "description": "Tracker status the ticket moves to when the step is entered."
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "repo_rules": {
                 "default": [],
                 "description": "`[project.tracker]` only; a source uses `routes`.",
@@ -3337,7 +3473,7 @@
                   "review": null,
                   "start": null
                 },
-                "description": "`start` / `review` / `done` → TransitionTarget; overrides `work.on_*` targets.",
+                "description": "Deprecated: use `pipeline`; still read as its fallback. `start` / `review` / `done` → TransitionTarget; overrides `work.on_*` targets.",
                 "properties": {
                   "done": {
                     "anyOf": [
@@ -5452,7 +5588,8 @@
               ],
               "default": {
                 "category": "done"
-              }
+              },
+              "description": "Deprecated: use `pipeline` steps; still read as their fallback."
             }
           },
           "type": "object"
@@ -5468,6 +5605,7 @@
           "properties": {
             "comment": {
               "default": "PR: {pr.url}",
+              "description": "Deprecated: use `pipeline` steps; still read as their fallback.",
               "type": [
                 "string",
                 "null"
@@ -5516,7 +5654,8 @@
               ],
               "default": {
                 "category": "in_review"
-              }
+              },
+              "description": "Deprecated: use `pipeline` steps; still read as their fallback."
             }
           },
           "type": "object"
@@ -5537,6 +5676,7 @@
             },
             "comment": {
               "default": null,
+              "description": "Deprecated: use `pipeline` steps; still read as their fallback.",
               "type": [
                 "string",
                 "null"
@@ -5585,10 +5725,147 @@
               ],
               "default": {
                 "category": "in_progress"
-              }
+              },
+              "description": "Deprecated: use `pipeline` steps; still read as their fallback."
             }
           },
           "type": "object"
+        },
+        "pipeline": {
+          "description": "Steps of a ticket's flow when its source sets no `tracker.pipeline`; empty builds them from\n`tracker.status_map` and `on_*` ([`effective_pipeline`]).",
+          "items": {
+            "additionalProperties": false,
+            "description": "One step of a ticket's flow. An empty `enter` makes the step manual only.",
+            "properties": {
+              "comment": {
+                "default": null,
+                "description": "Template posted on the ticket when the step is entered.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "enter": {
+                "default": [],
+                "items": {
+                  "anyOf": [
+                    {
+                      "description": "What enters a pipeline step (`[[…pipeline]] enter`).",
+                      "enum": [
+                        "work_started",
+                        "pr_opened",
+                        "pr_ready",
+                        "review_requested",
+                        "changes_requested",
+                        "approved",
+                        "merged"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "properties": {
+                        "status": {
+                          "anyOf": [
+                            {
+                              "properties": {
+                                "category": {
+                                  "description": "Status category; serialized `todo | in_progress | in_review | done | unknown` (also used in config).",
+                                  "enum": [
+                                    "todo",
+                                    "in_progress",
+                                    "in_review",
+                                    "done",
+                                    "unknown"
+                                  ],
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "category"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name"
+                              ],
+                              "type": "object"
+                            }
+                          ],
+                          "description": "`{ category = \"in_progress\" }` or `{ name = \"In Progress\" }`."
+                        }
+                      },
+                      "required": [
+                        "status"
+                      ],
+                      "type": "object"
+                    }
+                  ],
+                  "description": "`\"pr_ready\"` (an event) or `{ status = { name = \"PO Review\" } }` (the ticket reaching a status)."
+                },
+                "type": "array"
+              },
+              "id": {
+                "default": "",
+                "type": "string"
+              },
+              "label": {
+                "default": "",
+                "type": "string"
+              },
+              "transition_to": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "category": {
+                            "description": "Status category; serialized `todo | in_progress | in_review | done | unknown` (also used in config).",
+                            "enum": [
+                              "todo",
+                              "in_progress",
+                              "in_review",
+                              "done",
+                              "unknown"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "category"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name"
+                        ],
+                        "type": "object"
+                      }
+                    ],
+                    "description": "`{ category = \"in_progress\" }` or `{ name = \"In Progress\" }`."
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Tracker status the ticket moves to when the step is entered."
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
         },
         "plan_preview": {
           "default": true,

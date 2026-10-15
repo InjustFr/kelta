@@ -81,6 +81,7 @@ export const ADVANCED: readonly string[] = [
   'worktree.type_map',
   'work.review_template',
   'work.scratch_branch_template',
+  'work.pipeline',
   'session_templates',
   'ports',
   'reviews.ignore_globs',

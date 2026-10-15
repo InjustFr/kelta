@@ -1173,7 +1173,9 @@ pub enum TransitionTarget {
 #[serde(default, deny_unknown_fields)]
 pub struct OnStart {
     pub assign_me: bool,
+    /// Deprecated: use `pipeline` steps; still read as their fallback.
     pub transition_to: Option<TransitionTarget>,
+    /// Deprecated: use `pipeline` steps; still read as their fallback.
     pub comment: Option<String>,
 }
 
@@ -1190,7 +1192,9 @@ impl Default for OnStart {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct OnPr {
+    /// Deprecated: use `pipeline` steps; still read as their fallback.
     pub transition_to: Option<TransitionTarget>,
+    /// Deprecated: use `pipeline` steps; still read as their fallback.
     pub comment: Option<String>,
 }
 
@@ -1206,6 +1210,7 @@ impl Default for OnPr {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct OnMerge {
+    /// Deprecated: use `pipeline` steps; still read as their fallback.
     pub transition_to: Option<TransitionTarget>,
     pub offer_cleanup: bool,
 }
@@ -1217,6 +1222,40 @@ impl Default for OnMerge {
             offer_cleanup: true,
         }
     }
+}
+
+/// What enters a pipeline step (`[[…pipeline]] enter`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PipelineEvent {
+    WorkStarted,
+    PrOpened,
+    PrReady,
+    ReviewRequested,
+    ChangesRequested,
+    Approved,
+    Merged,
+}
+
+/// `"pr_ready"` (an event) or `{ status = { name = "PO Review" } }` (the ticket reaching a status).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(untagged)]
+pub enum Trigger {
+    Event(PipelineEvent),
+    Status { status: TransitionTarget },
+}
+
+/// One step of a ticket's flow. An empty `enter` makes the step manual only.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct StepDef {
+    pub id: String,
+    pub label: String,
+    pub enter: Vec<Trigger>,
+    /// Tracker status the ticket moves to when the step is entered.
+    pub transition_to: Option<TransitionTarget>,
+    /// Template posted on the ticket when the step is entered.
+    pub comment: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
@@ -1253,6 +1292,11 @@ pub struct WorkSettings {
     pub on_start: OnStart,
     pub on_pr: OnPr,
     pub on_merge: OnMerge,
+    /// Steps of a ticket's flow when its source sets no `tracker.pipeline`; empty builds them from
+    /// `tracker.status_map` and `on_*` ([`effective_pipeline`]).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<StepDef>>", optional)]
+    pub pipeline: Vec<StepDef>,
     pub pr: PrSettings,
     /// Branch of a scratch work item (New work item, `kelta-ctl start --task`); `{slug}` = slug of
     /// the task's first line.
@@ -1272,6 +1316,7 @@ impl Default for WorkSettings {
             on_start: OnStart::default(),
             on_pr: OnPr::default(),
             on_merge: OnMerge::default(),
+            pipeline: Vec::new(),
             pr: PrSettings::default(),
             scratch_branch_template: "wip/{slug}".into(),
             return_brief_after_mins: 20,
@@ -1794,7 +1839,7 @@ pub struct ColumnSpec {
     pub names: Vec<String>,
 }
 
-/// `start` / `review` / `done` → TransitionTarget; overrides `work.on_*` targets.
+/// Deprecated: use `pipeline`; still read as its fallback. `start` / `review` / `done` → TransitionTarget; overrides `work.on_*` targets.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct StatusMap {
@@ -1842,6 +1887,11 @@ pub struct TrackerBinding {
     pub views: Vec<TrackerView>,
     pub columns: Vec<ColumnSpec>,
     pub status_map: StatusMap,
+    /// Steps of this board's tickets; empty takes `work.pipeline`, else the steps built from
+    /// `status_map` and `work.on_*` ([`effective_pipeline`]).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<StepDef>>", optional)]
+    pub pipeline: Vec<StepDef>,
     /// `[project.tracker]` only; a source uses `routes`.
     pub repo_rules: Vec<RepoRule>,
 }
@@ -1853,6 +1903,55 @@ impl TrackerBinding {
         let views = self.views.iter().filter_map(|v| v.account.clone());
         std::iter::once(self.account.clone()).chain(views).find(|a| !a.as_str().is_empty())
     }
+}
+
+/// The steps of a board's tickets: its `pipeline`, else `work.pipeline`, else the flow `status_map`
+/// and `work.on_*` describe (a `status_map` key wins over its `on_*` target, as Start work, `on_pr`
+/// and the merge resolve it today).
+pub fn effective_pipeline(tracker: &TrackerBinding, work: &WorkSettings) -> Vec<StepDef> {
+    if !tracker.pipeline.is_empty() {
+        return tracker.pipeline.clone();
+    }
+    if !work.pipeline.is_empty() {
+        return work.pipeline.clone();
+    }
+    let map = &tracker.status_map;
+    let step = |id: &str,
+                label: &str,
+                on: &[PipelineEvent],
+                to: Option<TransitionTarget>,
+                comment: Option<String>| StepDef {
+        id: id.into(),
+        label: label.into(),
+        enter: on.iter().copied().map(Trigger::Event).collect(),
+        transition_to: to,
+        comment,
+    };
+    vec![
+        step(
+            "implementing",
+            "Implementing",
+            &[PipelineEvent::WorkStarted],
+            map.start.clone().or_else(|| work.on_start.transition_to.clone()),
+            work.on_start.comment.clone(),
+        ),
+        step(
+            "pr",
+            "PR",
+            &[PipelineEvent::PrOpened],
+            map.review.clone().or_else(|| work.on_pr.transition_to.clone()),
+            work.on_pr.comment.clone(),
+        ),
+        step("review", "Review", &[PipelineEvent::PrReady, PipelineEvent::ReviewRequested], None, None),
+        step("merge", "Merge", &[PipelineEvent::Approved], None, None),
+        step(
+            "done",
+            "Done",
+            &[PipelineEvent::Merged],
+            map.done.clone().or_else(|| work.on_merge.transition_to.clone()),
+            None,
+        ),
+    ]
 }
 
 /// `[[sources.routes]]`: tickets matching `match` start in `project`'s `repo`.
@@ -1985,7 +2084,7 @@ fn same_views(a: &TrackerBinding, b: &TrackerBinding) -> bool {
 }
 
 fn same_board(a: &TrackerBinding, b: &TrackerBinding) -> bool {
-    same_views(a, b) && a.columns == b.columns && a.status_map == b.status_map
+    same_views(a, b) && a.columns == b.columns && a.status_map == b.status_map && a.pipeline == b.pipeline
 }
 
 /// Lowercase `[a-z0-9-]*`: runs of anything else become one `-`, none at either end (empty when
@@ -2003,10 +2102,10 @@ pub fn slug(s: &str) -> String {
 }
 
 /// `existing` plus the projects' deprecated `[project.tracker]` blocks (the migration and the read
-/// path): a board equal to a source's (account, views, columns, status_map) joins it, the
+/// path): a board equal to a source's (account, views, columns, status_map, pipeline) joins it, the
 /// project and its `repo_rules` as routes; another becomes a new source, labelled after its only
 /// view or its account, plus ` · <project name>` when another source has the same views but
-/// other columns or status_map. Ids are the label's slug, made unique with `-2`, `-3`, ….
+/// other columns, status_map or pipeline. Ids are the label's slug, made unique with `-2`, `-3`, ….
 /// An account-less block takes `source_account`; one without any account is skipped.
 pub fn sources_from_trackers(existing: &[Source], projects: &[ProjectConfig]) -> Vec<Source> {
     let mut out = existing.to_vec();
@@ -2228,6 +2327,99 @@ mod tests {
         assert_eq!(BlockedMarker::default_for(TrackerKind::GithubIssues), BlockedMarker::Status);
         assert!(!BlockedMarker::Relation.writable(TrackerKind::Linear));
         assert!(!BlockedMarker::Label("x".into()).writable(TrackerKind::Redmine));
+    }
+
+    #[test]
+    fn pipeline_parses_and_round_trips() {
+        let s: Settings = toml::from_str(
+            r#"
+[work]
+pipeline = [{ id = "build", label = "Build", enter = ["work_started"] }]
+
+[[sources]]
+id = "a"
+
+[[sources.tracker.pipeline]]
+id = "review"
+label = "Review"
+enter = ["pr_ready", "review_requested"]
+
+[[sources.tracker.pipeline]]
+id = "po_review"
+label = "PO Review"
+enter = [{ status = { name = "PO Review" } }, { status = { category = "in_review" } }]
+transition_to = { name = "PO Review" }
+comment = "Ready for PO: {pr.url}"
+
+[[sources.tracker.pipeline]]
+id = "release"
+label = "Release"
+"#,
+        )
+        .unwrap();
+        let p = &s.sources[0].tracker.pipeline;
+        assert_eq!(p.iter().map(|d| d.id.as_str()).collect::<Vec<_>>(), ["review", "po_review", "release"]);
+        assert_eq!(
+            p[0].enter,
+            [Trigger::Event(PipelineEvent::PrReady), Trigger::Event(PipelineEvent::ReviewRequested)]
+        );
+        assert_eq!(
+            p[1].enter,
+            [
+                Trigger::Status { status: TransitionTarget::Name { name: "PO Review".into() } },
+                Trigger::Status { status: TransitionTarget::Category { category: StatusCategory::InReview } },
+            ]
+        );
+        assert_eq!(p[1].comment.as_deref(), Some("Ready for PO: {pr.url}"));
+        assert!(p[2].enter.is_empty());
+        assert_eq!(s.work.pipeline[0].enter, [Trigger::Event(PipelineEvent::WorkStarted)]);
+        let t = &s.sources[0].tracker;
+        let back: TrackerBinding = toml::from_str(&toml::to_string(t).unwrap()).unwrap();
+        assert_eq!(&back, t);
+        assert_eq!(serde_json::from_value::<Settings>(serde_json::to_value(&s).unwrap()).unwrap(), s);
+    }
+
+    #[test]
+    fn effective_pipeline_falls_back_to_status_map_and_on_targets() {
+        let targets = |p: &[StepDef]| p.iter().map(|d| d.transition_to.clone()).collect::<Vec<_>>();
+        let cat = |category| Some(TransitionTarget::Category { category });
+        let name = |n: &str| Some(TransitionTarget::Name { name: n.into() });
+        let work = WorkSettings::default();
+        let p = effective_pipeline(&TrackerBinding::default(), &work);
+        assert_eq!(
+            p.iter().map(|d| d.id.as_str()).collect::<Vec<_>>(),
+            ["implementing", "pr", "review", "merge", "done"]
+        );
+        assert_eq!(
+            targets(&p),
+            [
+                cat(StatusCategory::InProgress),
+                cat(StatusCategory::InReview),
+                None,
+                None,
+                cat(StatusCategory::Done)
+            ]
+        );
+        assert_eq!((p[0].comment.as_deref(), p[1].comment.as_deref()), (None, Some("PR: {pr.url}")));
+        assert_eq!(
+            p[2].enter,
+            [Trigger::Event(PipelineEvent::PrReady), Trigger::Event(PipelineEvent::ReviewRequested)]
+        );
+        assert_eq!(p[3].enter, [Trigger::Event(PipelineEvent::Approved)]);
+        assert_eq!(p[4].enter, [Trigger::Event(PipelineEvent::Merged)]);
+        let set = TrackerBinding {
+            status_map: StatusMap { start: None, review: name("In Review"), done: name("Shipped") },
+            ..TrackerBinding::default()
+        };
+        assert_eq!(
+            targets(&effective_pipeline(&set, &work)),
+            [cat(StatusCategory::InProgress), name("In Review"), None, None, name("Shipped")]
+        );
+        let step = |id: &str| StepDef { id: id.into(), ..StepDef::default() };
+        let global = WorkSettings { pipeline: vec![step("global")], ..WorkSettings::default() };
+        assert_eq!(effective_pipeline(&TrackerBinding::default(), &global), [step("global")]);
+        let mine = TrackerBinding { pipeline: vec![step("mine")], ..TrackerBinding::default() };
+        assert_eq!(effective_pipeline(&mine, &global), [step("mine")]);
     }
 
     #[test]

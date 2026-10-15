@@ -3,12 +3,18 @@ import type { AccountId } from "./AccountId";
 import type { ColumnSpec } from "./ColumnSpec";
 import type { RepoRule } from "./RepoRule";
 import type { StatusMap } from "./StatusMap";
+import type { StepDef } from "./StepDef";
 import type { TrackerView } from "./TrackerView";
 
 /**
  * `[sources.tracker]`, and the deprecated `[project.tracker]`.
  */
 export type TrackerBinding = { account: AccountId, views: Array<TrackerView>, columns: Array<ColumnSpec>, status_map: StatusMap, 
+/**
+ * Steps of this board's tickets; empty takes `work.pipeline`, else the steps built from
+ * `status_map` and `work.on_*` ([`effective_pipeline`]).
+ */
+pipeline?: Array<StepDef>, 
 /**
  * `[project.tracker]` only; a source uses `routes`.
  */
