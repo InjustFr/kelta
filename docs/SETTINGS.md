@@ -141,7 +141,7 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | `min_version` | str (semver) | `"2.1.200"` | older → warning, hooks still attempted |
 | `hook_transport` | enum(command\|http) | `command` | SessionStart always command |
 | `mcp` | bool | `true` | Kelta MCP server for Claude sessions |
-| `mcp_board_writes` | bool | `true` | board-wide MCP writes (`transition_ticket_by_key`, `comment_ticket_by_key`, `update_ticket_body`, `close_ticket`); off = read-only board tools. Also needs `mcp` |
+| `mcp_board_writes` | bool | `true` | board-wide MCP writes (`transition_ticket_by_key`, `comment_ticket_by_key`, `update_ticket_body`, `close_ticket`, `move_ticket_step`); off = read-only board tools. Also needs `mcp` |
 | `mcp_offer` | bool | `true` | at startup, offer to register Kelta's MCP in Claude Code (user scope) when it is found and not registered; the toast's Never sets it to `false`. Global |
 | `hooks_offer` | bool | `true` | at startup, offer to register Kelta's hook relay (`kelta-ctl hook --outside`) in Claude Code's user settings when it is found and not registered, so Claude sessions Kelta did not start show in the Queue; the toast's Never sets it to `false`. Global. Settings → Claude has Install / Remove buttons for both registrations |
 | `allowed_tools` | list<str> | `["mcp__kelta__*"]` | passed via `--allowedTools` |

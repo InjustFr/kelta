@@ -460,6 +460,13 @@ pre,
   }
 }
 
+/* A settings row opened from ⌘K or search: an accent wash that fades. */
+@keyframes k-revealed {
+  from {
+    background: color-mix(in srgb, var(--k-accent) 22%, transparent);
+  }
+}
+
 /* Attention: a ring leaves the lamp, --k-pulses times, then the lamp stays still. */
 @keyframes k-pulse {
   from {

@@ -113,7 +113,10 @@ test.describe('settings pane', () => {
     const results = page.getByTestId('search-results');
     const hit = results.locator('[data-hit="key:terminal.copy_on_select"]');
     await expect(hit).toBeVisible();
+    await expect(hit).toHaveClass(/active/);
     await page.keyboard.press('ArrowDown');
+    await expect(hit).not.toHaveClass(/active/);
+    await page.keyboard.press('ArrowUp');
     await expect(hit).toHaveClass(/active/);
     await page.keyboard.press('Enter');
     const sw = results.locator('[data-path="terminal.copy_on_select"]').getByRole('switch');
@@ -124,6 +127,40 @@ test.describe('settings pane', () => {
     await page.keyboard.press('Escape');
     await expect(search).toHaveValue('');
     await expect(page.getByTestId('settings-pane')).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+  test('Terminal: grouped by task, Clipboard group, session host toggle, disk caps follow saving (#470)', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    await page.goto(`${HARNESS}?view=settings&section=terminal`);
+
+    await expect(
+      page.locator('[data-testid="settings-section"] > [data-testid="copy-group"] > header > h3'),
+    ).toHaveText(['Text', 'Cursor', 'Clipboard', 'Keyboard', 'Scrollback & history', 'Shell', 'Sound']);
+    const clipboard = page
+      .locator('[data-testid="copy-group"]')
+      .filter({ has: page.getByRole('heading', { name: 'Clipboard', exact: true }) });
+    for (const p of ['copy_on_select', 'osc52', 'confirm_multiline_paste'])
+      await expect(clipboard.locator(`[data-testid="field"][data-path="terminal.${p}"]`)).toBeVisible();
+    await expect(clipboard.getByText('Let programs copy to the clipboard')).toBeVisible();
+    await expect(page.locator('[data-testid="group"][data-path="terminal.scrollback"]')).toBeVisible();
+    await expect(page.getByTestId('terminal-preview')).toBeVisible();
+
+    await page.getByTestId('advanced').getByText('Advanced settings').click();
+    for (const name of ['OSC 52', 'Session host', 'Shift enter'])
+      await expect(page.getByText(name, { exact: true })).toHaveCount(0);
+    await expect(page.locator('[data-testid="settings-section"] textarea')).toHaveCount(0);
+    await expect(
+      page
+        .locator('[data-testid="field"][data-path="terminal.session_host"]')
+        .getByRole('switch', { name: 'Keep sessions running after Kelta quits' }),
+    ).toBeChecked();
+
+    await page.getByRole('switch', { name: 'Save scrolled-off lines to disk' }).click();
+    await expect(page.locator('[data-testid="field"][data-path="terminal.history_log_mb"]')).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 

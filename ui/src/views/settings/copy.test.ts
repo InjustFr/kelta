@@ -101,6 +101,24 @@ describe('settings copy table', () => {
     }
   });
 
+  it('Terminal is grouped by task, scrollback outside Advanced (#470)', async () => {
+    onOs('MacIntel');
+    const { container, unmount } = await renderForm('terminal');
+    const heads = [...container.querySelectorAll('[data-testid="copy-group"] h3')].map((h) => h.textContent);
+    expect(heads).toEqual([
+      'Text',
+      'Cursor',
+      'Clipboard',
+      'Keyboard',
+      'Scrollback & history',
+      'Shell',
+      'Sound',
+    ]);
+    for (const p of ['terminal.scrollback', 'terminal.osc52'])
+      expect(container.querySelector(`[data-path="${p}"]`)!.closest('[data-testid="advanced"]')).toBeNull();
+    unmount();
+  });
+
   it('every key of a finished section has a label (COPY_DONE)', () => {
     for (const os of ['MacIntel', 'Linux x86_64'] as const) {
       onOs(os);
@@ -214,7 +232,7 @@ describe('Settings → Claude', () => {
     const { container, unmount } = render(Claude, { layer: 'global', projectId: null, repoId: null });
     await waitFor(() => expect(container.querySelector('[data-testid="claude-mcp"]')).toBeTruthy());
     expect(
-      [...container.querySelectorAll('[data-testid="copy-group"] h3')].map((h) => h.textContent),
+      [...container.querySelectorAll('[data-testid="copy-group"] > header > h3')].map((h) => h.textContent),
     ).toEqual(['Sessions & cost', 'Profiles', 'Kelta in Claude Code']);
     const first = container.querySelector('[data-group="Sessions & cost"]')!;
     expect(

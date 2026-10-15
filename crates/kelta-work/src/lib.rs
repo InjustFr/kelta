@@ -45,7 +45,7 @@ use kelta_proto::dirs::Dirs;
 use kelta_proto::error::KeltaError;
 use kelta_proto::events::{BusEvent, bus};
 use kelta_proto::ext::BlockingOutcome;
-use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
+use kelta_proto::ids::{AccountId, ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{
     DeltaFile, EditorTarget, FinishMergedReport, FinishOpts, GitStatus, RebaseOp, SendFile, SessionInfo,
     ShipOrigin, StartWorkPlan, StepStatus, TemplatePreview, WORK_STEPS, WorkItem, WorkSource, WorkStepStatus,
@@ -66,6 +66,9 @@ pub trait WorkHost: Send + Sync {
     async fn run_blocking(&self, ev: &BusEvent) -> Result<BlockingOutcome, KeltaError>;
 }
 
+/// A ticket across accounts: (account, key).
+type TicketKey = (AccountId, String);
+
 pub struct WorkService {
     core: Weak<dyn CoreApi>,
     store: Arc<dyn WorkStore>,
@@ -80,8 +83,10 @@ pub struct WorkService {
     shipping: Mutex<HashSet<WorkItemId>>,
     /// Serializes `pr_ended` across items, so the last merged PR of a ticket sees the others as done.
     merge_lock: tokio::sync::Mutex<()>,
-    /// Serializes ticket step moves (read, advance, effects, write; #461).
-    step_lock: tokio::sync::Mutex<()>,
+    /// Serializes ticket step moves per ticket (read, advance, effects, write; #461), never across tickets (#466).
+    step_locks: Mutex<HashMap<TicketKey, Arc<tokio::sync::Mutex<()>>>>,
+    /// Last status id the ticket poll saw per ticket with work (#466): only a change signals.
+    seen_status: Mutex<HashMap<TicketKey, String>>,
     /// Serializes the existing-item check + insert of `start` (no twin items for one source).
     start_lock: tokio::sync::Mutex<()>,
     /// Serializes store writes; held only around load-modify-save (`save`, `update`).
@@ -114,7 +119,8 @@ impl WorkService {
             item_locks: Mutex::new(HashMap::new()),
             shipping: Mutex::new(HashSet::new()),
             merge_lock: tokio::sync::Mutex::new(()),
-            step_lock: tokio::sync::Mutex::new(()),
+            step_locks: Mutex::new(HashMap::new()),
+            seen_status: Mutex::new(HashMap::new()),
             start_lock: tokio::sync::Mutex::new(()),
             write_lock: tokio::sync::Mutex::new(()),
             fetched: Mutex::new(HashMap::new()),
@@ -158,19 +164,21 @@ impl WorkService {
 
     /// `work_plan`.
     pub async fn plan(&self, project: &ProjectId, source: WorkSource) -> Result<StartWorkPlan, KeltaError> {
-        self.build_plan(project, source, None, false).await
+        self.build_plan(project, source, None, false, None).await
     }
 
     /// `work_plan` with a source route's `repo` for a ticket, used when the plan stays in `project`.
     /// `another`: Start another PR on the ticket (#456), a new item even when it has one.
+    /// `ticket_source`: the ticket's source, for its pipeline's start effects (#466).
     pub async fn plan_with_repo(
         &self,
         project: &ProjectId,
         source: WorkSource,
         repo: Option<String>,
         another: bool,
+        ticket_source: Option<&str>,
     ) -> Result<StartWorkPlan, KeltaError> {
-        self.build_plan(project, source, repo, another).await
+        self.build_plan(project, source, repo, another, ticket_source).await
     }
 
     /// `work_start` (progress via `work.updated`).
@@ -525,6 +533,10 @@ impl WorkService {
         self.item_locks.lock().entry(id.clone()).or_default().clone()
     }
 
+    pub(crate) fn step_lock(&self, t: &TicketRef) -> Arc<tokio::sync::Mutex<()>> {
+        self.step_locks.lock().entry((t.account.clone(), t.key.clone())).or_default().clone()
+    }
+
     /// Conflict for a held item lock, naming Claude's MCP ship when that is the holder.
     pub(crate) fn busy(&self, id: &WorkItemId) -> KeltaError {
         if self.shipping.lock().contains(id) {
@@ -700,6 +712,20 @@ mod tests {
         assert!(w.list(None).await.unwrap().is_empty());
         let e = w.resume(&WorkItemId::new("nope")).await.unwrap_err();
         assert_eq!(e.code, kelta_proto::ErrorCode::NotFound);
+    }
+
+    #[tokio::test]
+    async fn step_locks_are_per_ticket() {
+        let core = FakeCore::new();
+        let weak: Weak<dyn CoreApi> = Arc::downgrade(&(core.clone() as Arc<dyn CoreApi>));
+        let w = WorkService::new(weak, Arc::new(MemWorkStore::new()), Dirs::under(&std::env::temp_dir()));
+        let a = kelta_proto::samples::ticket_ref();
+        let b = TicketRef { key: "SHOP-2".into(), ..a.clone() };
+        let la = w.step_lock(&a);
+        let _g = la.lock().await;
+        assert!(w.step_lock(&b).try_lock().is_ok(), "another ticket does not wait");
+        let a2 = TicketRef { id: "other".into(), ..a.clone() };
+        assert!(w.step_lock(&a2).try_lock().is_err(), "same account+key, same lock");
     }
 
     #[tokio::test]

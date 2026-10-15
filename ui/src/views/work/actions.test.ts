@@ -127,6 +127,19 @@ describe('L9 actions', () => {
     });
   });
 
+  it('work.next_step / work.move_step from Tickets fall back to the selected ticket (#466)', async () => {
+    await work.load();
+    const ref = work.all.find((w) => w.ticket?.key === 'SHOP-142')!.ticket!;
+    ui.view = 'tickets';
+    selectTicket(ref, 'shop');
+    await dispatch('work.next_step');
+    expect(mock.calls.at(-1)).toMatchObject({ cmd: 'ticket_step_set', args: { step_id: null } });
+    await dispatch('work.move_step');
+    expect(ui.sheet?.key).toBe('tickets.step');
+    ui.sheets = [];
+    ui.view = null;
+  });
+
   it('work.start with marked tickets opens the batch start instead (#141, #397)', async () => {
     selectTicket({ account: 'jira-acme', key: 'SHOP-151', id: '10151' }, 'shop');
     batch.toggle({ account: 'jira-acme', key: 'SHOP-160', id: '10160' }, 'shop');

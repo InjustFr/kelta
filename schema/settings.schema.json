@@ -1128,7 +1128,7 @@
         },
         "mcp_board_writes": {
           "default": true,
-          "description": "Board-wide MCP writes (move, comment, edit, close any ticket by key); off = read-only board tools.",
+          "description": "Board-wide MCP writes (move, comment, edit, close any ticket by key, move its pipeline step); off = read-only board tools.",
           "type": "boolean"
         },
         "mcp_offer": {

@@ -5,7 +5,7 @@
 import { msg, t } from '$lib/i18n/index.svelte';
 import { dispatch, hasAction } from '$lib/actions';
 import { settingsSections } from '$app/registry';
-import type { CommandDef, ProjectId, SessionInfo, TemplateCtx, TicketItem } from '$lib/gen';
+import type { CommandDef, JsonValue, ProjectId, SessionInfo, TemplateCtx, TicketItem } from '$lib/gen';
 import { ACTIONS } from '$lib/gen/actions';
 import { effectiveChords } from '$lib/keys/manager';
 import { paneSession } from '$lib/layout';
@@ -15,7 +15,17 @@ import { attentionRank, lampOf, type LampLevel } from '$lib/stores/reducers';
 import { currentPlatform, isIconName } from '$lib/ui';
 
 import { reviewCtx, ticketCtx, workCtx } from '../../views/plugins/actions';
-import { helpOf, keywordsOf, labelOf, leafFields, type SchemaNode } from '../../views/settings/lib/schema';
+import { toggleSetting } from '../../views/settings/actions';
+import { getAt, splitPath } from '../../views/settings/lib/paths';
+import {
+  enumOptions,
+  helpOf,
+  keywordsOf,
+  labelOf,
+  leafFields,
+  type LeafField,
+  type SchemaNode,
+} from '../../views/settings/lib/schema';
 import { SECTION_ROOTS } from '../../views/settings/lib/sections';
 import { configWorkflows, pickWorkflow, runWorkflowOn } from '../../views/tickets/workflow.svelte';
 import { focusedWorkItem } from '../../views/work/actions';
@@ -49,6 +59,12 @@ export interface PaletteItem {
   kbd?: string;
   icon: string;
   lamp?: LampLevel;
+  /** A settings key's current value (All projects), shown at the row's end. */
+  value?: string;
+  /** An on/off setting: drawn as a switch, ↵ flips it. */
+  checked?: boolean;
+  /** ⌘↵: the alternative to `run` (a setting: open it in Settings). */
+  open?: () => void;
   run: () => void | Promise<void>;
 }
 
@@ -276,22 +292,38 @@ export function workflowItems(): PaletteItem[] {
   }));
 }
 
+/** A key's value as its palette row shows it; lists, maps and secrets show none (Settings does). */
+function valueText(f: LeafField, v: JsonValue | undefined): string | undefined {
+  if (v === undefined || v === null || v === '') return undefined;
+  if (f.kind === 'enum') return enumOptions(f.node, f.path).find((o) => o.value === v)?.label;
+  return f.kind === 'int' || f.kind === 'float' || f.kind === 'string' ? String(v) : undefined;
+}
+
 /** Every section, then every key of the loaded schema (label and help as in Settings). */
 export function settingsItems(): PaletteItem[] {
   const linux = currentPlatform() === 'linux';
   const sections = settingsSections.filter((s) => !s.platform || (s.platform === 'linux') === linux);
   const schema = settings.schema.data as unknown as SchemaNode | null;
+  const current = settings.value() as unknown as JsonValue | null; // All projects: the layer ⌘K's switch writes
   const keys = schema
     ? sections.flatMap((s) =>
-        leafFields(schema, SECTION_ROOTS[s.id] ?? []).map((f) => ({
-          id: `setting-key:${f.path}`,
-          group: 'Settings' as const,
-          label: labelOf(f.path),
-          detail: [f.path, helpOf(f.path, f.node)].filter(Boolean).join(SEP),
-          keywords: keywordsOf(f.path).join(' '),
-          icon: s.icon,
-          run: () => void dispatch('settings.open', { section: s.id, key: f.path }),
-        })),
+        leafFields(schema, SECTION_ROOTS[s.id] ?? []).map((f): PaletteItem => {
+          const label = labelOf(f.path);
+          const open = (): void => void dispatch('settings.open', { section: s.id, key: f.path });
+          const v = getAt(current ?? undefined, splitPath(f.path));
+          return {
+            id: `setting-key:${f.path}`,
+            group: 'Settings',
+            label,
+            detail: [f.path, helpOf(f.path, f.node)].filter(Boolean).join(SEP),
+            keywords: keywordsOf(f.path).join(' '),
+            icon: s.icon,
+            open,
+            ...(f.kind === 'bool'
+              ? { checked: v === true, run: () => toggleSetting(f.path, label) }
+              : { value: valueText(f, v), run: open }),
+          };
+        }),
       )
     : [];
   return [

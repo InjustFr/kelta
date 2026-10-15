@@ -141,7 +141,7 @@ impl WorkService {
             .iter()
             .find(|r| r.code_host.as_ref().is_some_and(|c| c.repo.eq_ignore_ascii_case(&pr.r#ref.repo)))
             .ok_or_else(|| KeltaError::invalid(format!("{} has no repository {}", p.name, pr.r#ref.repo)))?;
-        let mut plan = self.build_plan(project, source, Some(repo.id.clone()), true).await?;
+        let mut plan = self.build_plan(project, source, Some(repo.id.clone()), true, None).await?;
         if plan.adopt_pr.as_deref() != Some(pr.url.as_str()) {
             // A PR that does not name the ticket (yet): its branch replaces the template's.
             plan.repo_id = repo.id.clone();
