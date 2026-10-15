@@ -399,12 +399,13 @@ Every event carries `{name, ts, project_id?, session_id?, work_item_id?, payload
 | `ticket.started` | `{ticket: TicketRef, worktree, branch, work_item_id}` |
 | `ticket.transitioned` | `{ticket, from: Status, to: Status}` |
 | `ticket.commented` / `ticket.assigned` | `{ticket, ...}` |
+| `ticket.step` | `TicketStep{ticket, source_id?, step_id, entered_at, by}` (the ticket entered a pipeline step; forward only) |
 | `worktree.created` / `worktree.removed` | `{path, branch, repo_id}` |
 | `work.before_finish` (blocking) / `work.finished` | `{work_item_id, opts}` |
 | `work.updated` | `{work: WorkItem}` (any item or saga step change; core relays it to the UI) |
 | `pr.before_create` (blocking) / `pr.created` | `{draft}` / `{review: Review}` |
 | `pr.review_requested` | `{review: Review}` (new key only) |
-| `pr.updated` | `{review, changes: ["ci","decision","head"]}` |
+| `pr.updated` | `{review, changes: ["ci","decision","head","draft","reviewers"]}` |
 | `pr.ci_changed` | `{review, state, previous}` |
 | `pr.approved` / `pr.changes_requested` / `pr.merged` / `pr.closed` | `{review, linked_tickets}` (`pr.merged` / `pr.closed`: an authored PR left the open list, seen live or by the startup / Queue-open check; `pr.closed` = closed without merge; once per PR) |
 | `tool.opened` / `tool.exited` | `{tool_id, instance_id, code?}` |

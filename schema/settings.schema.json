@@ -3284,7 +3284,7 @@
                 "type": "array"
               },
               "pipeline": {
-                "description": "Steps of this board's tickets; empty takes `work.pipeline`, else the steps built from\n`status_map` and `work.on_*` ([`effective_pipeline`]).",
+                "description": "Steps of this board's tickets; empty takes `work.pipeline`, else the steps built from\n`status_map` and `work.on_*` (`effective_pipeline`).",
                 "items": {
                   "additionalProperties": false,
                   "description": "One step of a ticket's flow. An empty `enter` makes the step manual only.",
@@ -5732,7 +5732,7 @@
           "type": "object"
         },
         "pipeline": {
-          "description": "Steps of a ticket's flow when its source sets no `tracker.pipeline`; empty builds them from\n`tracker.status_map` and `on_*` ([`effective_pipeline`]).",
+          "description": "Steps of a ticket's flow when its source sets no `tracker.pipeline`; empty builds them from\n`tracker.status_map` and `on_*` (`effective_pipeline`).",
           "items": {
             "additionalProperties": false,
             "description": "One step of a ticket's flow. An empty `enter` makes the step manual only.",

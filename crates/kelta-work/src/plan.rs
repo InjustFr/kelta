@@ -8,10 +8,11 @@ use kelta_proto::model::{
     BranchChoice, BranchExists, ClaudePlan, PORT_BLOCK, ProjectInfo, RepoInfo, SideEffects, StartWorkPlan,
     WorkItem, WorkSource, WorkState,
 };
-use kelta_proto::settings::{Settings, StartOption};
+use kelta_proto::settings::{PipelineEvent, Settings, StartOption, effective_pipeline};
 use kelta_proto::tracker::{Ticket, TrackerKind};
 
 use crate::git;
+use crate::pipeline::Signal;
 use crate::template::{Ctx, Mode, expand_home, render, tidy_path};
 
 /// Ticket facts kept in the saga journal (prompt, PR title/body, `{closes}`).
@@ -236,21 +237,21 @@ pub fn pr_title_with_key(title: &str, key: &str, key_regex: &str) -> Option<Stri
     (!has_key).then(|| format!("{key}: {}", title.trim()))
 }
 
-/// Default side effects (status_map overrides `work.on_start`).
+/// Default side effects: the transition and comment of the step `work_started` enters (#461).
 pub fn side_effects(settings: &Settings, project: &ProjectInfo, ticket: bool, ctx: &Ctx) -> SideEffects {
-    let on = &settings.work.on_start;
-    let start = project.tracker.as_ref().and_then(|t| t.status_map.start.clone());
+    // shortcut: the project board's steps, not the ticket source's (core sets `ticket_source` after
+    // the plan); pass the source when a project has two boards with different pipelines.
+    let steps = effective_pipeline(&project.tracker.clone().unwrap_or_default(), &settings.work);
+    let start = crate::pipeline::advance(&steps, None, &Signal::Event(PipelineEvent::WorkStarted))
+        .filter(|_| ticket)
+        .map(|i| &steps[i]);
     SideEffects {
-        assign_me: ticket && on.assign_me,
-        transition_to: if ticket { start.or_else(|| on.transition_to.clone()) } else { None },
-        comment: if ticket {
-            on.comment
-                .as_ref()
-                .and_then(|c| render(c, ctx, Mode::Lenient).ok())
-                .filter(|c| !c.trim().is_empty())
-        } else {
-            None
-        },
+        assign_me: ticket && settings.work.on_start.assign_me,
+        transition_to: start.and_then(|s| s.transition_to.clone()),
+        comment: start
+            .and_then(|s| s.comment.as_ref())
+            .and_then(|c| render(c, ctx, Mode::Lenient).ok())
+            .filter(|c| !c.trim().is_empty()),
         run_setup: !settings.worktree.setup.is_empty(),
     }
 }

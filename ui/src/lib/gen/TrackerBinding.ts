@@ -12,7 +12,7 @@ import type { TrackerView } from "./TrackerView";
 export type TrackerBinding = { account: AccountId, views: Array<TrackerView>, columns: Array<ColumnSpec>, status_map: StatusMap, 
 /**
  * Steps of this board's tickets; empty takes `work.pipeline`, else the steps built from
- * `status_map` and `work.on_*` ([`effective_pipeline`]).
+ * `status_map` and `work.on_*` (`effective_pipeline`).
  */
 pipeline?: Array<StepDef>, 
 /**

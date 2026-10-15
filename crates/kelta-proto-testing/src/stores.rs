@@ -9,13 +9,15 @@ use parking_lot::Mutex;
 use kelta_proto::api::{GrantStore, PluginGrant, TrustStore, WorkStore};
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::{PluginId, ProjectId, WorkItemId};
-use kelta_proto::model::{ReviewNote, StepStatus, WorkItem, WorkStepStatus};
+use kelta_proto::model::{ReviewNote, StepStatus, TicketStep, WorkItem, WorkStepStatus};
+use kelta_proto::tracker::TicketRef;
 
 #[derive(Default)]
 pub struct MemWorkStore {
     items: Mutex<BTreeMap<WorkItemId, WorkItem>>,
     steps: Mutex<BTreeMap<WorkItemId, BTreeMap<String, WorkStepStatus>>>,
     notes: Mutex<Vec<ReviewNote>>,
+    ticket_steps: Mutex<BTreeMap<String, TicketStep>>,
 }
 
 impl MemWorkStore {
@@ -26,6 +28,15 @@ impl MemWorkStore {
 
 #[async_trait]
 impl WorkStore for MemWorkStore {
+    async fn ticket_step(&self, t: &TicketRef) -> Result<Option<TicketStep>, KeltaError> {
+        Ok(self.ticket_steps.lock().get(&format!("{}:{}", t.account.as_str(), t.key)).cloned())
+    }
+
+    async fn put_ticket_step(&self, s: &TicketStep) -> Result<(), KeltaError> {
+        self.ticket_steps.lock().insert(format!("{}:{}", s.ticket.account.as_str(), s.ticket.key), s.clone());
+        Ok(())
+    }
+
     async fn put_item(&self, item: &WorkItem) -> Result<(), KeltaError> {
         self.items.lock().insert(item.id.clone(), item.clone());
         Ok(())

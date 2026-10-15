@@ -73,7 +73,7 @@ pub fn export_all() -> Result<BTreeMap<String, String>, String> {
         CloseOnExit, SpawnRequest, SessionInfo, ClaudeMeta, EditorMeta, AttachInfo, StatusChange,
         Scope, Layout, Tab, SplitDir, LayoutNode, TicketsMode, RowDensity, PaneContent, Placement,
         OpenPaneRequest, PaneRef, WorkKind, WorkState, StepStatus, WorkStepStatus, WorkItem,
-        WorkSource, BranchChoice, BranchExists, ClaudePlan, SideEffects, StartWorkPlan, PlanOptions, FinishOpts,
+        WorkSource, BranchChoice, BranchExists, ClaudePlan, SideEffects, TicketStep, StartWorkPlan, PlanOptions, FinishOpts,
         GitStatus, EditorTarget, TemplateCtx, RebaseState, RunClaim, RunState, RebaseOnto, RebaseOp, SendFile,
         FinishMergedReport, SkippedItem, ShipOrigin, ReviewDelta, DeltaFile, NoteState, ReviewNote, ReviewNotes,
         NextUpItem, NextUp, LocalTags, LocalTag, WorkflowInfo, WorkflowSource, WorkflowStart, ClaudeRun, ClaudeRunPhase, ClaudeRunAgent, OutsideSession,

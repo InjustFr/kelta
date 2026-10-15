@@ -233,9 +233,20 @@ const V18: &str = r#"
 ALTER TABLE sessions ADD COLUMN tasks_json TEXT;
 "#;
 
+/// v19: where each ticket stands in its pipeline (#461, `TicketStep`); `entered_by` = `TicketStep.by` (BY is an SQL keyword).
+const V19: &str = r#"
+CREATE TABLE IF NOT EXISTS ticket_steps (
+  ticket_key TEXT PRIMARY KEY NOT NULL,
+  source_id  TEXT,
+  step_id    TEXT NOT NULL,
+  entered_at TEXT NOT NULL,
+  entered_by TEXT NOT NULL
+);
+"#;
+
 /// Ordered migrations; `MIGRATIONS.len()` == `kelta_proto::store::SCHEMA_VERSION`.
 pub const MIGRATIONS: &[&str] =
-    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18];
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19];
 
 fn backfill_ticket_sources(c: &Connection, sources: &[Source]) -> rusqlite::Result<()> {
     let rows: Vec<(String, String)> = c

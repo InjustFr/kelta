@@ -606,6 +606,9 @@ impl Core {
                 page.items.extend(fresh);
             }
             self.cache_put(&q.cache_key, &page);
+            // Status-triggered ticket steps (#461), off the list's path: entering one may comment.
+            let (work, tickets) = (self.work.clone(), page.items.clone());
+            self.rt.spawn(async move { work.ticket_statuses(&tickets).await });
         }
         Ok(page)
     }
@@ -1609,6 +1612,12 @@ impl Core {
                     }
                     _ => {}
                 }
+            }
+            if r.draft != p.draft {
+                changes.push("draft");
+            }
+            if r.waiting_on != p.waiting_on {
+                changes.push("reviewers");
             }
             if r.head_sha != p.head_sha {
                 changes.push("head");
