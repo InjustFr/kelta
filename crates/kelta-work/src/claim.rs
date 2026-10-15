@@ -105,13 +105,14 @@ impl WorkService {
     /// MCP `link_pr` (#453): the work item of `ticket` on `pr`'s head branch, without Claude. The
     /// scratch item adopting `pr` gets the ticket; else a new item runs Start work up to its
     /// worktree (the one that has the branch checked out, or a new one) and Resume runs the rest.
-    /// Linked already: a no-op. `Conflict` names the item holding the ticket or the PR.
+    /// The `bool` is `true` when it linked, `false` when the PR's item already had this ticket (a
+    /// no-op). `Conflict` names the item holding the ticket or the PR.
     pub async fn link_ticket_pr(
         &self,
         project: &ProjectId,
         ticket: TicketRef,
         pr: &Review,
-    ) -> Result<WorkItem, KeltaError> {
+    ) -> Result<(WorkItem, bool), KeltaError> {
         self.ensure_listener();
         let core = self.api()?;
         let p = core.project(project).ok_or_else(|| KeltaError::not_found(format!("project {project}")))?;
@@ -122,7 +123,7 @@ impl WorkService {
         if let Some(o) = plan::owner_of_pr(&all, &p, pr) {
             match &o.ticket {
                 Some(t) if t.account == ticket.account && t.key == ticket.key => {
-                    return self.load(&o.id).await;
+                    return Ok((self.load(&o.id).await?, false));
                 }
                 Some(t) => {
                     let who = format!("work item {} on {} ({})", o.id, o.branch, t.key);
@@ -131,14 +132,14 @@ impl WorkService {
                 None => {
                     let id = o.id.clone();
                     drop(guard);
-                    return self.link(&id, ticket, false).await;
+                    return self.link(&id, ticket, false).await.map(|w| (w, true));
                 }
             }
         }
         let repo = p
             .repos
             .iter()
-            .find(|r| r.code_host.as_ref().is_some_and(|c| c.repo == pr.r#ref.repo))
+            .find(|r| r.code_host.as_ref().is_some_and(|c| c.repo.eq_ignore_ascii_case(&pr.r#ref.repo)))
             .ok_or_else(|| KeltaError::invalid(format!("{} has no repository {}", p.name, pr.r#ref.repo)))?;
         let mut plan = self.build_plan(project, source, Some(repo.id.clone()), true).await?;
         if plan.adopt_pr.as_deref() != Some(pr.url.as_str()) {
@@ -158,7 +159,7 @@ impl WorkService {
             WorkState::Failed { step, message } => {
                 Err(KeltaError::upstream(format!("work item {id} failed at {step}: {message}")))
             }
-            _ => Ok(item),
+            _ => Ok((item, true)),
         }
     }
 

@@ -902,7 +902,7 @@ impl CoreApi for Core {
         project: &ProjectId,
         ticket: TicketRef,
         pr: kelta_proto::codehost::Review,
-    ) -> Result<WorkItem, KeltaError> {
+    ) -> Result<(WorkItem, bool), KeltaError> {
         self.work.link_ticket_pr(project, ticket, &pr).await
     }
     async fn editor_open(
