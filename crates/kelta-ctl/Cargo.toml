@@ -17,6 +17,7 @@ path = "src/main.rs"
 serde = { workspace = true }
 serde_json = { workspace = true }
 rustix = { workspace = true }
+kelta-workspace-hack.workspace = true
 
 [dev-dependencies]
 tempfile = { workspace = true }

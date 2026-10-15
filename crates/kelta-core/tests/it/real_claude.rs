@@ -25,7 +25,7 @@ use kelta_proto::ids::{ProjectId, SessionId};
 use kelta_proto::model::{Lifecycle, SessionKind, SessionStatus, WorkSource};
 use kelta_proto::settings::{ClaudeEffort, PermissionMode, ProjectConfig, RepoConfig, Settings};
 use kelta_proto::term::{LoginEnv, LoginEnvSource};
-use kelta_proto::testing::{FakeSecrets, FakeUiBridge};
+use kelta_proto_testing::{FakeSecrets, FakeUiBridge};
 use parking_lot::Mutex;
 use serde_json::Value;
 

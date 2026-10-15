@@ -6,7 +6,7 @@ use crate::support::*;
 use kelta_proto::api::CodeHost;
 use kelta_proto::codehost::{CodeHostKind, ReviewKind};
 use kelta_proto::error::{ErrorCode, KeltaError};
-use kelta_proto::testing::conformance::{CodeHostCase, code_host_contract, pr_create};
+use kelta_proto_testing::conformance::{CodeHostCase, code_host_contract, pr_create};
 use wiremock::matchers::{any, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 

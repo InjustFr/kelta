@@ -363,7 +363,7 @@ mod tests {
     use kelta_proto::ids::SessionId;
     use kelta_proto::model::SessionKind;
     use kelta_proto::term::{KillSignal, PtySpawnSpec, TerminalEvent, TerminalLimits};
-    use kelta_proto::testing::RecordingTerminalEvents;
+    use kelta_proto_testing::RecordingTerminalEvents;
 
     /// Output that makes `process` panic, as a parser bug would.
     pub(super) const PANIC: &[u8] = b"KELTA_TEST_PANIC";

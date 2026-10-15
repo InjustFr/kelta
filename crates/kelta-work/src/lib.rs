@@ -679,7 +679,7 @@ impl Drop for WorkService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kelta_proto::testing::{FakeCore, MemWorkStore};
+    use kelta_proto_testing::{FakeCore, MemWorkStore};
 
     #[tokio::test]
     async fn empty_list_and_missing_item() {

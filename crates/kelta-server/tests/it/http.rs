@@ -7,7 +7,7 @@ use std::sync::Arc;
 use kelta_proto::ids::{AccountId, SessionId};
 use kelta_proto::model::SessionStatus;
 use kelta_proto::samples;
-use kelta_proto::testing::{FakeCodeHost, FakeTracker};
+use kelta_proto_testing::{FakeCodeHost, FakeTracker};
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -146,7 +146,7 @@ async fn http_hook_transport_applies_status() {
     let sid = SessionId::new("s");
     e.server.register_session(&sid, "ht", None);
     let port = e.server.ensure_http().await.unwrap();
-    let payload: Value = kelta_proto::testing::fixtures::load_value("hook_stop").unwrap();
+    let payload: Value = kelta_proto_testing::fixtures::load_value("hook_stop").unwrap();
     let r = client()
         .post(format!("http://127.0.0.1:{port}/hook/s"))
         .bearer_auth("ht")

@@ -8,7 +8,7 @@ use kelta_proto::error::ErrorCode;
 use kelta_proto::ids::AccountId;
 use kelta_proto::secret::{SecretCtx, SecretRef};
 use kelta_proto::settings::AccountKind;
-use kelta_proto::testing::FakeSecrets;
+use kelta_proto_testing::FakeSecrets;
 use serde_json::json;
 use tokio::time::Instant;
 use wiremock::matchers::{body_string_contains, header, method, path};

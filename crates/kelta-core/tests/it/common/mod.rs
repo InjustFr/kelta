@@ -1,4 +1,4 @@
-//! Shared test harness: a `Core` wired with the `kelta_proto::testing` fakes.
+//! Shared test harness: a `Core` wired with the `kelta_proto_testing` fakes.
 #![allow(dead_code, clippy::unwrap_used, clippy::type_complexity)] // test helpers, not #[test] fns
 
 use std::collections::{BTreeMap, HashMap};
@@ -21,8 +21,8 @@ use kelta_proto::settings::{
     AccountConfig, AccountKind, ProjectConfig, RepoConfig, Settings, SettingsDiff, sources_from_trackers,
 };
 use kelta_proto::term::{LoginEnv, LoginEnvSource};
-use kelta_proto::testing::{FakeSecrets, FakeTerminalHost, FakeUiBridge};
 use kelta_proto::tracker::User;
+use kelta_proto_testing::{FakeSecrets, FakeTerminalHost, FakeUiBridge};
 use parking_lot::{Mutex, RwLock};
 
 /// In-memory settings + project CRUD.

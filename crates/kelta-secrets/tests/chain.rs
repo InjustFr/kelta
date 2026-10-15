@@ -11,7 +11,7 @@ use kelta_proto::error::ErrorCode;
 use kelta_proto::ids::AccountId;
 use kelta_proto::secret::{KEYRING_SERVICE, SecretCtx, SecretRef};
 use kelta_proto::settings::Settings;
-use kelta_proto::testing::FakeSettings;
+use kelta_proto_testing::FakeSettings;
 use kelta_secrets::{RESOLVE_TIMEOUT, Secrets, SecretsOptions};
 
 #[path = "support/capture.rs"]

@@ -6,13 +6,13 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use parking_lot::Mutex;
 
-use crate::api::{SecretResolver, SettingsSource, UiBridge};
-use crate::error::KeltaError;
-use crate::events::{Notification, UiEvent};
-use crate::ids::ProjectId;
-use crate::ipc::WindowState;
-use crate::secret::{Secret, SecretBackendStatus, SecretCtx, SecretRef};
-use crate::settings::{ProjectConfig, ProjectFile, Settings};
+use kelta_proto::api::{SecretResolver, SettingsSource, UiBridge};
+use kelta_proto::error::KeltaError;
+use kelta_proto::events::{Notification, UiEvent};
+use kelta_proto::ids::ProjectId;
+use kelta_proto::ipc::WindowState;
+use kelta_proto::secret::{Secret, SecretBackendStatus, SecretCtx, SecretRef};
+use kelta_proto::settings::{ProjectConfig, ProjectFile, Settings};
 
 /// Map-backed secrets; every ref kind resolves from the map (keyed by the full ref string).
 #[derive(Default)]

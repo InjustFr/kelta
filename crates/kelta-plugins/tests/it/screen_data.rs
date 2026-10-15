@@ -9,7 +9,7 @@ use kelta_proto::events::bus;
 use kelta_proto::ext::{CallOrigin, PluginMethod};
 use kelta_proto::ids::{AccountId, PluginId, ProjectId, ScreenInstanceId, WorkItemId};
 use kelta_proto::samples;
-use kelta_proto::testing::{FakeTracker, fixtures};
+use kelta_proto_testing::{FakeTracker, fixtures};
 use serde_json::{Value, json};
 
 const SCREENS: &str = "\n[[contributes.screens]]\nid = \"main\"\ntitle = \"Main\"\nentry = \"index.html\"\n\

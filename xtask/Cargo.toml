@@ -9,12 +9,14 @@ authors.workspace = true
 publish.workspace = true
 
 [dependencies]
-kelta-proto = { workspace = true, features = ["testing"] }
+kelta-proto = { workspace = true }
+kelta-proto-testing = { workspace = true }
 kelta-plugins = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
+kelta-workspace-hack.workspace = true
 
 [dev-dependencies]
 tempfile = { workspace = true }

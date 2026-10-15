@@ -14,6 +14,7 @@ path = "src/main.rs"
 
 [dependencies]
 rustix = { workspace = true }
+kelta-workspace-hack.workspace = true
 
 [lints]
 workspace = true

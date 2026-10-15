@@ -17,7 +17,7 @@ use kelta_proto::model::{
     WorkSource, WorkState,
 };
 use kelta_proto::samples;
-use kelta_proto::testing::FakeCodeHost;
+use kelta_proto_testing::FakeCodeHost;
 use kelta_work::WorkService;
 use serde_json::json;
 

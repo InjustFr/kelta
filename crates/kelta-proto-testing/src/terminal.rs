@@ -5,11 +5,11 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 
-use crate::api::{FrameSink, TerminalEvents, TerminalHost};
-use crate::error::KeltaError;
-use crate::ids::SessionId;
-use crate::model::AttachInfo;
-use crate::term::{
+use kelta_proto::api::{FrameSink, TerminalEvents, TerminalHost};
+use kelta_proto::error::KeltaError;
+use kelta_proto::ids::SessionId;
+use kelta_proto::model::AttachInfo;
+use kelta_proto::term::{
     HistoryHit, KillSignal, PtySpawnSpec, SessionTermStats, TerminalEvent, TerminalLimits, TerminalPalette,
     TerminalStats,
 };
@@ -167,7 +167,7 @@ impl TerminalHost for FakeTerminalHost {
 
     fn detach(&self, id: &SessionId, generation: u32) {
         if let Some(sess) = self.sessions.lock().get_mut(id)
-            && (sess.generation == generation || generation == crate::api::ANY_VIEW)
+            && (sess.generation == generation || generation == kelta_proto::api::ANY_VIEW)
         {
             sess.sink = None;
             sess.attached = false;

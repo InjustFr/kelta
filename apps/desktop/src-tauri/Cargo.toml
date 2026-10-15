@@ -39,6 +39,7 @@ tracing-subscriber = { workspace = true }
 libc = { workspace = true }
 time = { workspace = true }
 semver = { workspace = true }
+kelta-workspace-hack.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = { workspace = true }
@@ -49,7 +50,7 @@ webkit2gtk = { workspace = true }
 zbus = { workspace = true }
 
 [dev-dependencies]
-kelta-proto = { workspace = true, features = ["testing"] }
+kelta-proto-testing = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]

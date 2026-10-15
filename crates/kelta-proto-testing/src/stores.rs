@@ -6,10 +6,10 @@ use std::path::{Path, PathBuf};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 
-use crate::api::{GrantStore, PluginGrant, TrustStore, WorkStore};
-use crate::error::KeltaError;
-use crate::ids::{PluginId, ProjectId, WorkItemId};
-use crate::model::{ReviewNote, StepStatus, WorkItem, WorkStepStatus};
+use kelta_proto::api::{GrantStore, PluginGrant, TrustStore, WorkStore};
+use kelta_proto::error::KeltaError;
+use kelta_proto::ids::{PluginId, ProjectId, WorkItemId};
+use kelta_proto::model::{ReviewNote, StepStatus, WorkItem, WorkStepStatus};
 
 #[derive(Default)]
 pub struct MemWorkStore {
@@ -47,7 +47,7 @@ impl WorkStore for MemWorkStore {
 
     async fn claim_item(&self, item: &WorkItem) -> Result<Result<WorkItem, Box<WorkItem>>, KeltaError> {
         let mut items = self.items.lock();
-        let held = crate::api::claim_holder(items.values(), item);
+        let held = kelta_proto::api::claim_holder(items.values(), item);
         let r = item.clone().claim_over(held);
         if let Ok(w) = &r {
             items.insert(w.id.clone(), w.clone());
@@ -64,7 +64,7 @@ impl WorkStore for MemWorkStore {
     ) -> Result<(), KeltaError> {
         self.steps.lock().entry(id.clone()).or_default().insert(
             step.to_owned(),
-            WorkStepStatus { step: step.to_owned(), status, detail, updated_at: crate::now_rfc3339() },
+            WorkStepStatus { step: step.to_owned(), status, detail, updated_at: kelta_proto::now_rfc3339() },
         );
         Ok(())
     }
@@ -74,8 +74,10 @@ impl WorkStore for MemWorkStore {
         let Some(map) = steps.get(id) else { return Ok(Vec::new()) };
         // Saga order first, then any unknown steps.
         let mut out: Vec<WorkStepStatus> =
-            crate::model::WORK_STEPS.iter().filter_map(|s| map.get(*s).cloned()).collect();
-        out.extend(map.values().filter(|s| !crate::model::WORK_STEPS.contains(&s.step.as_str())).cloned());
+            kelta_proto::model::WORK_STEPS.iter().filter_map(|s| map.get(*s).cloned()).collect();
+        out.extend(
+            map.values().filter(|s| !kelta_proto::model::WORK_STEPS.contains(&s.step.as_str())).cloned(),
+        );
         Ok(out)
     }
 
@@ -130,7 +132,7 @@ impl GrantStore for MemGrantStore {
                 p.clone(),
                 PluginGrant {
                     permission: p.clone(),
-                    granted_at: crate::now_rfc3339(),
+                    granted_at: kelta_proto::now_rfc3339(),
                     manifest_sha256: manifest_sha256.to_owned(),
                 },
             );
@@ -161,7 +163,7 @@ impl GrantStore for MemGrantStore {
         let m = kv.entry(plugin.clone()).or_default();
         let others: usize = m.iter().filter(|(k, _)| *k != key).map(|(k, v)| k.len() + v.len()).sum();
         if others + key.len() + value.len() > quota {
-            return Err(crate::api::kv_quota_error(quota));
+            return Err(kelta_proto::api::kv_quota_error(quota));
         }
         m.insert(key.to_owned(), value);
         Ok(())
