@@ -33,6 +33,46 @@ test.describe('settings pane', () => {
     expect(errors).toEqual([]);
   });
 
+  test('Changed by you: a global and a project change, where each is set, narrowed by search, reset (#474)', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    await page.goto(`${HARNESS}?view=settings&section=terminal`);
+    await expect(page.locator('[data-testid="settings-section"]')).toBeVisible();
+    await page.evaluate(async () => {
+      const { __ipc } = window as unknown as { __ipc: typeof Ipc };
+      await __ipc.settingsSet({ layer: 'global', path: 'terminal.font_size', value: 15 });
+      await __ipc.settingsSet({
+        layer: 'project',
+        project_id: 'shop',
+        path: 'worktree.branch_template',
+        value: 'feat/{key}',
+      });
+    });
+    await page.getByRole('button', { name: /Changed by you/ }).click();
+    const list = page.getByTestId('changed-settings');
+    const font = list.locator('li', { hasText: 'terminal.font_size' });
+    const branch = list.locator('li', { hasText: 'worktree.branch_template' });
+    await expect(font).toContainText('All projects');
+    await expect(branch).toContainText('Shop');
+
+    await page.getByRole('searchbox', { name: 'Search settings' }).fill('font size');
+    await expect(font).toBeVisible();
+    await expect(branch).toHaveCount(0);
+
+    await font.getByTestId('changed-reset').click();
+    await expect(font).toHaveCount(0);
+    const last = await page.evaluate(
+      () =>
+        (window as unknown as { __keltaMock: { calls: { cmd: string; args: unknown }[] } }).__keltaMock.calls
+          .filter((c) => c.cmd === 'settings_reset')
+          .at(-1)?.args,
+    );
+    expect(last).toMatchObject({ layer: 'global', path: 'terminal.font_size' });
+    expect(errors).toEqual([]);
+  });
+
   test('a source without routes, projects or columns opens Sources and takes a route (#281)', async ({
     page,
   }) => {

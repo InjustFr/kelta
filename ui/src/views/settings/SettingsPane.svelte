@@ -11,11 +11,12 @@
   import type { ValidationIssue } from '$lib/gen';
   import { dispatch } from '$lib/actions';
   import * as ipc from '$lib/ipc/commands';
-  import { projects, settings as settingsStore } from '$lib/stores';
+  import { projects, settings as settingsStore, toasts } from '$lib/stores';
   import Badge from '$lib/ui/Badge.svelte';
   import Button from '$lib/ui/Button.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
   import Icon from '$lib/ui/Icon.svelte';
+  import IconButton from '$lib/ui/IconButton.svelte';
   import Kbd from '$lib/ui/Kbd.svelte';
   import Select from '$lib/ui/Select.svelte';
   import Spinner from '$lib/ui/Spinner.svelte';
@@ -23,15 +24,31 @@
   import { tick, untrack, type Component } from 'svelte';
 
   import { noteRecent } from '../../shell/jumplist';
+  import CountChips from '../filters/CountChips.svelte';
 
-  import { takeKeyRequest, takeTomlRequest } from './actions';
+  import { takeChangedRequest, takeKeyRequest, takeTomlRequest } from './actions';
   import EditToml from './EditToml.svelte';
   import Field from './fields/Field.svelte';
-  import { provideEditor, SettingsEditor, type EditLayer } from './lib/editor.svelte';
+  import {
+    provideEditor,
+    readLayerFiles,
+    SettingsEditor,
+    type EditLayer,
+    type LayerFile,
+  } from './lib/editor.svelte';
   import { effectiveBindings } from './lib/chords';
   import { isRecord } from './lib/paths';
   import { repoRelevant } from './lib/schema';
-  import { buildSearchIndex, isInline, searchSettings, type SearchEntry, type SearchHit } from './lib/search';
+  import {
+    buildSearchIndex,
+    changedSettings,
+    isInline,
+    resettable,
+    searchSettings,
+    type ChangedRow,
+    type SearchEntry,
+    type SearchHit,
+  } from './lib/search';
   import { SECTION_GROUPS, sectionLabel } from './lib/sections';
   import { health } from './lib/health.svelte';
   import RepoTrust from './RepoTrust.svelte';
@@ -81,6 +98,12 @@
         query = key;
         active = 0;
       }
+    }
+    if (takeChangedRequest()) {
+      changedOn = true;
+      query = '';
+      active = 0;
+      editor.raw = false;
     }
     const toml = takeTomlRequest();
     if (toml) {
@@ -169,8 +192,21 @@
       : [],
   );
   const shown = $derived(allFor === query ? hits : hits.slice(0, SHOWN));
+  // ---- Changed by you (#474) ----------------------------------------------------------------------
+  let changedOn = $state(false);
+  let files = $state<LayerFile[]>([]);
+  $effect(() => {
+    void settingsStore.lastChange; // any write (form, TOML, ⌘K, another window) re-reads the files
+    const list = configurable;
+    void readLayerFiles(list).then((f) => (files = f));
+  });
+  const changedRows = $derived(changedSettings(index, files));
+  const changedHits = $derived(query.trim() ? searchSettings(changedRows, query) : changedRows);
   const counts = $derived(
-    hits.reduce<Record<string, number>>((m, h) => ((m[h.section] = (m[h.section] ?? 0) + 1), m), {}),
+    (changedOn ? changedHits : hits).reduce<Record<string, number>>(
+      (m, h) => ((m[h.section] = (m[h.section] ?? 0) + 1), m),
+      {},
+    ),
   );
   $effect(() => {
     void active;
@@ -204,6 +240,7 @@
   }
 
   function open(h: SearchEntry): void {
+    changedOn = false;
     query = '';
     sectionId = h.section;
     editor.raw = !!h.toml; // TOML-only keys open Edit TOML
@@ -224,6 +261,23 @@
     if (sel) void tick().then(() => reveal(sel, record));
   }
 
+  /** A Changed by you row: the form on that row's file, then the row (#474). */
+  function openChanged(r: ChangedRow): void {
+    void editor.target(r.file);
+    open(r);
+  }
+
+  /** Removes the row's key from its file through the form's write path (as #478's toggleSetting). */
+  async function resetChanged(r: ChangedRow): Promise<void> {
+    const ed = new SettingsEditor(r.file);
+    await ed.refreshDoc(); // a repo file's trust
+    for (const p of r.resets)
+      if (!(await ed.reset(p)))
+        toasts.error(ed.errors[p] ?? '', t('Could not reset {name}', { name: r.label }));
+    await editor.refreshDoc();
+    files = await readLayerFiles(configurable);
+  }
+
   /** ↵ on a hit: a simple value focuses its control, anything else opens. */
   function activate(h: SearchHit): void {
     if (!isInline(h)) return open(h);
@@ -236,9 +290,12 @@
   function onSearchKey(e: KeyboardEvent): void {
     if (e.key === 'Escape' && query)
       query = ''; // empty: GlobalHost closes Settings (data-esc-close)
-    else if (e.key === 'ArrowDown') active = Math.min(active + 1, shown.length - 1);
+    else if (e.key === 'ArrowDown')
+      active = Math.min(active + 1, (changedOn ? changedHits : shown).length - 1);
     else if (e.key === 'ArrowUp') active = Math.max(active - 1, 0);
-    else if (e.key === 'Enter' && shown[active]) activate(shown[active]);
+    else if (e.key === 'Enter' && changedOn) {
+      if (changedHits[active]) openChanged(changedHits[active]);
+    } else if (e.key === 'Enter' && shown[active]) activate(shown[active]);
     else return;
     e.preventDefault();
   }
@@ -260,6 +317,23 @@
         onkeydown={onSearchKey}
       />
     </label>
+    <CountChips
+      label={t('Changed by you')}
+      chips={[
+        {
+          id: 'changed',
+          label: t('Changed by you'),
+          title: t('Everything that differs from Kelta’s defaults, and where it is set.'),
+          n: changedRows.length,
+        },
+      ]}
+      value={changedOn ? 'changed' : null}
+      onchange={(id) => {
+        changedOn = id !== null;
+        active = 0;
+        if (changedOn) editor.raw = false;
+      }}
+    />
     <div class="layers" role="group" aria-label={t('Layer being edited')}>
       <button
         type="button"
@@ -379,7 +453,7 @@
         {#each g.sections as s (s.id)}
           <button
             type="button"
-            class:dim={searching && !counts[s.id]}
+            class:dim={(searching || changedOn) && !counts[s.id]}
             class:active={sectionId === s.id && !query}
             aria-current={sectionId === s.id && !query ? 'page' : undefined}
             data-section={s.id}
@@ -387,12 +461,13 @@
               stopReveal?.();
               sectionId = s.id;
               query = '';
+              changedOn = false;
               editor.raw = false;
             }}
           >
             <Icon name={s.icon} size={14} />
             {sectionLabel(s)}
-            {#if searching}
+            {#if searching || changedOn}
               {#if counts[s.id]}<span class="count k-num" data-testid="nav-hits">{counts[s.id]}</span>{/if}
             {:else if s.id === 'health' && problemCount > 0}
               <span class="count" data-testid="health-count"><Badge tone="danger">{problemCount}</Badge></span
@@ -405,6 +480,47 @@
     <main bind:this={mainEl}>
       {#if editor.raw}
         <EditToml {editor} />
+      {:else if changedOn}
+        <section data-testid="changed-settings">
+          <h1>{t('Changed by you')}</h1>
+          <p class="help">{t('Everything that differs from Kelta’s defaults, and where it is set.')}</p>
+          {#if changedHits.length === 0}
+            <EmptyState
+              icon="search"
+              title={query.trim()
+                ? t('No matching setting')
+                : t('Nothing changed: every setting is at its default.')}
+            />
+          {:else}
+            <ol class="results" bind:this={listEl}>
+              {#each changedHits as r, i (r.id)}
+                <li class="result" class:active={i === active} data-hit={r.id}>
+                  <span class="crumb"
+                    >{r.crumb}{#if r.path}&ensp;<code>{r.path}</code>{/if}</span
+                  >
+                  <div class="line">
+                    <span class="label">{r.label}</span>
+                    {#if isInline(r) && r.field !== 'secret'}<code>{String(r.value)}</code>{/if}
+                    {#each r.chords ?? [] as c (c)}<Kbd chord={c} />{/each}
+                    <Badge tone="accent">{r.file.where}</Badge>
+                    <Button size="sm" variant="ghost" onclick={() => openChanged(r)}
+                      >{r.toml ? t('Edit TOML') : t('Open')}</Button
+                    >
+                    {#if resettable(r)}
+                      <IconButton
+                        icon="rotate-ccw-clock"
+                        size="sm"
+                        label={t('Reset {name} in {file}', { name: r.label, file: r.file.where })}
+                        data-testid="changed-reset"
+                        onclick={() => resetChanged(r)}
+                      />
+                    {/if}
+                  </div>
+                </li>
+              {/each}
+            </ol>
+          {/if}
+        </section>
       {:else if searching}
         <section data-testid="search-results">
           <h1>{t('Results for “{query}”', { query: query.trim() })}</h1>
