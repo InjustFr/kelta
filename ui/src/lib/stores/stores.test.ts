@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerAction } from '$lib/actions';
 
 import type { TicketDetail, UiEvent } from '$lib/gen';
+import { workCreatePr } from '$lib/ipc/commands';
 import { connectUiEvents, onAnyUiEvent, resetUiEventsForTests } from '$lib/ipc/events';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
@@ -13,6 +14,7 @@ import { ProjectsStore } from './projects.svelte';
 import { ReviewsStore } from './reviews.svelte';
 import { SessionsStore } from './sessions.svelte';
 import { SettingsStore } from './settings.svelte';
+import { TicketStepsStore } from './ticketSteps.svelte';
 import { TicketsStore, ticketListKey } from './tickets.svelte';
 import { ToastsStore } from './toasts.svelte';
 import { idle } from './loadable';
@@ -135,6 +137,25 @@ describe('SessionsStore', () => {
     const unseen = store.all.find((s) => !s.seen)!;
     await store.markSeen(unseen.id);
     expect(store.get(unseen.id)?.seen).toBe(true);
+  });
+});
+
+describe('TicketStepsStore (#462)', () => {
+  it('loads the stored steps and follows ticket.step', async () => {
+    const store = new TicketStepsStore();
+    const w = mock.state.work.find((x) => x.ticket)!;
+    const row = { ticket: w.ticket!, source_id: null, step_id: 'pr', entered_at: '', by: '' };
+    mock.state.ticketSteps.push(row);
+    await store.load();
+    expect(store.get(row.ticket)?.step_id).toBe('pr');
+    store.apply({ type: 'ticket.step', step: { ...row, step_id: 'review' } });
+    expect(store.get(row.ticket)?.step_id).toBe('review');
+  });
+
+  it('the mock stores a pr step on work_create_pr', async () => {
+    const w = mock.state.work.find((x) => x.ticket && !x.pr_url)!;
+    await workCreatePr({ id: w.id, draft: false } as never);
+    expect(mock.state.ticketSteps.map((s) => s.step_id)).toEqual(['pr']);
   });
 });
 

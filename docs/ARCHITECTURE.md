@@ -652,6 +652,7 @@ Every command below is listed in `apps/desktop/src-tauri/src/commands/names.rs` 
 | `work_notes` | `{id}` | `ReviewNotes{worktree, notes: Vec<ReviewNote>, since: Option<ReviewDelta>}` | review notes of the item (#133, SQLite `notes`), with `+N/−M since feedback` |
 | `work_note_resolve` | `{id, note: i64}` | `ReviewNotes` | |
 | `work_notes_send` | `{id}` | `ReviewNotes` | the open notes in one message to the item's Claude (held while it works, as `work_send`) |
+| `ticket_steps` | `{}` | `Vec<TicketStep>` | every stored ticket step (#462, SQLite `ticket_steps`; `ticket.id` empty): the stage track's place |
 | `work_arm_merge` | `{id, method: MergeMethod /*squash|merge|rebase*/}` | `WorkItem` (`auto_finish`) | host auto-merge (GitHub `enablePullRequestAutoMerge`, GitLab `merge_when_pipeline_succeeds`); refusal = host message. On `pr.merged` the item runs Finish once; a dirty/unpushed worktree is kept and the item flagged (`Merged.detail`) |
 | `work_disarm_merge` | `{id}` | `WorkItem` | |
 | `work_park` | `{id}` | `WorkItem` (`parked_at`, `nvim_kept`) | #142: kill the item's Claude and nvim (SIGHUP → 2 s → SIGKILL), sessions back to Dormant so the next attach resumes them (`claude --resume`, nvim `-S`); worktree and conversation untouched, `worktree.teardown` runs when set. An nvim with unsaved buffers (`getbufinfo({'bufmodified':1})` over RPC) or that cannot be checked keeps running. `Conflict` while Claude works. `claude.auto_park_after_mins` parks a done + seen Claude after that long without input (one-shot per session, cancelled by input) |
@@ -707,6 +708,7 @@ type UiEvent =
  | {type:'layout.changed', project_id: ProjectId, layout: Layout}            // backend-initiated changes, and another window's layout_save (#342)
  | {type:'tickets.changed', scope: Scope} | {type:'reviews.changed', scope: Scope, new_keys: ReviewRef[]}
  | {type:'work.updated', work: WorkItem}
+ | {type:'ticket.step', step: TicketStep}                                                  // a ticket entered a pipeline step (#461), relayed from bus ticket.step (#462)
  | {type:'settings.changed', layers: Layer[], paths: string[], requires_restart: string[]}
  | {type:'account.status', account_id: AccountId, status: 'ok'|'needs_auth'|'rate_limited'|'offline'|'error', detail?: string}
  | {type:'toast', toast: Toast /*{level:'info'|'warn'|'error', text, action?: {label, command: ActionId|string, args?}}*/}
@@ -723,7 +725,7 @@ Each window has its own channel (§2 "Detached windows"). One Tauri event exists
 
 ### 6.3 Internal bus (`BusEvent`) — catalogue in PLUGINS.md §6
 
-`BusEvent { name: String, ts: String, project_id: Option<ProjectId>, session_id: Option<SessionId>, work_item_id: Option<WorkItemId>, payload: Value, chain: TriggerChain{depth: u8, origin_triggers: Vec<String>} }` on a `tokio::sync::broadcast` (capacity 1024; lagged subscribers get a `lagged` marker and resync). The trigger engine (`PluginHost::start`) is one subscriber. Core itself handles two events synchronously on publish: `app.focus_changed` (published by the desktop shell on window focus; scheduler intervals) and `work.updated` (published by kelta-work; relayed as `UiEvent::WorkUpdated`).
+`BusEvent { name: String, ts: String, project_id: Option<ProjectId>, session_id: Option<SessionId>, work_item_id: Option<WorkItemId>, payload: Value, chain: TriggerChain{depth: u8, origin_triggers: Vec<String>} }` on a `tokio::sync::broadcast` (capacity 1024; lagged subscribers get a `lagged` marker and resync). The trigger engine (`PluginHost::start`) is one subscriber. Core itself handles three events synchronously on publish: `app.focus_changed` (published by the desktop shell on window focus; scheduler intervals), `work.updated` (published by kelta-work; relayed as `UiEvent::WorkUpdated`) and `ticket.step` (published by kelta-work's pipeline; relayed as `UiEvent::TicketStep`).
 
 ---
 

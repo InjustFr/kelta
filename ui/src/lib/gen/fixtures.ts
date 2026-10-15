@@ -3868,6 +3868,21 @@ export const uiEventWorkUpdated: UiEvent = {
   }
 };
 
+export const uiEventTicketStep: UiEvent = {
+  "step": {
+    "by": "\"pr_opened\"",
+    "entered_at": "2026-10-15T10:00:00Z",
+    "source_id": "product",
+    "step_id": "pr",
+    "ticket": {
+      "account": "jira-acme",
+      "id": "10142",
+      "key": "SHOP-142"
+    }
+  },
+  "type": "ticket.step"
+};
+
 export const uiEventSettingsChanged: UiEvent = {
   "layers": [
     "global"
@@ -4116,6 +4131,7 @@ export const fixtures: Readonly<Record<string, unknown>> = {
   "ui_event_tickets_changed_source": uiEventTicketsChangedSource,
   "ui_event_reviews_changed": uiEventReviewsChanged,
   "ui_event_work_updated": uiEventWorkUpdated,
+  "ui_event_ticket_step": uiEventTicketStep,
   "ui_event_settings_changed": uiEventSettingsChanged,
   "ui_event_account_status": uiEventAccountStatus,
   "ui_event_toast": uiEventToast,

@@ -62,6 +62,11 @@ pub(crate) fn steps_of(env: &Env, item: &WorkItem) -> Vec<StepDef> {
 }
 
 impl WorkService {
+    /// `ticket_steps` (#462): every stored ticket step, for the UI's stage track.
+    pub async fn ticket_steps(&self) -> Result<Vec<TicketStep>, KeltaError> {
+        self.store.ticket_steps().await
+    }
+
     /// Move `item`'s ticket to the furthest later step `sig` enters and run that step's effects.
     /// Returns why the ticket was not moved (the merge's phase detail).
     pub(crate) async fn signal(

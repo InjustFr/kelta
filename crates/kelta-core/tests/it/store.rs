@@ -97,6 +97,18 @@ async fn ticket_steps_round_trip_across_a_restart() {
     let s = Store::open(&db).unwrap();
     assert_eq!(s.ticket_step(&t("jira")).await.unwrap(), Some(row("review", "\"pr_ready\"")));
     assert_eq!(s.ticket_step(&t("linear")).await.unwrap(), None, "per account");
+    let all = s.ticket_steps().await.unwrap();
+    assert_eq!(all.len(), 1);
+    assert_eq!(
+        (
+            all[0].ticket.account.as_str(),
+            all[0].ticket.key.as_str(),
+            all[0].ticket.id.as_str(),
+            all[0].step_id.as_str()
+        ),
+        ("jira", "A-1", "", "review")
+    );
+    assert_eq!(all[0].source_id.as_deref(), Some("main"));
 }
 
 #[tokio::test]

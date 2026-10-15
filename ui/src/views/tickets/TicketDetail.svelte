@@ -41,7 +41,7 @@
   import { openContent } from '../work/nav';
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { onActions, onRefresh } from '../work/ui.svelte';
-  import { STAGES } from '../work/stage';
+  import { stageName } from '../work/stage';
   import { siblingKey } from '../work/live';
   import { resumeWork, startAnotherPr, startPreview, startWorkOnTicket, ticketWork } from '../work/startWork';
   import ActionBar from './ActionBar.svelte';
@@ -120,7 +120,7 @@
     if (liveItem) {
       const ph = phaseNow(liveItem);
       return t('{stage} stage. Next: {step}.', {
-        stage: t(STAGES[standing.stage.at]!),
+        stage: stageName(standing.stage),
         step: ph.primary ? ph.primaryLabel : ph.label,
       });
     }

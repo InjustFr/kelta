@@ -376,6 +376,8 @@ export interface Commands {
   /** Merge when ready: the host's auto-merge, then Finish once merged (`auto_finish`). */
   work_arm_merge: { args: { id: WorkItemId; method: MergeMethod }; result: WorkItem };
   work_disarm_merge: { args: { id: WorkItemId }; result: WorkItem };
+  /** Every stored ticket step (#462), for the stage track. */
+  ticket_steps: { args: NoArgs; result: TicketStep[] };
   editor_open: { args: { target: EditorTarget; path: string; line?: number | null }; result: null };
   editor_send_selection: { args: { editor_session: SessionId; claude_session: SessionId }; result: null };
   editor_quickfix: { args: { target: EditorTarget; files: string[] }; result: null };
@@ -556,6 +558,7 @@ export const COMMAND_NAMES = [
   'work_notes_send',
   'work_arm_merge',
   'work_disarm_merge',
+  'ticket_steps',
   'editor_open',
   'editor_send_selection',
   'editor_quickfix',
@@ -807,6 +810,7 @@ export const workNoteResolve = wrap('work_note_resolve');
 export const workNotesSend = wrap('work_notes_send');
 export const workArmMerge = wrap('work_arm_merge');
 export const workDisarmMerge = wrap('work_disarm_merge');
+export const ticketSteps = wrap('ticket_steps');
 export const editorOpen = wrap('editor_open');
 export const editorSendSelection = wrap('editor_send_selection');
 export const editorQuickfix = wrap('editor_quickfix');
