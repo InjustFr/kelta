@@ -21,6 +21,7 @@
     fieldKind,
     resolve,
     titleOf,
+    TOGGLE_VALUES,
     variantOptions,
     type SchemaNode,
   } from '../lib/schema';
@@ -56,7 +57,8 @@
   }: Props = $props();
 
   const resolved = $derived(resolve(node));
-  const kind = $derived(fieldKind(node));
+  const toggle = $derived(path ? TOGGLE_VALUES[path] : undefined);
+  const kind = $derived(toggle ? 'bool' : fieldKind(node));
   const n = $derived(resolved.node);
 
   // ---- text / number drafts ----------------------------------------------------------------
@@ -197,7 +199,12 @@
 
 <div class="control" data-kind={kind}>
   {#if kind === 'bool'}
-    <Toggle checked={value === true} {label} disabled={readonly} onchange={(c) => onchange(c)} />
+    <Toggle
+      checked={toggle ? value === toggle[0] : value === true}
+      {label}
+      disabled={readonly}
+      onchange={(c) => onchange(toggle ? toggle[c ? 0 : 1] : c)}
+    />
   {:else if kind === 'enum'}
     <Select
       id={idAttr}
