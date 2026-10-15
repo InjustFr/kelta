@@ -509,7 +509,7 @@ describe('settings in place (#478)', () => {
     expect(copyOnSelect()).toBe(true);
     expect(ui.settings).toBeNull();
     const last = toasts.list.at(-1)!;
-    expect(last.toast.text).toBe('Copy on select turned on');
+    expect(last.toast.text).toBe('Copy text when you select it turned on');
     expect(last.toast.action).toMatchObject({
       command: 'settings.restore',
       args: { path: 'terminal.copy_on_select', value: null },
