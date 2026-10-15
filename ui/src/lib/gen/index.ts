@@ -247,6 +247,7 @@ export type * from './Tab';
 export type * from './TabId';
 export type * from './TemplateCtx';
 export type * from './TemplateNode';
+export type * from './TemplatePreview';
 export type * from './TerminalLimits';
 export type * from './TerminalPalette';
 export type * from './TerminalSettings';

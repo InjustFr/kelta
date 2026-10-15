@@ -4,16 +4,17 @@ use std::path::{Path, PathBuf};
 
 use kelta_proto::codehost::{CodeHostKind, Review};
 use kelta_proto::error::KeltaError;
+use kelta_proto::ids::ProjectId;
 use kelta_proto::model::{
     BranchChoice, BranchExists, ClaudePlan, PORT_BLOCK, ProjectInfo, RepoInfo, SideEffects, StartWorkPlan,
-    WorkItem, WorkSource, WorkState,
+    TemplatePreview, WorkItem, WorkSource, WorkState,
 };
 use kelta_proto::settings::{PipelineEvent, Settings, StartOption, effective_pipeline};
 use kelta_proto::tracker::{Ticket, TrackerKind};
 
 use crate::git;
 use crate::pipeline::Signal;
-use crate::template::{Ctx, Mode, expand_home, render, tidy_path};
+use crate::template::{Ctx, Mode, expand_home, render, slugify, tidy_path};
 
 /// Ticket facts kept in the saga journal (prompt, PR title/body, `{closes}`).
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -355,6 +356,86 @@ pub fn port_free(port: u16) -> bool {
     ["0.0.0.0", "127.0.0.1"].iter().all(|h| std::net::TcpListener::bind((*h, port)).is_ok())
 }
 
+/// The live example under a template setting (#479): `template`, typed at settings `path`, rendered for
+/// the sample ticket KEL-214 the way Start work does (saga.rs ticket arm, `item_ctx`, `pr_defaults`).
+/// The Insert menu's examples (ui `views/settings/lib/placeholders.ts`) show the same values.
+pub async fn preview(
+    settings: &Settings,
+    dirs: &kelta_proto::dirs::Dirs,
+    path: &str,
+    template: &str,
+) -> Result<TemplatePreview, KeltaError> {
+    let mut s = settings.clone();
+    match path {
+        "worktree.branch_template" => s.worktree.branch_template = template.to_owned(),
+        "worktree.root" => s.worktree.root = template.to_owned(),
+        _ => {}
+    }
+    let repo = RepoInfo {
+        id: "app".into(),
+        path: home_dir().unwrap_or_default().join("code/kelta"),
+        primary: true,
+        remote: "origin".into(),
+        base: "main".into(),
+        code_host: None,
+        exists: true,
+    };
+    let project = ProjectInfo {
+        id: ProjectId::new("kelta"),
+        name: "Kelta".into(),
+        color: None,
+        icon: None,
+        repos: vec![repo.clone()],
+        tracker: None,
+        open: true,
+        active: true,
+        attention: Default::default(),
+        builtin: false,
+    };
+    let ticket = TicketSnap {
+        key: "KEL-214".into(),
+        branch_key: "KEL-214".into(),
+        title: "Search settings by meaning".into(),
+        url: "https://tracker.example/browse/KEL-214".into(),
+        kind: Some("story".into()),
+        ..Default::default()
+    };
+    // Same calls as the Start work plan (saga.rs).
+    let mut ctx = base_ctx(&project, Some(&repo), dirs);
+    add_ticket(&mut ctx, &ticket);
+    ctx.set("key", ticket.branch_key.clone());
+    ctx.set("slug", slugify(&ticket.title, s.worktree.slug_max as usize));
+    ctx.set("type", type_for(&s, ticket.kind.as_deref()));
+    let raw = render(&s.worktree.branch_template, &ctx, Mode::Strict)?;
+    // `check-ref-format --branch` needs no repository.
+    let cwd = std::env::temp_dir();
+    let (branch, git_ok) = match git::check_branch_name(&cwd, &raw).await {
+        Ok(b) => (b, true),
+        Err(_) => (valid_branch(&cwd, &raw).await?, false),
+    };
+    ctx.set("branch", branch.clone());
+    let worktree = worktree_path(&s, &ctx)?.to_string_lossy().into_owned();
+    ctx.set("worktree", worktree.clone());
+    let run = dirs.session_runtime("1a2b3c4d");
+    ctx.set("sid8", "1a2b3c4d");
+    ctx.set("ticket.file", run.join(crate::claude::TICKET_FILE).to_string_lossy().into_owned());
+    ctx.set("run", run.to_string_lossy().into_owned());
+    ctx.set("port", "20140");
+    ctx.set("session.id", "0192aaaa-0000-7000-8000-1a2b3c4d0000");
+    ctx.set("session.name", "Claude");
+    ctx.set("session.cwd", worktree.clone());
+    ctx.set("pr.number", "215");
+    ctx.set("pr.url", "https://github.com/acme/kelta/pull/215");
+    ctx.set("pr.head", branch.clone());
+    ctx.set("pr.base", "main");
+    ctx.set("pr.title", ticket.title.clone());
+    Ok(match path {
+        "worktree.branch_template" => TemplatePreview { text: branch, git_ok: Some(git_ok) },
+        "worktree.root" => TemplatePreview { text: worktree, git_ok: None },
+        _ => TemplatePreview { text: render(template, &ctx, Mode::Lenient)?, git_ok: None },
+    })
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -419,6 +500,28 @@ mod tests {
         assert!(owner_of_pr(std::slice::from_ref(&item), &project, &pr).is_some());
         item.state = WorkState::Finished;
         assert!(owner_of_pr(std::slice::from_ref(&item), &project, &pr).is_none());
+    }
+
+    #[tokio::test]
+    async fn preview_renders_the_sample_ticket_like_start_work() {
+        let (s, d) = (Settings::default(), kelta_proto::dirs::Dirs::under(Path::new("/k")));
+        let p = |path: &'static str, t: &'static str| preview(&s, &d, path, t);
+        let b = "worktree.branch_template";
+        let ok =
+            TemplatePreview { text: "feat/KEL-214-search-settings-by-meaning".into(), git_ok: Some(true) };
+        assert_eq!(p(b, "{type}/{key}-{slug}").await.unwrap(), ok);
+        let fixed = p(b, "{type}/{key} x").await.unwrap();
+        assert_eq!((fixed.text.as_str(), fixed.git_ok), ("feat/KEL-214-x", Some(false)));
+        assert!(p(b, "{nope}").await.is_err());
+        assert_eq!(
+            p("worktree.root", "/wt/{project}/{repo}/{key}-{slug}").await.unwrap().text,
+            "/wt/kelta/app/KEL-214-search-settings-by-meaning"
+        );
+        let c = p("work.pr.title_template", "{ticket.key}: {ticket.title} on {branch} {nope}").await.unwrap();
+        assert_eq!(
+            c.text,
+            "KEL-214: Search settings by meaning on feat/KEL-214-search-settings-by-meaning {nope}"
+        );
     }
 
     #[test]
