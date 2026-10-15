@@ -54,6 +54,8 @@
     label?: string;
     /** Content above the items; it also describes the menu (`aria-describedby`). */
     header?: Snippet;
+    /** Content under the items (a hint, #479). */
+    footer?: Snippet;
     /** A filter in the header narrows the items: the first enabled one stays lit as Enter's target. */
     filtered?: boolean;
     /** Opened from the keyboard (`⌘.`, #404): the first entry, the next step, starts lit. */
@@ -62,7 +64,18 @@
     onclose: () => void;
   }
 
-  let { items, x, y, label, header, filtered = false, lit = false, onselect, onclose }: Props = $props();
+  let {
+    items,
+    x,
+    y,
+    label,
+    header,
+    footer,
+    filtered = false,
+    lit = false,
+    onselect,
+    onclose,
+  }: Props = $props();
   const headerId = $props.id();
 
   let el = $state<HTMLDivElement>();
@@ -88,6 +101,12 @@
 
   $effect(() => {
     if (filtered) active = enabled[0] ?? -1;
+  });
+
+  // A long menu scrolls: keep the lit entry in view while the arrows move it.
+  $effect(() => {
+    if (active >= 0)
+      el?.querySelectorAll<HTMLElement>('[role="menuitem"]')[active]?.scrollIntoView?.({ block: 'nearest' });
   });
 
   function move(delta: number): void {
@@ -196,6 +215,7 @@
       {#if item.kbd}<Kbd chord={item.kbd} />{/if}
     </button>
   {/each}
+  {#if footer}<div class="foot">{@render footer()}</div>{/if}
 </div>
 
 <style>
@@ -210,11 +230,21 @@
     z-index: var(--k-z-menu);
     min-width: 220px;
     max-width: 400px;
+    max-height: calc(100vh - 8px);
+    overflow-y: auto;
     padding: var(--k-space-2);
     border-radius: var(--k-radius-lg);
     background: var(--k-bg-float);
     box-shadow: var(--k-shadow);
     animation: k-pop-in var(--k-duration-fast) var(--k-ease);
+  }
+
+  .foot {
+    margin-top: var(--k-space-2);
+    padding: var(--k-space-2) var(--k-space-4) 0;
+    border-top: 1px solid var(--k-border);
+    font-size: var(--k-font-size-xs);
+    color: var(--k-fg-subtle);
   }
 
   button {

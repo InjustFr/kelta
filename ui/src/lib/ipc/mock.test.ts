@@ -178,6 +178,7 @@ describe('mock transport', () => {
       settings_validate: { layer: 'global', text: 'a = 1' },
       settings_write_raw: { layer: 'global', text: 'a = 1' },
       settings_open_file: { layer: 'global' },
+      template_preview: { path: 'worktree.branch_template', template: '{type}/{key}-{slug}' },
       repo_trust: { project_id: 'shop', repo_id: 'api', trust: true },
       secret_set: { secret_ref: 'keyring:x', value: 'v' },
       secret_delete: { secret_ref: 'keyring:x' },

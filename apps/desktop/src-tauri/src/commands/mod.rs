@@ -130,6 +130,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         settings::settings_validate,
         settings::settings_write_raw,
         settings::settings_open_file,
+        settings::template_preview,
         settings::repo_trust,
         secrets::secret_set,
         secrets::secret_delete,

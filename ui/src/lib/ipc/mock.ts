@@ -478,7 +478,10 @@ function transitionsFor(t: Ticket): Transition[] {
 }
 
 function setPath(root: JsonValue, path: string, value: JsonValue | undefined): JsonValue {
-  const parts = path.split('.').filter(Boolean);
+  // Quoted segments (`keys.bindings."pane.split_right"`) hold dots, as in core's dotted paths.
+  const parts = (path.match(/"(?:[^"\\]|\\.)*"|[^.]+/g) ?? []).map((p) =>
+    p.startsWith('"') ? p.slice(1, -1).replace(/\\(.)/g, '$1') : p,
+  );
   const out = clone(root) as Record<string, JsonValue>;
   let node: Record<string, JsonValue> = out;
   parts.forEach((part, i) => {
@@ -835,6 +838,21 @@ export function createMockTransport(options: MockOptions = {}): {
         'config.toml',
         '/Users/ada/.config/kelta',
       ),
+    // shortcut: a few sample values instead of the core's renderer; mock IPC only needs a plausible line.
+    template_preview: ({ template }) => ({
+      text: template.replace(
+        /\{([\w.]+)\}/g,
+        (m, k: string) =>
+          ({
+            key: 'KEL-214',
+            'ticket.key': 'KEL-214',
+            type: 'feat',
+            slug: 'search-settings-by-meaning',
+            'ticket.title': 'Search settings by meaning',
+          })[k] ?? m,
+      ),
+      git_ok: null,
+    }),
     repo_trust: ({ trust }) => ({ ...clone(samples.trustInfo), trusted: trust }),
     secret_set: () => null,
     secret_delete: () => null,

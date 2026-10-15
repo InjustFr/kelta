@@ -552,6 +552,7 @@ Every command below is listed in `apps/desktop/src-tauri/src/commands/names.rs` 
 | `settings_validate` | `{layer, text: String}` | `Vec<ValidationIssue{path, message, line?, col?}>` | |
 | `settings_write_raw` | `{layer, project_id?, repo_id?, text}` | `EffectiveSettings` (validate first; refuse on error) | |
 | `settings_open_file` | `{layer, project_id?, repo_id?}` | `SessionInfo` (opens `$EDITOR`/nvim pane on the file) | |
+| `template_preview` | `{path, template}` | `TemplatePreview{text, git_ok?}` | live example under a template setting (#479): rendered for the sample ticket KEL-214 like Start work; `git_ok` only for `worktree.branch_template` |
 | `repo_trust` | `{project_id, repo_id, trust: bool, sha256?}` | `TrustInfo{path, hash, trusted}` | `sha256` (of the text the user reviewed) is required to trust; `conflict` when the file changed since |
 | `secret_set` | `{secret_ref: String, value: String}` | `()` (value never echoed/logged) | `commands/secrets.rs` (L4) |
 | `secret_delete` | `{secret_ref}` | `()` | |

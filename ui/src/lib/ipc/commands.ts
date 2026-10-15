@@ -70,6 +70,7 @@ import type {
   StartWorkPlan,
   SubscribeResult,
   TemplateCtx,
+  TemplatePreview,
   TerminalPalette,
   TranscriptLine,
   Ticket,
@@ -164,6 +165,8 @@ export interface Commands {
   settings_validate: { args: { layer: Layer; text: string }; result: ValidationIssue[] };
   settings_write_raw: { args: LayerArgs & { text: string }; result: EffectiveSettings };
   settings_open_file: { args: LayerArgs; result: SessionInfo };
+  /** The live example under a template setting (#479): rendered for the sample ticket KEL-214. */
+  template_preview: { args: { path: string; template: string }; result: TemplatePreview };
   repo_trust: {
     // sha256 = hash of the text the user reviewed (required to trust).
     args: { project_id: ProjectId; repo_id: string; trust: boolean; sha256?: string };
@@ -453,6 +456,7 @@ export const COMMAND_NAMES = [
   'settings_validate',
   'settings_write_raw',
   'settings_open_file',
+  'template_preview',
   'repo_trust',
   'secret_set',
   'secret_delete',
@@ -662,6 +666,7 @@ export const settingsReset = wrap('settings_reset');
 export const settingsValidate = wrap('settings_validate');
 export const settingsWriteRaw = wrap('settings_write_raw');
 export const settingsOpenFile = wrap('settings_open_file');
+export const templatePreview = wrap('template_preview');
 export const repoTrust = wrap('repo_trust');
 export const secretSet = wrap('secret_set');
 export const secretDelete = wrap('secret_delete');
