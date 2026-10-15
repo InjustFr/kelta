@@ -8,7 +8,7 @@ import { dispatch } from '$lib/actions';
 import { settings, ui } from '$lib/stores';
 
 import schemaJson from '../../../../schema/settings.schema.json';
-import { COPY, COPY_DONE, SECTION_COPY, type CopyTable } from './copy';
+import { COPY, COPY_DONE, SECTION_COPY } from './copy';
 import { joinPath, splitPath } from './lib/paths';
 import { enumOptions, fieldKind, leafFields, nodeAt, type SchemaNode } from './lib/schema';
 import { SECTION_ROOTS } from './lib/sections';
@@ -20,15 +20,7 @@ import Worktree from './sections/Worktree.svelte';
 const schema = schemaJson as unknown as SchemaNode;
 const onOs = (p: 'MacIntel' | 'Linux x86_64') => vi.spyOn(navigator, 'platform', 'get').mockReturnValue(p);
 
-const injected: string[] = [];
-const inject = (table: CopyTable) => {
-  Object.assign(COPY, table);
-  injected.push(...Object.keys(table));
-};
-afterEach(() => {
-  vi.restoreAllMocks();
-  for (const k of injected.splice(0)) delete COPY[k];
-});
+afterEach(() => vi.restoreAllMocks());
 
 async function renderForm(sectionId: SettingsSectionId) {
   const { transport } = createMockTransport();

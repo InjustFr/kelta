@@ -29,8 +29,6 @@ export default {
   },
   'polling.min_secs': {
     label: msg('Fastest refresh, in seconds'),
-    help: msg(
-      'Shorter intervals above are raised to this. Redmine boards refresh at most every 60 seconds.',
-    ),
+    help: msg('Shorter intervals above are raised to this. Redmine boards refresh at most every 60 seconds.'),
   },
 } satisfies CopyTable;

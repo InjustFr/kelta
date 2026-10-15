@@ -6,9 +6,7 @@ export default {
   'editor.default': {
     order: 0,
     label: msg('Open files in'),
-    help: msg(
-      'The id of the editor below that Open file and review sessions use, such as nvim or vscode.',
-    ),
+    help: msg('The id of the editor below that Open file and review sessions use, such as nvim or vscode.'),
     keywords: [msg('vscode'), msg('vs code'), msg('zed'), msg('neovim')],
   },
   'editor.follow_claude_edits': {

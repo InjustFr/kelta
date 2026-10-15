@@ -40,24 +40,24 @@
 
 {#if s}
   <SettingsRow label="Kelta {s.current} ({s.channel})" actions data-testid="updates">
-      {#snippet control()}
-        {#if s.state.type === 'ready'}
-          <Button variant="primary" onclick={() => void restartApp()}>{t('Restart')}</Button>
-        {/if}
-        {#if s.state.type !== 'unsupported'}
-          <Button
-            loading={updates.checking}
-            onclick={() => void updates.check().catch(() => {})}
-            data-testid="update-check">{t('Check now')}</Button
-          >
-        {/if}
+    {#snippet control()}
+      {#if s.state.type === 'ready'}
+        <Button variant="primary" onclick={() => void restartApp()}>{t('Restart')}</Button>
+      {/if}
+      {#if s.state.type !== 'unsupported'}
         <Button
-          variant="ghost"
-          onclick={() => void openExternal({ url: releasePage(s.channel) }).catch(() => {})}
-          >{t("What's new")}</Button
+          loading={updates.checking}
+          onclick={() => void updates.check().catch(() => {})}
+          data-testid="update-check">{t('Check now')}</Button
         >
-      {/snippet}
-      <p class:failed={s.state.type === 'failed'} data-testid="update-state">{line}</p>
+      {/if}
+      <Button
+        variant="ghost"
+        onclick={() => void openExternal({ url: releasePage(s.channel) }).catch(() => {})}
+        >{t("What's new")}</Button
+      >
+    {/snippet}
+    <p class:failed={s.state.type === 'failed'} data-testid="update-state">{line}</p>
   </SettingsRow>
 {/if}
 

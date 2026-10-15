@@ -28,9 +28,7 @@ export default {
   'keys.linux_terminal': {
     platform: 'linux',
     label: msg('Ctrl+letter in a focused terminal'),
-    help: msg(
-      'Who gets a plain Ctrl+letter that Kelta also binds: the terminal program or Kelta.',
-    ),
+    help: msg('Who gets a plain Ctrl+letter that Kelta also binds: the terminal program or Kelta.'),
     options: { terminal_first: { label: msg('Terminal first') }, kelta_first: { label: msg('Kelta first') } },
   },
 } satisfies CopyTable;
