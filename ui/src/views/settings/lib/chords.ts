@@ -133,6 +133,66 @@ export function duplicateChords(bindings: Record<string, readonly string[]>): Bi
     .map(([chord, actions]) => ({ chord, actions, reserved: false }));
 }
 
+export type KeyArea = 'app' | 'projects' | 'panes' | 'tickets' | 'terminal' | 'work';
+
+/** Groups of the Keys table, in display order (labels go through `t`). */
+export const KEY_AREAS: readonly { id: KeyArea; label: string }[] = [
+  { id: 'app', label: msg('App') },
+  { id: 'projects', label: msg('Projects') },
+  { id: 'panes', label: msg('Tabs & panes') },
+  { id: 'tickets', label: msg('Tickets & reviews') },
+  { id: 'terminal', label: msg('Terminal') },
+  { id: 'work', label: msg('Work') },
+];
+
+const AREA_OF: Record<string, KeyArea> = {
+  project: 'projects',
+  tool: 'projects',
+  tab: 'panes',
+  pane: 'panes',
+  session: 'panes',
+  tickets: 'tickets',
+  reviews: 'tickets',
+  terminal: 'terminal',
+  work: 'work',
+  editor: 'work',
+};
+
+/** Area of an action by the first segment of its id; unknown ids (new or plugin actions) go under App. */
+export function actionArea(id: string): KeyArea {
+  return AREA_OF[id.split('.')[0]!] ?? 'app';
+}
+
+/** Text filter: the trimmed query, any case, inside the label or the id. */
+export function matchesText(query: string, label: string, id: string): boolean {
+  const q = query.trim().toLowerCase();
+  return q === '' || label.toLowerCase().includes(q) || id.toLowerCase().includes(q);
+}
+
+/** A press in Press keys mode: its chord, and the typed key when no Cmd/Ctrl/Alt was held. */
+export interface KeyPress {
+  chord: string;
+  key: string | null;
+}
+
+/** Whether an action answers a press: one of its chords, or its key after the prefix (matched on `KeyboardEvent.key` like the key manager). */
+export function matchesPress(press: KeyPress, chords: readonly string[], prefixKey: string | null): boolean {
+  const c = normalizeChord(press.chord);
+  return chords.some((x) => normalizeChord(x) === c) || (press.key !== null && press.key === prefixKey);
+}
+
+/** Actions other than `except` already bound to `chord`. */
+export function actionsOn(
+  bindings: Record<string, readonly string[]>,
+  chord: string,
+  except: string,
+): string[] {
+  const c = normalizeChord(chord);
+  return Object.entries(bindings)
+    .filter(([id, chords]) => id !== except && chords.some((x) => normalizeChord(x) === c))
+    .map(([id]) => id);
+}
+
 export interface Snippet {
   id: 'hyprland' | 'sway' | 'gnome' | 'macos';
   label: string;
