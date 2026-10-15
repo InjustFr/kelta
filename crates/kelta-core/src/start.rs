@@ -52,7 +52,10 @@ impl Core {
         let (target, choices, hint) =
             self.plan_target(project.as_ref(), &source, source_id.as_deref()).await?;
         let (project, repo, guessed) = target;
-        let mut plan = self.work.plan_with_repo(&project, source, repo, another).await?;
+        let mut plan = self
+            .work
+            .plan_with_repo(&project, source, repo, another, hint.as_ref().map(|h| h.id.as_str()))
+            .await?;
         plan.project_choices = choices;
         // The route's options follow its project, like its repo.
         let route_options = hint

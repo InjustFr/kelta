@@ -276,7 +276,8 @@ async fn merge_moves_the_ticket_to_done_on_the_last_open_pr_of_the_ticket() {
     let first = started(&fx, &w, "SHOP-141").await;
     let mut t = samples::ticket_ref();
     t.key = "SHOP-141".into();
-    let plan = w.plan_with_repo(&project(), WorkSource::Ticket { ticket: t }, None, true).await.unwrap();
+    let plan =
+        w.plan_with_repo(&project(), WorkSource::Ticket { ticket: t }, None, true, None).await.unwrap();
     let second = w.start(plan).await.unwrap();
     let (a, b) = (with_pr(&fx, &first, 91).await, with_pr(&fx, &second, 92).await);
 
@@ -607,8 +608,242 @@ async fn a_manual_move_runs_the_entered_step_forward_and_nothing_back() {
     let mut other = t.clone();
     other.key = "SHOP-999".into();
     assert_eq!(w.move_step(&other, None).await.unwrap_err().code, ErrorCode::NotFound);
+    let mut it = fx.store.get_item(&item.id).await.unwrap().unwrap();
+    it.state = WorkState::Finished;
+    fx.store.put_item(&it).await.unwrap();
+    assert_eq!(
+        w.move_step(&t, None).await.unwrap_err().code,
+        ErrorCode::NotFound,
+        "a finished item is no work, as in the UI"
+    );
 }
 
 fn comments_have(fx: &Fx, text: &str) -> bool {
     fx.tracker.ticket("SHOP-141").unwrap().comments.iter().any(|c| c.body_html.contains(text))
+}
+
+/// A PR for the ticket, not written on any item: `link_pr` joins it.
+fn pr_review(n: u64) -> Review {
+    let mut review = samples::review();
+    review.r#ref.number = n;
+    review.url = format!("https://github.com/acme/shop-api/pull/{n}");
+    review
+}
+
+fn transitions(fx: &Fx, id: &str) -> usize {
+    let p = format!("transition:SHOP-141:{id}");
+    fx.tracker.calls().iter().filter(|c| c.starts_with(&p)).count()
+}
+
+fn started_comments(fx: &Fx) -> usize {
+    fx.tracker.ticket("SHOP-141").unwrap().comments.iter().filter(|c| c.body_html.contains("Started")).count()
+}
+
+async fn another(fx: &Fx, w: &Arc<WorkService>) -> WorkItem {
+    let mut t = samples::ticket_ref();
+    t.key = "SHOP-141".into();
+    let plan =
+        w.plan_with_repo(&project(), WorkSource::Ticket { ticket: t }, None, true, None).await.unwrap();
+    let item = w.start(plan).await.unwrap();
+    assert_eq!(item.state, WorkState::Active, "{:?} {}", item.steps, fx.repo.display());
+    item
+}
+
+fn start_pipeline(fx: &Fx) {
+    fx.settings(|s| {
+        s.work.pipeline = vec![
+            step("implementing", on(PipelineEvent::WorkStarted), Some("In Progress"), Some("Started")),
+            step("pr", on(PipelineEvent::PrOpened), Some("In Review"), None),
+            step("done", on(PipelineEvent::Merged), Some("Done"), None),
+        ];
+    });
+}
+
+#[tokio::test]
+async fn replacing_the_pipeline_never_moves_a_ticket_back() {
+    need_git!();
+    let fx = Fx::new();
+    fx.settings(|s| {
+        s.work.pipeline = vec![
+            step("implementing", on(PipelineEvent::WorkStarted), None, None),
+            step("pr", on(PipelineEvent::PrOpened), None, None),
+            step("review", on(PipelineEvent::PrReady), None, None),
+            step("done", on(PipelineEvent::Merged), None, None),
+        ];
+    });
+    let w = fx.service();
+    w.ensure_listener();
+    let item = started(&fx, &w, "SHOP-141").await;
+    let mut review = pr_review(91);
+    w.link_pr(&item.id, &review).await.unwrap();
+    wait_step(&fx, &item, "pr").await;
+    review.draft = false;
+    let updated = |r: &Review, c: &str| {
+        BusEvent::new(bus::PR_UPDATED, serde_json::json!({ "review": r, "changes": [c] }))
+    };
+    fx.core.publish(updated(&review, "draft"));
+    wait_step(&fx, &item, "review").await;
+
+    fx.settings(|s| {
+        s.work.pipeline = vec![
+            step("start", on(PipelineEvent::WorkStarted), None, None),
+            step("asked", on(PipelineEvent::ReviewRequested), None, None),
+            step("shipped", on(PipelineEvent::Merged), None, None),
+        ];
+    });
+    review.waiting_on = vec!["me".into()];
+    fx.core.publish(updated(&review, "reviewers"));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(step_of(&fx, &item).await.as_deref(), Some("shipped"), "clamped forward, never `asked`");
+}
+
+#[tokio::test]
+async fn done_then_another_pr_runs_the_start_pr_and_done_transitions_again() {
+    need_git!();
+    let fx = Fx::new();
+    start_pipeline(&fx);
+    let w = fx.service();
+    w.ensure_listener();
+    let first = started(&fx, &w, "SHOP-141").await;
+    let a = pr_review(91);
+    w.link_pr(&first.id, &a).await.unwrap();
+    publish_end(&fx, bus::PR_MERGED, &a);
+    wait_state(&fx, &first, |s| matches!(s, WorkState::Merged { .. })).await;
+    wait_step(&fx, &first, "done").await;
+
+    let second = another(&fx, &w).await;
+    assert_eq!(step_of(&fx, &second).await.as_deref(), Some("implementing"), "the flow restarted");
+    let b = pr_review(92);
+    w.link_pr(&second.id, &b).await.unwrap();
+    wait_step(&fx, &second, "pr").await;
+    publish_end(&fx, bus::PR_MERGED, &b);
+    wait_state(&fx, &second, |s| matches!(s, WorkState::Merged { .. })).await;
+    wait_step(&fx, &second, "done").await;
+    assert_eq!((transitions(&fx, "t3"), transitions(&fx, "t10"), transitions(&fx, "t5")), (2, 2, 2));
+    assert_eq!(started_comments(&fx), 2);
+}
+
+#[tokio::test]
+async fn a_sibling_start_at_the_start_step_posts_the_comment_once() {
+    need_git!();
+    let fx = Fx::new();
+    start_pipeline(&fx);
+    let w = fx.service();
+    started(&fx, &w, "SHOP-141").await;
+    let second = another(&fx, &w).await;
+    assert_eq!(step_of(&fx, &second).await.as_deref(), Some("implementing"));
+    assert_eq!((transitions(&fx, "t3"), started_comments(&fx)), (1, 1));
+}
+
+#[tokio::test]
+async fn a_sibling_start_never_moves_the_ticket_back() {
+    need_git!();
+    let fx = Fx::new();
+    start_pipeline(&fx);
+    let w = fx.service();
+    w.ensure_listener();
+    let first = started(&fx, &w, "SHOP-141").await;
+    w.link_pr(&first.id, &pr_review(91)).await.unwrap();
+    wait_step(&fx, &first, "pr").await;
+    let second = another(&fx, &w).await;
+    assert_eq!(step_of(&fx, &second).await.as_deref(), Some("pr"));
+    assert_eq!((transitions(&fx, "t3"), started_comments(&fx)), (1, 1));
+}
+
+#[tokio::test]
+async fn resume_after_the_pr_opened_skips_the_start_effects() {
+    need_git!();
+    let fx = Fx::new();
+    start_pipeline(&fx);
+    let w = fx.service();
+    let mut t = samples::ticket_ref();
+    t.key = "SHOP-141".into();
+    let plan = w.plan(&project(), WorkSource::Ticket { ticket: t.clone() }).await.unwrap();
+    w.set_crash_after(Some("claude"));
+    w.start(plan).await.unwrap_err();
+    let id = fx.store.list_items(None).await.unwrap().remove(0).id;
+    fx.store
+        .put_ticket_step(&kelta_proto::model::TicketStep {
+            ticket: t,
+            source_id: None,
+            step_id: "pr".into(),
+            entered_at: kelta_proto::now_rfc3339(),
+            by: serde_json::to_string(&on(PipelineEvent::PrOpened)).unwrap(),
+        })
+        .await
+        .unwrap();
+    let done = fx.service().resume(&id).await.unwrap();
+    assert_eq!(done.state, WorkState::Active, "{:?}", done.steps);
+    assert_eq!(step_of(&fx, &done).await.as_deref(), Some("pr"));
+    assert_eq!((transitions(&fx, "t3"), started_comments(&fx)), (0, 0));
+}
+
+#[tokio::test]
+async fn a_manual_move_back_stays_across_an_unchanged_status_poll() {
+    need_git!();
+    let fx = Fx::new();
+    let po = Trigger::Status { status: TransitionTarget::Name { name: "PO Review".into() } };
+    fx.settings(|s| {
+        s.work.pipeline = vec![
+            step("implementing", on(PipelineEvent::WorkStarted), None, None),
+            step("po", po, None, None),
+        ];
+    });
+    let w = fx.service();
+    let item = started(&fx, &w, "SHOP-141").await;
+    let mut tk = fx.tracker.ticket("SHOP-141").unwrap().ticket;
+    tk.status = samples::status("12", "PO Review", StatusCategory::InReview);
+    w.ticket_statuses(std::slice::from_ref(&tk)).await;
+    assert_eq!(step_of(&fx, &item).await.as_deref(), Some("po"));
+    w.move_step(item.ticket.as_ref().unwrap(), Some("implementing")).await.unwrap();
+    w.ticket_statuses(std::slice::from_ref(&tk)).await;
+    assert_eq!(step_of(&fx, &item).await.as_deref(), Some("implementing"), "same status: no signal");
+    let mut other = tk.clone();
+    other.status = samples::status("10", "In Review", StatusCategory::InReview);
+    w.ticket_statuses(std::slice::from_ref(&other)).await;
+    assert_eq!(step_of(&fx, &item).await.as_deref(), Some("implementing"));
+    w.ticket_statuses(std::slice::from_ref(&tk)).await;
+    assert_eq!(step_of(&fx, &item).await.as_deref(), Some("po"), "a changed status enters it");
+}
+
+#[tokio::test]
+async fn a_failed_manual_move_is_reported_and_retried() {
+    need_git!();
+    let fx = Fx::new();
+    fx.settings(|s| {
+        s.work.pipeline = vec![
+            step("implementing", on(PipelineEvent::WorkStarted), None, None),
+            step("po", on(PipelineEvent::Approved), Some("In Review"), None),
+        ];
+    });
+    let w = fx.service();
+    let item = started(&fx, &w, "SHOP-141").await;
+    let t = item.ticket.clone().unwrap();
+    fx.tracker.require_fields("t10");
+    let e = w.move_step(&t, Some("po")).await.unwrap_err();
+    assert!(e.message.contains("transition failed"), "{}", e.message);
+    assert_eq!(step_of(&fx, &item).await.as_deref(), Some("po"), "stored anyway");
+    assert!(w.move_step(&t, Some("po")).await.is_err());
+    assert_eq!(transitions(&fx, "t10"), 2, "retried, no early Ok");
+}
+
+#[tokio::test]
+async fn next_step_without_a_stored_step_skips_the_start_effects() {
+    need_git!();
+    let fx = Fx::new();
+    fx.settings(|s| {
+        s.work.pipeline = vec![
+            step("implementing", on(PipelineEvent::WorkStarted), Some("In Progress"), Some("Started")),
+            step("pr", on(PipelineEvent::PrOpened), None, None),
+        ];
+    });
+    let w = fx.service();
+    let scratch =
+        WorkSource::Branch { name: String::new(), task: Some("Explore caching".into()), repo: None };
+    let a = w.start(w.plan(&project(), scratch).await.unwrap()).await.unwrap();
+    let mut t = samples::ticket_ref();
+    t.key = "SHOP-141".into();
+    w.link(&a.id, t.clone(), false).await.unwrap();
+    assert_eq!(w.move_step(&t, None).await.unwrap().step_id, "implementing");
+    assert_eq!((transitions(&fx, "t3"), started_comments(&fx)), (0, 0));
 }

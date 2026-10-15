@@ -832,7 +832,7 @@ pub struct ClaudeSettings {
     pub hook_transport: HookTransport,
     /// Kelta MCP server for Claude sessions.
     pub mcp: bool,
-    /// Board-wide MCP writes (move, comment, edit, close any ticket by key); off = read-only board tools.
+    /// Board-wide MCP writes (move, comment, edit, close any ticket by key, move its pipeline step); off = read-only board tools.
     pub mcp_board_writes: bool,
     /// At startup, offer to register Kelta's MCP in Claude Code (user scope); false = never ask.
     #[schemars(extend("x-kelta-scope" = ["global"]))]

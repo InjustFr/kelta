@@ -547,11 +547,14 @@ export function focusedWorkItem(): WorkItem | null {
  *  opens on its commands (#404). */
 function onFocused(
   fn: (item: WorkItem) => void | Promise<void>,
+  orTicket?: (ticket: TicketRef) => unknown,
 ): (args?: Record<string, unknown>) => Promise<void> {
   return async (args) => {
     const id = args?.id as string | undefined;
     const item = (id ? work.get(id) : null) ?? focusedWorkItem();
     if (item) await fn(item);
+    // From Tickets with no work tab (#466): the selected ticket.
+    else if (orTicket && selection.ticket) await orTicket(selection.ticket);
     else ui.openOverlay('palette');
   };
 }
@@ -568,11 +571,15 @@ registerAction('work.story', () => {
   if (tab?.work_item_id) story.toggle(tab.id);
   else ui.openOverlay('palette');
 });
+const BY_TICKET: Partial<Record<string, (t: TicketRef) => unknown>> = {
+  next_step: (t) => moveStep(t, null),
+  move_step: pickStep,
+};
 for (const a of WORK_ACTIONS)
   if (a.key)
     registerAction(
       `work.${a.id}`,
-      onFocused((item) => runWorkAction(a.id, item)),
+      onFocused((item) => runWorkAction(a.id, item), BY_TICKET[a.id]),
     );
 registerAction('work.finish_merged', () => ui.openSheet('finish_merged'));
 
