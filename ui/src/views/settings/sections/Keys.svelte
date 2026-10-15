@@ -27,6 +27,7 @@
     effectiveBindings,
     KEY_AREAS,
     matchesPress,
+    prefixCandidates,
     matchesText,
     normalizeChord,
     TOGGLE_SNIPPETS,
@@ -145,7 +146,7 @@
       return;
     }
     const chord = chordFromEvent(e);
-    if (chord) pressed = { chord, key: e.metaKey || e.ctrlKey || e.altKey ? null : e.key };
+    if (chord) pressed = { chord, keys: prefixCandidates(e) };
   }
 
   async function apply(action: string, chords: string[], taken: readonly string[] = []): Promise<void> {

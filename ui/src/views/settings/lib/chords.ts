@@ -169,16 +169,31 @@ export function matchesText(query: string, label: string, id: string): boolean {
   return q === '' || label.toLowerCase().includes(q) || id.toLowerCase().includes(q);
 }
 
-/** A press in Press keys mode: its chord, and the typed key when no Cmd/Ctrl/Alt was held. */
+/** A press in Press keys mode: its chord, and the keys the manager would try as a prefix key (empty when Cmd/Ctrl/Alt was held). */
 export interface KeyPress {
   chord: string;
-  key: string | null;
+  keys: readonly string[];
 }
 
-/** Whether an action answers a press: one of its chords, or its key after the prefix (matched on `KeyboardEvent.key` like the key manager). */
+/** Prefix-key candidates of a keydown, mirroring `KeyManager.#prefixBinding`: the key, Shift+letter as lowercase, the Digit code. */
+export function prefixCandidates(
+  e: Pick<KeyboardEvent, 'key' | 'code' | 'shiftKey' | 'metaKey' | 'ctrlKey' | 'altKey'>,
+): string[] {
+  if (e.metaKey || e.ctrlKey || e.altKey) return [];
+  const digit = /^Digit([0-9])$/.exec(e.code)?.[1];
+  return [
+    e.key,
+    ...(e.shiftKey && /^[A-Z]$/.test(e.key) ? [e.key.toLowerCase()] : []),
+    ...(digit ? [digit] : []),
+  ];
+}
+
+/** Whether an action answers a press: one of its chords, or its key after the prefix (candidates as the key manager). */
 export function matchesPress(press: KeyPress, chords: readonly string[], prefixKey: string | null): boolean {
   const c = normalizeChord(press.chord);
-  return chords.some((x) => normalizeChord(x) === c) || (press.key !== null && press.key === prefixKey);
+  return (
+    chords.some((x) => normalizeChord(x) === c) || (prefixKey !== null && press.keys.includes(prefixKey))
+  );
 }
 
 /** Actions other than `except` already bound to `chord`. */

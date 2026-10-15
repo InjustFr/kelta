@@ -3,7 +3,15 @@ import { describe, expect, it } from 'vitest';
 
 import { ACTIONS } from '$lib/gen/actions';
 
-import { actionArea, actionsOn, chordFromEvent, KEY_AREAS, matchesPress, matchesText } from './lib/chords';
+import {
+  actionArea,
+  actionsOn,
+  chordFromEvent,
+  KEY_AREAS,
+  matchesPress,
+  matchesText,
+  prefixCandidates,
+} from './lib/chords';
 
 describe('chordFromEvent', () => {
   it('records the layout letter, not the QWERTY position', () => {
@@ -43,14 +51,24 @@ describe('matchesText', () => {
 
 describe('matchesPress', () => {
   it('matches a bound chord in any spelling', () => {
-    expect(matchesPress({ chord: 'cmd+shift+d', key: null }, ['shift+cmd+d'], null)).toBe(true);
-    expect(matchesPress({ chord: 'cmd+shift+d', key: null }, ['cmd+d'], null)).toBe(false);
+    expect(matchesPress({ chord: 'cmd+shift+d', keys: [] }, ['shift+cmd+d'], null)).toBe(true);
+    expect(matchesPress({ chord: 'cmd+shift+d', keys: [] }, ['cmd+d'], null)).toBe(false);
   });
 
   it('matches the key after the prefix only without Cmd/Ctrl/Alt', () => {
-    expect(matchesPress({ chord: "shift+'", key: '"' }, [], '"')).toBe(true);
-    expect(matchesPress({ chord: 'cmd+d', key: null }, [], 'd')).toBe(false);
-    expect(matchesPress({ chord: 'shift+n', key: 'N' }, [], 'n')).toBe(false);
+    expect(matchesPress({ chord: "shift+'", keys: ['"'] }, [], '"')).toBe(true);
+    expect(matchesPress({ chord: 'cmd+d', keys: [] }, [], 'd')).toBe(false);
+    expect(matchesPress({ chord: 'shift+n', keys: ['N', 'n'] }, [], 'n')).toBe(true);
+    expect(matchesPress({ chord: 'digit1', keys: ['&', '1'] }, [], '1')).toBe(true);
+  });
+});
+
+describe('prefixCandidates', () => {
+  const ev = { key: 'N', code: 'KeyN', shiftKey: true, metaKey: false, ctrlKey: false, altKey: false };
+  it('mirrors the key manager', () => {
+    expect(prefixCandidates(ev)).toEqual(['N', 'n']);
+    expect(prefixCandidates({ ...ev, key: '&', code: 'Digit1', shiftKey: false })).toEqual(['&', '1']);
+    expect(prefixCandidates({ ...ev, metaKey: true })).toEqual([]);
   });
 });
 
