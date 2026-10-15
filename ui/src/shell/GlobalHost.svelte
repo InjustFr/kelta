@@ -31,8 +31,10 @@
   function onkeydown(e: KeyboardEvent): void {
     // Sheets, dialogs, menus and the chord recorder keep their own Esc.
     if (view !== 'settings' || e.key !== 'Escape' || e.defaultPrevented) return;
-    // In a field, Esc first leaves it (committing what was typed); the next one closes Settings.
-    if (isEditable(e.target)) (e.target as HTMLElement).blur();
+    // In a field, Esc first leaves it (committing what was typed); the next one closes Settings. The
+    // settings search (data-esc-close) clears itself on its first Esc and closes on the next.
+    if (isEditable(e.target) && !(e.target as HTMLElement).hasAttribute('data-esc-close'))
+      (e.target as HTMLElement).blur();
     else ui.settings = null;
   }
 
