@@ -75,10 +75,10 @@
     };
   });
 
-  function pick(id: string): void {
+  function pick(id: string, alt = false): void {
     const item = results.find((r) => r.id === id);
     onclose();
-    if (item) void Promise.resolve(item.run());
+    if (item) void Promise.resolve((alt && item.open ? item.open : item.run)());
   }
 </script>
 
@@ -93,6 +93,8 @@
     kbd: r.kbd,
     group: r.group,
     lamp: r.lamp,
+    value: r.value,
+    checked: r.checked,
   }))}
   {query}
   onquery={(q) => (query = q)}

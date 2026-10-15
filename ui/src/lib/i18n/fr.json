@@ -2733,5 +2733,10 @@
   "Kelta settings folder": "Dossier des réglages de Kelta",
   "Kelta data folder": "Dossier des données de Kelta",
   "Home folder": "Dossier personnel",
-  "User name": "Nom d’utilisateur"
+  "User name": "Nom d’utilisateur",
+  "Toggle": "Basculer",
+  "Open in Settings": "Ouvrir dans les paramètres",
+  "{setting} turned on": "{setting} activé",
+  "{setting} turned off": "{setting} désactivé",
+  "Undo": "Annuler l’action"
 }

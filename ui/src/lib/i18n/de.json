@@ -2733,5 +2733,10 @@
   "Kelta settings folder": "Kelta-Einstellungsordner",
   "Kelta data folder": "Kelta-Datenordner",
   "Home folder": "Home-Ordner",
-  "User name": "Benutzername"
+  "User name": "Benutzername",
+  "Toggle": "Umschalten",
+  "Open in Settings": "In den Einstellungen öffnen",
+  "{setting} turned on": "{setting} eingeschaltet",
+  "{setting} turned off": "{setting} ausgeschaltet",
+  "Undo": "Rückgängig"
 }

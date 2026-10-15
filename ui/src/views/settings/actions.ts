@@ -2,13 +2,17 @@
 // Optional args: { section?: string } to land on a given section, { toml?: projectId } to land on
 // that project's raw TOML (the Edit TOML mode, for what the forms cannot edit), { source_id } to
 // bring that source's card into view in Settings → Sources, { key: 'tickets.wip_limit' } to show that key.
+// toggleSetting (⌘K, #478) flips an on/off key in All projects; its toast's Undo is settings.restore.
 
 import { t } from '$lib/i18n/index.svelte';
 import { registerAction } from '$lib/actions';
+import type { JsonValue } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 import { toasts, sessions, ui } from '$lib/stores';
 
 import { activateProject } from '../../shell/nav';
+
+import { SettingsEditor } from './lib/editor.svelte';
 
 let tomlRequest: string | null = null;
 
@@ -76,6 +80,31 @@ registerAction('claude.hooks_install', async () => {
 });
 registerAction('claude.hooks_never', async () => {
   await ipc.settingsSet({ layer: 'global', path: 'claude.hooks_offer', value: false });
+});
+
+/** ⌘K's switch (#478): flips `path` in All projects as the Settings form writes it, with Undo. */
+export async function toggleSetting(path: string, label: string): Promise<void> {
+  const editor = new SettingsEditor(); // the global layer
+  await editor.refreshDoc();
+  const before = editor.layerValue(path) ?? null; // unset there: Undo removes the key
+  const on = editor.valueOf(path) !== true;
+  if (!(await editor.set(path, on))) {
+    toasts.error(editor.errors[path] ?? '', label);
+    return;
+  }
+  toasts.push({
+    level: 'info',
+    text: on ? t('{setting} turned on', { setting: label }) : t('{setting} turned off', { setting: label }),
+    action: { label: t('Undo'), command: 'settings.restore', args: { path, value: before } },
+  });
+}
+
+// Undo of toggleSetting: `value` back at `path` in All projects; null resets the key.
+registerAction('settings.restore', async (args) => {
+  const path = typeof args?.path === 'string' ? args.path : '';
+  const editor = new SettingsEditor();
+  if (!(await editor.set(path, (args?.value ?? null) as JsonValue)))
+    toasts.error(editor.errors[path] ?? '', t('Undo'));
 });
 
 // "Set up with Claude" (#343), from the onboarding and the palette: core installs Kelta's MCP when

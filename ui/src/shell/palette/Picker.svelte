@@ -9,6 +9,9 @@
     kbd?: string;
     group?: string;
     lamp?: LampLevel;
+    value?: string;
+    /** An on/off setting: a switch, ↵ flips it, ⌘↵ opens it in Settings. */
+    checked?: boolean;
   }
 </script>
 
@@ -22,7 +25,7 @@
     items: readonly PickerItem[];
     query: string;
     onquery: (query: string) => void;
-    onpick: (id: string) => void;
+    onpick: (id: string, alt?: boolean) => void;
     onclose: () => void;
     empty?: string;
     busy?: boolean;
@@ -50,6 +53,7 @@
 
   let selected = $state(0);
   let list = $state<HTMLElement>();
+  const current = $derived(shown[selected]);
 
   $effect(() => {
     // New results: select the first one.
@@ -72,7 +76,7 @@
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const item = shown[selected];
-      if (item) onpick(item.id);
+      if (item) onpick(item.id, e.metaKey || e.ctrlKey);
     }
   }
 </script>
@@ -106,10 +110,11 @@
           role="option"
           tabindex="-1"
           aria-selected={i === selected}
+          aria-checked={item.checked}
           data-index={i}
           data-testid="{testid}-item"
           onpointermove={() => (selected = i)}
-          onclick={() => onpick(item.id)}
+          onclick={(e) => onpick(item.id, e.metaKey || e.ctrlKey)}
         >
           <span class="lamp-slot"
             >{#if item.lamp}<Lamp level={item.lamp} />{/if}</span
@@ -117,6 +122,8 @@
           <Icon name={item.icon ?? 'command'} size={16} />
           <span class="label">{item.label}</span>
           {#if item.detail}<span class="detail">{item.detail}</span>{/if}
+          {#if item.value}<span class="value">{item.value}</span>{/if}
+          {#if item.checked !== undefined}<span class="switch" class:on={item.checked} aria-hidden="true"></span>{/if}
           {#if item.kbd}<Kbd chord={item.kbd} />{/if}
         </div>
       {:else}
@@ -125,7 +132,12 @@
     </div>
     <footer class="hints">
       <span><Kbd chord="up" /><Kbd chord="down" /> {t('Move')}</span>
-      <span><Kbd chord="enter" /> {t('Run')}</span>
+      {#if current?.checked !== undefined}
+        <span><Kbd chord="enter" /> {t('Toggle')}</span>
+        <span><Kbd chord="mod+enter" /> {t('Open in Settings')}</span>
+      {:else}
+        <span><Kbd chord="enter" /> {t('Run')}</span>
+      {/if}
       <span><Kbd chord="escape" /> {t('Close')}</span>
     </footer>
   </div>
@@ -222,6 +234,49 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: var(--k-font-size-sm);
+  }
+
+  .value {
+    flex: none;
+    max-width: 30%;
+    overflow: hidden;
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-sm);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Toggle's track, drawn only: ↵ flips it. */
+  .switch {
+    position: relative;
+    flex: none;
+    width: 28px;
+    height: 16px;
+    border-radius: 8px;
+    background: var(--k-bezel);
+    box-shadow: inset 0 0 0 1px var(--k-border-strong);
+  }
+
+  .switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--k-fg-subtle);
+    transition: translate var(--k-duration-fast) var(--k-ease);
+  }
+
+  .switch.on {
+    background: var(--k-accent);
+    box-shadow: none;
+  }
+
+  .switch.on::after {
+    translate: 12px 0;
+    background: var(--k-well);
   }
 
   .row :global(.k-kbd) {
