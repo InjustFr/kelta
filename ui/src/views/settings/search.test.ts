@@ -9,8 +9,9 @@ import { projects, settings } from '$lib/stores';
 
 import schemaJson from '../../../../schema/settings.schema.json';
 import { effectiveBindings } from './lib/chords';
+import type { LayerFile } from './lib/editor.svelte';
 import type { SchemaNode } from './lib/schema';
-import { buildSearchIndex, isInline, searchSettings } from './lib/search';
+import { buildSearchIndex, changedSettings, isInline, resettable, searchSettings } from './lib/search';
 import SettingsPane from './SettingsPane.svelte';
 
 const schema = schemaJson as unknown as SchemaNode;
@@ -156,5 +157,63 @@ describe('settings search results', () => {
     await screen.findByRole('button', { name: /Search actions in/ });
     await fireEvent.click(screen.getByRole('button', { name: 'Open the TOML file' }));
     expect(screen.getByTestId('edit-toml-toggle').textContent).toContain('Back to form');
+  });
+});
+
+describe('Changed by you (#474)', () => {
+  const files: LayerFile[] = [
+    {
+      layer: 'global',
+      projectId: null,
+      repoId: null,
+      where: 'All projects',
+      value: { terminal: { font_size: 15 }, keys: { bindings: { 'palette.open': ['cmd+p'] } }, sources: [] },
+    },
+    {
+      layer: 'project',
+      projectId: 'shop',
+      repoId: null,
+      where: 'Shop',
+      value: { project: { id: 'shop' }, terminal: { font_size: 16 } },
+    },
+    {
+      layer: 'repo',
+      projectId: 'shop',
+      repoId: 'api',
+      where: 'Shop › api',
+      value: { worktree: { setup: ['pnpm i'] } },
+    },
+  ];
+
+  it('lists every key and rebound shortcut set in each file, with where it is set', () => {
+    const rows = changedSettings(index(), files);
+    expect(rows.map((r) => [r.file.where, r.kind, r.path])).toEqual(
+      expect.arrayContaining([
+        ['All projects', 'key', 'terminal.font_size'],
+        ['All projects', 'key', 'sources'],
+        ['All projects', 'action', 'palette.open'],
+        ['Shop', 'key', 'terminal.font_size'],
+        ['Shop › api', 'key', 'worktree.setup'],
+      ]),
+    );
+    expect(rows).toHaveLength(5);
+    expect(rows.some((r) => r.path === 'keys.bindings' || r.path?.startsWith('project'))).toBe(false);
+    expect(rows.find((r) => r.path === 'palette.open')).toMatchObject({
+      resets: ['keys.bindings."palette.open"'],
+      chords: ['cmd+p'],
+    });
+    expect(rows.find((r) => r.file.where === 'Shop')!.value).toBe(16);
+    expect(new Set(rows.map((r) => r.id)).size).toBe(rows.length);
+  });
+
+  it('offers reset for values and shortcuts, not for whole lists; the search narrows the rows', () => {
+    const rows = changedSettings(index(), files);
+    const row = (path: string) => rows.find((r) => r.path === path)!;
+    expect(resettable(row('terminal.font_size'))).toBe(true);
+    expect(resettable(row('palette.open'))).toBe(true);
+    expect(resettable(row('sources'))).toBe(false);
+    const hits = searchSettings(rows, 'font size');
+    expect(hits.map((h) => h.file.where)).toEqual(['All projects', 'Shop']);
+    expect(hits.every((h) => h.path === 'terminal.font_size')).toBe(true);
   });
 });

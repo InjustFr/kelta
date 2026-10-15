@@ -2,11 +2,15 @@
 // TOML-only ones, rows sections draw themselves, keymap actions) and the ranking: label, keywords,
 // group and section, help, key; Advanced last.
 import type { SettingsSection, SettingsSectionId } from '$app/registry';
+import type { JsonValue } from '$lib/gen';
 import { ACTIONS } from '$lib/gen/actions';
 import { t } from '$lib/i18n/index.svelte';
 
 import { fuzzyScore } from '../../../shell/palette/fuzzy';
 import { COPY, onThisPlatform } from '../copy';
+
+import type { LayerFile } from './editor.svelte';
+import { getAt, joinPath, splitPath } from './paths';
 
 import {
   enumOptions,
@@ -54,6 +58,53 @@ export interface SearchHit extends SearchEntry {
 const INLINE: readonly FieldKind[] = ['bool', 'enum', 'int', 'float', 'string', 'secret'];
 /** Simple values are edited in the results; lists, maps and TOML-only keys show one line with Open. */
 export const isInline = (e: SearchEntry): boolean => e.kind === 'key' && !e.toml && INLINE.includes(e.field!);
+export interface ChangedRow extends SearchEntry {
+  file: LayerFile;
+  /** What the reset removes from that file: the key, or an action's shortcut and prefix-key overrides. */
+  resets: string[];
+  /** The file's value (key rows). */
+  value?: JsonValue;
+}
+
+// Rebound shortcuts are listed per action (as Keys' "Changed" chip), not as the whole map.
+const KEYMAP: readonly string[] = ['keys.bindings', 'keys.prefix_bindings'];
+// Lists of things you added (accounts, sources, tools…) and TOML-only tables: one click would delete them all, so they only open.
+const RECORDS: readonly FieldKind[] = ['keyed-list', 'object-map', 'json'];
+export const resettable = (r: ChangedRow): boolean =>
+  r.kind === 'action' || (!r.toml && !RECORDS.includes(r.field!));
+
+/**
+ * Every key and rebound shortcut set in one of `files` (#474), file by file, in index order.
+ * shortcut: keys outside the index (unknown keys, other-OS roots) and plugin actions are not listed, upgrade when someone asks.
+ */
+export function changedSettings(index: readonly SearchEntry[], files: readonly LayerFile[]): ChangedRow[] {
+  return files.flatMap((file) => {
+    const at = (p: string): JsonValue | undefined => getAt(file.value, splitPath(p));
+    return index.flatMap((e): ChangedRow[] => {
+      const paths =
+        e.kind === 'key' && !KEYMAP.includes(e.path!)
+          ? [e.path!]
+          : e.kind === 'action'
+            ? KEYMAP.map((k) => joinPath([...splitPath(k), e.path!]))
+            : [];
+      const resets = paths.filter((p) => at(p) !== undefined);
+      if (resets.length === 0) return [];
+      const v = at(resets[0]!);
+      return [
+        {
+          ...e,
+          id: `${file.layer}:${file.projectId ?? ''}:${file.repoId ?? ''}|${e.id}`,
+          file,
+          resets,
+          value: e.kind === 'key' ? v : undefined,
+          chords: e.kind === 'action' && Array.isArray(v) ? (v as string[]) : e.chords,
+        },
+      ];
+    });
+  });
+}
+
+const isAdvancedPath = (p: string): boolean => ADVANCED.some((a) => p === a || p.startsWith(`${a}.`));
 
 export function buildSearchIndex(
   schema: SchemaNode,
@@ -186,11 +237,14 @@ function score(e: SearchEntry, qs: string[], phrase: string): { score: number; w
 }
 
 /** Hits for `query`, best first; Advanced keys after the rest. */
-export function searchSettings(index: readonly SearchEntry[], query: string): SearchHit[] {
+export function searchSettings<E extends SearchEntry>(
+  index: readonly E[],
+  query: string,
+): (E & { score: number; why: string })[] {
   const qs = words(query);
   if (qs.length === 0) return [];
   const phrase = qs.join(' ');
-  const hits: (SearchHit & { i: number })[] = [];
+  const hits: (E & { score: number; why: string; i: number })[] = [];
   index.forEach((e, i) => {
     const m = score(e, qs, phrase);
     if (m) hits.push({ ...e, ...m, i });

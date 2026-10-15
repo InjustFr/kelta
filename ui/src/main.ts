@@ -48,6 +48,14 @@ async function start(): Promise<void> {
   // shortcut: best effort on reload / Cmd+Q (app.exit does not wait for the page), upgrade by routing quit through the UI.
   window.addEventListener('beforeunload', () => void stores.layout.flush());
 
+  // The webview gets Finder files and dragged links since #480 (no native drag-drop handler): one that
+  // no target takes would navigate the page away. In-app drags carry only text/plain and stay untouched.
+  const external = (e: DragEvent): void => {
+    if (e.dataTransfer?.types.some((t) => t === 'Files' || t === 'text/uri-list')) e.preventDefault();
+  };
+  window.addEventListener('dragover', external);
+  window.addEventListener('drop', external);
+
   injectSprite();
   await setLocale(null); // the OS language from the first frame; settings may override it once loaded
   const target = document.getElementById('app');

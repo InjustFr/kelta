@@ -2998,5 +2998,10 @@
   "How many Claude sessions run and what they cost, their profiles, and Kelta in Claude Code. The launch options under Advanced run commands.": "Combien de sessions Claude tournent et ce qu’elles coûtent, leurs profils, et Kelta dans Claude Code. Les options de lancement sous Avancé exécutent des commandes.",
   "Memory use and how web views are kept.": "Utilisation mémoire et conservation des vues web.",
   "Boards you take tickets from, which projects they feed, how tickets route to a repository, and how often they refresh.": "Les tableaux d’où vous prenez des tickets, les projets qu’ils alimentent, comment les tickets sont routés vers un dépôt, et à quelle fréquence ils s’actualisent.",
-  "Profile list": "Liste des profils"
+  "Profile list": "Liste des profils",
+  "Changed by you": "Modifié par vous",
+  "Everything that differs from Kelta’s defaults, and where it is set.": "Tout ce qui diffère des valeurs par défaut de Kelta, et où c’est défini.",
+  "Nothing changed: every setting is at its default.": "Rien n’a changé : chaque paramètre a sa valeur par défaut.",
+  "Reset {name} in {file}": "Réinitialiser {name} dans {file}",
+  "Could not reset {name}": "Impossible de réinitialiser {name}"
 }

@@ -334,6 +334,13 @@ export function settingsItems(): PaletteItem[] {
       icon: s.icon,
       run: () => void dispatch('settings.open', { section: s.id }),
     })),
+    {
+      id: 'settings:changed',
+      group: 'Settings' as const,
+      label: t('Settings: {section}', { section: t('Changed by you') }),
+      icon: 'rotate-ccw-clock',
+      run: () => void dispatch('settings.open', { changed: true }),
+    },
     ...keys,
   ];
 }
