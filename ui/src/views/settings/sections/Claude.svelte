@@ -6,6 +6,7 @@
   import { toasts } from '$lib/stores';
   import Button from '$lib/ui/Button.svelte';
 
+  import { IN_CLAUDE_CODE, PROFILES } from '../copy/claude';
   import SettingsRow from '../layout/SettingsRow.svelte';
   import SectionForm from '../SectionForm.svelte';
 
@@ -66,7 +67,8 @@
 </script>
 
 <SectionForm sectionId="claude" {...props}>
-  {#snippet before()}
+  {#snippet inGroup(group: string)}
+    {#if group === IN_CLAUDE_CODE}
     {#if installed !== undefined}
       <SettingsRow label={t("Kelta's ticket tools in Claude Code")} actions data-testid="claude-mcp">
         {#snippet control()}
@@ -105,7 +107,7 @@
         </p>
       </SettingsRow>
     {/if}
-    {#if mode !== undefined}
+    {:else if group === PROFILES && mode !== undefined}
       <SettingsRow
         label={t('Profiles without a permission mode start in')}
         actions

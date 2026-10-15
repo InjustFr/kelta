@@ -2,7 +2,7 @@
   // Keybinding editor: effective chords per action (catalog default ⊕ `keys.bindings`), a chord
   // recorder, conflict warnings (L2's `findConflicts` for the reserved list + duplicate bindings)
   // and the compositor snippets that bind `kelta-ctl toggle`.
-  import { msg, t } from '$lib/i18n/index.svelte';
+  import { t } from '$lib/i18n/index.svelte';
   import type { SettingsSectionProps } from '$app/registry';
   import { ACTIONS, RESERVED_CHORDS, type ActionMeta } from '$lib/gen/actions';
   import type { JsonValue } from '$lib/gen';
@@ -53,11 +53,7 @@
   const bindings = $derived(effectiveBindings(overrides, platform));
   const access = $derived(editor.access('keys.bindings'));
 
-  // Shown first with plain labels; #468's copy table can take these over.
-  const FIRST: readonly [string, string][] = [
-    ['keys.prefix', msg('Prefix key')],
-    ['keys.prefix_hint_ms', msg('Show what the next key does after (ms)')],
-  ];
+  const FIRST = ['keys.prefix', 'keys.prefix_hint_ms'] as const; // shown first, labelled by copy/keys.ts
   type KeyChip = 'all' | 'changed' | 'unassigned' | 'conflicts';
   let query = $state('');
   let pressMode = $state(false);
@@ -192,9 +188,9 @@
 >
   {#snippet before()}
     {#if editor.ready && editor.schema}
-      {#each FIRST as [path, label] (path)}
+      {#each FIRST as path (path)}
         {@const node = nodeAt(editor.schema, splitPath(path))}
-        {#if node}<Field {path} {node} title={t(label)} />{/if}
+        {#if node}<Field {path} {node} />{/if}
       {/each}
     {/if}
   {/snippet}

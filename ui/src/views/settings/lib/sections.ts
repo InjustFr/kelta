@@ -6,20 +6,19 @@ import { msg, t } from '$lib/i18n/index.svelte';
 import type { SettingsSectionId } from '$app/registry';
 
 export const SECTION_ROOTS: Partial<Record<SettingsSectionId, readonly string[]>> = {
-  general: ['app'],
-  window: ['window'],
+  general: ['app', 'window'],
   keys: ['keys'],
   terminal: ['terminal'],
   'linux-graphics': ['linux'],
   projects: ['env'],
-  sources: ['sources'],
+  sources: ['sources', 'polling'],
   accounts: ['accounts', 'oauth'],
   claude: ['claude'],
   editors: ['editor'],
   worktree: ['worktree', 'work', 'tickets', 'session_templates', 'ports'],
   reviews: ['reviews'],
   notifications: ['notifications'],
-  performance: ['polling', 'performance', 'web'],
+  performance: ['performance', 'web'],
   tools: ['tools'],
 };
 
@@ -34,7 +33,7 @@ export const TOML_ROOTS: Partial<Record<SettingsSectionId, readonly string[]>> =
 export const SECTION_GROUPS: readonly { label: string; ids: readonly SettingsSectionId[] }[] = [
   {
     label: msg('Basics'),
-    ids: ['health', 'general', 'window', 'terminal', 'keys', 'notifications', 'linux-graphics'],
+    ids: ['health', 'general', 'terminal', 'keys', 'notifications', 'linux-graphics'],
   },
   { label: msg('Work'), ids: ['projects', 'sources', 'worktree', 'reviews', 'tags', 'claude', 'editors'] },
   { label: msg('Integrations'), ids: ['accounts', 'tools', 'triggers', 'plugins'] },
@@ -74,6 +73,7 @@ export const ADVANCED: readonly string[] = [
   'claude.min_version',
   'claude.prompt_templates',
   'claude.queue_hold_pct',
+  'claude.terminal_command',
   'editor.review_args',
   'work.on_start.transition_to',
   'work.on_start.comment',
@@ -101,10 +101,13 @@ export const ADVANCED: readonly string[] = [
 
 const advanced = new Set(ADVANCED);
 export const isAdvanced = (path: string): boolean => advanced.has(path);
+/** The key or one of its parents is in ADVANCED (the form and the search). Field.svelte keeps the exact
+ *  `isAdvanced`: inside an advanced group (web, oauth) its children must still show. */
+export const underAdvanced = (path: string): boolean =>
+  ADVANCED.some((a) => path === a || path.startsWith(`${a}.`));
 
 export const SECTION_BLURB: Partial<Record<SettingsSectionId, string>> = {
-  general: msg('Theme, updates, session restore and quit behaviour.'),
-  window: msg('Window decorations and what closing the window does.'),
+  general: msg('Appearance, startup and quit, the window and updates.'),
   keys: msg(
     'Matching uses physical keys. Mod is Cmd on macOS and Ctrl on Linux, where a focused terminal keeps plain Ctrl+letter and Ctrl+Shift+letter still reaches Kelta. An app prefix key followed by one key reaches every action.',
   ),
@@ -115,7 +118,9 @@ export const SECTION_BLURB: Partial<Record<SettingsSectionId, string>> = {
   accounts: msg(
     'Accounts connect trackers and code hosts. Tokens are kept in your system keychain or read from a CLI you already use, never in config files.',
   ),
-  claude: msg('How Kelta launches Claude Code. Binary, extra arguments and extra hooks run commands.'),
+  claude: msg(
+    'How many Claude sessions run and what they cost, their profiles, and Kelta in Claude Code. The launch options under Advanced run commands.',
+  ),
   editors: msg(
     'Editors Kelta can open files in. A preset set here replaces the one with the same name from a broader level.',
   ),
@@ -125,13 +130,13 @@ export const SECTION_BLURB: Partial<Record<SettingsSectionId, string>> = {
     'Local tags: reminders you put on tickets and pull requests. Kept in Kelta, never sent to a tracker or code host.',
   ),
   notifications: msg('Desktop notifications and quiet hours.'),
-  performance: msg('How often Kelta checks your tracker and code host, memory use and web view behaviour.'),
+  performance: msg('Memory use and how web views are kept.'),
   tools: msg('Buttons that open programs like lazygit in a pane, or apps like Fork.'),
   triggers: msg('Commands that run when something happens, such as a ticket starting. Plugins can add some.'),
   plugins: msg('Plugins add tools, triggers and screens. Each asks for the permissions it needs.'),
   projects: msg('Folders Kelta manages, with their repositories.'),
   sources: msg(
-    'Boards you take tickets from, which projects they feed, and how tickets route to a repository.',
+    'Boards you take tickets from, which projects they feed, how tickets route to a repository, and how often they refresh.',
   ),
 };
 
@@ -160,9 +165,15 @@ export const SECTION_ROWS: Partial<Record<SettingsSectionId, readonly SectionRow
     {
       label: msg("Kelta's ticket tools in Claude Code"),
       keywords: [msg('mcp'), msg('install')],
+      group: msg('Kelta in Claude Code'),
       anchor: 'claude-mcp',
     },
-    { label: msg('Claude sessions started outside Kelta'), keywords: [msg('hooks')], anchor: 'claude-hooks' },
+    {
+      label: msg('Claude sessions started outside Kelta'),
+      keywords: [msg('hooks')],
+      group: msg('Kelta in Claude Code'),
+      anchor: 'claude-hooks',
+    },
     {
       label: msg('Profiles without a permission mode start in'),
       group: msg('Profiles'),

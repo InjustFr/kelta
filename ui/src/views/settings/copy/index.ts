@@ -25,7 +25,6 @@ import reviews from './reviews';
 import sources from './sources';
 import terminal from './terminal';
 import tools from './tools';
-import windowCopy from './window';
 import worktree from './worktree';
 
 export interface CopyOption {
@@ -52,7 +51,6 @@ export type CopyTable = Record<string, CopyEntry>;
 
 export const SECTION_COPY: Partial<Record<SettingsSectionId, CopyTable>> = {
   general,
-  window: windowCopy,
   keys,
   terminal,
   'linux-graphics': linuxGraphics,
@@ -71,8 +69,22 @@ export const SECTION_COPY: Partial<Record<SettingsSectionId, CopyTable>> = {
 /** Every entry by dotted settings path. */
 export const COPY: CopyTable = Object.assign({}, ...Object.values(SECTION_COPY));
 
-/** Sections whose copy is finished: every key has a label (copy.test.ts). Section tickets add theirs. */
-export const COPY_DONE: readonly SettingsSectionId[] = ['worktree'];
+/** Sections whose copy is finished: every key has a label (copy.test.ts). Notifications joins with #472. */
+export const COPY_DONE: readonly SettingsSectionId[] = [
+  'general',
+  'keys',
+  'terminal',
+  'linux-graphics',
+  'projects',
+  'sources',
+  'accounts',
+  'claude',
+  'editors',
+  'worktree',
+  'reviews',
+  'performance',
+  'tools',
+];
 
 export const onThisPlatform = (entry: CopyEntry | undefined): boolean =>
   !entry?.platform || entry.platform === currentPlatform();

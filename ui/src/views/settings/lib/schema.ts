@@ -27,8 +27,6 @@ export interface SchemaNode {
   format?: string;
   required?: string[];
   $ref?: string;
-  'x-kelta-category'?: string;
-  'x-kelta-order'?: number;
   'x-kelta-scope'?: string[];
   'x-kelta-secret'?: boolean;
   'x-kelta-restart'?: boolean;
@@ -59,8 +57,6 @@ export interface Resolved {
 }
 
 const X_KEYS = [
-  'x-kelta-category',
-  'x-kelta-order',
   'x-kelta-scope',
   'x-kelta-secret',
   'x-kelta-restart',

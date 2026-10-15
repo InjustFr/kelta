@@ -119,7 +119,7 @@
 </script>
 
 <SectionForm sectionId="sources" {...props} skip={['sources']}>
-  {#snippet after()}
+  {#snippet before()}
     {#if globalOnly}
       <div class="notice" role="status" data-testid="sources-global-only">
         <Icon name="info" size={16} />

@@ -18,13 +18,13 @@ import {
   type SchemaNode,
 } from './schema';
 import {
-  ADVANCED,
   SECTION_BLURB,
   SECTION_KEYWORDS,
   SECTION_ROOTS,
   SECTION_ROWS,
   TOML_ROOTS,
   sectionLabel,
+  underAdvanced,
 } from './sections';
 
 export interface SearchEntry {
@@ -54,7 +54,6 @@ export interface SearchHit extends SearchEntry {
 const INLINE: readonly FieldKind[] = ['bool', 'enum', 'int', 'float', 'string', 'secret'];
 /** Simple values are edited in the results; lists, maps and TOML-only keys show one line with Open. */
 export const isInline = (e: SearchEntry): boolean => e.kind === 'key' && !e.toml && INLINE.includes(e.field!);
-const isAdvancedPath = (p: string): boolean => ADVANCED.some((a) => p === a || p.startsWith(`${a}.`));
 
 export function buildSearchIndex(
   schema: SchemaNode,
@@ -93,7 +92,7 @@ export function buildSearchIndex(
         node: f.node,
         field: f.kind,
         toml,
-        advanced: isAdvancedPath(f.path),
+        advanced: underAdvanced(f.path),
       }));
     out.push(...keys(SECTION_ROOTS[s.id] ?? [], false), ...keys(TOML_ROOTS[s.id] ?? [], true));
     for (const r of SECTION_ROWS[s.id] ?? [])
