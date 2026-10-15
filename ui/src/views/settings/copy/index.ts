@@ -72,7 +72,7 @@ export const SECTION_COPY: Partial<Record<SettingsSectionId, CopyTable>> = {
 export const COPY: CopyTable = Object.assign({}, ...Object.values(SECTION_COPY));
 
 /** Sections whose copy is finished: every key has a label (copy.test.ts). Section tickets add theirs. */
-export const COPY_DONE: readonly SettingsSectionId[] = ['worktree', 'terminal'];
+export const COPY_DONE: readonly SettingsSectionId[] = ['worktree', 'terminal', 'notifications'];
 
 export const onThisPlatform = (entry: CopyEntry | undefined): boolean =>
   !entry?.platform || entry.platform === currentPlatform();

@@ -26,6 +26,8 @@
     after?: Snippet;
     /** Paths (or whole roots) left out of the generated form (owned by a custom control). */
     skip?: readonly string[];
+    /** Paths shown but not editable: another setting makes them do nothing (still rendered, so search hits land). */
+    disabled?: readonly string[];
   }
 
   let {
@@ -36,6 +38,7 @@
     before,
     after,
     skip = [],
+    disabled = [],
   }: Props = $props();
 
   const editor = useEditor(() => ({ layer, projectId, repoId }));
@@ -87,7 +90,7 @@
 
 {#snippet fields(items: [string, SchemaNode][])}
   {#each items as [path, node] (path)}
-    <Field {path} {node} depth={path.includes('.') ? 1 : 0} />
+    <Field {path} {node} depth={path.includes('.') ? 1 : 0} disabled={disabled.includes(path)} />
   {/each}
 {/snippet}
 
@@ -122,7 +125,7 @@
       data-testid="advanced"
     >
       {#each advanced as [path, node] (path)}
-        <Field {path} {node} depth={1} />
+        <Field {path} {node} depth={1} disabled={disabled.includes(path)} />
       {/each}
     </SettingsDisclosure>
   {/if}

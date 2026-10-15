@@ -13,6 +13,7 @@ import { childEntries, enumOptions, fieldKind, leafFields, nodeAt, type SchemaNo
 import { SECTION_ROOTS } from './lib/sections';
 import { takeSourceRequest } from './actions';
 import SectionForm from './SectionForm.svelte';
+import Notifications from './sections/Notifications.svelte';
 import Worktree from './sections/Worktree.svelte';
 
 const schema = schemaJson as unknown as SchemaNode;
@@ -153,6 +154,66 @@ describe('settings copy table', () => {
       }
       expect([...missing]).toEqual([]);
     }
+  });
+});
+
+describe('Settings → Notifications (#472)', () => {
+  const EVENTS = [
+    'notifications.claude_blocked',
+    'notifications.claude_done',
+    'notifications.review_requested',
+    'notifications.pr_approved',
+    'notifications.pr_changes_requested',
+    'notifications.ci_failed_mine',
+  ];
+  const mount = async () => {
+    const { transport, controls } = createMockTransport();
+    setTransport(transport);
+    await settings.load();
+    const r = render(Notifications, { layer: 'global', projectId: null, repoId: null });
+    await waitFor(() => expect(r.container.querySelector('[data-path]')).toBeTruthy());
+    // the editor's first load must land before a click, or it overwrites the write
+    await waitFor(() => expect(controls.calls.some((c) => c.cmd === 'settings_layer_get')).toBe(true));
+    return r;
+  };
+  const row = (c: HTMLElement, p: string) => c.querySelector(`[data-path="${p}"]`)!;
+
+  it('the switch comes first, events under Tell me when, then Quiet time; the test row follows the switches', async () => {
+    const { container, unmount } = await mount();
+    const fields = [...container.querySelectorAll('[data-testid="field"]')].filter(
+      (f) => !f.closest('[data-testid="advanced"]'),
+    );
+    expect(fields.map((f) => f.getAttribute('data-path'))).toEqual([
+      'notifications.enabled',
+      ...EVENTS,
+      'notifications.quiet_hours',
+      'notifications.only_when_unfocused',
+      'notifications.focus_allow_blocked',
+    ]);
+    expect(
+      [...container.querySelectorAll('[data-testid="copy-group"] h3')].map((h) => h.textContent),
+    ).toEqual(['Tell me when', 'Quiet time']);
+    expect(row(container, 'notifications.enabled').closest('[data-testid="copy-group"]')).toBeNull();
+    expect(row(container, 'notifications.bell_background').closest('[data-testid="advanced"]')).toBeTruthy();
+    const test = container.querySelector('[data-testid="notification-test"]')!;
+    expect(fields.at(-1)!.compareDocumentPosition(test) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    unmount();
+  });
+
+  it('the events are disabled, still shown, while notifications are off', async () => {
+    const { container, unmount } = await mount();
+    const sw = (p: string) =>
+      within(row(container, p) as HTMLElement).getByRole('switch') as HTMLInputElement;
+    const master = () => screen.getByRole('switch', { name: 'Desktop notifications' }) as HTMLInputElement;
+    await fireEvent.click(master());
+    await waitFor(() => expect(sw('notifications.claude_blocked').disabled).toBe(true));
+    for (const p of EVENTS) expect(sw(p).disabled).toBe(true);
+    for (const i of row(container, 'notifications.quiet_hours').querySelectorAll('input[type="time"]'))
+      expect((i as HTMLInputElement).disabled).toBe(true);
+    await waitFor(() => expect(master().disabled).toBe(false)); // never disabled by its own dependents
+    await fireEvent.click(master());
+    await waitFor(() => expect(sw('notifications.claude_blocked').disabled).toBe(false));
+    unmount();
   });
 });
 

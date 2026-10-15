@@ -58,7 +58,9 @@
 
   const resolved = $derived(resolve(node));
   const toggle = $derived(path ? TOGGLE_VALUES[path] : undefined);
-  const kind = $derived(toggle ? 'bool' : fieldKind(node));
+  const kind = $derived(
+    toggle ? 'bool' : path === 'notifications.quiet_hours' ? 'time-range' : fieldKind(node),
+  );
   const n = $derived(resolved.node);
 
   // ---- text / number drafts ----------------------------------------------------------------
@@ -66,11 +68,17 @@
   let localError = $state<string | null>(null);
 
   $effect(() => {
+    localError = null;
     if (kind === 'string' || kind === 'secret') text = typeof value === 'string' ? value : '';
     else if (kind === 'int' || kind === 'float')
       text = value === undefined || value === null ? '' : String(value);
     else if (kind === 'json') text = value === undefined ? '' : JSON.stringify(value, null, 2);
-    localError = null;
+    else if (kind === 'time-range') {
+      const s = typeof value === 'string' ? value : '';
+      const [a = '', b = ''] = s.split('-').map((x) => x.trim());
+      range = [a, b];
+      localError = rangeError(s); // a bad value typed in the TOML shows at once
+    }
   });
 
   function commitText(): void {
@@ -120,6 +128,23 @@
     } catch (err) {
       localError = t('Invalid JSON: {message}', { message: (err as Error).message });
     }
+  }
+
+  // ---- time range ("HH:MM-HH:MM", empty = off; kelta-core notifier.rs in_quiet_hours) ----------
+  const RANGE = /^((?:[01]\d|2[0-3]):[0-5]\d)\s*-\s*((?:[01]\d|2[0-3]):[0-5]\d)$/;
+  let range = $state(['', '']);
+
+  function rangeError(s: string): string | null {
+    if (s === '') return null;
+    const m = RANGE.exec(s);
+    if (!m) return t('Enter both times, or clear both.');
+    return m[1] === m[2] ? t('Pick two different times.') : null; // Rust: same start and end = never quiet
+  }
+
+  function commitRange(): void {
+    const s = range[0] || range[1] ? `${range[0]}-${range[1]}` : '';
+    localError = rangeError(s);
+    if (!localError && s !== (typeof value === 'string' ? value : '')) onchange(s);
   }
 
   // ---- lists / maps --------------------------------------------------------------------------
@@ -239,6 +264,27 @@
       {readonly}
       onchange={(ref) => onchange(ref)}
     />
+  {:else if kind === 'time-range'}
+    <div class="row">
+      <input
+        id={idAttr}
+        class="num"
+        type="time"
+        aria-label={t('From')}
+        bind:value={range[0]}
+        disabled={readonly}
+        onchange={commitRange}
+      />
+      <span>{t('to')}</span>
+      <input
+        class="num"
+        type="time"
+        aria-label={t('Until')}
+        bind:value={range[1]}
+        disabled={readonly}
+        onchange={commitRange}
+      />
+    </div>
   {:else if kind === 'string'}
     {#snippet field()}
       <TextInput
