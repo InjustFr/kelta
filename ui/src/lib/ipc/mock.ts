@@ -478,7 +478,10 @@ function transitionsFor(t: Ticket): Transition[] {
 }
 
 function setPath(root: JsonValue, path: string, value: JsonValue | undefined): JsonValue {
-  const parts = path.split('.').filter(Boolean);
+  // Quoted segments (`keys.bindings."pane.split_right"`) hold dots, as in core's dotted paths.
+  const parts = (path.match(/"(?:[^"\\]|\\.)*"|[^.]+/g) ?? []).map((p) =>
+    p.startsWith('"') ? p.slice(1, -1).replace(/\\(.)/g, '$1') : p,
+  );
   const out = clone(root) as Record<string, JsonValue>;
   let node: Record<string, JsonValue> = out;
   parts.forEach((part, i) => {

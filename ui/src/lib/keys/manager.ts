@@ -286,8 +286,10 @@ export class KeyManager {
   start(target: EventTarget = window): () => void {
     const onKeyDown = (e: Event): void => {
       const event = e as KeyboardEvent;
-      // Terminal views route their own events through attachCustomKeyEventHandler.
-      if (event.target instanceof Element && event.target.closest('[data-terminal]')) return;
+      // Terminal views route their own events through attachCustomKeyEventHandler; key recorders
+      // ([data-key-capture], Settings › Keys) read the raw press.
+      if (event.target instanceof Element && event.target.closest('[data-terminal], [data-key-capture]'))
+        return;
       if (this.handleKeyDown(event) === 'pass' && this.#opts.keys?.()?.list_keys === false) {
         // `keys.list_keys = false`: the letter shortcuts of lists and boards never reach their pane.
         if (isListKey(event, this.#context(event))) event.stopPropagation();

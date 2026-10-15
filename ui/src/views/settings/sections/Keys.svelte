@@ -2,28 +2,39 @@
   // Keybinding editor: effective chords per action (catalog default ⊕ `keys.bindings`), a chord
   // recorder, conflict warnings (L2's `findConflicts` for the reserved list + duplicate bindings)
   // and the compositor snippets that bind `kelta-ctl toggle`.
-  import { t } from '$lib/i18n/index.svelte';
+  import { msg, t } from '$lib/i18n/index.svelte';
   import type { SettingsSectionProps } from '$app/registry';
-  import { ACTIONS, RESERVED_CHORDS } from '$lib/gen/actions';
+  import { ACTIONS, RESERVED_CHORDS, type ActionMeta } from '$lib/gen/actions';
   import type { JsonValue } from '$lib/gen';
   import * as ipc from '$lib/ipc/commands';
   import { findConflicts } from '$lib/keys';
   import { toasts } from '$lib/stores';
+  import Badge from '$lib/ui/Badge.svelte';
   import Button from '$lib/ui/Button.svelte';
   import IconButton from '$lib/ui/IconButton.svelte';
   import Kbd from '$lib/ui/Kbd.svelte';
   import { currentPlatform } from '$lib/ui/format';
 
+  import CountChips from '../../filters/CountChips.svelte';
+  import Field from '../fields/Field.svelte';
   import { useEditor } from '../lib/editor.svelte';
+  import { nodeAt } from '../lib/schema';
   import {
+    actionArea,
+    actionsOn,
     chordFromEvent,
     duplicateChords,
     effectiveBindings,
+    KEY_AREAS,
+    matchesPress,
+    prefixCandidates,
+    matchesText,
     normalizeChord,
     TOGGLE_SNIPPETS,
     type BindingConflict,
+    type KeyPress,
   } from '../lib/chords';
-  import { joinPath, isRecord } from '../lib/paths';
+  import { joinPath, isRecord, splitPath } from '../lib/paths';
   import SettingsGroup from '../layout/SettingsGroup.svelte';
   import SectionForm from '../SectionForm.svelte';
 
@@ -42,8 +53,53 @@
   const bindings = $derived(effectiveBindings(overrides, platform));
   const access = $derived(editor.access('keys.bindings'));
 
+  // Shown first with plain labels; #468's copy table can take these over.
+  const FIRST: readonly [string, string][] = [
+    ['keys.prefix', msg('Prefix key')],
+    ['keys.prefix_hint_ms', msg('Show what the next key does after (ms)')],
+  ];
+  type KeyChip = 'all' | 'changed' | 'unassigned' | 'conflicts';
+  let query = $state('');
+  let pressMode = $state(false);
+  let pressed = $state<KeyPress | null>(null);
+  // `autofocus` does not take focus once the page has loaded.
+  const focusNow = (node: HTMLElement): void => node.focus();
+  let chip = $state<KeyChip>('all');
+  const prefixOf = (a: ActionMeta): string | null => prefixMap[a.id] ?? a.prefix;
+  const changed = (id: string): boolean => id in overrides || id in prefixMap;
+  const unassigned = (a: ActionMeta): boolean => (bindings[a.id] ?? []).length === 0 && !prefixOf(a);
+  const conflicted = $derived(new Set(conflictsFor(bindings).flatMap((c) => c.actions)));
+  const labelOf = (id: string): string => t(ACTIONS.find((x) => x.id === id)?.label ?? id);
+  const inChip = (a: ActionMeta, c: KeyChip): boolean =>
+    c === 'changed'
+      ? changed(a.id)
+      : c === 'unassigned'
+        ? unassigned(a)
+        : c === 'conflicts'
+          ? conflicted.has(a.id)
+          : true;
+  const shown = $derived(
+    ACTIONS.filter(
+      (a) =>
+        inChip(a, chip) &&
+        (pressMode
+          ? pressed === null || matchesPress(pressed, bindings[a.id] ?? [], prefixOf(a))
+          : matchesText(query, t(a.label), a.id)),
+    ),
+  );
+  const chips = $derived(
+    (
+      [
+        ['all', t('All')],
+        ['changed', t('Changed')],
+        ['unassigned', t('Unassigned')],
+        ['conflicts', t('Conflicts')],
+      ] as const
+    ).map(([id, label]) => ({ id, label, title: label, n: ACTIONS.filter((a) => inChip(a, id)).length })),
+  );
+
   let recording = $state<string | null>(null);
-  let pending = $state<{ action: string; chord: string; conflicts: BindingConflict[] } | null>(null);
+  let pending = $state<{ action: string; chord: string; taken: string[]; reserved: boolean } | null>(null);
   let snippet = $state<(typeof TOGGLE_SNIPPETS)[number]['id']>(platform === 'macos' ? 'macos' : 'hyprland');
 
   function conflictsFor(next: Record<string, string[]>): BindingConflict[] {
@@ -77,18 +133,37 @@
     const chord = chordFromEvent(e);
     if (!chord) return;
     recording = null;
-    const next = { ...bindings, [action]: [chord] };
-    const mine = conflictsFor(next).filter((c) => normalizeChord(c.chord) === normalizeChord(chord));
-    pending = { action, chord, conflicts: mine };
+    const reserved = findConflicts({ [action]: [chord] }, RESERVED_CHORDS).some((c) => c.reserved);
+    pending = { action, chord, taken: actionsOn(bindings, chord, action), reserved };
   }
 
-  async function apply(action: string, chords: string[]): Promise<void> {
+  function onpress(e: KeyboardEvent): void {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.code === 'Escape' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+      pressMode = false;
+      pressed = null;
+      return;
+    }
+    const chord = chordFromEvent(e);
+    if (chord) pressed = { chord, keys: prefixCandidates(e) };
+  }
+
+  async function apply(action: string, chords: string[], taken: readonly string[] = []): Promise<void> {
     pending = null;
+    const c = normalizeChord(chords[0] ?? '');
+    // The other actions give the chord up first (read before the writes re-derive `bindings`).
+    const freed = taken.map(
+      (id) => [id, (bindings[id] ?? []).filter((x) => normalizeChord(x) !== c)] as const,
+    );
+    for (const [id, rest] of freed)
+      if (!(await editor.set(joinPath(['keys', 'bindings', id]), rest as JsonValue))) return;
     await editor.set(joinPath(['keys', 'bindings', action]), chords as JsonValue);
   }
 
   async function resetBinding(action: string): Promise<void> {
-    await editor.reset(joinPath(['keys', 'bindings', action]));
+    if (action in overrides) await editor.reset(joinPath(['keys', 'bindings', action]));
+    if (action in prefixMap) await editor.reset(joinPath(['keys', 'prefix_bindings', action]));
   }
 
   async function setPrefix(action: string, key: string): Promise<void> {
@@ -110,105 +185,179 @@
   const activeSnippet = $derived(TOGGLE_SNIPPETS.find((s) => s.id === snippet) ?? TOGGLE_SNIPPETS[0]!);
 </script>
 
-<SectionForm sectionId="keys" {...props} skip={['keys.bindings', 'keys.prefix_bindings']}>
+<SectionForm
+  sectionId="keys"
+  {...props}
+  skip={['keys.bindings', 'keys.prefix_bindings', 'keys.prefix', 'keys.prefix_hint_ms']}
+>
+  {#snippet before()}
+    {#if editor.ready && editor.schema}
+      {#each FIRST as [path, label] (path)}
+        {@const node = nodeAt(editor.schema, splitPath(path))}
+        {#if node}<Field {path} {node} title={t(label)} />{/if}
+      {/each}
+    {/if}
+  {/snippet}
   {#snippet after()}
     <div class="keys" data-testid="keys-section">
       <SettingsGroup heading={t('Bindings')}>
         {#if !access.editable && access.reason}<p class="hint">{access.reason}</p>{/if}
+        <div class="filter">
+          {#if pressMode}
+            <div
+              class="recorder"
+              role="textbox"
+              tabindex="0"
+              data-key-capture
+              use:focusNow
+              aria-label={t('Press keys to find their action')}
+              data-testid="press-keys"
+              onkeydown={onpress}
+            >
+              {#if pressed}<Kbd chord={pressed.chord} />{:else}{t('Press keys… (Esc stops)')}{/if}
+            </div>
+          {:else}
+            <input
+              type="search"
+              class="search"
+              bind:value={query}
+              placeholder={t('Filter by action name or id')}
+              aria-label={t('Filter shortcuts')}
+              data-testid="keys-filter"
+            />
+          {/if}
+          <Button
+            size="sm"
+            icon="keyboard"
+            aria-pressed={pressMode}
+            onclick={() => {
+              pressMode = !pressMode;
+              pressed = null;
+            }}>{t('Press keys')}</Button
+          >
+          <CountChips
+            label={t('Show')}
+            {chips}
+            value={chip}
+            onchange={(id) => (chip = (id ?? 'all') as KeyChip)}
+          />
+        </div>
         <table data-testid="bindings">
           <thead
             ><tr><th>{t('Action')}</th><th>{t('Shortcut')}</th><th>{t('After prefix')}</th><th></th></tr
             ></thead
           >
-          <tbody>
-            {#each ACTIONS as a (a.id)}
-              {@const chords = bindings[a.id] ?? []}
-              {@const custom = a.id in overrides}
-              <tr data-action={a.id} class:custom>
-                <td>
-                  <div>{t(a.label)}</div>
-                  <code class="id">{a.id}</code>
-                </td>
-                <td>
-                  {#if recording === a.id}
-                    <!-- svelte-ignore a11y_autofocus -->
-                    <div
-                      class="recorder"
-                      role="textbox"
-                      tabindex="0"
-                      aria-label={t('Press the new shortcut for {action}', { action: t(a.label) })}
-                      data-testid="recorder"
-                      autofocus
-                      onkeydown={(e) => onkeydown(e, a.id)}
-                      onblur={() => (recording = null)}
-                    >
-                      {t('Press a shortcut… (Esc cancels)')}
-                    </div>
-                  {:else if chords.length === 0}
-                    <span class="muted"
-                      >{a.id === 'window.toggle' ? t('Bind in your compositor (below)') : t('Unbound')}</span
-                    >
-                  {:else}
-                    {#each chords as c (c)}<Kbd chord={c} />{/each}
-                  {/if}
-                  {#if pending && pending.action === a.id}
-                    <div class="pending" data-testid="pending-binding">
-                      <Kbd chord={pending.chord} />
-                      {#if pending.conflicts.length > 0}
-                        <p class="warn" role="status" data-testid="conflict">
-                          {#each pending.conflicts as c (c.chord)}
-                            {#if c.reserved}
-                              <code>{c.chord}</code> {t('is reserved for terminal programs.')}
-                            {:else}
-                              <code>{c.chord}</code>
-                              {t('is already used by {actions}.', {
-                                actions: c.actions.filter((x) => x !== a.id).join(', '),
-                              })}
-                            {/if}
-                          {/each}
-                        </p>
+          {#each KEY_AREAS as area (area.id)}
+            {@const rows = shown.filter((a) => actionArea(a.id) === area.id)}
+            {#if rows.length > 0}
+              <tbody data-area={area.id}>
+                <tr class="area"><th colspan="4" scope="colgroup">{t(area.label)}</th></tr>
+                {#each rows as a (a.id)}
+                  {@const chords = bindings[a.id] ?? []}
+                  {@const custom = changed(a.id)}
+                  <tr data-action={a.id} class:custom>
+                    <td>
+                      <div>{t(a.label)}</div>
+                      <code class="id">{a.id}</code>
+                    </td>
+                    <td>
+                      {#if recording === a.id}
+                        <div
+                          class="recorder"
+                          role="textbox"
+                          tabindex="0"
+                          aria-label={t('Press the new shortcut for {action}', { action: t(a.label) })}
+                          data-testid="recorder"
+                          data-key-capture
+                          use:focusNow
+                          onkeydown={(e) => onkeydown(e, a.id)}
+                          onblur={() => (recording = null)}
+                        >
+                          {t('Press a shortcut… (Esc cancels)')}
+                        </div>
+                      {:else if chords.length === 0}
+                        <span class="muted"
+                          >{a.id === 'window.toggle'
+                            ? t('Bind in your compositor (below)')
+                            : t('Unbound')}</span
+                        >
+                      {:else}
+                        {#each chords as c (c)}<Kbd chord={c} />{/each}
                       {/if}
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        onclick={() => pending && apply(pending.action, [pending.chord])}
-                      >
-                        {pending.conflicts.length > 0 ? t('Bind anyway') : t('Bind')}
-                      </Button>
-                      <Button size="sm" onclick={() => (pending = null)}>{t('Cancel')}</Button>
-                    </div>
-                  {/if}
-                </td>
-                <td>
-                  {#if a.prefix !== null || a.id in prefixMap}
-                    <input
-                      class="prefix"
-                      aria-label={t('Prefix key for {action}', { action: t(a.label) })}
-                      maxlength="1"
-                      value={prefixMap[a.id] ?? ''}
-                      disabled={!access.editable}
-                      onchange={(e) => setPrefix(a.id, e.currentTarget.value)}
-                    />
-                  {/if}
-                </td>
-                <td class="actions">
-                  {#if access.editable && a.id !== 'window.toggle'}
-                    <Button size="sm" onclick={() => startRecording(a.id)}>{t('Record')}</Button>
-                    <Button size="sm" onclick={() => apply(a.id, [])} disabled={chords.length === 0}
-                      >{t('Unbind')}</Button
-                    >
-                    {#if custom}<IconButton
-                        icon="rotate-ccw-clock"
-                        size="sm"
-                        label={t('Reset {action} to default', { action: t(a.label) })}
-                        onclick={() => resetBinding(a.id)}
-                      />{/if}
-                  {/if}
-                </td>
-              </tr>
-            {/each}
-          </tbody>
+                      {#if custom}<Badge tone="accent">{t('Changed')}</Badge>{/if}
+                      {#if pending && pending.action === a.id}
+                        <div
+                          class="pending"
+                          class:clash={pending.taken.length > 0}
+                          data-testid="pending-binding"
+                        >
+                          <Kbd chord={pending.chord} />
+                          {#if pending.taken.length > 0}
+                            <p class="warn" role="alert" data-testid="conflict">
+                              {t('already runs {actions}. Using it here unbinds it there.', {
+                                actions: pending.taken.map(labelOf).join(', '),
+                              })}
+                            </p>
+                          {:else if pending.reserved}
+                            <p class="warn" role="status" data-testid="conflict">
+                              {t('is reserved for terminal programs.')}
+                            </p>
+                          {/if}
+                          {#if pending.taken.length > 0}
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onclick={() => pending && apply(pending.action, [pending.chord], pending.taken)}
+                              >{t('Use it here')}</Button
+                            >
+                            <Button size="sm" onclick={() => startRecording(a.id)}>{t('Pick another')}</Button
+                            >
+                          {:else}
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onclick={() => pending && apply(pending.action, [pending.chord])}
+                              >{pending.reserved ? t('Bind anyway') : t('Bind')}</Button
+                            >
+                            <Button size="sm" onclick={() => (pending = null)}>{t('Cancel')}</Button>
+                          {/if}
+                        </div>
+                      {/if}
+                    </td>
+                    <td>
+                      {#if a.prefix !== null || a.id in prefixMap}
+                        <input
+                          class="prefix"
+                          aria-label={t('Prefix key for {action}', { action: t(a.label) })}
+                          maxlength="1"
+                          placeholder={a.prefix ?? ''}
+                          value={prefixMap[a.id] ?? ''}
+                          disabled={!access.editable}
+                          onchange={(e) => setPrefix(a.id, e.currentTarget.value)}
+                        />
+                      {/if}
+                    </td>
+                    <td class="actions">
+                      {#if access.editable && a.id !== 'window.toggle'}
+                        <Button size="sm" onclick={() => startRecording(a.id)}>{t('Record')}</Button>
+                        <Button size="sm" onclick={() => apply(a.id, [])} disabled={chords.length === 0}
+                          >{t('Unbind')}</Button
+                        >
+                        {#if custom}<IconButton
+                            icon="rotate-ccw-clock"
+                            size="sm"
+                            label={t('Reset {action} to default', { action: t(a.label) })}
+                            onclick={() => resetBinding(a.id)}
+                          />{/if}
+                      {/if}
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            {/if}
+          {/each}
         </table>
+        {#if shown.length === 0}<p class="hint">{t('No action matches.')}</p>{/if}
         {#if editor.errors[joinPath(['keys', 'bindings'])]}<p class="error" role="alert">
             {editor.errors[joinPath(['keys', 'bindings'])]}
           </p>{/if}
@@ -263,6 +412,37 @@
 
   tr.custom td:first-child {
     border-left: 2px solid var(--k-accent);
+  }
+
+  .filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--k-space-2);
+    margin-bottom: var(--k-space-2);
+  }
+
+  .search {
+    flex: 1 1 240px;
+    height: var(--k-control-height);
+    padding: 0 var(--k-space-3);
+    border: 1px solid var(--k-border);
+    border-radius: var(--k-radius);
+    background: var(--k-bg);
+    color: var(--k-fg);
+    font: inherit;
+  }
+
+  tr.area th {
+    padding-top: var(--k-space-4);
+    font-size: var(--k-font-size-sm);
+    color: var(--k-fg);
+  }
+
+  .pending.clash {
+    padding: var(--k-space-2) var(--k-space-3);
+    border-radius: var(--k-radius);
+    background: var(--k-bg-sunken);
   }
 
   .id {
