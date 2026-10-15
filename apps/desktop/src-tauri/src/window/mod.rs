@@ -122,6 +122,8 @@ fn create(app: &AppHandle) -> Result<WebviewWindow, Box<dyn std::error::Error>> 
         .inner_size(geometry::DEFAULT_WIDTH, geometry::DEFAULT_HEIGHT)
         .min_inner_size(geometry::MIN_WIDTH, geometry::MIN_HEIGHT)
         .decorations(!eff.undecorated())
+        // The native handler eats dragover/drop on macOS: the page does its own drag and drop (#341, #480).
+        .disable_drag_drop_handler()
         .on_page_load(on_page_load);
 
     // macOS custom chrome: the system traffic lights over the context bar's 72px inset, no title bar.
@@ -173,6 +175,7 @@ pub(crate) fn open_detached(
         .inner_size(geometry::DEFAULT_WIDTH, geometry::DEFAULT_HEIGHT)
         .min_inner_size(geometry::MIN_WIDTH, geometry::MIN_HEIGHT)
         .initialization_script(format!("window.__KELTA_DETACHED__ = {shows};"))
+        .disable_drag_drop_handler()
         .on_page_load(on_page_load);
     let saved = core
         .config()
@@ -585,6 +588,21 @@ mod tests {
     fn detached_labels_fit_the_capability() {
         assert_eq!(detached_label(&TabId::new("tab-1a2b")), "detached-tab-1a2b");
         assert_eq!(detached_label(&TabId::new("t.x/é")), "detached-t_x__");
+    }
+
+    /// The page handles drag and drop itself (#341 pane moves, #480): the native handler would eat it on macOS.
+    #[test]
+    fn every_window_leaves_drag_and_drop_to_the_page() {
+        let src = include_str!("mod.rs").split("#[cfg(test)]").next().unwrap();
+        let builders: Vec<&str> = src.split("WebviewWindowBuilder::new(").skip(1).collect();
+        assert_eq!(builders.len(), 2, "main and detached windows");
+        for b in builders {
+            let chain = &b[..b.find(".on_page_load(").unwrap()];
+            assert!(
+                chain.contains(".disable_drag_drop_handler()"),
+                "a window keeps Tauri's drag-drop handler"
+            );
+        }
     }
 
     #[test]
