@@ -458,6 +458,13 @@ describe('recent places, pull requests, settings keys and prefixes (#420)', () =
     ui.settings = null;
   });
 
+  it('matches a settings key by a keyword of the copy table', async () => {
+    await settings.loadSchema();
+    const item = settingsItems().find((i) => i.id === 'setting-key:app.updates')!;
+    expect(item.label).toBe('Check for updates automatically');
+    expect(itemText(item)).toContain('upgrade');
+  });
+
   it('prefixes narrow the query to their group', () => {
     expect(parseQuery('#311')).toEqual({ groups: ['Tickets'], text: '311' });
     expect(parseQuery('! 311')).toEqual({ groups: ['Pull requests'], text: '311' });

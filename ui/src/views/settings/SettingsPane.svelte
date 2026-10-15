@@ -26,7 +26,16 @@
   import EditToml from './EditToml.svelte';
   import Field from './fields/Field.svelte';
   import { provideEditor, SettingsEditor, type EditLayer } from './lib/editor.svelte';
-  import { COPY, leafFields, descriptionOf, titleOf, enumOptions, type LeafField } from './lib/schema';
+  import {
+    leafFields,
+    descriptionOf,
+    titleOf,
+    enumOptions,
+    helpOf,
+    keywordsOf,
+    labelOf,
+    type LeafField,
+  } from './lib/schema';
   import { SECTION_GROUPS, SECTION_ROOTS, sectionLabel } from './lib/sections';
   import { health } from './lib/health.svelte';
   import RepoTrust from './RepoTrust.svelte';
@@ -145,10 +154,11 @@
     const hay = [
       f.path,
       titleOf(f.segs[f.segs.length - 1] ?? ''),
-      t(COPY[f.path]?.label ?? ''),
-      t(COPY[f.path]?.help ?? ''),
+      labelOf(f.path),
+      helpOf(f.path, f.node),
       descriptionOf(f.node),
-      ...enumOptions(f.node).map((o) => o.value),
+      ...keywordsOf(f.path),
+      ...enumOptions(f.node, f.path).flatMap((o) => [o.value, o.label]),
     ]
       .join(' ')
       .toLowerCase();
