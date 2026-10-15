@@ -773,7 +773,13 @@ impl WorkService {
         if apply_side_effects {
             let ctx = self.item_ctx(&env, &item, &j);
             if let Some(p) = j.plan.as_mut() {
-                p.side_effects = plan::side_effects(&env.settings, &env.project, true, &ctx);
+                p.side_effects = plan::side_effects(
+                    &env.settings,
+                    &env.project,
+                    item.ticket_source.as_deref(),
+                    true,
+                    &ctx,
+                );
             }
             j.effects_done.clear();
             // Failures are toasted inside, like the saga step (non-fatal).

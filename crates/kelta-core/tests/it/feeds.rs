@@ -13,7 +13,10 @@ use kelta_proto::events::{BusEvent, UiEvent, bus};
 use kelta_proto::ids::{AccountId, ProjectId};
 use kelta_proto::ipc::WindowState;
 use kelta_proto::model::{Scope, WorkItem, WorkKind, WorkState};
-use kelta_proto::settings::{AccountKind, CodeHostBinding, ColumnSpec, ProjectConfig, Settings, TrackerView};
+use kelta_proto::settings::{
+    AccountKind, CodeHostBinding, ColumnSpec, PipelineEvent, ProjectConfig, Settings, StepDef, TrackerView,
+    TransitionTarget, Trigger,
+};
 use kelta_proto::store::ProviderCacheRow;
 use kelta_proto::tracker::{Assignee, StatusCategory, TicketRef, WaitWhy, Who};
 use kelta_proto_testing::{FakeTerminalHost, FakeTracker};
@@ -577,6 +580,42 @@ async fn wait_work(e: &Env, pred: impl Fn(&WorkItem) -> bool) -> WorkItem {
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
     panic!("work item never reached the expected state");
+}
+
+#[tokio::test]
+async fn a_ticket_page_reaches_the_status_poll() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    e.h.cfg.update(|s| {
+        s.work.pipeline = vec![
+            StepDef {
+                id: "implementing".into(),
+                enter: vec![Trigger::Event(PipelineEvent::WorkStarted)],
+                ..Default::default()
+            },
+            StepDef {
+                id: "in_review".into(),
+                enter: vec![Trigger::Status { status: TransitionTarget::Name { name: "In Review".into() } }],
+                ..Default::default()
+            },
+        ];
+    });
+    // SHOP-143 is In Review in FakeTracker::new.
+    let it = WorkItem {
+        kind: WorkKind::Ticket,
+        ticket: Some(TicketRef { account: "jira-acme".into(), key: "SHOP-143".into(), id: "10143".into() }),
+        ..work_item("feat/SHOP-143", None)
+    };
+    e.h.core.store().call(move |c| q::work_put(c, &it)).await.unwrap();
+    e.h.core.tracker_list(Scope::All, None, None, None, None, true).await.unwrap();
+    for _ in 0..200 {
+        let rows = e.h.core.work().ticket_steps().await.unwrap();
+        if rows.iter().any(|r| r.ticket.key == "SHOP-143" && r.step_id == "in_review") {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    panic!("the ticket page never reached the status poll");
 }
 
 #[tokio::test]
