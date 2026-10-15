@@ -117,4 +117,27 @@ test.describe('pane drag and drop', () => {
     await page.waitForTimeout(700);
     if ((await callsOf(page, 'layout_save')).length > 0) expect((await savedTabs(page))[0]).toEqual(before);
   });
+
+  test('a file dropped outside any target never navigates the page (#480)', async ({ page }) => {
+    await boot(page);
+    const url = page.url();
+    const cancelled = await page.evaluate(() => {
+      const fire = (type: string, dt: DataTransfer): boolean => {
+        const e = new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true });
+        document.querySelector('[data-testid="pane-header"]')!.dispatchEvent(e);
+        return e.defaultPrevented;
+      };
+      const file = new DataTransfer();
+      file.items.add(new File(['x'], 'notes.txt', { type: 'text/plain' }));
+      const inApp = new DataTransfer();
+      inApp.setData('text/plain', 'pane-1');
+      return {
+        fileOver: fire('dragover', file),
+        fileDrop: fire('drop', file),
+        inAppOver: fire('dragover', inApp),
+      };
+    });
+    expect(cancelled).toEqual({ fileOver: true, fileDrop: true, inAppOver: false });
+    expect(page.url()).toBe(url);
+  });
 });

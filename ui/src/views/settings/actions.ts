@@ -1,7 +1,7 @@
 // settings.open (Mod+,): shows Settings over the window (#410), or closes it when it is showing.
 // Optional args: { section?: string } to land on a given section, { toml?: projectId } to land on
 // that project's raw TOML (the Edit TOML mode, for what the forms cannot edit), { source_id } to
-// bring that source's card into view in Settings → Sources ({ source_id, anchor: 'steps' }: its Steps editor), { key: 'tickets.wip_limit' } to show that key.
+// bring that source's card into view in Settings → Sources ({ source_id, anchor: 'steps' }: its Steps editor), { key: 'tickets.wip_limit' } to show that key, { changed: true } to open Changed by you (#474).
 // toggleSetting (⌘K, #478) flips an on/off key in All projects; its toast's Undo is settings.restore.
 
 import { t } from '$lib/i18n/index.svelte';
@@ -25,6 +25,15 @@ export function takeKeyRequest(): string | null {
   const key = keyRequest;
   keyRequest = null;
   return key;
+}
+
+let changedRequest = false;
+
+/** The Settings pane opens on Changed by you (⌘K, #474), once. */
+export function takeChangedRequest(): boolean {
+  const c = changedRequest;
+  changedRequest = false;
+  return c;
 }
 
 const sourceListeners = new Set<() => void>();
@@ -56,8 +65,16 @@ registerAction('settings.open', (args) => {
   sourceRequest =
     typeof args?.source_id === 'string' ? { id: args.source_id, steps: args.anchor === 'steps' } : null;
   keyRequest = typeof args?.key === 'string' ? args.key : null;
+  changedRequest = args?.changed === true;
   const wasOpen = ui.settings !== null;
-  if (wasOpen && section === null && tomlRequest === null && sourceRequest === null && keyRequest === null) {
+  if (
+    wasOpen &&
+    section === null &&
+    tomlRequest === null &&
+    sourceRequest === null &&
+    keyRequest === null &&
+    !changedRequest
+  ) {
     ui.settings = null; // ⌘, again closes it
     return;
   }

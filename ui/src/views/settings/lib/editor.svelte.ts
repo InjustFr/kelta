@@ -4,7 +4,7 @@
 import { t } from '$lib/i18n/index.svelte';
 import { getContext, setContext } from 'svelte';
 
-import type { EffectiveSettings, JsonValue, Layer, LayerDoc } from '$lib/gen';
+import type { EffectiveSettings, JsonValue, Layer, LayerDoc, ProjectInfo } from '$lib/gen';
 import * as ipc from '$lib/ipc/commands';
 import { toIpcError } from '$lib/ipc/transport';
 import { settings as store } from '$lib/stores';
@@ -26,6 +26,35 @@ export interface EditorTarget {
   layer: EditLayer;
   projectId: string | null;
   repoId: string | null;
+}
+
+/** A settings file Changed by you reads (#474): which file, where it applies ("All projects", "Shop › api") and its own document. */
+export interface LayerFile extends EditorTarget {
+  where: string;
+  value: JsonValue;
+}
+
+/** The global file (core merges keybindings.toml into it), each project's and each of its repositories'; a file that cannot be read is left out. */
+export async function readLayerFiles(projects: readonly ProjectInfo[]): Promise<LayerFile[]> {
+  const targets: Omit<LayerFile, 'value'>[] = [
+    { layer: 'global', projectId: null, repoId: null, where: t('All projects') },
+    ...projects.flatMap((p) => [
+      { layer: 'project' as const, projectId: p.id, repoId: null, where: p.name },
+      ...p.repos.map((r) => ({
+        layer: 'repo' as const,
+        projectId: p.id,
+        repoId: r.id,
+        where: `${p.name} › ${r.id}`,
+      })),
+    ]),
+  ];
+  const docs = await Promise.allSettled(
+    targets.map((f) => ipc.settingsLayerGet({ layer: f.layer, project_id: f.projectId, repo_id: f.repoId })),
+  );
+  return targets.flatMap((f, i) => {
+    const d = docs[i]!;
+    return d.status === 'fulfilled' ? [{ ...f, value: d.value.value }] : [];
+  });
 }
 
 export class SettingsEditor {

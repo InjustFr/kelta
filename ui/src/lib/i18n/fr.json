@@ -2887,5 +2887,10 @@
   "to": "à",
   "Enter both times, or clear both.": "Saisissez les deux heures, ou videz les deux.",
   "Pick two different times.": "Choisissez deux heures différentes.",
-  "Nothing shows? Allow Kelta in your system’s notification settings.": "Rien ne s’affiche ? Autorisez Kelta dans les réglages de notifications du système."
+  "Nothing shows? Allow Kelta in your system’s notification settings.": "Rien ne s’affiche ? Autorisez Kelta dans les réglages de notifications du système.",
+  "Changed by you": "Modifié par vous",
+  "Everything that differs from Kelta’s defaults, and where it is set.": "Tout ce qui diffère des valeurs par défaut de Kelta, et où c’est défini.",
+  "Nothing changed: every setting is at its default.": "Rien n’a changé : chaque paramètre a sa valeur par défaut.",
+  "Reset {name} in {file}": "Réinitialiser {name} dans {file}",
+  "Could not reset {name}": "Impossible de réinitialiser {name}"
 }

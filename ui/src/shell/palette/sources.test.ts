@@ -11,7 +11,7 @@ import { idle } from '$lib/stores/loadable';
 
 import '../actions';
 import '../../views/tools/actions';
-import { takeKeyRequest } from '../../views/settings/actions';
+import { takeChangedRequest, takeKeyRequest } from '../../views/settings/actions';
 import { flushJump, noteFocus, noteRecent, RECENT_CAP, recentPlaces } from '../jumplist';
 import { rank } from './fuzzy';
 import Switcher from './Switcher.svelte';
@@ -464,6 +464,14 @@ describe('recent places, pull requests, settings keys and prefixes (#420)', () =
     await hit.run();
     expect(ui.settings).toEqual({ section: 'worktree' });
     expect(takeKeyRequest()).toBe('tickets.wip_limit');
+    ui.settings = null;
+  });
+
+  it('opens Settings on Changed by you (#474)', async () => {
+    const item = settingsItems().find((i) => i.id === 'settings:changed')!;
+    expect(item.label).toBe('Settings: Changed by you');
+    await item.run();
+    expect(takeChangedRequest()).toBe(true);
     ui.settings = null;
   });
 
