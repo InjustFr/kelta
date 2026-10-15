@@ -206,13 +206,13 @@ pub fn siblings<'a>(items: &'a [WorkItem], item: &'a WorkItem) -> impl Iterator<
 }
 
 /// Unfinished own work item behind `pr` (B2): linked by URL, or on its head branch in the repo
-/// bound to the PR's repository (a PR Claude opened with `gh`).
+/// bound to the PR's repository (case-insensitive, as `join_work_prs`; a PR Claude opened with `gh`).
 pub fn owner_of_pr<'a>(items: &'a [WorkItem], project: &ProjectInfo, pr: &Review) -> Option<&'a WorkItem> {
     let bound = |w: &WorkItem| {
-        project
-            .repos
-            .iter()
-            .any(|r| r.id == w.repo_id && r.code_host.as_ref().is_some_and(|c| c.repo == pr.r#ref.repo))
+        project.repos.iter().any(|r| {
+            r.id == w.repo_id
+                && r.code_host.as_ref().is_some_and(|c| c.repo.eq_ignore_ascii_case(&pr.r#ref.repo))
+        })
     };
     items
         .iter()
@@ -407,6 +407,12 @@ mod tests {
         let bound = project.repos[0].code_host.as_ref().map(|c| c.repo.clone());
         assert_eq!(bound.as_deref(), Some(pr.r#ref.repo.as_str()), "sample repo is bound to the PR repo");
         assert!(owner_of_pr(std::slice::from_ref(&item), &project, &pr).is_some());
+        let mut upper = pr.clone();
+        upper.r#ref.repo = pr.r#ref.repo.to_uppercase();
+        assert!(
+            owner_of_pr(std::slice::from_ref(&item), &project, &upper).is_some(),
+            "repo case does not matter"
+        );
         item.branch = "other".into();
         item.pr_url = Some(pr.url.clone());
         assert!(owner_of_pr(std::slice::from_ref(&item), &project, &pr).is_some());
