@@ -2865,5 +2865,12 @@
   "Everything that differs from Kelta’s defaults, and where it is set.": "Tout ce qui diffère des valeurs par défaut de Kelta, et où c’est défini.",
   "Nothing changed: every setting is at its default.": "Rien n’a changé : chaque paramètre a sa valeur par défaut.",
   "Reset {name} in {file}": "Réinitialiser {name} dans {file}",
-  "Could not reset {name}": "Impossible de réinitialiser {name}"
+  "Could not reset {name}": "Impossible de réinitialiser {name}",
+  "Font size…": "Taille de police…",
+  "Lines kept…": "Lignes conservées…",
+  "Terminal settings": "Paramètres du terminal",
+  "Change the limit": "Modifier la limite",
+  "Settings for {section}": "Paramètres de {section}",
+  "Open setting": "Ouvrir le paramètre",
+  "Notification settings": "Paramètres des notifications"
 }

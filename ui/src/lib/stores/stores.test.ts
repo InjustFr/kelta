@@ -596,6 +596,22 @@ describe('ToastsStore', () => {
     vi.useRealTimers();
   });
 
+  it('an error naming a setting offers to open it (#477)', () => {
+    const store = new ToastsStore();
+    store.error(
+      { code: 'invalid_argument', message: 'worktree.root must be absolute: x', detail: { setting: 'worktree.root' }, retry_after_ms: null },
+      'Start work',
+    );
+    store.error('plain');
+    expect(store.list[0]!.toast.action).toEqual({
+      label: 'Open setting',
+      command: 'settings.open',
+      args: { key: 'worktree.root' },
+    });
+    expect(store.list[1]!.toast.action).toBeNull();
+    store.clear();
+  });
+
   it('closes info toasts when their view is left, and only those', () => {
     const store = new ToastsStore();
     let view: string | null = 'a';

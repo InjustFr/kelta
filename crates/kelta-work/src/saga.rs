@@ -667,7 +667,12 @@ impl WorkService {
                             command: "work.retry_step".into(),
                             args: Some(serde_json::json!({ "id": id, "step": step })),
                         }),
-                        secondary: None,
+                        // An error naming a setting (`detail.setting`) offers to open it (#477).
+                        secondary: e.detail.as_ref().and_then(|d| d.get("setting")?.as_str()).map(|k| ToastAction {
+                            label: "Open setting".into(),
+                            command: "settings.open".into(),
+                            args: Some(serde_json::json!({ "key": k })),
+                        }),
                     });
                     return Ok(item);
                 }

@@ -16,6 +16,8 @@
     msg('Review'),
     msg('Enter token'),
     msg('Yes'),
+    msg('Open setting'),
+    msg('Notification settings'),
   ];
 </script>
 

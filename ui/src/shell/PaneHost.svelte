@@ -3,6 +3,7 @@
   import { paneComponent, type AnyComponent } from '$app/registry';
   import type { PaneNode, Rect } from '$lib/layout';
   import type { ProjectId, TabId } from '$lib/gen';
+  import { dispatch } from '$lib/actions';
   import { pluginEnable } from '$lib/ipc/commands';
   import { lampOf, plugins, sessions, settings, toasts, work } from '$lib/stores';
   import { Badge, Button, ErrorState, Icon, IconButton, Lamp, Menu, Spinner, type MenuItem } from '$lib/ui';
@@ -94,6 +95,13 @@
     if (session) {
       items.push({ id: 'rename', label: t('Rename session…'), icon: 'pencil', separator: true });
     }
+    if (content.kind === 'terminal') {
+      items.push(
+        { id: 'font', label: t('Font size…'), icon: 'a-large-small', separator: true },
+        { id: 'lines', label: t('Lines kept…'), icon: 'scroll-text' },
+        { id: 'terminal-settings', label: t('Terminal settings'), icon: 'settings' },
+      );
+    }
     items.push({
       id: 'close',
       label: t('Close pane'),
@@ -132,6 +140,16 @@
         }
         break;
       }
+      case 'font':
+        await dispatch('settings.open', { key: 'terminal.font_size' });
+        break;
+      case 'lines':
+        // terminal.scrollback.<kind>: shell | claude | editor | tool | setup | custom, as SessionKind
+        await dispatch('settings.open', { key: `terminal.scrollback.${session?.kind.type ?? 'shell'}` });
+        break;
+      case 'terminal-settings':
+        await dispatch('settings.open', { section: 'terminal' });
+        break;
       case 'close':
         close();
         break;
