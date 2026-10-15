@@ -84,7 +84,12 @@ test.describe('settings pane', () => {
     // the mock shares one effective state: the global value goes last
     await page.evaluate(async () => {
       const { __ipc } = window as unknown as { __ipc: typeof Ipc };
-      await __ipc.settingsSet({ layer: 'project', project_id: 'shop', path: 'terminal.font_size', value: 16 });
+      await __ipc.settingsSet({
+        layer: 'project',
+        project_id: 'shop',
+        path: 'terminal.font_size',
+        value: 16,
+      });
       await __ipc.settingsSet({ layer: 'global', path: 'terminal.font_size', value: 14 });
     });
     const font = page.locator('[data-testid="field"][data-path="terminal.font_size"]');
@@ -286,7 +291,7 @@ test.describe('settings pane', () => {
     await page.getByRole('button', { name: /^Conflicts/ }).click();
     await expect(detach).toHaveCount(0);
     await expect(split).toHaveCount(0);
-    await page.getByRole('button', { name: /^All/ }).click();
+    await page.getByTestId('keys-section').getByRole('button', { name: /^All/ }).click();
 
     await page.getByRole('button', { name: 'Reset Split right to default' }).click();
     await expect(split).not.toContainText('Unbound');

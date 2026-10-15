@@ -57,7 +57,9 @@ export async function readLayerFiles(projects: readonly ProjectInfo[]): Promise<
   );
   return targets.flatMap((f, i) => {
     const d = docs[i]!;
-    return d.status === 'fulfilled' ? [{ ...f, value: d.value.value, path: d.value.path, trusted: d.value.trusted }] : [];
+    return d.status === 'fulfilled'
+      ? [{ ...f, value: d.value.value, path: d.value.path, trusted: d.value.trusted }]
+      : [];
   });
 }
 

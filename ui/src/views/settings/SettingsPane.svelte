@@ -167,7 +167,9 @@
   $effect(() => {
     void settingsStore.lastChange; // any write (form, TOML, ⌘K, another window) re-reads the files
     const list = configurable;
-    void readLayerFiles(list).then((f) => (editor.files = f));
+    void readLayerFiles(list).then((f) => {
+      editor.files = f;
+    });
   });
   const changedRows = $derived(changedSettings(index, editor.files));
   /** Changed settings per file, for the Applies to picker and the banner (#475). */
