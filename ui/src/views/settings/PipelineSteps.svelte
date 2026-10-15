@@ -8,6 +8,7 @@
   import { settings } from '$lib/stores';
   import { Button, IconButton, Select, TextInput, Toggle } from '$lib/ui';
 
+  import TemplateTools from './fields/TemplateTools.svelte';
   import SettingsGroup from './layout/SettingsGroup.svelte';
   import { uniqueId } from './lib/accounts';
   import { effectivePipeline } from './lib/pipeline';
@@ -199,14 +200,22 @@
               options={targets}
               onchange={(v) => void edit(i, (x) => ({ ...x, transition_to: dec(v) }))}
             />
-            <TextInput
-              label={t('Comment of step {n}', { n })}
+            <TemplateTools
+              id="step-comment-{sourceId}-{i}"
+              path="sources.tracker.pipeline.comment"
               value={d.comment ?? ''}
-              onchange={(e) => {
-                const c = (e.currentTarget as HTMLInputElement).value;
-                void edit(i, (x) => ({ ...x, comment: c.trim() ? c : null }));
-              }}
-            />
+              readonly={!custom}
+            >
+              <TextInput
+                id="step-comment-{sourceId}-{i}"
+                label={t('Comment of step {n}', { n })}
+                value={d.comment ?? ''}
+                onchange={(e) => {
+                  const c = (e.currentTarget as HTMLInputElement).value;
+                  void edit(i, (x) => ({ ...x, comment: c.trim() ? c : null }));
+                }}
+              />
+            </TemplateTools>
           </li>
         {/each}
       </ol>

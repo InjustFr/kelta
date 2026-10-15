@@ -49,6 +49,7 @@
     "allow-settings-validate",
     "allow-settings-write-raw",
     "allow-settings-open-file",
+    "allow-template-preview",
     "allow-repo-trust",
     "allow-secret-set",
     "allow-secret-delete",
