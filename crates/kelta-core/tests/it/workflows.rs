@@ -17,7 +17,7 @@ use kelta_proto::model::{
 };
 use kelta_proto::samples;
 use kelta_proto::settings::{AccountKind, CodeHostBinding, Settings};
-use kelta_proto::testing::{FakeTerminalHost, FakeTracker};
+use kelta_proto_testing::{FakeTerminalHost, FakeTracker};
 
 fn workflow(dir: &Path, file: &str, meta: &str) {
     std::fs::create_dir_all(dir).unwrap();

@@ -6,7 +6,7 @@
 //! perf snapshot.
 //!
 //! Every lane service is constructed with `Weak<dyn CoreApi>` and consumed only through the scaffold
-//! signatures. [`Core::start_with`] lets tests inject the `kelta_proto::testing` fakes.
+//! signatures. [`Core::start_with`] lets tests inject the `kelta_proto_testing` fakes.
 
 pub mod attention;
 pub mod bus;

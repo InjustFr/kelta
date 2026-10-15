@@ -525,7 +525,7 @@ impl Drop for PluginHost {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kelta_proto::testing::{FakeCore, MemGrantStore};
+    use kelta_proto_testing::{FakeCore, MemGrantStore};
 
     #[tokio::test]
     async fn empty_host_lists_nothing() {

@@ -9,7 +9,7 @@ use kelta_proto::ids::{ProjectId, SessionId};
 use kelta_proto::model::{Lifecycle, RestorePolicy, SessionKind, SpawnRequest};
 use kelta_proto::settings::{RestoreMode, Settings};
 use kelta_proto::term::TerminalEvent;
-use kelta_proto::testing::{FakeTerminalHost, RecordingSink};
+use kelta_proto_testing::{FakeTerminalHost, RecordingSink};
 
 fn req(kind: SessionKind, program: Option<&str>, args: &[&str], restore: RestorePolicy) -> SpawnRequest {
     SpawnRequest {

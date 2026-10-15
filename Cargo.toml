@@ -3,6 +3,7 @@ resolver = "3"
 members = [
   "crates/*",
   "apps/desktop/src-tauri",
+  "crates/kelta-workspace-hack",
   "xtask",
   "bench",
   "fixtures/tui-sim",
@@ -30,6 +31,8 @@ kelta-work = { path = "crates/kelta-work" }
 kelta-server = { path = "crates/kelta-server" }
 kelta-plugins = { path = "crates/kelta-plugins" }
 kelta-core = { path = "crates/kelta-core" }
+kelta-proto-testing = { path = "crates/kelta-proto-testing" }
+kelta-workspace-hack = { path = "crates/kelta-workspace-hack" }
 
 # ---- desktop (ARCHITECTURE §1.1) -------------------------------------------
 tauri = { version = "=2.12.2" }

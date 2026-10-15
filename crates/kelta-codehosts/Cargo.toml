@@ -20,9 +20,10 @@ time = { workspace = true }
 parking_lot = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+kelta-workspace-hack.workspace = true
 
 [dev-dependencies]
-kelta-proto = { workspace = true, features = ["testing"] }
+kelta-proto-testing = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 wiremock = { workspace = true }
 

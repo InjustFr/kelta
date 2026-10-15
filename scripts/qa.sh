@@ -97,6 +97,13 @@ if want rust; then
   section "cargo fmt ${fmt_scope[*]} -- --check"
   step cargo fmt "${fmt_scope[@]}" -- --check
 
+  # A stale workspace-hack makes every distinct cargo invocation rebuild the workspace crates (#465).
+  if command -v cargo-hakari >/dev/null 2>&1; then
+    section "cargo hakari generate --diff, manage-deps --dry-run"
+    step cargo hakari generate --diff
+    step cargo hakari manage-deps --dry-run
+  fi
+
   section "cargo clippy ${scope[*]} --all-targets --locked -- -D warnings"
   # With QA_KEEP_GOING=1, a crate that fails does not stop clippy on the crates that do not depend on it.
   keep_going=

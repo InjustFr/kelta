@@ -1,6 +1,6 @@
 //! `cargo run -p xtask -- kpp-check <plugin dir> [--account <json>] [--secret <value>]`
 //!
-//! Runs the provider conformance contract (`kelta_proto::testing::conformance`, the one every
+//! Runs the provider conformance contract (`kelta_proto_testing::conformance`, the one every
 //! built-in tracker and code host passes) against a process (KPP) plugin. `--account` adds account
 //! fields (`base_url`, `user`, …); `--secret` is handed to the plugin as the account secret.
 //! The contract writes (transition, comment, assign, create): point the plugin at test data.
@@ -14,9 +14,9 @@ use kelta_proto::codehost::CodeHostKind;
 use kelta_proto::ext::ProviderKind;
 use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, TrackerBinding, TrackerView};
-use kelta_proto::testing::FakeSecrets;
-use kelta_proto::testing::conformance::{CodeHostCase, TrackerCase, code_host_contract, tracker_contract};
 use kelta_proto::tracker::TrackerKind;
+use kelta_proto_testing::FakeSecrets;
+use kelta_proto_testing::conformance::{CodeHostCase, TrackerCase, code_host_contract, tracker_contract};
 use serde_json::{Value, json};
 
 const ACCOUNT: &str = "kpp-check";

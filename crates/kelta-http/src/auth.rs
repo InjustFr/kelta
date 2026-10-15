@@ -145,7 +145,7 @@ mod tests {
     use super::*;
     use crate::{HttpClient, HttpPolicy};
     use kelta_proto::ids::AccountId;
-    use kelta_proto::testing::FakeSecrets;
+    use kelta_proto_testing::FakeSecrets;
 
     fn authed(secrets: Arc<FakeSecrets>, scheme: AuthScheme) -> Authed {
         let ctx = HttpCtx::new(HttpClient::new("t"), AccountId::new("a"), HttpPolicy::default());

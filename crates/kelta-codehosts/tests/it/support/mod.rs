@@ -10,7 +10,7 @@ use kelta_proto::api::CodeHost;
 use kelta_proto::codehost::{ReviewKind, ReviewQuery, ReviewRef};
 use kelta_proto::ids::AccountId;
 use kelta_proto::settings::AccountConfig;
-use kelta_proto::testing::FakeSecrets;
+use kelta_proto_testing::FakeSecrets;
 use serde_json::{Value, json};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};

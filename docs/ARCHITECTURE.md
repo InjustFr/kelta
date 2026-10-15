@@ -202,8 +202,9 @@ keltad (terminal.session_host = daemon): PtyTerminalHost + reader threads + the 
 crates/kelta-proto      [scaffold]  ids, DTOs, IPC request/response types, UiEvent/BusEvent, settings structs (+Default, JsonSchema),
                                     plugin manifest/tool/trigger types, hook payloads, frame consts, ActionId catalog,
                                     service traits (§4), KeltaError, `term::command` (every child process, §7.2),
-                                    `i18n` (fr/de table for text outside the webview), `testing` feature: FakeCore,
-                                    FakeTerminalHost, FakeTracker, FakeCodeHost, FakeSecrets, FakeSettings, fixtures
+                                    `i18n` (fr/de table for text outside the webview)
+crates/kelta-proto-testing  (dev-dep)  FakeCore, FakeTerminalHost, FakeTracker, FakeCodeHost, FakeSecrets, FakeSettings, in-memory stores,
+                                    provider conformance contract, fixtures::load
 crates/kelta-term       [L1]  TerminalHost impl: PtyBackend (portable-pty | rustix), login-env exec, reader threads, alacritty model,
                               query responder, snapshot encoder, flow control, scrollback memory budget;
                               `daemon`: the `keltad` binary and the `DaemonTerminalHost` client
@@ -405,7 +406,7 @@ pub trait UiBridge: Send + Sync {
 //   kelta_term::PtyTerminalHost::new(env: LoginEnv, limits: TerminalLimits) ; impl TerminalHost ; kelta_term::resolve_login_env(timeout)
 ```
 
-`WorkStore`, `GrantStore`, `TrustStore` are small traits in proto implemented by kelta-core over SQLite (fakes in `testing`).
+`WorkStore`, `GrantStore`, `TrustStore` are small traits in proto implemented by kelta-core over SQLite (fakes in `kelta-proto-testing`).
 `PluginSettingsSource { fn fragments(&self) -> Vec<(PluginId, serde_json::Value /*flat schema*/)> }` is implemented by `PluginHost` and handed by core to `ConfigService::set_plugin_schemas` (Plugin-defaults layer + validation of `plugins.<id>`). `Dirs { config, data, state, logs, runtime, bin }` is defined and resolved in proto (`Dirs::resolve(env, overrides)`, per §2.1) so every crate shares it.
 
 ---

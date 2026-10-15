@@ -376,7 +376,7 @@ mod tests {
     #[tokio::test]
     async fn open_diff_after_disconnect_does_not_park() {
         let tmp = tempfile::tempdir().unwrap();
-        let fake = kelta_proto::testing::FakeCore::new();
+        let fake = kelta_proto_testing::FakeCore::new();
         let core: Arc<dyn CoreApi> = fake.clone();
         let cx = Cx {
             core: Arc::downgrade(&core),

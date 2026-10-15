@@ -150,7 +150,7 @@ impl Drop for Server {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kelta_proto::testing::FakeCore;
+    use kelta_proto_testing::FakeCore;
 
     #[tokio::test]
     async fn refcount_starts_and_stops() {

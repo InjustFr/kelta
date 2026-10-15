@@ -13,7 +13,7 @@ use kelta_proto::model::{
 use kelta_proto::samples::{CLAUDE_UUID, SID, SID2};
 use kelta_proto::settings::Settings;
 use kelta_proto::term::KillSignal;
-use kelta_proto::testing::RecordingSink;
+use kelta_proto_testing::RecordingSink;
 
 fn req(id: &str, kind: SessionKind, program: &str, args: &[&str], restore: RestorePolicy) -> SpawnRequest {
     SpawnRequest {

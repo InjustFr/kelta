@@ -1,4 +1,4 @@
-//! Test support (feature `testing`): fakes for every service trait, in-memory stores and fixtures.
+//! Test support for kelta-proto (dev-dependency only): fakes for every service trait, in-memory stores and fixtures.
 //!
 //! All fakes record what they receive and expose it through accessor methods; none spawns threads,
 //! touches the network or arms timers.
@@ -22,11 +22,11 @@ pub mod fixtures {
 
     use serde::de::DeserializeOwned;
 
-    use crate::error::KeltaError;
+    use kelta_proto::error::KeltaError;
 
     /// Absolute fixtures directory.
     pub fn dir() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures")
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../kelta-proto/fixtures")
     }
 
     /// Path of `<name>.json`.

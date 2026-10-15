@@ -15,8 +15,8 @@ use kelta_proto::ipc::WindowState;
 use kelta_proto::model::{Scope, WorkItem, WorkKind, WorkState};
 use kelta_proto::settings::{AccountKind, CodeHostBinding, ColumnSpec, ProjectConfig, Settings, TrackerView};
 use kelta_proto::store::ProviderCacheRow;
-use kelta_proto::testing::{FakeTerminalHost, FakeTracker};
 use kelta_proto::tracker::{Assignee, StatusCategory, TicketRef, WaitWhy, Who};
+use kelta_proto_testing::{FakeTerminalHost, FakeTracker};
 
 fn settings() -> Settings {
     let mut s = Settings::defaults();

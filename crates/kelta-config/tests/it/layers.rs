@@ -9,8 +9,8 @@ use kelta_proto::api::SettingsSource;
 use kelta_proto::dirs::CliArgs;
 use kelta_proto::ids::{PluginId, ProjectId};
 use kelta_proto::settings::{Layer, RuntimeOverrides, Severity, TransitionTarget};
-use kelta_proto::testing::MemTrustStore;
 use kelta_proto::tracker::StatusCategory;
+use kelta_proto_testing::MemTrustStore;
 use serde_json::json;
 
 fn pid(s: &str) -> ProjectId {

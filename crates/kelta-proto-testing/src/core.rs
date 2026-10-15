@@ -10,19 +10,19 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::sync::broadcast;
 
-use crate::api::{CodeHost, CoreApi, Tracker};
-use crate::codehost::{PrDraft, ReviewItem, ReviewKind};
-use crate::ctl::CtlCommand;
-use crate::error::KeltaError;
-use crate::events::{BUS_CAPACITY, BusEvent, Notification, Toast, bus};
-use crate::ext::{ProxiedRequest, ProxiedResponse, ToolHandle};
-use crate::ids::{AccountId, PaneId, ProjectId, SessionId, TabId, ToolId, WorkItemId};
-use crate::model::{
+use kelta_proto::api::{CodeHost, CoreApi, Tracker};
+use kelta_proto::codehost::{PrDraft, ReviewItem, ReviewKind};
+use kelta_proto::ctl::CtlCommand;
+use kelta_proto::error::KeltaError;
+use kelta_proto::events::{BUS_CAPACITY, BusEvent, Notification, Toast, bus};
+use kelta_proto::ext::{ProxiedRequest, ProxiedResponse, ToolHandle};
+use kelta_proto::ids::{AccountId, PaneId, ProjectId, SessionId, TabId, ToolId, WorkItemId};
+use kelta_proto::model::{
     Attention, EditorTarget, Lifecycle, OpenPaneRequest, PaneRef, Placement, ProjectInfo, Scope, SessionInfo,
     SessionKind, SessionStatus, ShipOrigin, SpawnRequest, StatusChange, StatusSource, TemplateCtx, WorkItem,
 };
-use crate::settings::Settings;
-use crate::tracker::{Assignee, Cursor, Ticket, TicketDetail, TicketItem, TicketPage, TicketRef};
+use kelta_proto::settings::Settings;
+use kelta_proto::tracker::{Assignee, Cursor, Ticket, TicketDetail, TicketItem, TicketPage, TicketRef};
 
 /// A recorded `CoreApi` call: method name + JSON-ish argument summary.
 #[derive(Debug, Clone, PartialEq)]
@@ -137,8 +137,9 @@ impl FakeCore {
                 x.project_id.clone()
             })
         };
-        let mut ev = BusEvent::new(crate::events::bus::SESSION_EXITED, serde_json::json!({"code": code}))
-            .with_session(id.clone());
+        let mut ev =
+            BusEvent::new(kelta_proto::events::bus::SESSION_EXITED, serde_json::json!({"code": code}))
+                .with_session(id.clone());
         if let Some(p) = project {
             ev = ev.with_project(p);
         }
@@ -247,7 +248,7 @@ impl CoreApi for FakeCore {
             *p += 1;
             *p
         };
-        let claude = matches!(req.kind, SessionKind::Claude).then(|| crate::model::ClaudeMeta {
+        let claude = matches!(req.kind, SessionKind::Claude).then(|| kelta_proto::model::ClaudeMeta {
             session_uuid: uuid::Uuid::new_v4().to_string(),
             ..Default::default()
         });
@@ -269,13 +270,13 @@ impl CoreApi for FakeCore {
             editor: None,
             cols: req.cols,
             rows: req.rows,
-            created_at: crate::now_rfc3339(),
+            created_at: kelta_proto::now_rfc3339(),
             kind: req.kind,
         };
         self.insert_session(info.clone());
         self.publish_inner(
             BusEvent::new(
-                crate::events::bus::SESSION_SPAWNED,
+                kelta_proto::events::bus::SESSION_SPAWNED,
                 serde_json::json!({ "session": Self::arg(&info) }),
             )
             .with_project(info.project_id.clone())
@@ -338,7 +339,7 @@ impl CoreApi for FakeCore {
         let mut s = self.sessions.lock();
         let c = s.get_mut(id).and_then(|s| s.claude.as_mut());
         // No sanitizer in proto: the fake keeps no body.
-        let q = crate::model::ClaudeQuestion { question, options, body_html: None };
+        let q = kelta_proto::model::ClaudeQuestion { question, options, body_html: None };
         c.ok_or_else(|| KeltaError::not_found(format!("Claude session {id}")))?.question = Some(Box::new(q));
         Ok(())
     }
@@ -400,14 +401,17 @@ impl CoreApi for FakeCore {
     }
 
     /// Set with `respond("project_add", json!([project, draft]))`.
-    fn project_add(&self, path: &Path) -> Result<(ProjectInfo, crate::model::ProjectDraft), KeltaError> {
+    fn project_add(
+        &self,
+        path: &Path,
+    ) -> Result<(ProjectInfo, kelta_proto::model::ProjectDraft), KeltaError> {
         self.record("project_add", serde_json::json!({ "path": path }));
         self.overridden("project_add").unwrap_or_else(|| Err(KeltaError::unsupported("project_add")))
     }
 
     fn settings_write(
         &self,
-        layer: crate::settings::Layer,
+        layer: kelta_proto::settings::Layer,
         project: Option<&ProjectId>,
         path: &str,
         value: Value,
@@ -418,13 +422,16 @@ impl CoreApi for FakeCore {
     }
 
     /// Set with `respond("account_test", json!({ "ok": true, "user": user, "error": null }))`.
-    async fn account_test(&self, account: &AccountId) -> Result<crate::ipc::AccountTestResult, KeltaError> {
+    async fn account_test(
+        &self,
+        account: &AccountId,
+    ) -> Result<kelta_proto::ipc::AccountTestResult, KeltaError> {
         self.record("account_test", serde_json::json!({ "account": account }));
         self.overridden("account_test").unwrap_or_else(|| Err(KeltaError::unsupported("account_test")))
     }
 
     /// Set with `respond("claude_permission_mode", json!("auto"))`.
-    fn claude_permission_mode(&self) -> Option<crate::settings::PermissionMode> {
+    fn claude_permission_mode(&self) -> Option<kelta_proto::settings::PermissionMode> {
         self.overridden("claude_permission_mode").and_then(Result::ok)
     }
 
@@ -457,7 +464,7 @@ impl CoreApi for FakeCore {
             return r;
         }
         let hosts: Vec<Arc<dyn CodeHost>> = self.code_hosts.lock().values().cloned().collect();
-        let q = crate::codehost::ReviewQuery { kind, include_team: true, include_drafts: true };
+        let q = kelta_proto::codehost::ReviewQuery { kind, include_team: true, include_drafts: true };
         let mut out = Vec::new();
         for h in hosts {
             for review in h.list_reviews(&q).await? {
@@ -535,8 +542,8 @@ impl CoreApi for FakeCore {
     }
 
     /// Set with `respond("local_tags", tags)`; none otherwise.
-    async fn local_tags(&self) -> Result<crate::model::LocalTags, KeltaError> {
-        self.overridden("local_tags").unwrap_or_else(|| Ok(crate::model::LocalTags::default()))
+    async fn local_tags(&self) -> Result<kelta_proto::model::LocalTags, KeltaError> {
+        self.overridden("local_tags").unwrap_or_else(|| Ok(kelta_proto::model::LocalTags::default()))
     }
 
     /// Set with `respond("ticket_by_key", item)`; not found otherwise.
@@ -598,17 +605,17 @@ impl CoreApi for FakeCore {
             .ok_or_else(|| KeltaError::not_found(format!("work item {id}")))
     }
 
-    async fn work_feedback(&self, id: &WorkItemId) -> Result<crate::codehost::Feedback, KeltaError> {
+    async fn work_feedback(&self, id: &WorkItemId) -> Result<kelta_proto::codehost::Feedback, KeltaError> {
         self.record("work_feedback", serde_json::json!({ "id": id }));
-        self.overridden("work_feedback").unwrap_or_else(|| Ok(crate::codehost::Feedback::default()))
+        self.overridden("work_feedback").unwrap_or_else(|| Ok(kelta_proto::codehost::Feedback::default()))
     }
 
-    async fn review(&self, r: &crate::codehost::ReviewRef) -> Option<crate::codehost::Review> {
+    async fn review(&self, r: &kelta_proto::codehost::ReviewRef) -> Option<kelta_proto::codehost::Review> {
         self.record("review", serde_json::json!({ "review": r }));
         self.overridden("review").and_then(Result::ok)
     }
 
-    async fn cached_review(&self, url: &str) -> Option<crate::codehost::Review> {
+    async fn cached_review(&self, url: &str) -> Option<kelta_proto::codehost::Review> {
         self.record("cached_review", serde_json::json!({ "url": url }));
         self.overridden("cached_review").and_then(Result::ok)
     }
@@ -617,7 +624,7 @@ impl CoreApi for FakeCore {
         &self,
         project: &ProjectId,
         ticket: TicketRef,
-        pr: crate::codehost::Review,
+        pr: kelta_proto::codehost::Review,
     ) -> Result<(WorkItem, bool), KeltaError> {
         self.record(
             "work_link_pr",
@@ -626,7 +633,7 @@ impl CoreApi for FakeCore {
         self.overridden("work_link_pr").unwrap_or_else(|| Err(KeltaError::unsupported("work_link_pr")))
     }
 
-    async fn work_fix_checks(&self, review: &crate::codehost::Review) -> Result<String, KeltaError> {
+    async fn work_fix_checks(&self, review: &kelta_proto::codehost::Review) -> Result<String, KeltaError> {
         self.record("work_fix_checks", serde_json::json!({ "review": review }));
         self.overridden("work_fix_checks").unwrap_or_else(|| Ok("sent 1 failed check".into()))
     }

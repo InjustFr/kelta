@@ -6,16 +6,16 @@ use async_trait::async_trait;
 use parking_lot::Mutex;
 use serde_json::Value;
 
-use crate::api::{CodeHost, Tracker};
-use crate::codehost::{
+use kelta_proto::api::{CodeHost, Tracker};
+use kelta_proto::codehost::{
     CodeHostKind, Feedback, MergeMethod, MyReviewState, PrCreate, PrState, Review, ReviewDetail, ReviewQuery,
     ReviewRef,
 };
-use crate::error::KeltaError;
-use crate::ids::AccountId;
-use crate::samples;
-use crate::settings::{BlockedMarker, TrackerBinding, TrackerView};
-use crate::tracker::{
+use kelta_proto::error::KeltaError;
+use kelta_proto::ids::AccountId;
+use kelta_proto::samples;
+use kelta_proto::settings::{BlockedMarker, TrackerBinding, TrackerView};
+use kelta_proto::tracker::{
     Assignee, Column, Comment, Cursor, Page, SourceHit, Status, StatusCategory, Ticket, TicketDetail,
     TicketField, TicketItem, TicketRef, TrackerCaps, TrackerKind, Transition, User, Who,
 };
@@ -59,7 +59,7 @@ impl FakeTracker {
                 ticket: t,
                 body_md: format!("Body of SHOP-{n}"),
                 body_html: format!("<p>Body of SHOP-{n}</p>"),
-                body_format: crate::tracker::BodyFormat::Markdown,
+                body_format: kelta_proto::tracker::BodyFormat::Markdown,
                 comments: vec![],
                 parent: None,
                 children: Vec::new(),
@@ -252,7 +252,7 @@ impl Tracker for FakeTracker {
             ticket: t.clone(),
             body_md: body_md.to_owned(),
             body_html: format!("<p>{body_md}</p>"),
-            body_format: crate::tracker::BodyFormat::Markdown,
+            body_format: kelta_proto::tracker::BodyFormat::Markdown,
             comments: vec![],
             parent: None,
             children: Vec::new(),
@@ -309,7 +309,7 @@ impl Tracker for FakeTracker {
     ) -> Result<Ticket, KeltaError> {
         self.enter(&format!("transition:{}:{transition_id}", t.key))?;
         if fields.is_none() && self.needs_fields.lock().iter().any(|x| x == transition_id) {
-            return Err(KeltaError::new(crate::error::ErrorCode::NeedsFields, "fields required")
+            return Err(KeltaError::new(kelta_proto::error::ErrorCode::NeedsFields, "fields required")
                 .with_detail(serde_json::json!({"fields": [{"id": "resolution", "name": "Resolution"}]})));
         }
         let to = workflow()
@@ -325,7 +325,7 @@ impl Tracker for FakeTracker {
         self.update(t, |d| {
             d.comments.push(Comment {
                 author: me,
-                created_at: crate::now_rfc3339(),
+                created_at: kelta_proto::now_rfc3339(),
                 body_html: format!("<p>{markdown}</p>"),
             });
         })?;
@@ -405,7 +405,7 @@ impl FakeCodeHost {
         authored.r#ref.number = 90;
         authored.title = "SHOP-142: Rate-limit login".into();
         authored.url = "https://github.com/acme/shop-api/pull/90".into();
-        authored.kind = crate::codehost::ReviewKind::Authored;
+        authored.kind = kelta_proto::codehost::ReviewKind::Authored;
         authored.author = samples::user();
         authored.source_branch = "feat/SHOP-142-rate-limit-login".into();
         authored.my_state = None;
@@ -590,7 +590,7 @@ impl CodeHost for FakeCodeHost {
         review.draft = d.draft;
         review.source_branch = d.head.clone();
         review.target_branch = d.base.clone();
-        review.kind = crate::codehost::ReviewKind::Authored;
+        review.kind = kelta_proto::codehost::ReviewKind::Authored;
         review.author = self.me.clone();
         review.my_state = None;
         reviews.push(ReviewDetail {

@@ -12,7 +12,7 @@ use kelta_proto::ids::{AccountId, ProjectId, SessionId};
 use kelta_proto::model::{SessionInfo, SessionKind};
 use kelta_proto::samples;
 use kelta_proto::settings::Settings;
-use kelta_proto::testing::{FakeCodeHost, FakeCore, FakeTracker, MemWorkStore};
+use kelta_proto_testing::{FakeCodeHost, FakeCore, FakeTracker, MemWorkStore};
 use kelta_work::WorkService;
 
 pub fn git(dir: &Path, args: &[&str]) -> String {

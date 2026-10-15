@@ -4,9 +4,6 @@
 //! ids, DTOs, IPC types, `UiEvent`/`BusEvent`, settings structs (+ `Default`, `JsonSchema`),
 //! plugin/tool/trigger types, hook payloads, terminal frame constants, the ActionId catalog,
 //! service traits and `KeltaError`.
-//!
-//! Feature `testing`: fakes (`FakeCore`, `FakeTerminalHost`, `FakeTracker`, `FakeCodeHost`,
-//! `FakeSecrets`, `FakeSettings`, `FakeUiBridge`, in-memory stores) and `fixtures::load`.
 
 pub mod actions;
 pub mod api;
@@ -30,9 +27,6 @@ pub mod store;
 pub mod term;
 pub mod tracker;
 pub mod typescript;
-
-#[cfg(feature = "testing")]
-pub mod testing;
 
 pub use error::{ErrorCode, KeltaError, Result};
 
