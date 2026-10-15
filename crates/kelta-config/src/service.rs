@@ -457,10 +457,7 @@ impl ConfigService {
         let mut s = index().settings_schema().clone();
         let frags = self.plugin_schemas.read().clone();
         if let Some(props) = s.pointer_mut("/properties/plugins/properties").and_then(Value::as_object_mut) {
-            for (id, mut frag) in frags {
-                if let Value::Object(m) = &mut frag {
-                    m.entry("x-kelta-category").or_insert(Value::String("Plugins".into()));
-                }
+            for (id, frag) in frags {
                 props.insert(id.as_str().to_owned(), frag);
             }
         }

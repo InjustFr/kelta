@@ -41,62 +41,38 @@ pub enum Layer {
 #[serde(default, deny_unknown_fields)]
 #[schemars(title = "Kelta settings")]
 pub struct Settings {
-    #[schemars(extend("x-kelta-category" = "General", "x-kelta-order" = 0))]
     pub app: AppSettings,
-    #[schemars(extend("x-kelta-category" = "Window", "x-kelta-order" = 1))]
     pub window: WindowSettings,
-    #[schemars(extend("x-kelta-category" = "Keys", "x-kelta-order" = 2))]
     pub keys: KeysSettings,
-    #[schemars(extend("x-kelta-category" = "Terminal", "x-kelta-order" = 3))]
     pub terminal: TerminalSettings,
     #[schemars(extend(
-        "x-kelta-category" = "Linux graphics",
-        "x-kelta-order" = 4,
         "x-kelta-scope" = ["global"],
         "x-kelta-restart" = true
     ))]
     pub linux: LinuxSettings,
-    #[schemars(extend("x-kelta-category" = "Polling", "x-kelta-order" = 11))]
     pub polling: PollingSettings,
-    #[schemars(extend("x-kelta-category" = "Notifications", "x-kelta-order" = 12))]
     pub notifications: NotificationSettings,
-    #[schemars(extend("x-kelta-category" = "Claude", "x-kelta-order" = 7))]
     pub claude: ClaudeSettings,
-    #[schemars(extend("x-kelta-category" = "Editors", "x-kelta-order" = 8))]
     pub editor: EditorSettings,
     #[schemars(extend(
-        "x-kelta-category" = "Worktree & work",
-        "x-kelta-order" = 9,
         "x-kelta-scope" = ["global", "project", "repo"]
     ))]
     pub worktree: WorktreeSettings,
-    #[schemars(extend("x-kelta-category" = "Worktree & work", "x-kelta-order" = 9))]
     pub work: WorkSettings,
-    #[schemars(extend("x-kelta-category" = "Worktree & work", "x-kelta-order" = 9))]
     pub ports: PortsSettings,
-    #[schemars(extend("x-kelta-category" = "Reviews", "x-kelta-order" = 10))]
     pub reviews: ReviewsSettings,
-    #[schemars(extend("x-kelta-category" = "Worktree & work", "x-kelta-order" = 9))]
     pub tickets: TicketsSettings,
-    #[schemars(extend("x-kelta-category" = "Tools", "x-kelta-order" = 13))]
     pub web: WebSettings,
-    #[schemars(extend("x-kelta-category" = "Performance", "x-kelta-order" = 16))]
     pub performance: PerformanceSettings,
     #[schemars(extend(
-        "x-kelta-category" = "Accounts",
-        "x-kelta-order" = 6,
         "x-kelta-scope" = ["global"]
     ))]
     pub accounts: BTreeMap<AccountId, AccountConfig>,
     #[schemars(extend(
-        "x-kelta-category" = "Accounts",
-        "x-kelta-order" = 6,
         "x-kelta-scope" = ["global"]
     ))]
     pub oauth: OAuthSettings,
     #[schemars(extend(
-        "x-kelta-category" = "Worktree & work",
-        "x-kelta-order" = 9,
         "x-kelta-scope" = ["global", "project", "repo"],
         "x-kelta-merge" = "by_id",
         "x-kelta-exec" = true
@@ -104,31 +80,23 @@ pub struct Settings {
     pub session_templates: Vec<SessionTemplate>,
     /// Ticket boards, each feeding zero or more projects (SETTINGS §2).
     #[schemars(extend(
-        "x-kelta-category" = "Projects",
-        "x-kelta-order" = 5,
         "x-kelta-scope" = ["global"],
         "x-kelta-merge" = "by_id"
     ))]
     pub sources: Vec<Source>,
     #[schemars(extend(
-        "x-kelta-category" = "Tools",
-        "x-kelta-order" = 13,
         "x-kelta-scope" = ["global"],
         "x-kelta-merge" = "by_id",
         "x-kelta-exec" = true
     ))]
     pub tools: Vec<ToolDef>,
     #[schemars(extend(
-        "x-kelta-category" = "Triggers",
-        "x-kelta-order" = 14,
         "x-kelta-scope" = ["global", "project", "repo"],
         "x-kelta-merge" = "by_id",
         "x-kelta-exec" = true
     ))]
     pub triggers: Vec<TriggerDef>,
     #[schemars(extend(
-        "x-kelta-category" = "Tools",
-        "x-kelta-order" = 13,
         "x-kelta-scope" = ["global"],
         "x-kelta-merge" = "by_id",
         "x-kelta-exec" = true
@@ -136,27 +104,20 @@ pub struct Settings {
     pub commands: Vec<CommandDef>,
     /// Prompt or slash command workflows run on a ticket, a PR or with no ticket.
     #[schemars(extend(
-        "x-kelta-category" = "Tools",
-        "x-kelta-order" = 13,
         "x-kelta-scope" = ["global"],
         "x-kelta-merge" = "by_id",
         "x-kelta-exec" = true
     ))]
     pub workflows: Vec<WorkflowDef>,
-    #[schemars(extend("x-kelta-category" = "Plugins", "x-kelta-order" = 15))]
     pub plugins: PluginsSettings,
     /// Environment added to every session of the project (project/repo files).
     #[schemars(extend(
-        "x-kelta-category" = "Projects",
-        "x-kelta-order" = 5,
         "x-kelta-scope" = ["global", "project", "repo"],
         "x-kelta-exec" = true
     ))]
     pub env: BTreeMap<String, String>,
     /// User colour themes, named by `app.dark_theme` / `app.light_theme` (a built-in id is overridden).
     #[schemars(extend(
-        "x-kelta-category" = "General",
-        "x-kelta-order" = 0,
         "x-kelta-scope" = ["global"]
     ))]
     pub themes: BTreeMap<String, ThemeDef>,
