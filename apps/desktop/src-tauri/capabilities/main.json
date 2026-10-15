@@ -153,6 +153,7 @@
     "allow-work-notes-send",
     "allow-work-arm-merge",
     "allow-work-disarm-merge",
+    "allow-ticket-steps",
     "allow-editor-open",
     "allow-editor-send-selection",
     "allow-editor-quickfix",

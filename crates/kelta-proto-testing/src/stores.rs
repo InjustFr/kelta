@@ -37,6 +37,10 @@ impl WorkStore for MemWorkStore {
         Ok(())
     }
 
+    async fn ticket_steps(&self) -> Result<Vec<TicketStep>, KeltaError> {
+        Ok(self.ticket_steps.lock().values().cloned().collect())
+    }
+
     async fn put_item(&self, item: &WorkItem) -> Result<(), KeltaError> {
         self.items.lock().insert(item.id.clone(), item.clone());
         Ok(())

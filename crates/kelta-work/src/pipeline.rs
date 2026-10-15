@@ -2,7 +2,7 @@
 //! entering a step runs its `transition_to` and `comment` once (skipped steps run nothing).
 
 use kelta_proto::codehost::{Review, ReviewDecision};
-use kelta_proto::error::ErrorCode;
+use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::{BusEvent, Toast, bus};
 use kelta_proto::model::{TicketStep, WorkItem, WorkState};
 use kelta_proto::settings::{PipelineEvent, StepDef, Trigger, effective_pipeline};
@@ -59,6 +59,11 @@ pub(crate) fn steps_of(env: &Env, item: &WorkItem) -> Vec<StepDef> {
 }
 
 impl WorkService {
+    /// `ticket_steps` (#462): every stored ticket step, for the UI's stage track.
+    pub async fn ticket_steps(&self) -> Result<Vec<TicketStep>, KeltaError> {
+        self.store.ticket_steps().await
+    }
+
     /// Move `item`'s ticket to the furthest later step `sig` enters and run that step's effects.
     /// Returns why the ticket was not moved (the merge's phase detail).
     pub(crate) async fn signal(
