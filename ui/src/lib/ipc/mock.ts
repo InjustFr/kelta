@@ -729,6 +729,15 @@ export function createMockTransport(options: MockOptions = {}): {
     emit({ type: 'session.updated', session: clone(s) });
     return clone(s);
   };
+  // Each settings file's own document (#474: Changed by you reads them one by one); a file not written yet is the sample.
+  const layerVals: Record<string, JsonValue> = {};
+  const fileKey = (a: CommandArgs<'settings_layer_get'>): string =>
+    `${a.layer}:${a.project_id ?? ''}:${a.repo_id ?? ''}`;
+  const layerVal = (a: CommandArgs<'settings_layer_get'>): JsonValue =>
+    (layerVals[fileKey(a)] ??= clone(samples.layerDoc.value));
+  const writeLayer = (a: CommandArgs<'settings_layer_get'>, path: string, value: JsonValue | undefined): void => {
+    layerVals[fileKey(a)] = setPath(layerVal(a), path, value);
+  };
   const settingsWith = (layer: Layer, path: string, value: JsonValue | undefined): EffectiveSettings => {
     const next = setPath(state.settings.value, path, value) as unknown as Settings;
     if (path.split('.')[0] === 'sources') next.sources = (next.sources ?? []).map(withSourceDefaults);
@@ -812,15 +821,21 @@ export function createMockTransport(options: MockOptions = {}): {
       return clone(schema.default) as unknown as JsonValue;
     },
     settings_effective: () => clone(state.settings),
-    settings_layer_get: ({ layer, project_id }) => ({
+    settings_layer_get: (a) => ({
       ...clone(samples.layerDoc),
       path:
-        layer === 'project' && project_id
-          ? `/Users/ada/.config/kelta/projects/${project_id}.toml`
+        a.layer === 'project' && a.project_id
+          ? `/Users/ada/.config/kelta/projects/${a.project_id}.toml`
           : '/Users/ada/.config/kelta/config.toml',
+      value: clone(layerVal(a)),
     }),
-    settings_set: ({ layer, path, value }) => settingsWith(layer, path, value),
-    settings_reset: ({ layer, path }) => {
+    settings_set: (a) => {
+      writeLayer(a, a.path, a.value);
+      return settingsWith(a.layer, a.path, a.value);
+    },
+    settings_reset: (a) => {
+      const { layer, path } = a;
+      writeLayer(a, path, undefined);
       const def = getPath(samples.settingsDefault as unknown as JsonValue, path);
       const next = settingsWith(layer, path, def);
       delete state.settings.sources[path];
