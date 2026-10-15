@@ -1,7 +1,7 @@
 // settings.open (Mod+,): shows Settings over the window (#410), or closes it when it is showing.
 // Optional args: { section?: string } to land on a given section, { toml?: projectId } to land on
 // that project's raw TOML (the Edit TOML mode, for what the forms cannot edit), { source_id } to
-// bring that source's card into view in Settings → Sources ({ source_id, anchor: 'steps' }: its Steps editor), { key: 'tickets.wip_limit' } to show that key, { changed: true } to open Changed by you (#474).
+// bring that source's card into view in Settings → Sources ({ source_id, anchor: 'steps' }: its Steps editor), { key: 'tickets.wip_limit' } to show that key, { changed: true } to open Changed by you (#474). Old section ids (`window`) land on the section that took their keys.
 // toggleSetting (⌘K, #478) flips an on/off key in All projects; its toast's Undo is settings.restore.
 
 import { t } from '$lib/i18n/index.svelte';
@@ -58,8 +58,12 @@ export function takeTomlRequest(): string | null {
   return id;
 }
 
+/** Section ids folded into another: an old settings.open target lands where its keys are now. */
+const MOVED: Record<string, string> = { window: 'general' };
+
 registerAction('settings.open', (args) => {
-  const section = typeof args?.section === 'string' ? args.section : null;
+  const asked = typeof args?.section === 'string' ? args.section : null;
+  const section = asked === null ? null : (MOVED[asked] ?? asked);
   // The pane's content only carries a section, so the TOML and source targets travel beside it.
   tomlRequest = typeof args?.toml === 'string' ? args.toml : null;
   sourceRequest =

@@ -4,29 +4,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SettingsSectionId } from '$app/registry';
 import { createMockTransport } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
+import { dispatch } from '$lib/actions';
 import { settings, ui } from '$lib/stores';
 
 import schemaJson from '../../../../schema/settings.schema.json';
-import { COPY, COPY_DONE, SECTION_COPY, type CopyTable } from './copy';
+import { COPY, COPY_DONE, SECTION_COPY } from './copy';
 import { joinPath, splitPath } from './lib/paths';
-import { childEntries, enumOptions, fieldKind, leafFields, nodeAt, type SchemaNode } from './lib/schema';
+import { enumOptions, fieldKind, leafFields, nodeAt, type SchemaNode } from './lib/schema';
 import { SECTION_ROOTS } from './lib/sections';
 import { takeSourceRequest } from './actions';
 import SectionForm from './SectionForm.svelte';
+import Claude from './sections/Claude.svelte';
+import Notifications from './sections/Notifications.svelte';
 import Worktree from './sections/Worktree.svelte';
 
 const schema = schemaJson as unknown as SchemaNode;
 const onOs = (p: 'MacIntel' | 'Linux x86_64') => vi.spyOn(navigator, 'platform', 'get').mockReturnValue(p);
 
-const injected: string[] = [];
-const inject = (table: CopyTable) => {
-  Object.assign(COPY, table);
-  injected.push(...Object.keys(table));
-};
-afterEach(() => {
-  vi.restoreAllMocks();
-  for (const k of injected.splice(0)) delete COPY[k];
-});
+afterEach(() => vi.restoreAllMocks());
 
 async function renderForm(sectionId: SettingsSectionId) {
   const { transport } = createMockTransport();
@@ -117,26 +112,6 @@ describe('settings copy table', () => {
     unmount();
   });
 
-  it('fields follow the table order under group headings, the rest A→Z', async () => {
-    inject({
-      'window.restore_geometry': { order: 0, group: 'On launch' },
-      'window.decorations': { order: 1, group: 'Look' },
-    });
-    const expected = ['restore_geometry', 'decorations', 'close_behavior'];
-    expect(childEntries(schema.properties!.window!, 'window').map(([k]) => k)).toEqual(expected);
-    const { container, unmount } = await renderForm('window');
-    expect(
-      [...container.querySelectorAll('[data-testid="field"]')].map((e) => e.getAttribute('data-path')),
-    ).toEqual(expected.map((k) => `window.${k}`));
-    expect(
-      [...container.querySelectorAll('[data-testid="copy-group"] h3')].map((h) => h.textContent),
-    ).toEqual(['On launch', 'Look']);
-    expect(
-      container.querySelector('[data-path="window.close_behavior"]')!.closest('[data-testid="copy-group"]'),
-    ).toBeNull();
-    unmount();
-  });
-
   it('every key of a finished section has a label (COPY_DONE)', () => {
     for (const os of ['MacIntel', 'Linux x86_64'] as const) {
       onOs(os);
@@ -153,6 +128,66 @@ describe('settings copy table', () => {
       }
       expect([...missing]).toEqual([]);
     }
+  });
+});
+
+describe('Settings → Notifications (#472)', () => {
+  const EVENTS = [
+    'notifications.claude_blocked',
+    'notifications.claude_done',
+    'notifications.review_requested',
+    'notifications.pr_approved',
+    'notifications.pr_changes_requested',
+    'notifications.ci_failed_mine',
+  ];
+  const mount = async () => {
+    const { transport, controls } = createMockTransport();
+    setTransport(transport);
+    await settings.load();
+    const r = render(Notifications, { layer: 'global', projectId: null, repoId: null });
+    await waitFor(() => expect(r.container.querySelector('[data-path]')).toBeTruthy());
+    // the editor's first load must land before a click, or it overwrites the write
+    await waitFor(() => expect(controls.calls.some((c) => c.cmd === 'settings_layer_get')).toBe(true));
+    return r;
+  };
+  const row = (c: HTMLElement, p: string) => c.querySelector(`[data-path="${p}"]`)!;
+
+  it('the switch comes first, events under Tell me when, then Quiet time; the test row follows the switches', async () => {
+    const { container, unmount } = await mount();
+    const fields = [...container.querySelectorAll('[data-testid="field"]')].filter(
+      (f) => !f.closest('[data-testid="advanced"]'),
+    );
+    expect(fields.map((f) => f.getAttribute('data-path'))).toEqual([
+      'notifications.enabled',
+      ...EVENTS,
+      'notifications.quiet_hours',
+      'notifications.only_when_unfocused',
+      'notifications.focus_allow_blocked',
+    ]);
+    expect(
+      [...container.querySelectorAll('[data-testid="copy-group"] h3')].map((h) => h.textContent),
+    ).toEqual(['Tell me when', 'Quiet time']);
+    expect(row(container, 'notifications.enabled').closest('[data-testid="copy-group"]')).toBeNull();
+    expect(row(container, 'notifications.bell_background').closest('[data-testid="advanced"]')).toBeTruthy();
+    const test = container.querySelector('[data-testid="notification-test"]')!;
+    expect(fields.at(-1)!.compareDocumentPosition(test) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    unmount();
+  });
+
+  it('the events are disabled, still shown, while notifications are off', async () => {
+    const { container, unmount } = await mount();
+    const sw = (p: string) =>
+      within(row(container, p) as HTMLElement).getByRole('switch') as HTMLInputElement;
+    const master = () => screen.getByRole('switch', { name: 'Desktop notifications' }) as HTMLInputElement;
+    await fireEvent.click(master());
+    await waitFor(() => expect(sw('notifications.claude_blocked').disabled).toBe(true));
+    for (const p of EVENTS) expect(sw(p).disabled).toBe(true);
+    for (const i of row(container, 'notifications.quiet_hours').querySelectorAll('input[type="time"]'))
+      expect((i as HTMLInputElement).disabled).toBe(true);
+    await waitFor(() => expect(master().disabled).toBe(false)); // never disabled by its own dependents
+    await fireEvent.click(master());
+    await waitFor(() => expect(sw('notifications.claude_blocked').disabled).toBe(false));
+    unmount();
   });
 });
 
@@ -218,6 +253,53 @@ describe('Settings → Work items', () => {
     ).toEqual(['Branch folder']);
     expect(container.querySelector('[data-testid="work-stages"]')).toBeNull();
     expect(container.querySelector('[data-testid="steps-note"]')).toBeNull();
+    unmount();
+  });
+});
+
+describe('Settings → General', () => {
+  it('Window keys sit under Appearance and Startup & quit; settings.open { section: "window" } lands on General', async () => {
+    const { container, unmount } = await renderForm('general');
+    expect(
+      [...container.querySelectorAll('[data-testid="copy-group"] h3')].map((h) => h.textContent),
+    ).toEqual(['Appearance', 'Startup & quit', 'Updates']);
+    for (const [group, path] of [
+      ['Appearance', 'window.decorations'],
+      ['Startup & quit', 'window.close_behavior'],
+      ['Startup & quit', 'window.restore_geometry'],
+    ])
+      expect(container.querySelector(`[data-group="${group}"] [data-path="${path}"]`), path).toBeTruthy();
+    unmount();
+
+    await import('./actions');
+    await dispatch('settings.open', { section: 'window' });
+    expect(ui.settings).toEqual({ section: 'general' });
+    ui.settings = null;
+  });
+});
+
+describe('Settings → Claude', () => {
+  it('fields follow the table order under its three groups, its own rows inside theirs, launch options under Advanced', async () => {
+    const { transport } = createMockTransport();
+    setTransport(transport);
+    const { container, unmount } = render(Claude, { layer: 'global', projectId: null, repoId: null });
+    await waitFor(() => expect(container.querySelector('[data-testid="claude-mcp"]')).toBeTruthy());
+    expect(
+      [...container.querySelectorAll('[data-testid="copy-group"] > header > h3')].map((h) => h.textContent),
+    ).toEqual(['Sessions & cost', 'Profiles', 'Kelta in Claude Code']);
+    const first = container.querySelector('[data-group="Sessions & cost"]')!;
+    expect(
+      [...first.querySelectorAll('[data-testid="field"]')].map((e) => e.getAttribute('data-path')),
+    ).toEqual(['claude.max_live', 'claude.budget_usd', 'claude.auto_park_after_mins']);
+    for (const [group, id] of [
+      ['Profiles', 'claude-permission-mode'],
+      ['Kelta in Claude Code', 'claude-mcp'],
+      ['Kelta in Claude Code', 'claude-hooks'],
+    ])
+      expect(container.querySelector(`[data-group="${group}"] [data-testid="${id}"]`), id).toBeTruthy();
+    const advanced = container.querySelector('[data-testid="advanced"]')!;
+    for (const p of ['binary', 'extra_args', 'extra_hooks', 'terminal_command'])
+      expect(advanced.querySelector(`[data-path="claude.${p}"]`), p).toBeTruthy();
     unmount();
   });
 });

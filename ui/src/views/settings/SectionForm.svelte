@@ -16,7 +16,7 @@
   import { useEditor } from './lib/editor.svelte';
   import { joinPath, splitPath } from './lib/paths';
   import { childEntries, fieldKind, leafFields, nodeAt, repoRelevant, type SchemaNode } from './lib/schema';
-  import { ADVANCED, SECTION_BLURB, SECTION_ROOTS, TOML_ROOTS } from './lib/sections';
+  import { ADVANCED, SECTION_BLURB, SECTION_ROOTS, TOML_ROOTS, underAdvanced } from './lib/sections';
 
   interface Props extends Partial<SettingsSectionProps> {
     sectionId: SettingsSectionId;
@@ -24,8 +24,12 @@
     before?: Snippet;
     /** Rendered after the generated form. */
     after?: Snippet;
+    /** Rendered at the end of each copy group, given its heading (the msg id), for a section's own rows. */
+    inGroup?: Snippet<[string]>;
     /** Paths (or whole roots) left out of the generated form (owned by a custom control). */
     skip?: readonly string[];
+    /** Paths shown but not editable: another setting makes them do nothing (still rendered, so search hits land). */
+    disabled?: readonly string[];
   }
 
   let {
@@ -35,7 +39,9 @@
     repoId = null,
     before,
     after,
+    inGroup,
     skip = [],
+    disabled = [],
   }: Props = $props();
 
   const editor = useEditor(() => ({ layer, projectId, repoId }));
@@ -67,7 +73,6 @@
     });
   });
   const visible = (path: string) => editor.layer !== 'repo' || repoRelevant(path);
-  const underAdvanced = (path: string) => ADVANCED.some((a) => path === a || path.startsWith(`${a}.`));
   const basic = $derived(entries.filter(([path]) => !underAdvanced(path)));
   const advanced = $derived.by((): [string, SchemaNode][] => {
     const schema = editor.schema;
@@ -87,7 +92,7 @@
 
 {#snippet fields(items: [string, SchemaNode][])}
   {#each items as [path, node] (path)}
-    <Field {path} {node} depth={path.includes('.') ? 1 : 0} />
+    <Field {path} {node} depth={path.includes('.') ? 1 : 0} disabled={disabled.includes(path)} />
   {/each}
 {/snippet}
 
@@ -106,7 +111,7 @@
     {#each groupRuns(basic.filter(([path]) => visible(path))) as run, i (i)}
       {#if run.group}
         <SettingsGroup heading={t(run.group)} data-testid="copy-group" data-group={run.group}
-          >{@render fields(run.items)}</SettingsGroup
+          >{@render fields(run.items)}{@render inGroup?.(run.group)}</SettingsGroup
         >
       {:else}
         {@render fields(run.items)}
@@ -122,7 +127,7 @@
       data-testid="advanced"
     >
       {#each advanced as [path, node] (path)}
-        <Field {path} {node} depth={1} />
+        <Field {path} {node} depth={1} disabled={disabled.includes(path)} />
       {/each}
     </SettingsDisclosure>
   {/if}

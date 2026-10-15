@@ -39,7 +39,8 @@ describe('schema -> field kinds', () => {
 
   it('the ticket sources have their own section', () => {
     expect(Object.keys(schema.properties ?? {})).toContain('sources');
-    expect(SECTION_ROOTS.sources).toEqual(['sources']);
+    expect(SECTION_ROOTS.sources).toEqual(['sources', 'polling']);
+    expect(SECTION_ROOTS.performance).toEqual(['performance', 'web']);
     expect(Object.values(TOML_ROOTS).flat()).not.toContain('sources');
   });
 });
@@ -115,6 +116,45 @@ describe('Control', () => {
     expect(document.querySelector('textarea')).toBeNull();
     await fireEvent.click(sw);
     expect(onchange).toHaveBeenCalledWith('inprocess');
+  });
+
+  it('quiet hours: two time fields write HH:MM-HH:MM, empty is off, a half range is an inline error (#472)', async () => {
+    const onchange = vi.fn();
+    render(Control, {
+      node: nodeAt(schema, ['notifications', 'quiet_hours'])!,
+      value: '22:00-08:00',
+      path: 'notifications.quiet_hours',
+      onchange,
+      label: 'Do not disturb hours',
+    });
+    const from = screen.getByLabelText('From') as HTMLInputElement;
+    const until = screen.getByLabelText('Until') as HTMLInputElement;
+    expect([from.value, until.value]).toEqual(['22:00', '08:00']);
+    await fireEvent.input(until, { target: { value: '07:30' } });
+    await fireEvent.change(until);
+    expect(onchange).toHaveBeenLastCalledWith('22:00-07:30');
+    await fireEvent.input(from, { target: { value: '' } });
+    await fireEvent.change(from);
+    expect(screen.getByRole('alert').textContent).toContain('Enter both times');
+    expect(onchange).toHaveBeenCalledTimes(1);
+    await fireEvent.input(until, { target: { value: '' } });
+    await fireEvent.change(until);
+    expect(onchange).toHaveBeenLastCalledWith('');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it.each([
+    ['garbage', 'Enter both times'],
+    ['10:00-10:00', 'Pick two different times'],
+  ])('quiet hours: a bad stored value %s shows the inline error (#472)', (value, error) => {
+    render(Control, {
+      node: nodeAt(schema, ['notifications', 'quiet_hours'])!,
+      value,
+      path: 'notifications.quiet_hours',
+      onchange: vi.fn(),
+      label: 'Do not disturb hours',
+    });
+    expect(screen.getByRole('alert').textContent).toContain(error);
   });
 
   it('int commits a number and rejects a fraction', async () => {

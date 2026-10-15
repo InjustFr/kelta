@@ -857,8 +857,6 @@
       },
       "default": {},
       "type": "object",
-      "x-kelta-category": "Accounts",
-      "x-kelta-order": 6,
       "x-kelta-scope": [
         "global"
       ]
@@ -983,9 +981,7 @@
           ]
         }
       },
-      "type": "object",
-      "x-kelta-category": "General",
-      "x-kelta-order": 0
+      "type": "object"
     },
     "claude": {
       "additionalProperties": false,
@@ -1240,9 +1236,7 @@
           "x-kelta-exec": true
         }
       },
-      "type": "object",
-      "x-kelta-category": "Claude",
-      "x-kelta-order": 7
+      "type": "object"
     },
     "commands": {
       "default": [],
@@ -1905,10 +1899,8 @@
         "type": "object"
       },
       "type": "array",
-      "x-kelta-category": "Tools",
       "x-kelta-exec": true,
       "x-kelta-merge": "by_id",
-      "x-kelta-order": 13,
       "x-kelta-scope": [
         "global"
       ]
@@ -2235,9 +2227,7 @@
           ]
         }
       },
-      "type": "object",
-      "x-kelta-category": "Editors",
-      "x-kelta-order": 8
+      "type": "object"
     },
     "env": {
       "additionalProperties": {
@@ -2246,9 +2236,7 @@
       "default": {},
       "description": "Environment added to every session of the project (project/repo files).",
       "type": "object",
-      "x-kelta-category": "Projects",
       "x-kelta-exec": true,
-      "x-kelta-order": 5,
       "x-kelta-scope": [
         "global",
         "project",
@@ -2426,9 +2414,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "x-kelta-category": "Keys",
-      "x-kelta-order": 2
+      "type": "object"
     },
     "linux": {
       "additionalProperties": false,
@@ -2500,8 +2486,6 @@
         }
       },
       "type": "object",
-      "x-kelta-category": "Linux graphics",
-      "x-kelta-order": 4,
       "x-kelta-restart": true,
       "x-kelta-scope": [
         "global"
@@ -2574,9 +2558,7 @@
           "type": "boolean"
         }
       },
-      "type": "object",
-      "x-kelta-category": "Notifications",
-      "x-kelta-order": 12
+      "type": "object"
     },
     "oauth": {
       "additionalProperties": false,
@@ -2595,8 +2577,6 @@
         }
       },
       "type": "object",
-      "x-kelta-category": "Accounts",
-      "x-kelta-order": 6,
       "x-kelta-scope": [
         "global"
       ]
@@ -2613,9 +2593,7 @@
           "type": "boolean"
         }
       },
-      "type": "object",
-      "x-kelta-category": "Performance",
-      "x-kelta-order": 16
+      "type": "object"
     },
     "plugins": {
       "additionalProperties": true,
@@ -2644,9 +2622,7 @@
           "type": "array"
         }
       },
-      "type": "object",
-      "x-kelta-category": "Plugins",
-      "x-kelta-order": 15
+      "type": "object"
     },
     "polling": {
       "additionalProperties": false,
@@ -2686,9 +2662,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "x-kelta-category": "Polling",
-      "x-kelta-order": 11
+      "type": "object"
     },
     "ports": {
       "additionalProperties": false,
@@ -2702,9 +2676,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "x-kelta-category": "Worktree & work",
-      "x-kelta-order": 9
+      "type": "object"
     },
     "reviews": {
       "additionalProperties": false,
@@ -2781,9 +2753,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "x-kelta-category": "Reviews",
-      "x-kelta-order": 10
+      "type": "object"
     },
     "session_templates": {
       "default": [
@@ -3038,10 +3008,8 @@
         "type": "object"
       },
       "type": "array",
-      "x-kelta-category": "Worktree & work",
       "x-kelta-exec": true,
       "x-kelta-merge": "by_id",
-      "x-kelta-order": 9,
       "x-kelta-scope": [
         "global",
         "project",
@@ -3816,9 +3784,7 @@
         "type": "object"
       },
       "type": "array",
-      "x-kelta-category": "Projects",
       "x-kelta-merge": "by_id",
-      "x-kelta-order": 5,
       "x-kelta-scope": [
         "global"
       ]
@@ -4111,9 +4077,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "x-kelta-category": "Terminal",
-      "x-kelta-order": 3
+      "type": "object"
     },
     "themes": {
       "additionalProperties": {
@@ -4345,8 +4309,6 @@
       "default": {},
       "description": "User colour themes, named by `app.dark_theme` / `app.light_theme` (a built-in id is overridden).",
       "type": "object",
-      "x-kelta-category": "General",
-      "x-kelta-order": 0,
       "x-kelta-scope": [
         "global"
       ]
@@ -4365,9 +4327,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "x-kelta-category": "Worktree & work",
-      "x-kelta-order": 9
+      "type": "object"
     },
     "tools": {
       "default": [],
@@ -4700,10 +4660,8 @@
         "type": "object"
       },
       "type": "array",
-      "x-kelta-category": "Tools",
       "x-kelta-exec": true,
       "x-kelta-merge": "by_id",
-      "x-kelta-order": 13,
       "x-kelta-scope": [
         "global"
       ]
@@ -5402,10 +5360,8 @@
         "type": "object"
       },
       "type": "array",
-      "x-kelta-category": "Triggers",
       "x-kelta-exec": true,
       "x-kelta-merge": "by_id",
-      "x-kelta-order": 14,
       "x-kelta-scope": [
         "global",
         "project",
@@ -5435,9 +5391,7 @@
           "type": "boolean"
         }
       },
-      "type": "object",
-      "x-kelta-category": "Tools",
-      "x-kelta-order": 13
+      "type": "object"
     },
     "window": {
       "additionalProperties": false,
@@ -5483,9 +5437,7 @@
           ]
         }
       },
-      "type": "object",
-      "x-kelta-category": "Window",
-      "x-kelta-order": 1
+      "type": "object"
     },
     "work": {
       "additionalProperties": false,
@@ -5924,9 +5876,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "x-kelta-category": "Worktree & work",
-      "x-kelta-order": 9
+      "type": "object"
     },
     "workflows": {
       "default": [],
@@ -5992,10 +5942,8 @@
         "type": "object"
       },
       "type": "array",
-      "x-kelta-category": "Tools",
       "x-kelta-exec": true,
       "x-kelta-merge": "by_id",
-      "x-kelta-order": 13,
       "x-kelta-scope": [
         "global"
       ]
@@ -6108,8 +6056,6 @@
         }
       },
       "type": "object",
-      "x-kelta-category": "Worktree & work",
-      "x-kelta-order": 9,
       "x-kelta-scope": [
         "global",
         "project",

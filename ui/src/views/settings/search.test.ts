@@ -33,6 +33,8 @@ const first = (q: string) => searchSettings(index(), q)[0]!;
 const TABLE: [string, string | RegExp][] = [
   ['clipboard', /^key:terminal\./],
   ['do not disturb', 'key:notifications.quiet_hours'],
+  ['dnd', 'key:notifications.quiet_hours'],
+  ['quiet hours', 'key:notifications.quiet_hours'],
   ['branch name', 'key:worktree.branch_template'],
   ['worktree folder', 'key:worktree.root'],
   ['how often', 'key:polling.focused_secs'],
@@ -71,6 +73,13 @@ describe('settings search ranking', () => {
     expect(searchSettings(index(), 'zoom')[1]!.id).toBe('key:terminal.font_size');
     expect(first('permission mode').crumb).toBe('Claude › Profiles');
   });
+
+  it('the refresh intervals sit under Sources › Refresh', () =>
+    expect(first('how often')).toMatchObject({
+      id: 'key:polling.focused_secs',
+      section: 'sources',
+      crumb: 'Sources › Refresh',
+    }));
 
   it("'pr' matches whole words: a work.pr key first, no keys.prefix in the top 5", () => {
     const hits = searchSettings(index(), 'pr');

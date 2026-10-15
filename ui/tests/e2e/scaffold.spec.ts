@@ -53,7 +53,7 @@ test.describe('scaffold', () => {
       const mods = await Promise.all(loaders.map((l) => l()));
       return mods.filter((m) => typeof m.default === 'function').length;
     });
-    expect(loaded).toBe(12 + 23 + 2 + 19);
+    expect(loaded).toBe(12 + 23 + 2 + 18);
 
     // UiEvents from the backend reach the stores.
     await page.evaluate(() => {
