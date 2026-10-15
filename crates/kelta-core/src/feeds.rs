@@ -21,7 +21,7 @@ use kelta_proto::ids::{AccountId, ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{NextUp, NextUpItem, PaneContent, Scope, WorkItem, WorkState};
 use kelta_proto::settings::{
     AccountKind, BlockedMarker, ColumnSpec, ProjectConfig, Settings, Source, SourceField, TrackerBinding,
-    TrackerView, Trigger, effective_pipeline,
+    StepDef, TrackerView, Trigger, effective_pipeline,
 };
 use kelta_proto::store::{ProviderCacheRow, SeenReviewRow};
 use kelta_proto::tracker::{
@@ -524,16 +524,23 @@ impl Core {
         }
     }
 
-    /// A pipeline the query's tickets follow has a status trigger (#466): else the poll has nothing to do.
+    /// A pipeline the query's tickets may follow has a status trigger (#466): else the poll has nothing to do.
     fn polls_statuses(&self, q: &TicketQuery) -> bool {
+        let polls = |steps: Vec<StepDef>| {
+            steps.iter().any(|st| st.enter.iter().any(|t| matches!(t, Trigger::Status { .. })))
+        };
         let sources: Vec<Source> = self.sources().into_iter().filter(|s| q.sources.contains(&s.id)).collect();
-        q.projects.iter().map(|p| self.cfg.effective(Some(p))).any(|s| {
-            sources.iter().any(|src| {
-                effective_pipeline(&src.tracker, &s.work)
-                    .iter()
-                    .any(|st| st.enter.iter().any(|t| matches!(t, Trigger::Status { .. })))
+        let by_source = q
+            .projects
+            .iter()
+            .map(|p| self.cfg.effective(Some(p)))
+            .any(|s| sources.iter().any(|src| polls(effective_pipeline(&src.tracker, &s.work))));
+        // An item with no `ticket_source` follows its project's board, else the work pipeline (`steps_for`, #481).
+        by_source
+            || self.project_configs().iter().any(|c| {
+                let binding = self.project_binding(&c.id).unwrap_or_default();
+                polls(effective_pipeline(&binding, &self.cfg.effective(Some(&c.id)).work))
             })
-        })
     }
 
     /// The list queries behind a scope (one per distinct `(account, view)`): the sources listing the

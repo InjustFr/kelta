@@ -1,5 +1,5 @@
 // Placeholders of template settings (SETTINGS §6) for the Insert menu (#479). The examples are the sample
-// ticket KEL-214 of `kelta_work::plan::preview`, so the menu and the live example agree.
+// ticket KEL-214 of `kelta_work::plan::preview`; in a PR title or body the live example leaves pr.* empty, as Kelta does.
 import { msg } from '$lib/i18n/index.svelte';
 
 export interface Placeholder {

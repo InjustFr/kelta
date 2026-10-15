@@ -362,7 +362,8 @@ pub fn port_free(port: u16) -> bool {
 
 /// The live example under a template setting (#479): `template`, typed at settings `path`, rendered for
 /// the sample ticket KEL-214 the way Start work does (saga.rs ticket arm, `item_ctx`, `pr_defaults`).
-/// The Insert menu's examples (ui `views/settings/lib/placeholders.ts`) show the same values.
+/// The Insert menu's examples (ui `views/settings/lib/placeholders.ts`) show the same values, except `pr.*` in a
+/// PR's own title and body, which render before the PR exists.
 pub async fn preview(
     settings: &Settings,
     dirs: &kelta_proto::dirs::Dirs,
@@ -428,11 +429,17 @@ pub async fn preview(
     ctx.set("session.id", "0192aaaa-0000-7000-8000-1a2b3c4d0000");
     ctx.set("session.name", "Claude");
     ctx.set("session.cwd", worktree.clone());
-    ctx.set("pr.number", "215");
-    ctx.set("pr.url", "https://github.com/acme/kelta/pull/215");
-    ctx.set("pr.head", branch.clone());
-    ctx.set("pr.base", "main");
-    ctx.set("pr.title", ticket.title.clone());
+    // A PR's title and body render before the PR exists (`pr_defaults`): no `pr.*` there, only `{closes}`,
+    // shown as if the sample were GitHub issue #214, as in the Insert menu (#481).
+    if path.starts_with("work.pr.") {
+        ctx.set("closes", "Closes #214");
+    } else {
+        ctx.set("pr.number", "215");
+        ctx.set("pr.url", "https://github.com/acme/kelta/pull/215");
+        ctx.set("pr.head", branch.clone());
+        ctx.set("pr.base", "main");
+        ctx.set("pr.title", ticket.title.clone());
+    }
     Ok(match path {
         "worktree.branch_template" => TemplatePreview { text: branch, git_ok: Some(git_ok) },
         "worktree.root" => TemplatePreview { text: worktree, git_ok: None },
@@ -526,6 +533,15 @@ mod tests {
             c.text,
             "KEL-214: Search settings by meaning on feat/KEL-214-search-settings-by-meaning {nope}"
         );
+    }
+
+    #[tokio::test]
+    async fn preview_leaves_pr_values_out_of_a_pr_title_and_body() {
+        let (s, d) = (Settings::default(), kelta_proto::dirs::Dirs::under(Path::new("/k")));
+        let p = |path: &'static str, t: &'static str| preview(&s, &d, path, t);
+        assert_eq!(p("work.pr.title_template", "[{pr.number}|{pr.url}|{pr.title}]").await.unwrap().text, "[||]");
+        assert_eq!(p("work.pr.body_template", "{closes}").await.unwrap().text, "Closes #214");
+        assert_eq!(p("sources.tracker.pipeline.comment", "{pr.number} {closes}").await.unwrap().text, "215 ");
     }
 
     #[test]

@@ -86,7 +86,7 @@
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
   import { onActions, onRefresh } from '../work/ui.svelte';
-  import { CLAUDE, DEPLOY, PR, REVIEW, STAGES, TICKET, stage, workStage, type Stage } from '../work/stage';
+  import { CLAUDE, DEPLOY, PR, REVIEW, STAGES, TICKET, stage, trackEnd, workStage, type Stage } from '../work/stage';
   import RowButton from '../tickets/RowButton.svelte';
   import {
     isNextUp,
@@ -542,6 +542,10 @@
     return out;
   });
 
+  const end = $derived(
+    trackEnd(lines.flatMap((l) => (l.type === 'row' ? [view(l.row, l.section).stage.labels] : []))),
+  );
+
   let vlist = $state<{ scrollToIndex(i: number): void }>();
   let root = $state<HTMLDivElement>();
 
@@ -953,7 +957,7 @@
         <div class="main">
           <div class="cols grid" aria-hidden="true">
             <span></span><span></span>
-            <span class="ends"><span>{t(STAGES[0])}</span><span>{t(STAGES[STAGES.length - 1])}</span></span>
+            <span class="ends"><span>{t(STAGES[0])}</span><span>{end}</span></span>
             <span class="next-h">{t('Next step')}</span><span class="right">{t('Last change')}</span>
           </div>
           <div class="list">
