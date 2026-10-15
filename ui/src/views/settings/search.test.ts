@@ -80,7 +80,7 @@ describe('settings search ranking', () => {
   });
 
   it('section names, TOML-only keys, custom rows and actions are hits', () => {
-    expect(first('Branch folders')).toMatchObject({ kind: 'section', id: 'section:worktree' });
+    expect(first('Work items')).toMatchObject({ kind: 'section', id: 'section:worktree' });
     expect(first('workflows')).toMatchObject({ id: 'key:workflows', toml: true, section: 'triggers' });
     expect(first('Send a test').id).toBe('row:notification-test');
     expect(first('Split down')).toMatchObject({ id: 'action:pane.split_down', chords: ['cmd+shift+d'] });
