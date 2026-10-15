@@ -735,7 +735,11 @@ export function createMockTransport(options: MockOptions = {}): {
     `${a.layer}:${a.project_id ?? ''}:${a.repo_id ?? ''}`;
   const layerVal = (a: CommandArgs<'settings_layer_get'>): JsonValue =>
     (layerVals[fileKey(a)] ??= clone(samples.layerDoc.value));
-  const writeLayer = (a: CommandArgs<'settings_layer_get'>, path: string, value: JsonValue | undefined): void => {
+  const writeLayer = (
+    a: CommandArgs<'settings_layer_get'>,
+    path: string,
+    value: JsonValue | undefined,
+  ): void => {
     layerVals[fileKey(a)] = setPath(layerVal(a), path, value);
   };
   const settingsWith = (layer: Layer, path: string, value: JsonValue | undefined): EffectiveSettings => {

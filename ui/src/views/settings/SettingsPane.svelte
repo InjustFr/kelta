@@ -272,7 +272,8 @@
     const ed = new SettingsEditor(r.file);
     await ed.refreshDoc(); // a repo file's trust
     for (const p of r.resets)
-      if (!(await ed.reset(p))) toasts.error(ed.errors[p] ?? '', t('Could not reset {name}', { name: r.label }));
+      if (!(await ed.reset(p)))
+        toasts.error(ed.errors[p] ?? '', t('Could not reset {name}', { name: r.label }));
     await editor.refreshDoc();
     files = await readLayerFiles(configurable);
   }
@@ -289,7 +290,8 @@
   function onSearchKey(e: KeyboardEvent): void {
     if (e.key === 'Escape' && query)
       query = ''; // empty: GlobalHost closes Settings (data-esc-close)
-    else if (e.key === 'ArrowDown') active = Math.min(active + 1, (changedOn ? changedHits : shown).length - 1);
+    else if (e.key === 'ArrowDown')
+      active = Math.min(active + 1, (changedOn ? changedHits : shown).length - 1);
     else if (e.key === 'ArrowUp') active = Math.max(active - 1, 0);
     else if (e.key === 'Enter' && changedOn) {
       if (changedHits[active]) openChanged(changedHits[active]);
@@ -485,13 +487,17 @@
           {#if changedHits.length === 0}
             <EmptyState
               icon="search"
-              title={query.trim() ? t('No matching setting') : t('Nothing changed: every setting is at its default.')}
+              title={query.trim()
+                ? t('No matching setting')
+                : t('Nothing changed: every setting is at its default.')}
             />
           {:else}
             <ol class="results" bind:this={listEl}>
               {#each changedHits as r, i (r.id)}
                 <li class="result" class:active={i === active} data-hit={r.id}>
-                  <span class="crumb">{r.crumb}{#if r.path}&ensp;<code>{r.path}</code>{/if}</span>
+                  <span class="crumb"
+                    >{r.crumb}{#if r.path}&ensp;<code>{r.path}</code>{/if}</span
+                  >
                   <div class="line">
                     <span class="label">{r.label}</span>
                     {#if isInline(r) && r.field !== 'secret'}<code>{String(r.value)}</code>{/if}
