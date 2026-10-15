@@ -9,7 +9,7 @@ use kelta_proto::api::{CodeHost, SecretResolver, Tracker};
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ids::AccountId;
 use kelta_proto::settings::{AccountConfig, AccountKind};
-use kelta_proto::testing::FakeSecrets;
+use kelta_proto_testing::FakeSecrets;
 use parking_lot::Mutex;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 

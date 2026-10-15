@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use kelta_proto::api::CoreApi;
 use kelta_proto::dirs::Dirs;
-use kelta_proto::testing::FakeCore;
+use kelta_proto_testing::FakeCore;
 use kelta_server::Server;
 
 pub struct Env {

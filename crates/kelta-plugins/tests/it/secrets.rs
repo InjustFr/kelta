@@ -12,7 +12,7 @@ use kelta_proto::api::{CoreApi, SecretResolver};
 use kelta_proto::events::BusEvent;
 use kelta_proto::ext::{ActionDef, CallOrigin, PluginMethod, SecretHeader, TriggerDef};
 use kelta_proto::ids::{PluginId, ProjectId};
-use kelta_proto::testing::FakeSecrets;
+use kelta_proto_testing::FakeSecrets;
 use serde_json::{Value, json};
 
 const SCHEMA: &str = r#"{"type":"object","properties":{

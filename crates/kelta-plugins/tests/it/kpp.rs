@@ -14,8 +14,8 @@ use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::ext::ProviderDef;
 use kelta_proto::ids::{AccountId, PluginId};
 use kelta_proto::settings::{AccountConfig, TrackerView};
-use kelta_proto::testing::FakeSecrets;
-use kelta_proto::testing::conformance::{CodeHostCase, code_host_contract};
+use kelta_proto_testing::FakeSecrets;
+use kelta_proto_testing::conformance::{CodeHostCase, code_host_contract};
 
 fn node() -> bool {
     let ok = std::process::Command::new("node").arg("--version").output().is_ok_and(|o| o.status.success());

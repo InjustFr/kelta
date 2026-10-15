@@ -1,4 +1,4 @@
-//! Behaviour of the `testing` fakes other lanes build on.
+//! Behaviour of the kelta-proto-testing fakes other lanes build on.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -13,8 +13,8 @@ use kelta_proto::model::*;
 use kelta_proto::secret::{SecretCtx, SecretRef};
 use kelta_proto::settings::TrackerView;
 use kelta_proto::term::*;
-use kelta_proto::testing::*;
 use kelta_proto::tracker::{Assignee, Cursor, StatusCategory, Who};
+use kelta_proto_testing::*;
 
 fn spawn_req(kind: SessionKind) -> SpawnRequest {
     SpawnRequest {

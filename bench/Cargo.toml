@@ -21,6 +21,7 @@ anyhow = { workspace = true }
 libc = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true }
+kelta-workspace-hack.workspace = true
 
 [lints]
 workspace = true

@@ -19,9 +19,10 @@ notify = { workspace = true }
 parking_lot = { workspace = true }
 sha2 = { workspace = true }
 tracing = { workspace = true }
+kelta-workspace-hack.workspace = true
 
 [dev-dependencies]
-kelta-proto = { workspace = true, features = ["testing"] }
+kelta-proto-testing = { workspace = true }
 tempfile = { workspace = true }
 insta = { workspace = true }
 

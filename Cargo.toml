@@ -3,6 +3,7 @@ resolver = "3"
 members = [
   "crates/*",
   "apps/desktop/src-tauri",
+  "crates/kelta-workspace-hack",
   "xtask",
   "bench",
   "fixtures/tui-sim",
@@ -30,6 +31,8 @@ kelta-work = { path = "crates/kelta-work" }
 kelta-server = { path = "crates/kelta-server" }
 kelta-plugins = { path = "crates/kelta-plugins" }
 kelta-core = { path = "crates/kelta-core" }
+kelta-proto-testing = { path = "crates/kelta-proto-testing" }
+kelta-workspace-hack = { path = "crates/kelta-workspace-hack" }
 
 # ---- desktop (ARCHITECTURE §1.1) -------------------------------------------
 tauri = { version = "=2.12.2" }
@@ -50,7 +53,7 @@ libc = { version = "=0.2.190" }
 reqwest = { version = "=0.13.5", default-features = false, features = ["rustls-no-provider", "json", "gzip", "http2", "query", "form", "system-proxy"] }
 # reqwest's `rustls` feature pulls aws-lc-sys (cmake C build, the slowest unit of a clean build, #191): ring
 # instead, installed by `kelta_http::client_builder`. tauri-plugin-updater already uses ring.
-rustls = { version = "=0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 axum = { version = "=0.8.9", features = ["ws"] }
 hyper = { version = "=1.12.0", features = ["client", "server", "http1"] }
 hyper-util = { version = "=0.1.21", features = ["client-legacy", "tokio", "http1"] }

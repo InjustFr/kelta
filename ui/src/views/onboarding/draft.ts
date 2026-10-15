@@ -116,15 +116,9 @@ export function defaultView(kind: AccountKind | string, hint: string | null): Tr
   }
 }
 
-/** A binding with no source yet. */
+/** A binding with no source yet; no `status_map` (deprecated by `pipeline`, #464; Rust fills its default). */
 export function emptyBinding(account: string): TrackerBinding {
-  return {
-    account,
-    views: [],
-    columns: [],
-    status_map: { start: null, review: null, done: null },
-    repo_rules: [],
-  };
+  return { account, views: [], columns: [], repo_rules: [] } as unknown as TrackerBinding;
 }
 
 export function bindTracker(

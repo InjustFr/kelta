@@ -1,0 +1,23 @@
+[package]
+name = "kelta-proto-testing"
+description = "Kelta test support: fakes for every kelta-proto service trait, in-memory stores, fixtures"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+kelta-proto = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+parking_lot = { workspace = true }
+toml = { workspace = true }
+uuid = { workspace = true }
+kelta-workspace-hack.workspace = true
+
+[lints]
+workspace = true

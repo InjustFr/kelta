@@ -164,7 +164,7 @@ fn claude_req() -> SpawnRequest {
     }
 }
 
-fn attention_events(ui: &kelta_proto::testing::FakeUiBridge) -> Vec<(String, Attention, u32, u32)> {
+fn attention_events(ui: &kelta_proto_testing::FakeUiBridge) -> Vec<(String, Attention, u32, u32)> {
     ui.events()
         .into_iter()
         .filter_map(|e| match e {

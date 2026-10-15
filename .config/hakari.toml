@@ -1,0 +1,14 @@
+# Settings for `cargo hakari` (see CONTRIBUTING.md): unifies third-party features so every
+# cargo invocation shares one build of the workspace crates (#465).
+hakari-package = "kelta-workspace-hack"
+dep-format-version = "4"
+# The v2 and v3 resolvers are identical from hakari's perspective.
+resolver = "2"
+# Same targets as deny.toml [graph].
+platforms = [
+    "aarch64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+]
+# Internal deps come from [workspace.dependencies].
+workspace-hack-line-style = "workspace-dotted"

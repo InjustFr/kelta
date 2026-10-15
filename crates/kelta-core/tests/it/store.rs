@@ -520,7 +520,7 @@ async fn startup_prunes_finished_items_past_the_retention() {
 fn unreadable_work_items_raise_one_toast_at_load() {
     use kelta_proto::dirs::{CliArgs, Dirs};
     use kelta_proto::events::UiEvent;
-    use kelta_proto::testing::{FakeSecrets, FakeTerminalHost, FakeUiBridge};
+    use kelta_proto_testing::{FakeSecrets, FakeTerminalHost, FakeUiBridge};
     let tmp = tempfile::tempdir().unwrap();
     let dirs = Dirs::under(tmp.path());
     std::fs::create_dir_all(&dirs.data).unwrap();

@@ -62,7 +62,7 @@ async fn plan_templating_and_unicode_slug() {
     d.ticket.r#ref.key = "SHOP-9".into();
     d.ticket.title = "Ünïcödé façade — naïve Straße: handle très long titles gracefully please".into();
     d.ticket.kind = Some("Bug".into());
-    let tr = Arc::new(kelta_proto::testing::FakeTracker::with_tickets(vec![d]));
+    let tr = Arc::new(kelta_proto_testing::FakeTracker::with_tickets(vec![d]));
     fx.core.add_tracker(AccountId::new("jira-acme"), tr);
     let plan = w.plan(&project(), ticket("SHOP-9")).await.unwrap();
     let slug = plan.branch.strip_prefix("fix/SHOP-9-").unwrap();

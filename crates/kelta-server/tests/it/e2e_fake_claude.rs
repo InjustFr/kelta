@@ -12,7 +12,7 @@ use kelta_proto::events::bus;
 use kelta_proto::ids::SessionId;
 use kelta_proto::model::SessionStatus;
 use kelta_proto::settings::ClaudeSettings;
-use kelta_proto::testing::FakeCore;
+use kelta_proto_testing::FakeCore;
 use serde_json::Value;
 use tokio::io::AsyncWriteExt;
 

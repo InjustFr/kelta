@@ -9,7 +9,7 @@ use kelta_proto::api::{CoreApi, GrantStore};
 use kelta_proto::dirs::Dirs;
 use kelta_proto::model::ProjectInfo;
 use kelta_proto::settings::Settings;
-use kelta_proto::testing::{FakeCore, MemGrantStore, fixtures};
+use kelta_proto_testing::{FakeCore, MemGrantStore, fixtures};
 
 pub struct Env {
     pub core: Arc<FakeCore>,

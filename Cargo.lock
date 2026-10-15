@@ -2916,6 +2916,7 @@ version = "1.7.0"
 dependencies = [
  "anyhow",
  "kelta-proto",
+ "kelta-workspace-hack",
  "libc",
  "serde",
  "serde_json",
@@ -2932,6 +2933,8 @@ dependencies = [
  "futures",
  "kelta-http",
  "kelta-proto",
+ "kelta-proto-testing",
+ "kelta-workspace-hack",
  "parking_lot",
  "regex",
  "serde_json",
@@ -2948,6 +2951,8 @@ dependencies = [
  "insta",
  "jsonschema",
  "kelta-proto",
+ "kelta-proto-testing",
+ "kelta-workspace-hack",
  "notify",
  "parking_lot",
  "serde_json",
@@ -2973,11 +2978,13 @@ dependencies = [
  "kelta-http",
  "kelta-plugins",
  "kelta-proto",
+ "kelta-proto-testing",
  "kelta-secrets",
  "kelta-server",
  "kelta-term",
  "kelta-trackers",
  "kelta-work",
+ "kelta-workspace-hack",
  "libc",
  "parking_lot",
  "regex",
@@ -3000,6 +3007,7 @@ dependencies = [
 name = "kelta-ctl"
 version = "1.7.0"
 dependencies = [
+ "kelta-workspace-hack",
  "rustix",
  "serde",
  "serde_json",
@@ -3014,6 +3022,8 @@ dependencies = [
  "kelta-core",
  "kelta-plugins",
  "kelta-proto",
+ "kelta-proto-testing",
+ "kelta-workspace-hack",
  "libc",
  "objc2",
  "objc2-foundation",
@@ -3043,6 +3053,8 @@ dependencies = [
  "ammonia",
  "base64 0.23.1",
  "kelta-proto",
+ "kelta-proto-testing",
+ "kelta-workspace-hack",
  "parking_lot",
  "pulldown-cmark",
  "reqwest",
@@ -3070,6 +3082,8 @@ dependencies = [
  "jsonschema",
  "kelta-http",
  "kelta-proto",
+ "kelta-proto-testing",
+ "kelta-workspace-hack",
  "mime_guess",
  "parking_lot",
  "regex",
@@ -3093,6 +3107,7 @@ name = "kelta-proto"
 version = "1.7.0"
 dependencies = [
  "async-trait",
+ "kelta-workspace-hack",
  "parking_lot",
  "rustix",
  "schemars 1.2.2",
@@ -3107,6 +3122,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "kelta-proto-testing"
+version = "1.7.0"
+dependencies = [
+ "async-trait",
+ "kelta-proto",
+ "kelta-workspace-hack",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tokio",
+ "toml 1.1.8+spec-1.1.0",
+ "uuid",
+]
+
+[[package]]
 name = "kelta-secrets"
 version = "1.7.0"
 dependencies = [
@@ -3116,6 +3146,8 @@ dependencies = [
  "chacha20poly1305",
  "kelta-http",
  "kelta-proto",
+ "kelta-proto-testing",
+ "kelta-workspace-hack",
  "keyring-core",
  "parking_lot",
  "serde_json",
@@ -3138,7 +3170,9 @@ dependencies = [
  "hyper-util",
  "kelta-http",
  "kelta-proto",
+ "kelta-proto-testing",
  "kelta-work",
+ "kelta-workspace-hack",
  "libc",
  "parking_lot",
  "reqwest",
@@ -3160,6 +3194,8 @@ dependencies = [
  "criterion",
  "insta",
  "kelta-proto",
+ "kelta-proto-testing",
+ "kelta-workspace-hack",
  "libc",
  "parking_lot",
  "portable-pty",
@@ -3180,6 +3216,8 @@ dependencies = [
  "insta",
  "kelta-http",
  "kelta-proto",
+ "kelta-proto-testing",
+ "kelta-workspace-hack",
  "libc",
  "parking_lot",
  "regex",
@@ -3198,6 +3236,8 @@ dependencies = [
  "globset",
  "insta",
  "kelta-proto",
+ "kelta-proto-testing",
+ "kelta-workspace-hack",
  "parking_lot",
  "regex",
  "rmpv",
@@ -3212,6 +3252,96 @@ dependencies = [
  "tracing",
  "uuid",
  "which",
+]
+
+[[package]]
+name = "kelta-workspace-hack"
+version = "1.7.0"
+dependencies = [
+ "aho-corasick",
+ "bit-set",
+ "bit-vec",
+ "bitflags 2.13.2",
+ "block2",
+ "crc32fast",
+ "crossbeam-utils",
+ "crypto-common 0.2.2",
+ "deranged",
+ "digest 0.11.3",
+ "errno",
+ "fastrand",
+ "foldhash 0.2.0",
+ "form_urlencoded",
+ "futures-channel",
+ "futures-core",
+ "futures-executor",
+ "futures-io",
+ "futures-sink",
+ "futures-task",
+ "futures-util",
+ "getrandom 0.3.4",
+ "getrandom 0.4.3",
+ "hashbrown 0.17.1",
+ "hyper",
+ "hyper-util",
+ "icu_properties",
+ "libc",
+ "linux-raw-sys",
+ "log",
+ "memchr",
+ "mio",
+ "num",
+ "num-bigint",
+ "num-traits",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-core-foundation",
+ "objc2-foundation",
+ "objc2-quartz-core",
+ "once_cell",
+ "percent-encoding",
+ "phf_shared 0.13.1",
+ "ppv-lite86",
+ "proc-macro2",
+ "quote",
+ "rand",
+ "rand_chacha",
+ "regex",
+ "regex-automata",
+ "regex-syntax",
+ "reqwest",
+ "rusqlite",
+ "rustix",
+ "rustls",
+ "rustls-webpki",
+ "schemars 0.8.22",
+ "security-framework-sys",
+ "serde",
+ "serde_core",
+ "serde_json",
+ "simd-adler32",
+ "slab",
+ "smallvec",
+ "stable_deref_trait",
+ "syn 2.0.119",
+ "syn 3.0.6",
+ "sync_wrapper",
+ "tauri-utils",
+ "time",
+ "time-macros",
+ "tokio",
+ "toml_datetime 1.1.2+spec-1.1.0",
+ "toml_edit 0.25.17+spec-1.1.0",
+ "toml_parser",
+ "toml_writer",
+ "tower",
+ "tracing",
+ "tracing-core",
+ "typenum",
+ "url",
+ "uuid",
+ "winnow 1.0.4",
+ "zerocopy",
 ]
 
 [[package]]
@@ -4793,9 +4923,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.45"
+version = "0.23.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
+checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "once_cell",
  "ring",
@@ -6518,6 +6648,7 @@ dependencies = [
 name = "tui-sim"
 version = "1.7.0"
 dependencies = [
+ "kelta-workspace-hack",
  "rustix",
 ]
 
@@ -7638,6 +7769,8 @@ dependencies = [
  "anyhow",
  "kelta-plugins",
  "kelta-proto",
+ "kelta-proto-testing",
+ "kelta-workspace-hack",
  "serde",
  "serde_json",
  "tempfile",

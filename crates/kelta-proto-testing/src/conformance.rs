@@ -4,11 +4,11 @@
 
 use std::collections::HashSet;
 
-use crate::api::{CodeHost, Tracker};
-use crate::codehost::{CodeHostKind, PrCreate, ReviewKind, ReviewQuery};
-use crate::error::ErrorCode;
-use crate::settings::{TrackerBinding, TrackerView};
-use crate::tracker::{Assignee, TicketRef, TrackerKind};
+use kelta_proto::api::{CodeHost, Tracker};
+use kelta_proto::codehost::{CodeHostKind, PrCreate, ReviewKind, ReviewQuery};
+use kelta_proto::error::ErrorCode;
+use kelta_proto::settings::{TrackerBinding, TrackerView};
+use kelta_proto::tracker::{Assignee, TicketRef, TrackerKind};
 
 macro_rules! ensure {
     ($cond:expr, $($fmt:tt)+) => {

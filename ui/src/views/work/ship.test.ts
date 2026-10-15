@@ -5,7 +5,7 @@ import { dispatch } from '$lib/actions';
 import type { WorkItem } from '$lib/gen';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { sessions, tickets, toasts, ui, work } from '$lib/stores';
+import { projects, sessions, tickets, toasts, ui, work } from '$lib/stores';
 
 import '../../shell/actions';
 import '../tickets/actions';
@@ -99,6 +99,20 @@ describe('Finish', () => {
     await waitFor(() => expect(work.get(w.id)?.state.kind).toBe('finished'));
     expect(mock.calls.find((c) => c.cmd === 'work_finish')?.args).toMatchObject({
       opts: { remove_worktree: true, delete_branch: true, transition_to: { name: select.options[1]!.value } },
+    });
+  });
+
+  it('moves the ticket to the last pipeline step target (#464)', async () => {
+    await projects.load();
+    projects.byId('shop')!.tracker!.pipeline = [
+      { id: 'done', label: 'Done', enter: ['merged'], transition_to: { name: 'Shipped' }, comment: null },
+    ];
+    render(FinishDialog, { props: { item: item(0), onclose: () => {} } });
+    expect(screen.getByRole('switch', { name: 'Move the ticket to Done' })).toHaveProperty('checked', true);
+    await fireEvent.click(screen.getByRole('button', { name: 'Finish' }));
+    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_finish')).toBe(true));
+    expect(mock.calls.find((c) => c.cmd === 'work_finish')?.args).toMatchObject({
+      opts: { transition_to: { name: 'Shipped' } },
     });
   });
 

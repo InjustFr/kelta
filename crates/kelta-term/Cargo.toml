@@ -32,9 +32,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 # keltad binary only (log to the file the app hands it as stderr).
 tracing-subscriber = { workspace = true }
+kelta-workspace-hack.workspace = true
 
 [dev-dependencies]
-kelta-proto = { workspace = true, features = ["testing"] }
+kelta-proto-testing = { workspace = true }
 tempfile = { workspace = true }
 insta = { workspace = true }
 proptest = { workspace = true }

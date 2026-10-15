@@ -17,7 +17,7 @@ use kelta_proto::model::{
 };
 use kelta_proto::settings::{QuitSessions, RestoreMode, Settings};
 use kelta_proto::term::TerminalLimits;
-use kelta_proto::testing::{FakeSecrets, FakeUiBridge, RecordingSink};
+use kelta_proto_testing::{FakeSecrets, FakeUiBridge, RecordingSink};
 use kelta_term::PtyTerminalHost;
 use kelta_term::daemon::{self, DaemonTerminalHost};
 

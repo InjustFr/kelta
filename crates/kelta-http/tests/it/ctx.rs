@@ -206,7 +206,7 @@ async fn graphql_query_is_retried_on_502_but_a_mutation_is_not() {
         .expect(1)
         .mount(&server)
         .await;
-    let secrets = kelta_proto::testing::FakeSecrets::with(&[("env:T", "tok")]);
+    let secrets = kelta_proto_testing::FakeSecrets::with(&[("env:T", "tok")]);
     let auth = Authed::new(ctx(), secrets, Some(SecretRef::new("env:T")), None, AuthScheme::Bearer);
     let url = format!("{}/graphql", server.uri());
     let d = graphql(&auth, &url, "query { viewer { login } }", json!({})).await.unwrap();

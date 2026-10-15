@@ -1,6 +1,6 @@
 <script lang="ts">
   // Settings → Sources: the global `[[sources]]`, one card per board: label, board (account and
-  // views), columns, status map, the projects it feeds and the routes of its tickets to a repo.
+  // views), columns, steps, the projects it feeds and the routes of its tickets to a repo.
   import { t } from '$lib/i18n/index.svelte';
   import { tick } from 'svelte';
 
@@ -21,6 +21,7 @@
   import { descriptionOf, entrySchema, nodeAt, type SchemaNode } from '../lib/schema';
   import { editSource, saveSources } from '../lib/sources.svelte';
   import SectionForm from '../SectionForm.svelte';
+  import PipelineSteps from '../PipelineSteps.svelte';
   import TrackerSources from '../TrackerSources.svelte';
 
   let props: SettingsSectionProps = $props();
@@ -57,8 +58,11 @@
     );
   });
 
-  const setTracker = (s: Source, key: 'columns' | 'status_map', v: JsonValue | null) =>
-    editSource(s.id, (x) => ({ ...x, tracker: { ...x.tracker, [key]: v ?? (key === 'columns' ? [] : {}) } }));
+  const setTracker = (s: Source, key: 'columns', v: JsonValue | null) =>
+    editSource(s.id, (x) => ({
+      ...x,
+      tracker: { ...x.tracker, [key]: (v ?? []) as unknown as Source['tracker']['columns'] },
+    }));
 
   /** Unticking a project drops its routes too (a route must name one of the source's projects). */
   const toggleProject = (s: Source, pid: string) =>
@@ -257,10 +261,11 @@
             {/if}
           </SettingsGroup>
 
+          <PipelineSteps sourceId={s.id} />
+
           {#if tracker}
             {@const columns = nodeAt(tracker, ['columns'])}
-            {@const statusMap = nodeAt(tracker, ['status_map'])}
-            <SettingsDisclosure label={t('Columns and status map')}>
+            <SettingsDisclosure label={t('Columns')}>
               {#if columns}
                 <SettingsRow label={t('Columns')}>
                   {#snippet control()}
@@ -272,19 +277,6 @@
                     />
                   {/snippet}
                   <p>{descriptionOf(columns)}</p>
-                </SettingsRow>
-              {/if}
-              {#if statusMap}
-                <SettingsRow label={t('Status map')}>
-                  {#snippet control()}
-                    <Control
-                      node={statusMap}
-                      value={s.tracker.status_map as unknown as JsonValue}
-                      label={t('Status map of {name}', { name: s.label })}
-                      onchange={(v) => void setTracker(s, 'status_map', v)}
-                    />
-                  {/snippet}
-                  <p>{descriptionOf(statusMap)}</p>
                 </SettingsRow>
               {/if}
             </SettingsDisclosure>

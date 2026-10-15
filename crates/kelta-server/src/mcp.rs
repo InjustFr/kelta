@@ -1078,7 +1078,7 @@ mod tests {
 
     #[tokio::test]
     async fn context_md_tool_names_are_what_a_session_lists() {
-        let fake = kelta_proto::testing::FakeCore::new();
+        let fake = kelta_proto_testing::FakeCore::new();
         let core: Arc<dyn CoreApi> = fake.clone();
         let sid = SessionId::new("s");
         for writes in [false, true] {
@@ -1102,7 +1102,7 @@ mod tests {
 
     #[test]
     fn ask_rejects_over_long_question_or_option() {
-        let fake = kelta_proto::testing::FakeCore::new();
+        let fake = kelta_proto_testing::FakeCore::new();
         let core: Arc<dyn CoreApi> = fake.clone();
         let sid = SessionId::new("s");
         let long = "x".repeat(10_000);

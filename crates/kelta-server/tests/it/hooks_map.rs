@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use kelta_proto::hooks::HookPayload;
 use kelta_proto::model::SessionStatus;
-use kelta_proto::testing::fixtures;
+use kelta_proto_testing::fixtures;
 use kelta_server::hooks::map;
 
 #[test]

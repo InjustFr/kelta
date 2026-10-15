@@ -18,8 +18,8 @@ use kelta_proto::settings::{
     TrackerView,
 };
 use kelta_proto::store::ProviderCacheRow;
-use kelta_proto::testing::{FakeSecrets, FakeTerminalHost, FakeTracker, FakeUiBridge};
 use kelta_proto::tracker::Who;
+use kelta_proto_testing::{FakeSecrets, FakeTerminalHost, FakeTracker, FakeUiBridge};
 
 fn view(id: &str, jql: &str) -> TrackerView {
     TrackerView { id: id.into(), label: id.into(), jql: Some(jql.into()), ..TrackerView::default() }

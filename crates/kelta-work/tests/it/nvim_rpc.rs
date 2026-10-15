@@ -10,7 +10,7 @@ use kelta_proto::events::BusEvent;
 use kelta_proto::ids::SessionId;
 use kelta_proto::model::{EditorMeta, EditorTarget, Lifecycle, SessionInfo, SessionKind};
 use kelta_proto::samples;
-use kelta_proto::testing::{FakeCore, MemWorkStore};
+use kelta_proto_testing::{FakeCore, MemWorkStore};
 use kelta_work::WorkService;
 use kelta_work::nvim::NvimClient;
 use rmpv::Value;

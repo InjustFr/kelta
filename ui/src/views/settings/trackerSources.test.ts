@@ -5,7 +5,8 @@ import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { dispatch } from '$lib/actions';
-import type { JsonValue, SourceRoute, TrackerBinding, TrackerView } from '$lib/gen';
+import type { JsonValue, SourceRoute, StepDef, TrackerBinding, TrackerView } from '$lib/gen';
+import { settingsDefault } from '$lib/gen/fixtures';
 import * as ipc from '$lib/ipc/commands';
 import { createMockTransport, lastSettingsValue, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
@@ -13,7 +14,9 @@ import { layout, projects, settings, ui } from '$lib/stores';
 
 import { confirms } from '../../shell/confirm.svelte';
 import { takeTomlRequest } from './actions';
+import PipelineSteps from './PipelineSteps.svelte';
 import SettingsPane from './SettingsPane.svelte';
+import { effectivePipeline } from './lib/pipeline';
 import { iterationWord } from './lib/sources.svelte';
 import Projects from './sections/Projects.svelte';
 import Sources from './sections/Sources.svelte';
@@ -252,15 +255,12 @@ describe('Settings → Sources', () => {
     await fireEvent.click(card('shop').getByRole('button', { name: 'Billing' }));
     await waitFor(() => expect(shop()?.routes.map((r) => r.project)).toEqual(['shop']));
 
-    // columns and status map render from the schema
+    // columns render from the schema
     const columns = await card('shop').findByLabelText('Columns of Product board');
     const todo = [{ id: 'todo', label: 'To do', categories: ['todo'], names: [] }];
     await fireEvent.input(columns, { target: { value: JSON.stringify(todo) } });
     await fireEvent.change(columns);
     await waitFor(() => expect(shop()?.tracker.columns).toEqual(todo));
-    const done = card('shop').getByText('Done', { selector: 'span' }).parentElement!;
-    await fireEvent.change(within(done).getAllByRole('combobox')[1]!, { target: { value: 'in_review' } });
-    await waitFor(() => expect(shop()?.tracker.status_map.done).toEqual({ category: 'in_review' }));
 
     await fireEvent.click(card('ops').getByRole('button', { name: 'Remove Ops board' }));
     await waitFor(() => expect(confirms.current?.title).toBe('Remove Ops board?'));
@@ -376,5 +376,117 @@ describe('settings.open toml', () => {
     await view.rerender({ ...props, content: { kind: 'settings', section: 'projects' } });
     expect(await screen.findByTestId('edit-toml')).toBeTruthy();
     expect(takeTomlRequest()).toBeNull();
+  });
+});
+
+describe('effectivePipeline (#464)', () => {
+  const work = settingsDefault.work;
+  const b = (p: Partial<TrackerBinding> = {}): TrackerBinding => ({
+    account: 'j',
+    views: [],
+    columns: [],
+    repo_rules: [],
+    status_map: { start: null, review: null, done: null },
+    ...p,
+  });
+  const step = (id: string): StepDef => ({ id, label: id, enter: [], transition_to: null, comment: null });
+
+  it('builds the default from status_map and work.on_*, else takes the source or global steps', () => {
+    const p = effectivePipeline(b(), work);
+    expect(p.map((d) => d.id)).toEqual(['implementing', 'pr', 'review', 'merge', 'done']);
+    expect(p.map((d) => d.transition_to)).toEqual([
+      { category: 'in_progress' },
+      { category: 'in_review' },
+      null,
+      null,
+      { category: 'done' },
+    ]);
+    expect([p[0]!.comment, p[1]!.comment]).toEqual([null, 'PR: {pr.url}']);
+    expect(p[2]!.enter).toEqual(['pr_ready', 'review_requested']);
+    const set = b({ status_map: { start: null, review: { name: 'In Review' }, done: { name: 'Shipped' } } });
+    expect(effectivePipeline(set, work).map((d) => d.transition_to)).toEqual([
+      { category: 'in_progress' },
+      { name: 'In Review' },
+      null,
+      null,
+      { name: 'Shipped' },
+    ]);
+    const global = { ...work, pipeline: [step('global')] };
+    expect(effectivePipeline(b(), global)).toEqual([step('global')]);
+    expect(effectivePipeline(b({ pipeline: [step('mine')] }), global)).toEqual([step('mine')]);
+  });
+});
+
+describe('Steps editor (#464)', () => {
+  const steps = () => screen.getAllByTestId('pipeline-step');
+
+  it('shows the default steps read only, and Customize writes them to the source', async () => {
+    render(PipelineSteps, { sourceId: 'shop' });
+    await waitFor(() => expect(steps()).toHaveLength(5));
+    expect(screen.queryByRole('button', { name: 'Add step' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Customize' }));
+    await waitFor(() =>
+      expect(shop()?.tracker.pipeline?.map((d) => d.id)).toEqual([
+        'implementing',
+        'pr',
+        'review',
+        'merge',
+        'done',
+      ]),
+    );
+    expect(shop()!.tracker.pipeline![1]).toEqual({
+      id: 'pr',
+      label: 'PR',
+      enter: ['pr_opened'],
+      transition_to: { category: 'in_review' },
+      comment: 'PR: {pr.url}',
+    });
+  });
+
+  it('adds a PO Review step with a status trigger and saves the order', async () => {
+    await shopColumns();
+    render(PipelineSteps, { sourceId: 'shop' });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Customize' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add step' }));
+    await waitFor(() => expect(shop()?.tracker.pipeline).toHaveLength(6));
+
+    const label = screen.getByLabelText('Label of step 6');
+    await fireEvent.input(label, { target: { value: 'PO Review' } });
+    await fireEvent.change(label);
+    await waitFor(() => expect(shop()!.tracker.pipeline![5]!.label).toBe('PO Review'));
+
+    await fireEvent.click(within(steps()[5]!).getByRole('switch', { name: 'Approved' }));
+    await waitFor(() => expect(shop()!.tracker.pipeline![5]!.enter).toContain('approved'));
+    const trigger = screen.getByLabelText('Status that enters step 6');
+    await within(trigger).findByRole('option', { name: 'Code Review' });
+    await fireEvent.change(trigger, { target: { value: 'name:Code Review' } });
+    await waitFor(() =>
+      expect(shop()!.tracker.pipeline![5]!.enter).toEqual(['approved', { status: { name: 'Code Review' } }]),
+    );
+    await fireEvent.change(screen.getByLabelText('Status set by step 6'), {
+      target: { value: 'category:in_review' },
+    });
+    await waitFor(() =>
+      expect(shop()!.tracker.pipeline![5]!.transition_to).toEqual({ category: 'in_review' }),
+    );
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Move step 6 up' }));
+    await waitFor(() =>
+      expect(shop()!.tracker.pipeline!.map((d) => d.id)).toEqual([
+        'implementing',
+        'pr',
+        'review',
+        'merge',
+        'step',
+        'done',
+      ]),
+    );
+    expect(shop()!.tracker.pipeline![4]).toEqual({
+      id: 'step',
+      label: 'PO Review',
+      enter: ['approved', { status: { name: 'Code Review' } }],
+      transition_to: { category: 'in_review' },
+      comment: null,
+    });
   });
 });
