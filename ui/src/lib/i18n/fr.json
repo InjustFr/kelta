@@ -2860,5 +2860,10 @@
   "Lines shown while scrolling": "Lignes affichées pendant le défilement",
   "History lines a pane holds when it opens. More scrolls further back and uses more memory.": "Lignes d’historique qu’un volet contient à l’ouverture. Plus : remonte plus loin, consomme plus de mémoire.",
   "Keep sessions running after Kelta quits": "Garder les sessions actives après la fermeture de Kelta",
-  "Sessions run in a background helper and are back on the next launch. Off: quitting Kelta ends them.": "Les sessions tournent dans un assistant en arrière-plan et reviennent au prochain lancement. Désactivé : quitter Kelta les termine."
+  "Sessions run in a background helper and are back on the next launch. Off: quitting Kelta ends them.": "Les sessions tournent dans un assistant en arrière-plan et reviennent au prochain lancement. Désactivé : quitter Kelta les termine.",
+  "Changed by you": "Modifié par vous",
+  "Everything that differs from Kelta’s defaults, and where it is set.": "Tout ce qui diffère des valeurs par défaut de Kelta, et où c’est défini.",
+  "Nothing changed: every setting is at its default.": "Rien n’a changé : chaque paramètre a sa valeur par défaut.",
+  "Reset {name} in {file}": "Réinitialiser {name} dans {file}",
+  "Could not reset {name}": "Impossible de réinitialiser {name}"
 }
