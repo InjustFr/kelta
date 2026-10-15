@@ -491,6 +491,23 @@ describe('keys.list_keys', () => {
   });
 });
 
+describe('key capture boxes', () => {
+  it('leaves a [data-key-capture] box its raw keys', () => {
+    const { manager, ids } = setup();
+    const box = document.body.appendChild(document.createElement('div'));
+    box.setAttribute('data-key-capture', '');
+    const stop = manager.start(window);
+    const inBox = ctrlShift('KeyK', 'K');
+    box.dispatchEvent(inBox);
+    const outside = ctrlShift('KeyK', 'K');
+    document.body.dispatchEvent(outside);
+    stop();
+    box.remove();
+    expect(inBox.defaultPrevented).toBe(false);
+    expect(ids()).toEqual(['palette.open']);
+  });
+});
+
 describe('Esc Esc in a tool terminal (#412)', () => {
   const TOOL: KeyContext = { ...TERMINAL, kind: 'tool' };
   const esc = () => press({ code: 'Escape', key: 'Escape' });

@@ -126,6 +126,54 @@ test.describe('settings pane', () => {
     await expect(page.getByTestId('settings-pane')).toBeVisible();
     expect(errors).toEqual([]);
   });
+
+  test('Keys: prefix fields first, filter, press keys, inline clash, reset (#476)', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    await page.goto(`${HARNESS}?view=settings&section=keys`);
+
+    const fields = page.locator('[data-testid="field"]');
+    await expect(fields.nth(0)).toHaveAttribute('data-path', 'keys.prefix');
+    await expect(fields.nth(1)).toHaveAttribute('data-path', 'keys.prefix_hint_ms');
+
+    const rows = page.locator('[data-testid="bindings"] tr[data-action]');
+    await page.getByTestId('keys-filter').fill('split');
+    await expect(rows).toHaveCount(2);
+    await expect(page.locator('tbody[data-area="panes"]')).toBeVisible();
+    await page.getByTestId('keys-filter').fill('');
+
+    await page.getByRole('button', { name: 'Press keys', exact: true }).click();
+    await expect(page.getByTestId('press-keys')).toBeFocused();
+    await page.keyboard.press('ControlOrMeta+Shift+d');
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toHaveAttribute('data-action', 'pane.split_down');
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('keys-filter')).toBeVisible();
+
+    const detach = page.locator('tr[data-action="pane.detach"]');
+    await detach.getByRole('button', { name: 'Record' }).click();
+    await expect(page.getByTestId('recorder')).toBeFocused();
+    await page.keyboard.press('ControlOrMeta+d');
+    await expect(page.getByTestId('conflict')).toContainText('Split right');
+    await page.getByRole('button', { name: 'Pick another' }).click();
+    await expect(page.getByTestId('recorder')).toBeVisible();
+    await page.keyboard.press('ControlOrMeta+d');
+    await page.getByRole('button', { name: 'Use it here' }).click();
+
+    const split = page.locator('tr[data-action="pane.split_right"]');
+    await expect(split).toContainText('Unbound');
+    await expect(split).toContainText('Changed');
+    await expect(detach).toContainText('Changed');
+
+    await page.getByRole('button', { name: /^Conflicts/ }).click();
+    await expect(detach).toHaveCount(0);
+    await expect(split).toHaveCount(0);
+    await page.getByRole('button', { name: /^All/ }).click();
+
+    await page.getByRole('button', { name: 'Reset Split right to default' }).click();
+    await expect(split).not.toContainText('Unbound');
+    expect(errors).toEqual([]);
+  });
 });
 
 test.describe('settings over the window (#410)', () => {
