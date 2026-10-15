@@ -131,6 +131,57 @@ export const SECTION_BLURB: Partial<Record<SettingsSectionId, string>> = {
   ),
 };
 
+/** Words the settings search matches on a section's name. */
+export const SECTION_KEYWORDS: Partial<Record<SettingsSectionId, readonly string[]>> = {
+  keys: [msg('shortcut'), msg('keyboard shortcuts'), msg('keybinding'), msg('hotkey')],
+  worktree: [msg('worktree')],
+  triggers: [msg('automation')],
+  plugins: [msg('extensions')],
+};
+
+export interface SectionRow {
+  label: string;
+  keywords?: readonly string[];
+  /** Heading shown in the breadcrumb (Section › group). */
+  group?: string;
+  /** data-testid of the row in its section; none: the hit opens the section at the top. */
+  anchor?: string;
+}
+
+/** Rows a section draws itself (not schema keys), for the settings search. Kept here, not in the
+ *  sections: they load lazily and the search must not load them all. At most one row per section
+ *  without an anchor. */
+export const SECTION_ROWS: Partial<Record<SettingsSectionId, readonly SectionRow[]>> = {
+  claude: [
+    {
+      label: msg("Kelta's ticket tools in Claude Code"),
+      keywords: [msg('mcp'), msg('install')],
+      anchor: 'claude-mcp',
+    },
+    { label: msg('Claude sessions started outside Kelta'), keywords: [msg('hooks')], anchor: 'claude-hooks' },
+    {
+      label: msg('Profiles without a permission mode start in'),
+      group: msg('Profiles'),
+      anchor: 'claude-permission-mode',
+    },
+  ],
+  notifications: [
+    { label: msg('Test notification'), keywords: [msg('send a test')], anchor: 'notification-test' },
+  ],
+  accounts: [
+    {
+      label: msg('Add account'),
+      keywords: [msg('token'), msg('github token'), msg('sign in')],
+      anchor: 'add-account',
+    },
+  ],
+  projects: [
+    { label: msg('Create project from folder'), keywords: [msg('add project'), msg('new project')] },
+  ],
+  tags: [{ label: msg('New tag'), keywords: [msg('label')] }],
+  tools: [{ label: msg('Add tool'), keywords: [msg('lazygit')] }],
+};
+
 /** Visible section title; the registry label stays for ids and tests. */
 export const sectionLabel = (s: { id: string; label: string }): string =>
   s.id === 'worktree' ? t('Branch folders') : t(s.label);

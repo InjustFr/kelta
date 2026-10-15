@@ -102,6 +102,30 @@ test.describe('settings pane', () => {
     await expect(page.getByTestId('edit-toml-toggle')).toHaveText('Back to form');
     expect(errors).toEqual([]);
   });
+
+  test('search: focus on open, Esc clears, ↓ and ↵ walk the hits (#469)', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    await page.goto(`${HARNESS}?view=settings&section=general`);
+    const search = page.getByRole('searchbox', { name: 'Search settings' });
+    await expect(search).toBeFocused();
+    await page.keyboard.type('clipboard');
+    const results = page.getByTestId('search-results');
+    const hit = results.locator('[data-hit="key:terminal.copy_on_select"]');
+    await expect(hit).toBeVisible();
+    await page.keyboard.press('ArrowDown');
+    await expect(hit).toHaveClass(/active/);
+    await page.keyboard.press('Enter');
+    const sw = results.locator('[data-path="terminal.copy_on_select"]').getByRole('switch');
+    await expect(sw).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(sw).toBeChecked();
+    await search.focus();
+    await page.keyboard.press('Escape');
+    await expect(search).toHaveValue('');
+    await expect(page.getByTestId('settings-pane')).toBeVisible();
+    expect(errors).toEqual([]);
+  });
 });
 
 test.describe('settings over the window (#410)', () => {
@@ -143,9 +167,11 @@ test.describe('settings over the window (#410)', () => {
     // A banner's action dispatches the same deep link, with Settings already showing.
     await dispatch(page, 'settings.open', { section: 'projects' });
     await expect(current).toHaveAttribute('data-section', 'projects');
-    // Esc in a field leaves the field first, then closes Settings.
-    await page.getByRole('searchbox', { name: 'Search settings' }).focus();
+    // Esc in the search clears it first, then closes Settings.
+    const box = page.getByRole('searchbox', { name: 'Search settings' });
+    await box.fill('font');
     await page.keyboard.press('Escape');
+    await expect(box).toHaveValue('');
     await expect(page.getByTestId('settings-pane')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('workspace')).toBeVisible();

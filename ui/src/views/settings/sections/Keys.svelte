@@ -193,7 +193,9 @@
                 </td>
                 <td class="actions">
                   {#if access.editable && a.id !== 'window.toggle'}
-                    <Button size="sm" onclick={() => startRecording(a.id)}>{t('Record')}</Button>
+                    <Button size="sm" data-testid="record" onclick={() => startRecording(a.id)}
+                      >{t('Record')}</Button
+                    >
                     <Button size="sm" onclick={() => apply(a.id, [])} disabled={chords.length === 0}
                       >{t('Unbind')}</Button
                     >
