@@ -86,9 +86,9 @@ describe('settings copy table', () => {
     const expected = ['restore_geometry', 'decorations', 'close_behavior'];
     expect(childEntries(schema.properties!.window!, 'window').map(([k]) => k)).toEqual(expected);
     const { container, unmount } = await renderForm('window');
-    expect([...container.querySelectorAll('[data-path]')].map((e) => e.getAttribute('data-path'))).toEqual(
-      expected.map((k) => `window.${k}`),
-    );
+    expect(
+      [...container.querySelectorAll('[data-testid="field"]')].map((e) => e.getAttribute('data-path')),
+    ).toEqual(expected.map((k) => `window.${k}`));
     expect(
       [...container.querySelectorAll('[data-testid="copy-group"] h3')].map((h) => h.textContent),
     ).toEqual(['On launch', 'Look']);
