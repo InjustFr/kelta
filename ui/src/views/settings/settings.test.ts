@@ -39,7 +39,8 @@ describe('schema -> field kinds', () => {
 
   it('the ticket sources have their own section', () => {
     expect(Object.keys(schema.properties ?? {})).toContain('sources');
-    expect(SECTION_ROOTS.sources).toEqual(['sources']);
+    expect(SECTION_ROOTS.sources).toEqual(['sources', 'polling']);
+    expect(SECTION_ROOTS.performance).toEqual(['performance', 'web']);
     expect(Object.values(TOML_ROOTS).flat()).not.toContain('sources');
   });
 });

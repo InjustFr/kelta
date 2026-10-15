@@ -67,7 +67,6 @@ describe('registries', { timeout: 30_000 }, () => {
     expect(ids).toEqual([
       'health',
       'general',
-      'window',
       'keys',
       'terminal',
       'linux-graphics',

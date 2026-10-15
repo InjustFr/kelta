@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Settings → General (global layer): running version and channel, the last check, Check now and
+  // Settings → General › Updates (global layer, drawn inside that copy group): running version and channel, the last check, Check now and
   // What's new (#74). Check failures show here only, never as a toast.
   import { t } from '$lib/i18n/index.svelte';
   import { onMount } from 'svelte';
@@ -9,7 +9,6 @@
 
   import { releasePage, restartApp, updates } from '../../shell/updates.svelte';
   import { clock } from '../../shell/usage';
-  import SettingsGroup from './layout/SettingsGroup.svelte';
   import SettingsRow from './layout/SettingsRow.svelte';
 
   onMount(() => void updates.refresh().catch(() => {}));
@@ -40,28 +39,26 @@
 </script>
 
 {#if s}
-  <SettingsGroup heading={t('Updates')} data-testid="updates">
-    <SettingsRow label="Kelta {s.current} ({s.channel})" actions>
-      {#snippet control()}
-        {#if s.state.type === 'ready'}
-          <Button variant="primary" onclick={() => void restartApp()}>{t('Restart')}</Button>
-        {/if}
-        {#if s.state.type !== 'unsupported'}
-          <Button
-            loading={updates.checking}
-            onclick={() => void updates.check().catch(() => {})}
-            data-testid="update-check">{t('Check now')}</Button
-          >
-        {/if}
+  <SettingsRow label="Kelta {s.current} ({s.channel})" actions data-testid="updates">
+    {#snippet control()}
+      {#if s.state.type === 'ready'}
+        <Button variant="primary" onclick={() => void restartApp()}>{t('Restart')}</Button>
+      {/if}
+      {#if s.state.type !== 'unsupported'}
         <Button
-          variant="ghost"
-          onclick={() => void openExternal({ url: releasePage(s.channel) }).catch(() => {})}
-          >{t("What's new")}</Button
+          loading={updates.checking}
+          onclick={() => void updates.check().catch(() => {})}
+          data-testid="update-check">{t('Check now')}</Button
         >
-      {/snippet}
-      <p class:failed={s.state.type === 'failed'} data-testid="update-state">{line}</p>
-    </SettingsRow>
-  </SettingsGroup>
+      {/if}
+      <Button
+        variant="ghost"
+        onclick={() => void openExternal({ url: releasePage(s.channel) }).catch(() => {})}
+        >{t("What's new")}</Button
+      >
+    {/snippet}
+    <p class:failed={s.state.type === 'failed'} data-testid="update-state">{line}</p>
+  </SettingsRow>
 {/if}
 
 <style>

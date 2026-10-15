@@ -133,6 +133,7 @@
     <SettingsGroup
       heading={g.mode === 'dark' ? t('Dark theme') : t('Light theme')}
       headingId="theme-{g.mode}-label"
+      nested
       data-mode={g.mode}
     >
       {#snippet meta()}

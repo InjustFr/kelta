@@ -116,7 +116,6 @@ export const sheetRegistry: Record<RegisteredSheetKey, LazyComponent> = {
 export type SettingsSectionId =
   | 'health'
   | 'general'
-  | 'window'
   | 'keys'
   | 'terminal'
   | 'linux-graphics'
@@ -167,13 +166,6 @@ export const settingsSections: readonly SettingsSection[] = [
     icon: 'settings',
     owner: 'L4',
     load: () => import('../views/settings/sections/General.svelte'),
-  },
-  {
-    id: 'window',
-    label: msg('Window'),
-    icon: 'app-window',
-    owner: 'L4',
-    load: () => import('../views/settings/sections/Window.svelte'),
   },
   {
     id: 'keys',

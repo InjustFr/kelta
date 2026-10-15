@@ -70,7 +70,10 @@ mod tests {
     fn schemas_have_annotations() {
         let s = settings_schema();
         let props = &s["properties"];
-        assert_eq!(props["terminal"]["x-kelta-category"], "Terminal");
+        assert!(
+            props["terminal"].get("x-kelta-category").is_none(),
+            "sections are the UI's (lib/sections.ts)"
+        );
         assert_eq!(props["tools"]["x-kelta-merge"], "by_id");
         assert_eq!(props["accounts"]["x-kelta-scope"], serde_json::json!(["global"]));
         assert!(props["terminal"]["properties"]["max_live_views"].is_object());

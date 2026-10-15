@@ -71,6 +71,13 @@ describe('settings search ranking', () => {
     expect(first('permission mode').crumb).toBe('Claude › Profiles');
   });
 
+  it('the refresh intervals sit under Sources › Refresh', () =>
+    expect(first('how often')).toMatchObject({
+      id: 'key:polling.focused_secs',
+      section: 'sources',
+      crumb: 'Sources › Refresh',
+    }));
+
   it("'pr' matches whole words: a work.pr key first, no keys.prefix in the top 5", () => {
     const hits = searchSettings(index(), 'pr');
     expect(hits[0]!.id).toMatch(/^key:work\.pr\./);
