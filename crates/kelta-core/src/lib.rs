@@ -905,6 +905,13 @@ impl CoreApi for Core {
     ) -> Result<(WorkItem, bool), KeltaError> {
         self.work.link_ticket_pr(project, ticket, &pr).await
     }
+    async fn ticket_step_set(
+        &self,
+        ticket: &TicketRef,
+        step_id: Option<&str>,
+    ) -> Result<kelta_proto::model::TicketStep, KeltaError> {
+        self.work.move_step(ticket, step_id).await
+    }
     async fn editor_open(
         &self,
         target: EditorTarget,

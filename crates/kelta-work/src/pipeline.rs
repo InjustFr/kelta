@@ -1,12 +1,13 @@
 //! Ticket steps (#461): where a ticket stands in its pipeline, moved forward only by signals;
-//! entering a step runs its `transition_to` and `comment` once (skipped steps run nothing).
+//! entering a step runs its `transition_to` and `comment` once (skipped steps run nothing); a manual
+//! move (#463) may also go back, running nothing.
 
 use kelta_proto::codehost::{Review, ReviewDecision};
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::{BusEvent, Toast, bus};
 use kelta_proto::model::{TicketStep, WorkItem, WorkState};
 use kelta_proto::settings::{PipelineEvent, StepDef, Trigger, effective_pipeline};
-use kelta_proto::tracker::{Status, Ticket};
+use kelta_proto::tracker::{Status, Ticket, TicketRef};
 
 use crate::ops::CHOOSE_DONE;
 use crate::saga::{self, Env, status_matches};
@@ -18,6 +19,8 @@ pub enum Signal {
     Event(PipelineEvent),
     /// The tracker reports the ticket in this status (ticket poll).
     Status(Status),
+    /// A manual move (#463): no trigger fires on it; its step's effects run as for an event.
+    Manual,
 }
 
 fn fires(t: &Trigger, sig: &Signal) -> bool {
@@ -95,6 +98,62 @@ impl WorkService {
         } else {
             self.enter_effects(&env, item, step, &sig, review).await
         };
+        self.put_step(&env, item, t, step, by).await;
+        why
+    }
+
+    /// Manual move (#463, Tauri `ticket_step_set`, MCP `move_ticket_step`): to `step_id`, or to the step
+    /// after the current one (`None`, Next step). Forward runs the entered step's effects as a signal
+    /// does; back is a correction that only stores the step (`by` = `manual`).
+    pub async fn move_step(
+        &self,
+        ticket: &TicketRef,
+        step_id: Option<&str>,
+    ) -> Result<TicketStep, KeltaError> {
+        let items = self.store.list_items(None).await?;
+        // Its unfinished item (newest first), else its last finished one: the journal and steps live there.
+        let item = items
+            .iter()
+            .filter(|w| w.ticket.as_ref().is_some_and(|x| x.account == ticket.account && x.key == ticket.key))
+            .min_by_key(|w| w.state == WorkState::Finished)
+            .ok_or_else(|| {
+                KeltaError::not_found(format!("{} has no work item: start work on it first", ticket.key))
+            })?;
+        let env = self.env(&item.project_id, &item.repo_id)?;
+        let steps = steps_of(&env, item);
+        let _g = self.step_lock.lock().await;
+        let row = self.store.ticket_step(ticket).await?;
+        let at = current(&steps, row.as_ref());
+        let next = match step_id {
+            Some(id) => steps.iter().position(|s| s.id == id).ok_or_else(|| {
+                let ids: Vec<&str> = steps.iter().map(|s| s.id.as_str()).collect();
+                KeltaError::invalid(format!("unknown step `{id}`; the steps are {}", ids.join(", ")))
+            })?,
+            None => at.map_or(0, |c| c + 1),
+        };
+        let Some(step) = steps.get(next) else {
+            return Err(KeltaError::invalid(format!("{} is at the last step", ticket.key)));
+        };
+        if let Some(r) = row.filter(|_| at == Some(next)) {
+            return Ok(r);
+        }
+        if at.is_none_or(|c| next > c)
+            && let Some(why) = self.enter_effects(&env, item, step, &Signal::Manual, None).await
+        {
+            env.core.toast(Toast::warn(format!("{}: {why}", ticket.key)));
+        }
+        Ok(self.put_step(&env, item, ticket, step, "manual".into()).await)
+    }
+
+    /// Stores `t` at `step` and publishes `ticket.step`.
+    async fn put_step(
+        &self,
+        env: &Env,
+        item: &WorkItem,
+        t: &TicketRef,
+        step: &StepDef,
+        by: String,
+    ) -> TicketStep {
         let row = TicketStep {
             ticket: t.clone(),
             source_id: item.ticket_source.clone(),
@@ -110,7 +169,7 @@ impl WorkService {
                 .with_project(item.project_id.clone())
                 .with_work_item(item.id.clone()),
         );
-        why
+        row
     }
 
     /// The transition (not for a status signal: the tracker is already there) and comment of `step`,

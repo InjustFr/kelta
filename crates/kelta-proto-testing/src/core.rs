@@ -19,7 +19,8 @@ use kelta_proto::ext::{ProxiedRequest, ProxiedResponse, ToolHandle};
 use kelta_proto::ids::{AccountId, PaneId, ProjectId, SessionId, TabId, ToolId, WorkItemId};
 use kelta_proto::model::{
     Attention, EditorTarget, Lifecycle, OpenPaneRequest, PaneRef, Placement, ProjectInfo, Scope, SessionInfo,
-    SessionKind, SessionStatus, ShipOrigin, SpawnRequest, StatusChange, StatusSource, TemplateCtx, WorkItem,
+    SessionKind, SessionStatus, ShipOrigin, SpawnRequest, StatusChange, StatusSource, TemplateCtx,
+    TicketStep, WorkItem,
 };
 use kelta_proto::settings::Settings;
 use kelta_proto::tracker::{Assignee, Cursor, Ticket, TicketDetail, TicketItem, TicketPage, TicketRef};
@@ -631,6 +632,15 @@ impl CoreApi for FakeCore {
             serde_json::json!({ "project": project, "ticket": ticket, "pr": pr.url }),
         );
         self.overridden("work_link_pr").unwrap_or_else(|| Err(KeltaError::unsupported("work_link_pr")))
+    }
+
+    async fn ticket_step_set(
+        &self,
+        ticket: &TicketRef,
+        step_id: Option<&str>,
+    ) -> Result<TicketStep, KeltaError> {
+        self.record("ticket_step_set", serde_json::json!({ "ticket": ticket, "step_id": step_id }));
+        self.overridden("ticket_step_set").unwrap_or_else(|| Err(KeltaError::unsupported("ticket_step_set")))
     }
 
     async fn work_fix_checks(&self, review: &kelta_proto::codehost::Review) -> Result<String, KeltaError> {

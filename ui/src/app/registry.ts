@@ -76,6 +76,7 @@ export type RegisteredSheetKey =
   | 'work_dialog'
   | 'tracker.source_picker'
   | 'tickets.move'
+  | 'tickets.step'
   | 'tickets.comment'
   | 'reviews.comment'
   | 'workflow_run'
@@ -100,6 +101,8 @@ export const sheetRegistry: Record<RegisteredSheetKey, LazyComponent> = {
   'tracker.source_picker': () => import('../views/tickets/SourcePickerSheet.svelte'),
   /** props: { ticket } */
   'tickets.move': () => import('../views/tickets/MoveSheet.svelte'),
+  /** props: { ticket: TicketRef, steps: StepDef[] } (#463) */
+  'tickets.step': () => import('../views/tickets/StepSheet.svelte'),
   /** props: { ticket: TicketRef } (#417) */
   'tickets.comment': () => import('../views/tickets/CommentDialog.svelte'),
   /** props: { review: ReviewRef } (#417) */

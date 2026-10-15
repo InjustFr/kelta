@@ -184,6 +184,7 @@ It lists only what can run now: the next step first (`↵`, its own letter runs 
 | `⇧T` | Create ticket… | scratch items only |
 | `t` / `o` | Open ticket / Open PR on the host | |
 | `⇧N` | Start another PR | ticket items: a new work item on the same ticket (§2.1) |
+| `e` / `⇧E` | Next step / Move to step… | ticket items: moves the ticket's pipeline step (§4.9) |
 | `⇧F` | Finish… | always confirmed |
 
 **Review-kind items**: `p`, `r`, `f`, `l`, `⇧T` and `⇧M` are not listed; their keys flash "Review checkout: read-only". A `kelta/pr-<n>` branch is never pushed or rebased.
@@ -485,7 +486,8 @@ A running workflow can stop and ask: MCP `ask` (§2.2 row 0) shows its question 
 
 A ticket stands on one step of its pipeline: its source's `tracker.pipeline`, else `work.pipeline`, else the steps built from `status_map` and `work.on_*` (SETTINGS §2). The step is stored per ticket (`ticket_steps`) and published as `ticket.step`.
 
-- **Forward only.** A signal enters the furthest later step whose `enter` matches it, and never a step at or before the current one. A new sibling item (§2.4), a Claude hook or a phase change never moves a ticket back.
+- **Forward only.** A signal enters the furthest later step whose `enter` matches it, and never a step at or before the current one. A new sibling item (§2.4), a Claude hook or a phase change never moves a ticket back. Only a manual move (below) goes back.
+- **Manual move (#463).** Next step (`e`) and Move to step… (`⇧E`, a picker of the pipeline's steps) in the ticket detail's More menu, the work menu (work tab header, Queue card) and the palette (`work.next_step`, `work.move_step`); MCP `move_ticket_step{key, account?, step}`. Both go through `ticket_step_set{ticket, step_id?}` (`null`: the step after the current one). Forward runs the entered step's transition and comment as a signal does (once per (ticket, step), never strict); backward is a correction, stored with `by = manual` and published, that runs nothing. It needs a work item of the ticket; an unknown step id fails naming the steps.
 - **Signals.** `work_started`: the Start saga. `pr_opened`: Ship, a PR linked to an item, or a PR joined to the ticket. `pr_ready`, `review_requested`, `changes_requested`, `approved`: the review refresh, when the PR leaves draft, gets reviewers, or its decision changes. `merged`: the merge (§4.6), not while another PR of the ticket is open. A **status** trigger: the ticket poll, when the tracker reports that status.
 - **Effects.** Entering a step runs its `transition_to`, then its `comment`, once per (ticket, step). A step a signal skips over runs nothing. A status trigger runs no transition, since the tracker is already there. The merge's transition stays strict: several Done statuses mean "choose Done status" (§4.6).
 - **Removed step.** A step id gone from the settings clamps the ticket to the last step the trigger that entered it still enters (logged).

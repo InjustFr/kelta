@@ -14,6 +14,6 @@ source_id: string | null, step_id: string,
  */
 entered_at: string, 
 /**
- * The trigger that entered the step, as JSON (`"pr_ready"`, `{"status":{"name":"PO Review"}}`).
+ * The trigger that entered the step, as JSON (`"pr_ready"`, `{"status":{"name":"PO Review"}}`), or `manual` (#463).
  */
 by: string, };

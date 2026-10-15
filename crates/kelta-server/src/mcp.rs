@@ -130,8 +130,8 @@ fn initialize(params: &Value) -> Value {
         "protocolVersion": version,
         "capabilities": { "tools": { "listChanged": false } },
         "serverInfo": { "name": "kelta", "title": "Kelta", "version": env!("CARGO_PKG_VERSION") },
-        "instructions": "Kelta workbench tools: list the ticket board from Kelta's cache, read, move, comment, \
-    edit or close any ticket by key; in a session Kelta started, also read and move the linked ticket, open \
+        "instructions": "Kelta workbench tools: list the ticket board from Kelta's cache, read, move (to a status, or to a \
+    pipeline step with move_ticket_step), comment, edit or close any ticket by key; in a session Kelta started, also read and move the linked ticket, open \
     files in the tab's editor, create the pull request, list review requests, add line comments to the \
     pending review of a pull request under review and notify the user. Background runs claim a ticket \
     (claim_ticket), report each phase (report_progress) and release it (release_ticket). Setup tools \
@@ -154,8 +154,13 @@ const SESSION_TOOLS: &[&str] = &[
 ];
 
 /// Board-wide writes, behind `claude.mcp` and `claude.mcp_board_writes`.
-const BOARD_WRITES: &[&str] =
-    &["transition_ticket_by_key", "comment_ticket_by_key", "update_ticket_body", "close_ticket"];
+const BOARD_WRITES: &[&str] = &[
+    "transition_ticket_by_key",
+    "comment_ticket_by_key",
+    "update_ticket_body",
+    "close_ticket",
+    "move_ticket_step",
+];
 
 fn listed(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, name: &str) -> bool {
     if sid.is_none() && SESSION_TOOLS.contains(&name) {
@@ -332,6 +337,15 @@ pub(crate) fn tool_defs() -> Value {
                 "type": "object",
                 "properties": { "key": key, "account": account, "comment": { "type": "string" } },
                 "required": ["key"], "additionalProperties": false
+            },
+        },
+        {
+            "name": "move_ticket_step",
+            "description": "Move a ticket to a step of its pipeline: a step id of its source's `tracker.pipeline`, else `work.pipeline`, else implementing, pr, review, merge, done. Forward runs the step's transition and comment, as Kelta's own moves do; backward is a correction that runs nothing. Needs a work item on the ticket.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "key": key, "account": account, "step": { "type": "string", "description": "Step id" } },
+                "required": ["key", "step"], "additionalProperties": false
             },
         },
         {
@@ -548,6 +562,12 @@ async fn call_tool(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, name: &str,
             }
             let ticket = core.ticket_close(&t).await.map_err(|e| e.message)?;
             Ok(format!("{} is now {}.", ticket.r#ref.key, ticket.status.name))
+        }
+        "move_ticket_step" => {
+            let step = str_arg(args, "step")?;
+            let (t, _) = ref_by_key(core, args).await?;
+            let row = core.ticket_step_set(&t, Some(step)).await.map_err(coded)?;
+            Ok(format!("{} is now at step {}.", t.key, row.step_id))
         }
         _ => {
             // `listed` keeps session tools off the global endpoint.

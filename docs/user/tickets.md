@@ -328,6 +328,7 @@ The tools work on any ticket of your Kelta projects by key:
 | `comment_ticket_by_key` | add a Markdown comment |
 | `update_ticket_body` | replace the description (e.g. tick acceptance boxes); fails without writing when it changed since the revision you read (GitHub) |
 | `close_ticket` | close, with an optional comment first (GitHub issues) |
+| `move_ticket_step` | move to a step of its pipeline: forward runs that step's status move and comment, backward only corrects where Kelta has it |
 | `list_review_requests` | pull requests awaiting your review |
 
 `claude.mcp_board_writes = false` keeps the board tools read-only (`list_tickets`, `get_ticket_by_key`). A ticket

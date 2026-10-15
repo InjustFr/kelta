@@ -180,6 +180,16 @@ pub async fn ticket_seen(core: State<'_, Arc<Core>>, tickets: Vec<TicketRef>) ->
     core.ticket_seen(tickets).await
 }
 
+/// Manual step move (#463): to `step_id`, or the step after the current one when `None`; back runs nothing.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn ticket_step_set(
+    core: State<'_, Arc<Core>>,
+    ticket: TicketRef,
+    step_id: Option<String>,
+) -> Res<TicketStep> {
+    core.work().move_step(&ticket, step_id.as_deref()).await
+}
+
 /// My local tags on tickets and pull requests (#349); never sent to a tracker or code host.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn tags_get(core: State<'_, Arc<Core>>) -> Res<LocalTags> {
