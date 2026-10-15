@@ -452,8 +452,12 @@ describe('recent places, pull requests, settings keys and prefixes (#420)', () =
   it('finds a settings key by its label and opens Settings at that key', async () => {
     await settings.loadSchema();
     const hit = rank(buildItems(), 'wip limit', itemText)[0]!;
-    expect(hit).toMatchObject({ group: 'Settings', id: 'setting-key:tickets.wip_limit', label: 'Wip limit' });
-    expect(hit.detail).toContain('Soft WIP limit');
+    expect(hit).toMatchObject({
+      group: 'Settings',
+      id: 'setting-key:tickets.wip_limit',
+      label: 'Work-in-progress limit',
+    });
+    expect(hit.detail).toContain('The Doing header warns above it');
     expect(hit.value).toBe('3');
     expect(hit.checked).toBeUndefined();
     await import('../../views/settings/actions');

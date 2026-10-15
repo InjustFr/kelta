@@ -234,7 +234,7 @@ export const settingsSections: readonly SettingsSection[] = [
   },
   {
     id: 'worktree',
-    label: msg('Worktrees'),
+    label: msg('Work items'),
     icon: 'git-branch',
     owner: 'L4',
     load: () => import('../views/settings/sections/Worktree.svelte'),

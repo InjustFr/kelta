@@ -75,15 +75,21 @@ export const ADVANCED: readonly string[] = [
   'claude.prompt_templates',
   'claude.queue_hold_pct',
   'editor.review_args',
-  'worktree.env_template',
-  'worktree.fetch_timeout_secs',
+  'work.on_start.transition_to',
+  'work.on_start.comment',
+  'work.on_pr.transition_to',
+  'work.on_pr.comment',
+  'work.on_merge.transition_to',
+  'work.pipeline',
+  'work.scratch_branch_template',
+  'work.review_template',
   'worktree.slug_max',
   'worktree.type_map',
-  'work.review_template',
-  'work.scratch_branch_template',
-  'work.pipeline',
-  'session_templates',
+  'worktree.env_template',
+  'worktree.cleanup',
   'ports',
+  'worktree.fetch_timeout_secs',
+  'session_templates',
   'reviews.ignore_globs',
   'reviews.nudge_template',
   'reviews.ticket_key_regex',
@@ -113,9 +119,7 @@ export const SECTION_BLURB: Partial<Record<SettingsSectionId, string>> = {
   editors: msg(
     'Editors Kelta can open files in. A preset set here replaces the one with the same name from a broader level.',
   ),
-  worktree: msg(
-    'Branch folders (git worktrees) let each work item have its own copy of the code. Choose where they live, how branches are named, and what runs on PR and merge.',
-  ),
+  worktree: msg('What Kelta does to tickets, branches and pull requests as work moves from start to merge.'),
   reviews: msg('Which pull / merge requests appear in the review lists.'),
   tags: msg(
     'Local tags: reminders you put on tickets and pull requests. Kept in Kelta, never sent to a tracker or code host.',
@@ -182,6 +186,5 @@ export const SECTION_ROWS: Partial<Record<SettingsSectionId, readonly SectionRow
   tools: [{ label: msg('Add tool'), keywords: [msg('lazygit')] }],
 };
 
-/** Visible section title; the registry label stays for ids and tests. */
-export const sectionLabel = (s: { id: string; label: string }): string =>
-  s.id === 'worktree' ? t('Branch folders') : t(s.label);
+/** Visible section title. */
+export const sectionLabel = (s: { id: string; label: string }): string => t(s.label);

@@ -1,7 +1,7 @@
 // settings.open (Mod+,): shows Settings over the window (#410), or closes it when it is showing.
 // Optional args: { section?: string } to land on a given section, { toml?: projectId } to land on
 // that project's raw TOML (the Edit TOML mode, for what the forms cannot edit), { source_id } to
-// bring that source's card into view in Settings → Sources, { key: 'tickets.wip_limit' } to show that key.
+// bring that source's card into view in Settings → Sources ({ source_id, anchor: 'steps' }: its Steps editor), { key: 'tickets.wip_limit' } to show that key.
 // toggleSetting (⌘K, #478) flips an on/off key in All projects; its toast's Undo is settings.restore.
 
 import { t } from '$lib/i18n/index.svelte';
@@ -16,7 +16,7 @@ import { SettingsEditor } from './lib/editor.svelte';
 
 let tomlRequest: string | null = null;
 
-let sourceRequest: string | null = null;
+let sourceRequest: { id: string; steps: boolean } | null = null;
 
 let keyRequest: string | null = null;
 
@@ -35,11 +35,11 @@ export function onSourceRequest(fn: () => void): () => void {
   return () => void sourceListeners.delete(fn);
 }
 
-/** Source whose card the next Sources section shows, once. */
-export function takeSourceRequest(): string | null {
-  const id = sourceRequest;
+/** Source whose card (or, with `steps`, its Steps editor) the next Sources section shows, once. */
+export function takeSourceRequest(): { id: string; steps: boolean } | null {
+  const req = sourceRequest;
   sourceRequest = null;
-  return id;
+  return req;
 }
 
 /** Project whose TOML the next Settings pane opens on, once. */
@@ -53,7 +53,8 @@ registerAction('settings.open', (args) => {
   const section = typeof args?.section === 'string' ? args.section : null;
   // The pane's content only carries a section, so the TOML and source targets travel beside it.
   tomlRequest = typeof args?.toml === 'string' ? args.toml : null;
-  sourceRequest = typeof args?.source_id === 'string' ? args.source_id : null;
+  sourceRequest =
+    typeof args?.source_id === 'string' ? { id: args.source_id, steps: args.anchor === 'steps' } : null;
   keyRequest = typeof args?.key === 'string' ? args.key : null;
   const wasOpen = ui.settings !== null;
   if (wasOpen && section === null && tomlRequest === null && sourceRequest === null && keyRequest === null) {

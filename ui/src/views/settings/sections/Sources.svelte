@@ -50,12 +50,15 @@
   // Settings already on Sources: the retarget does not remount this section.
   $effect(() => onSourceRequest(() => (wanted = takeSourceRequest())));
   $effect(() => {
-    const id = wanted;
-    if (!id || !all.some((s) => s.id === id)) return;
+    const req = wanted;
+    if (!req || !all.some((s) => s.id === req.id)) return;
     wanted = null; // once: later saves replace `all` and must not scroll back
-    void tick().then(() =>
-      document.querySelector(`[data-source-card="${CSS.escape(id)}"]`)?.scrollIntoView?.({ block: 'start' }),
-    );
+    void tick().then(() => {
+      const card = document.querySelector(`[data-source-card="${CSS.escape(req.id)}"]`);
+      (req.steps ? card?.querySelector('[data-testid="pipeline-steps"]') : card)?.scrollIntoView?.({
+        block: 'start',
+      });
+    });
   });
 
   const setTracker = (s: Source, key: 'columns', v: JsonValue | null) =>

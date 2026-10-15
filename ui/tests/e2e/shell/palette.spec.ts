@@ -57,7 +57,7 @@ test.describe('palette', () => {
     await input.fill(',settings keys');
     await expect(first).toContainText('Settings: Keys');
     await input.fill('wip limit');
-    await expect(first).toContainText('Wip limit');
+    await expect(first).toContainText('Work-in-progress limit');
     await expect(first).toContainText('3');
     await page.keyboard.press('Enter');
     await expect(page.locator('[data-testid="field"][data-path="tickets.wip_limit"]')).toHaveAttribute(

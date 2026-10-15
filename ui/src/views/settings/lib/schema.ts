@@ -372,7 +372,8 @@ export interface LeafField {
   kind: FieldKind;
 }
 
-/** Flattens `roots` (top-level keys) into editable fields; groups are expanded. */
+/** Flattens `roots` (top-level keys) into editable fields; groups are expanded, a root meant for another OS
+ *  drops out, and the copy table's `order` runs across roots (a section's groups can mix several roots). */
 export function leafFields(schema: SchemaNode, roots: readonly string[]): LeafField[] {
   const out: LeafField[] = [];
   const visit = (segs: string[], node: SchemaNode): void => {
@@ -385,9 +386,10 @@ export function leafFields(schema: SchemaNode, roots: readonly string[]): LeafFi
   };
   for (const root of roots) {
     const node = schema.properties?.[root];
-    if (node) visit([root], node);
+    if (node && onThisPlatform(COPY[root])) visit([root], node);
   }
-  return out;
+  const order = (path: string): number => COPY[path]?.order ?? Number.MAX_SAFE_INTEGER;
+  return out.sort((a, b) => order(a.path) - order(b.path)); // stable: unordered keys keep their place
 }
 
 /** Default value of a field (schema default, or an empty value of its kind). */
