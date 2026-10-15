@@ -41,6 +41,7 @@ pub const COMMANDS: &[&str] = &[
     "settings_validate",
     "settings_write_raw",
     "settings_open_file",
+    "template_preview",
     "repo_trust",
     "secret_set",
     "secret_delete",

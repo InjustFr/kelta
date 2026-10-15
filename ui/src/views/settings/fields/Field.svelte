@@ -21,7 +21,6 @@
     labelOf,
     repoRelevant,
     resolve,
-    TEMPLATE_HELP,
     type SchemaNode,
   } from '../lib/schema';
   import { isAdvanced } from '../lib/sections';
@@ -131,7 +130,6 @@
         />
       {/snippet}
       {#if description}<p>{description}</p>{/if}
-      {#if isTemplate}<p title={t(TEMPLATE_HELP)}>{t('Supports placeholders: hover for the list.')}</p>{/if}
       {#if !access.editable && access.reason}<p>{access.reason}</p>{/if}
       {#if error}<p class="error" role="alert" data-testid="field-error">{error}</p>{/if}
       {#if nullable && value === undefined}<p>{t('Not set.')}</p>{/if}

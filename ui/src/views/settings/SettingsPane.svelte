@@ -9,16 +9,18 @@
     type SettingsSectionProps,
   } from '$app/registry';
   import type { ValidationIssue } from '$lib/gen';
+  import { dispatch } from '$lib/actions';
   import * as ipc from '$lib/ipc/commands';
   import { projects, settings as settingsStore } from '$lib/stores';
   import Badge from '$lib/ui/Badge.svelte';
   import Button from '$lib/ui/Button.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
   import Icon from '$lib/ui/Icon.svelte';
+  import Kbd from '$lib/ui/Kbd.svelte';
   import Select from '$lib/ui/Select.svelte';
   import Spinner from '$lib/ui/Spinner.svelte';
   import { currentPlatform } from '$lib/ui/format';
-  import { untrack, type Component } from 'svelte';
+  import { tick, untrack, type Component } from 'svelte';
 
   import { noteRecent } from '../../shell/jumplist';
 
@@ -26,17 +28,11 @@
   import EditToml from './EditToml.svelte';
   import Field from './fields/Field.svelte';
   import { provideEditor, SettingsEditor, type EditLayer } from './lib/editor.svelte';
-  import {
-    leafFields,
-    descriptionOf,
-    titleOf,
-    enumOptions,
-    helpOf,
-    keywordsOf,
-    labelOf,
-    type LeafField,
-  } from './lib/schema';
-  import { SECTION_GROUPS, SECTION_ROOTS, sectionLabel } from './lib/sections';
+  import { effectiveBindings } from './lib/chords';
+  import { isRecord } from './lib/paths';
+  import { repoRelevant } from './lib/schema';
+  import { buildSearchIndex, isInline, searchSettings, type SearchHit } from './lib/search';
+  import { SECTION_GROUPS, sectionLabel } from './lib/sections';
   import { health } from './lib/health.svelte';
   import RepoTrust from './RepoTrust.svelte';
 
@@ -77,7 +73,10 @@
     const wanted = content.section;
     if (wanted && sections.some((s) => s.id === wanted)) sectionId = wanted;
     const key = takeKeyRequest();
-    if (key) query = key;
+    if (key) {
+      query = key;
+      active = 0;
+    }
     const toml = takeTomlRequest();
     if (toml) {
       editor.raw = true;
@@ -145,41 +144,114 @@
     await editor.target({ projectId: id, repoId: editor.layer === 'repo' ? (repo?.id ?? null) : null });
   }
 
-  // ---- search ---------------------------------------------------------------------------------
-  const allRoots = Object.values(SECTION_ROOTS).flatMap((r) => r ?? []);
-  const sectionOfRoot = (root: string): string =>
-    t(sections.find((s) => SECTION_ROOTS[s.id]?.includes(root))?.label ?? '');
+  // ---- search (#469) ------------------------------------------------------------------------------
+  const SHOWN = 12;
+  let listEl = $state<HTMLElement>();
+  let mainEl = $state<HTMLElement>();
+  let active = $state(0);
+  let allFor = $state<string | null>(null); // the query "Show all" was pressed for
+  const bindings = $derived.by(() => {
+    const v = editor.valueOf('keys.bindings');
+    return effectiveBindings(isRecord(v) ? (v as Record<string, string[]>) : {}, platform);
+  });
+  const index = $derived(editor.schema ? buildSearchIndex(editor.schema, sections, bindings) : []);
+  const searching = $derived(query.trim() !== '' && !editor.raw);
+  const hits = $derived(
+    searching
+      ? searchSettings(index, query).filter(
+          (h) => h.kind !== 'key' || editor.layer !== 'repo' || repoRelevant(h.path!),
+        )
+      : [],
+  );
+  const shown = $derived(allFor === query ? hits : hits.slice(0, SHOWN));
+  const counts = $derived(
+    hits.reduce<Record<string, number>>((m, h) => ((m[h.section] = (m[h.section] ?? 0) + 1), m), {}),
+  );
+  $effect(() => {
+    void active;
+    listEl?.querySelector('.result.active')?.scrollIntoView?.({ block: 'nearest' });
+  });
 
-  function matches(f: LeafField, q: string): boolean {
-    const hay = [
-      f.path,
-      titleOf(f.segs[f.segs.length - 1] ?? ''),
-      labelOf(f.path),
-      helpOf(f.path, f.node),
-      descriptionOf(f.node),
-      ...keywordsOf(f.path),
-      ...enumOptions(f.node, f.path).flatMap((o) => [o.value, o.label]),
-    ]
-      .join(' ')
-      .toLowerCase();
-    return q
-      .toLowerCase()
-      .split(/\s+/)
-      .filter(Boolean)
-      .every((t) => hay.includes(t));
+  let stopReveal: (() => void) | null = null;
+  /** Scrolls to `selector` in the section once it is drawn (the section loads, then its data); event-driven, no timer. */
+  function reveal(selector: string, then?: (el: HTMLElement) => void): void {
+    stopReveal?.();
+    const found = (): boolean => {
+      const el = mainEl?.querySelector<HTMLElement>(selector);
+      if (!el) return false;
+      el.closest('details')?.setAttribute('open', ''); // an Advanced key
+      el.scrollIntoView?.({ block: 'center' });
+      then?.(el);
+      return true;
+    };
+    if (!mainEl || found()) return;
+    const obs = new MutationObserver(() => {
+      if (found()) stopReveal?.();
+    });
+    obs.observe(mainEl, { childList: true, subtree: true });
+    stopReveal = () => {
+      obs.disconnect();
+      stopReveal = null;
+    };
   }
 
-  const results = $derived.by((): LeafField[] => {
-    const q = query.trim();
-    if (!q || !editor.schema) return [];
-    return leafFields(editor.schema, allRoots)
-      .filter((f) => matches(f, q))
-      .slice(0, 60);
-  });
+  function open(h: SearchHit): void {
+    query = '';
+    sectionId = h.section;
+    editor.raw = !!h.toml; // TOML-only keys open Edit TOML
+    if (h.toml) return;
+    const sel =
+      h.kind === 'key'
+        ? `[data-path="${CSS.escape(h.path!)}"]`
+        : h.kind === 'action'
+          ? `[data-action="${CSS.escape(h.path!)}"]`
+          : h.anchor
+            ? `[data-testid="${h.anchor}"]`
+            : null;
+    const record =
+      h.kind === 'action'
+        ? (el: HTMLElement) => el.querySelector<HTMLElement>('[data-testid="record"]')?.click()
+        : undefined;
+    // after tick: the results (which hold the same data-path) are gone
+    if (sel) void tick().then(() => reveal(sel, record));
+  }
+
+  /** ↵ on a hit: a simple value focuses its control, anything else opens. */
+  function activate(h: SearchHit): void {
+    if (!isInline(h)) return open(h);
+    const row = listEl?.querySelector(`[data-hit="${CSS.escape(h.id)}"]`);
+    (
+      row?.querySelector<HTMLElement>('input, select, textarea') ?? row?.querySelector<HTMLElement>('button')
+    )?.focus();
+  }
+
+  function onSearchKey(e: KeyboardEvent): void {
+    if (e.key === 'Escape' && query)
+      query = ''; // empty: GlobalHost closes Settings (data-esc-close)
+    else if (e.key === 'ArrowDown') active = Math.min(active + 1, shown.length - 1);
+    else if (e.key === 'ArrowUp') active = Math.max(active - 1, 0);
+    else if (e.key === 'Enter' && shown[active]) activate(shown[active]);
+    else return;
+    e.preventDefault();
+  }
 </script>
 
 <div class="pane" data-testid="settings-pane" data-pane-kind="settings">
   <header class="k-toolbar bar">
+    <label class="search">
+      <Icon name="search" size={14} />
+      <!-- svelte-ignore a11y_autofocus -->
+      <input
+        type="search"
+        placeholder={t('Search settings')}
+        aria-label={t('Search settings')}
+        bind:value={query}
+        autofocus
+        data-esc-close
+        oninput={() => (active = 0)}
+        onkeydown={onSearchKey}
+      />
+    </label>
     <div class="layers" role="group" aria-label={t('Layer being edited')}>
       <button
         type="button"
@@ -227,15 +299,6 @@
         onchange={(id) => editor.target({ repoId: id })}
       />
     {/if}
-    <label class="search">
-      <Icon name="search" size={14} />
-      <input
-        type="search"
-        placeholder={t('Search settings')}
-        aria-label={t('Search settings')}
-        bind:value={query}
-      />
-    </label>
     <Button
       size="sm"
       icon="file-code"
@@ -308,10 +371,12 @@
         {#each g.sections as s (s.id)}
           <button
             type="button"
+            class:dim={searching && !counts[s.id]}
             class:active={sectionId === s.id && !query}
             aria-current={sectionId === s.id && !query ? 'page' : undefined}
             data-section={s.id}
             onclick={() => {
+              stopReveal?.();
               sectionId = s.id;
               query = '';
               editor.raw = false;
@@ -319,7 +384,9 @@
           >
             <Icon name={s.icon} size={14} />
             {sectionLabel(s)}
-            {#if s.id === 'health' && problemCount > 0}
+            {#if searching}
+              {#if counts[s.id]}<span class="count k-num" data-testid="nav-hits">{counts[s.id]}</span>{/if}
+            {:else if s.id === 'health' && problemCount > 0}
               <span class="count" data-testid="health-count"><Badge tone="danger">{problemCount}</Badge></span
               >
             {/if}
@@ -327,23 +394,60 @@
         {/each}
       {/each}
     </nav>
-    <main>
+    <main bind:this={mainEl}>
       {#if editor.raw}
         <EditToml {editor} />
-      {:else if query.trim()}
+      {:else if searching}
         <section data-testid="search-results">
           <h1>{t('Results for “{query}”', { query: query.trim() })}</h1>
           {#if !editor.ready}
             <Spinner size={16} />
-          {:else if results.length === 0}
-            <EmptyState title={t('No matching setting')} icon="search" />
+          {:else if hits.length === 0}
+            <EmptyState title={t('No matching setting')} icon="search">
+              {#snippet actions()}
+                <Button size="sm" onclick={() => dispatch('palette.open')}
+                  >{t('Search actions in {keys}', { keys: platform === 'macos' ? '⌘K' : 'Ctrl+K' })}</Button
+                >
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon="file-code"
+                  onclick={() => {
+                    query = '';
+                    editor.raw = true;
+                  }}>{t('Open the TOML file')}</Button
+                >
+              {/snippet}
+            </EmptyState>
           {:else}
-            {#each results as f (f.path)}
-              <div class="result">
-                <span class="crumb">{sectionOfRoot(f.segs[0] ?? '')}&ensp;<code>{f.path}</code></span>
-                <Field path={f.path} node={f.node} depth={1} />
-              </div>
-            {/each}
+            <ol class="results" bind:this={listEl}>
+              {#each shown as h, i (h.id)}
+                <li class="result" class:active={i === active} data-hit={h.id}>
+                  <span class="crumb"
+                    >{h.crumb}{#if h.path}&ensp;<code>{h.path}</code>{/if}{#if h.why}<span class="why"
+                        >{h.why}</span
+                      >{/if}</span
+                  >
+                  {#if isInline(h)}
+                    <Field path={h.path!} node={h.node!} depth={1} />
+                  {:else}
+                    <div class="line">
+                      <span class="label">{h.label}</span>
+                      {#each h.chords ?? [] as c (c)}<Kbd chord={c} />{/each}
+                      <Button size="sm" variant="ghost" onclick={() => open(h)}
+                        >{h.kind === 'action' ? t('Record') : h.toml ? t('Edit TOML') : t('Open')}</Button
+                      >
+                    </div>
+                    {#if h.kind === 'section' && h.help}<p class="help">{h.help}</p>{/if}
+                  {/if}
+                </li>
+              {/each}
+            </ol>
+            {#if shown.length < hits.length}
+              <Button size="sm" variant="ghost" onclick={() => (allFor = query)}
+                >{t('Show all {n} results', { n: hits.length })}</Button
+              >
+            {/if}
           {/if}
         </section>
       {:else}
@@ -413,7 +517,6 @@
     display: inline-flex;
     align-items: center;
     gap: var(--k-space-2);
-    margin-left: auto;
     padding: 0 var(--k-space-3);
     height: var(--k-control-height-sm);
     border: 1px solid var(--k-border);
@@ -505,6 +608,10 @@
     margin-left: auto;
   }
 
+  nav button.dim {
+    opacity: 0.5;
+  }
+
   nav button:hover {
     background: var(--k-bg-hover);
   }
@@ -555,8 +662,41 @@
     }
   }
 
+  .results {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
   .result {
     border-bottom: 1px solid var(--k-border);
+  }
+
+  .result.active {
+    box-shadow: inset 2px 0 0 var(--k-accent);
+  }
+
+  .line {
+    display: flex;
+    align-items: center;
+    gap: var(--k-space-3);
+    min-height: var(--k-row-height);
+  }
+
+  .line .label {
+    flex: 1;
+  }
+
+  .why {
+    margin-left: var(--k-space-2);
+    color: var(--k-fg-muted);
+    font-style: italic;
+  }
+
+  .help {
+    margin: 0 0 var(--k-space-2);
+    color: var(--k-fg-muted);
+    font-size: var(--k-font-size-sm);
   }
 
   .crumb {

@@ -26,6 +26,7 @@
   } from '../lib/schema';
   import Control from './Control.svelte';
   import SecretControl from './SecretControl.svelte';
+  import TemplateTools from './TemplateTools.svelte';
 
   interface Props {
     node: SchemaNode;
@@ -232,15 +233,22 @@
       onchange={(ref) => onchange(ref)}
     />
   {:else if kind === 'string'}
-    <TextInput
-      id={idAttr}
-      bind:value={text}
-      aria-label={label}
-      disabled={readonly}
-      spellcheck={false}
-      class={template ? 'template' : ''}
-      onchange={commitText}
-    />
+    {#snippet field()}
+      <TextInput
+        id={idAttr}
+        bind:value={text}
+        aria-label={label}
+        disabled={readonly}
+        spellcheck={false}
+        class={template ? 'template' : ''}
+        onchange={commitText}
+      />
+    {/snippet}
+    {#if template && path && idAttr}
+      <TemplateTools id={idAttr} {path} value={text} {readonly}>{@render field()}</TemplateTools>
+    {:else}
+      {@render field()}
+    {/if}
   {:else if kind === 'string-list'}
     <div class="chips" data-testid="chips">
       {#each list as item, i (item + i)}

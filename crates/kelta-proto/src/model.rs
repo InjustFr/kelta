@@ -1187,6 +1187,16 @@ pub struct TicketStep {
     pub by: String,
 }
 
+/// The live example under a template setting (#479, `template_preview`): the template rendered for
+/// the sample ticket KEL-214 the way Start work renders it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct TemplatePreview {
+    pub text: String,
+    /// Branch name templates only: `false` when git refuses the rendered name and `text` is the
+    /// cleaned-up name Kelta uses instead.
+    pub git_ok: Option<bool>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct StartWorkPlan {
     pub project_id: ProjectId,

@@ -51,7 +51,7 @@
         </div>
       </div>
     {/if}
-    <SettingsRow label={t('Test notification')} actions>
+    <SettingsRow label={t('Test notification')} actions data-testid="notification-test">
       {#snippet control()}
         <Button size="sm" icon="bell" loading={testing} onclick={test}>{t('Send a test notification')}</Button
         >

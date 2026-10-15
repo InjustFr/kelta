@@ -154,6 +154,16 @@ pub async fn settings_open_file(
     Ok(info)
 }
 
+/// The live example under a template setting (#479): `template` rendered for the sample ticket KEL-214.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn template_preview(
+    core: State<'_, Arc<Core>>,
+    path: String,
+    template: String,
+) -> Res<TemplatePreview> {
+    core.work().template_preview(&path, &template).await
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub async fn repo_trust(
     core: State<'_, Arc<Core>>,

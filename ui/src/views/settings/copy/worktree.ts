@@ -53,12 +53,14 @@ export default {
   },
 
   'worktree.branch_template': {
+    keywords: [msg('branch name')],
     group: FOLDER,
     order: 10,
     label: msg('Branch name'),
     help: msg('Checked as a valid git branch name.'),
   },
   'worktree.root': {
+    keywords: [msg('worktree folder'), msg('location')],
     group: FOLDER,
     order: 11,
     label: msg('Where branch folders live'),
@@ -92,24 +94,28 @@ export default {
   },
 
   'work.pr.title_template': {
+    keywords: [msg('pr'), msg('pull request title')],
     group: PR,
     order: 20,
     label: msg('Title'),
     help: msg('Title of the pull requests Kelta opens.'),
   },
   'work.pr.body_template': {
+    keywords: [msg('pr'), msg('pull request description')],
     group: PR,
     order: 21,
     label: msg('Description'),
     help: msg('{closes} adds Closes #n for GitHub issues.'),
   },
   'work.pr.draft': {
+    keywords: [msg('pr')],
     group: PR,
     order: 22,
     label: msg('Open as a draft'),
     help: msg('New pull requests start as drafts.'),
   },
   'work.pr.merge_method': {
+    keywords: [msg('pr'), msg('squash')],
     group: PR,
     order: 23,
     label: msg('Merge method'),
