@@ -9,7 +9,7 @@ import * as ipc from '$lib/ipc/commands';
 import { toIpcError } from '$lib/ipc/transport';
 import { settings as store } from '$lib/stores';
 
-import { getAt, splitPath } from './paths';
+import { equal, getAt, splitPath } from './paths';
 import { infoAt, repoAllows, type PathInfo, type SchemaNode } from './schema';
 
 export type EditLayer = 'global' | 'project' | 'repo';
@@ -28,15 +28,19 @@ export interface EditorTarget {
   repoId: string | null;
 }
 
-/** A settings file Changed by you reads (#474): which file, where it applies ("All projects", "Shop › api") and its own document. */
-export interface LayerFile extends EditorTarget {
+/** One settings file's identity: `global::`, `project:shop:`, `repo:shop:api` (the editor's projectId is ignored in All projects). */
+export const fileKey = (f: EditorTarget): string =>
+  `${f.layer}:${f.layer === 'global' ? '' : (f.projectId ?? '')}:${f.layer === 'repo' ? (f.repoId ?? '') : ''}`;
+
+/** A settings file Changed by you reads (#474): which file, where it applies ("All projects", "Shop › api"), its own document, its path and, for a repository, its trust (#475). */
+export interface LayerFile extends EditorTarget, Pick<LayerDoc, 'path' | 'trusted'> {
   where: string;
   value: JsonValue;
 }
 
 /** The global file (core merges keybindings.toml into it), each project's and each of its repositories'; a file that cannot be read is left out. */
 export async function readLayerFiles(projects: readonly ProjectInfo[]): Promise<LayerFile[]> {
-  const targets: Omit<LayerFile, 'value'>[] = [
+  const targets: Omit<LayerFile, 'value' | 'path' | 'trusted'>[] = [
     { layer: 'global', projectId: null, repoId: null, where: t('All projects') },
     ...projects.flatMap((p) => [
       { layer: 'project' as const, projectId: p.id, repoId: null, where: p.name },
@@ -53,7 +57,7 @@ export async function readLayerFiles(projects: readonly ProjectInfo[]): Promise<
   );
   return targets.flatMap((f, i) => {
     const d = docs[i]!;
-    return d.status === 'fulfilled' ? [{ ...f, value: d.value.value }] : [];
+    return d.status === 'fulfilled' ? [{ ...f, value: d.value.value, path: d.value.path, trusted: d.value.trusted }] : [];
   });
 }
 
@@ -68,6 +72,10 @@ export class SettingsEditor {
   loadError = $state<string | null>(null);
   /** The pane shows the raw TOML of this layer (Edit TOML) instead of the forms. */
   raw = $state(false);
+  /** Every settings file (readLayerFiles), kept current by the pane: change counts and override chips (#475). */
+  files = $state<LayerFile[]>([]);
+  /** Shows `path` in `target`'s file; the Settings pane also opens the row's section and highlights it (#475). */
+  show: (target: EditorTarget, path: string) => void = (target) => void this.target(target);
 
   constructor(target: Partial<EditorTarget> = {}) {
     this.layer = target.layer ?? 'global';
@@ -111,6 +119,30 @@ export class SettingsEditor {
     return this.layerValue(path) !== undefined || this.sourceOf(path) === this.layer;
   }
 
+  /** In a project: a key only All projects sets (language, window…), shown with its value instead of a control (#475). */
+  globalOnly(path: string): boolean {
+    const info = this.layer === 'project' ? this.info(path) : null;
+    return !!info?.known && !info.scope.includes('project');
+  }
+
+  /** In a project, a key its file leaves unset: the value it inherits from All projects (the form's placeholder). */
+  inherited(path: string): JsonValue | undefined {
+    return this.layer === 'project' && !this.isSetHere(path) && !this.globalOnly(path)
+      ? this.valueOf(path)
+      : undefined;
+  }
+
+  /** In All projects: the project and repository files that set `path` to another value ("Shop uses 16 →"). */
+  overrides(path: string): { file: LayerFile; value: JsonValue }[] {
+    if (this.layer !== 'global') return [];
+    const segs = splitPath(path);
+    const here = this.valueOf(path);
+    return this.files.flatMap((file) => {
+      const value = file.layer === 'global' ? undefined : getAt(file.value, segs);
+      return value === undefined || equal(value, here) ? [] : [{ file, value }];
+    });
+  }
+
   info(path: string): PathInfo | null {
     return this.schema ? infoAt(this.schema, splitPath(path)) : null;
   }
@@ -119,8 +151,7 @@ export class SettingsEditor {
     if (this.layer === 'global') return { editable: true, reason: null };
     if (!this.projectId) return { editable: false, reason: t('Select a project first') };
     if (this.layer === 'project') {
-      const info = this.info(path);
-      if (info && info.known && !info.scope.includes('project')) {
+      if (this.globalOnly(path)) {
         return { editable: false, reason: t('Global only: this key cannot be set per project') };
       }
       return { editable: true, reason: null };
