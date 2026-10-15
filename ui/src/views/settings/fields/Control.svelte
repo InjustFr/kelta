@@ -38,6 +38,8 @@
     id?: string;
     /** A list of folders: adds a Browse… button. */
     browse?: boolean;
+    /** Settings path: enum option labels come from the copy table. */
+    path?: string;
   }
 
   let {
@@ -49,6 +51,7 @@
     template = false,
     id,
     browse = false,
+    path,
   }: Props = $props();
 
   const resolved = $derived(resolve(node));
@@ -186,7 +189,7 @@
     onchange({ [key]: schema ? defaultOf(schema) : '' });
   }
 
-  const enumOpts = $derived(kind === 'enum' ? enumOptions(node) : []);
+  const enumOpts = $derived(kind === 'enum' ? enumOptions(node, path) : []);
   const currentEnum = $derived(enumOpts.find((o) => o.value === value));
   const idAttr = $derived(id);
 </script>

@@ -7,21 +7,21 @@
   import Badge from '$lib/ui/Badge.svelte';
   import IconButton from '$lib/ui/IconButton.svelte';
 
+  import { groupRuns } from '../copy';
   import SettingsGroup from '../layout/SettingsGroup.svelte';
   import SettingsRow from '../layout/SettingsRow.svelte';
   import { useEditor } from '../lib/editor.svelte';
   import { joinPath, splitPath } from '../lib/paths';
   import {
     childEntries,
-    COPY,
-    descriptionOf,
     fieldKind,
+    helpOf,
     infoAt,
     isTemplatePath,
+    labelOf,
     repoRelevant,
     resolve,
     TEMPLATE_HELP,
-    titleOf,
     type SchemaNode,
   } from '../lib/schema';
   import { isAdvanced } from '../lib/sections';
@@ -45,9 +45,15 @@
   const editor = useEditor();
   const kind = $derived(fieldKind(node));
   const segs = $derived(splitPath(path));
-  const copy = $derived(COPY[path]);
-  const label = $derived(title ?? (copy?.label ? t(copy.label) : titleOf(segs[segs.length - 1] ?? path)));
-  const description = $derived(copy?.help ? t(copy.help) : descriptionOf(node));
+  const label = $derived(title ?? labelOf(path));
+  const description = $derived(helpOf(path, node));
+  const children = $derived(
+    kind === 'group'
+      ? childEntries(node, path)
+          .map(([key, child]): [string, SchemaNode] => [joinPath([...segs, key]), child])
+          .filter(([p]) => !isAdvanced(p))
+      : [],
+  );
   const info = $derived(editor.schema ? infoAt(editor.schema, segs) : null);
   const access = $derived(editor.access(path));
   const source = $derived(editor.sourceOf(path));
@@ -65,8 +71,14 @@
 {#if visible}
   {#if kind === 'group'}
     <SettingsGroup heading={label} {description} nested={depth > 0} data-testid="group" data-path={path}>
-      {#each childEntries(node).filter(([key]) => !isAdvanced(joinPath( [...segs, key] ))) as [key, child] (key)}
-        <Field path={joinPath([...segs, key])} node={child} depth={depth + 1} />
+      {#each groupRuns(children) as run, i (i)}
+        {#if run.group}
+          <SettingsGroup heading={t(run.group)} nested data-testid="copy-group">
+            {#each run.items as [p, child] (p)}<Field path={p} node={child} depth={depth + 2} />{/each}
+          </SettingsGroup>
+        {:else}
+          {#each run.items as [p, child] (p)}<Field path={p} node={child} depth={depth + 1} />{/each}
+        {/if}
       {/each}
     </SettingsGroup>
   {:else if kind === 'object-map'}
@@ -108,6 +120,7 @@
       {#snippet control()}
         <Control
           {node}
+          {path}
           {value}
           {id}
           {label}

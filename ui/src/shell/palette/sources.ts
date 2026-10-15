@@ -15,7 +15,7 @@ import { attentionRank, lampOf, type LampLevel } from '$lib/stores/reducers';
 import { currentPlatform, isIconName } from '$lib/ui';
 
 import { reviewCtx, ticketCtx, workCtx } from '../../views/plugins/actions';
-import { COPY, descriptionOf, leafFields, titleOf, type SchemaNode } from '../../views/settings/lib/schema';
+import { helpOf, keywordsOf, labelOf, leafFields, type SchemaNode } from '../../views/settings/lib/schema';
 import { SECTION_ROOTS } from '../../views/settings/lib/sections';
 import { configWorkflows, pickWorkflow, runWorkflowOn } from '../../views/tickets/workflow.svelte';
 import { focusedWorkItem } from '../../views/work/actions';
@@ -44,6 +44,8 @@ export interface PaletteItem {
   group: PaletteGroup;
   label: string;
   detail?: string;
+  /** Extra words matched by the query, not shown. */
+  keywords?: string;
   kbd?: string;
   icon: string;
   lamp?: LampLevel;
@@ -81,7 +83,7 @@ export function parseQuery(query: string): { groups: readonly PaletteGroup[] | n
 
 /** Text matched against the query. */
 export function itemText(item: PaletteItem): string {
-  return `${item.label} ${item.detail ?? ''}`;
+  return `${item.label} ${item.detail ?? ''} ${item.keywords ?? ''}`;
 }
 
 /** Detail segments are separated by space, not middle dots (DESIGN §3). */
@@ -281,18 +283,15 @@ export function settingsItems(): PaletteItem[] {
   const schema = settings.schema.data as unknown as SchemaNode | null;
   const keys = schema
     ? sections.flatMap((s) =>
-        leafFields(schema, SECTION_ROOTS[s.id] ?? []).map((f) => {
-          const copy = COPY[f.path];
-          const help = copy?.help ? t(copy.help) : descriptionOf(f.node);
-          return {
-            id: `setting-key:${f.path}`,
-            group: 'Settings' as const,
-            label: copy?.label ? t(copy.label) : titleOf(f.segs.at(-1) ?? f.path),
-            detail: [f.path, help].filter(Boolean).join(SEP),
-            icon: s.icon,
-            run: () => void dispatch('settings.open', { section: s.id, key: f.path }),
-          };
-        }),
+        leafFields(schema, SECTION_ROOTS[s.id] ?? []).map((f) => ({
+          id: `setting-key:${f.path}`,
+          group: 'Settings' as const,
+          label: labelOf(f.path),
+          detail: [f.path, helpOf(f.path, f.node)].filter(Boolean).join(SEP),
+          keywords: keywordsOf(f.path).join(' '),
+          icon: s.icon,
+          run: () => void dispatch('settings.open', { section: s.id, key: f.path }),
+        })),
       )
     : [];
   return [

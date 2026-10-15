@@ -9,7 +9,9 @@
   import Spinner from '$lib/ui/Spinner.svelte';
   import type { Snippet } from 'svelte';
 
+  import { COPY, groupRuns, onThisPlatform } from './copy';
   import Field from './fields/Field.svelte';
+  import SettingsGroup from './layout/SettingsGroup.svelte';
   import SettingsDisclosure from './layout/SettingsDisclosure.svelte';
   import { useEditor } from './lib/editor.svelte';
   import { joinPath, splitPath } from './lib/paths';
@@ -50,7 +52,7 @@
       const node = schema.properties?.[root];
       if (!node) return [];
       if (all.length === 1 && fieldKind(node) === 'group')
-        return childEntries(node)
+        return childEntries(node, root)
           .map(([key, child]): [string, SchemaNode] => [joinPath([root, key]), child])
           .filter(([path]) => !skip.includes(path));
       return [[root, node]];
@@ -62,13 +64,23 @@
     const schema = editor.schema;
     if (!schema) return [];
     return ADVANCED.filter(
-      (a) => !skip.includes(a) && visible(a) && entries.some(([p]) => a === p || a.startsWith(`${p}.`)),
+      (a) =>
+        !skip.includes(a) &&
+        visible(a) &&
+        onThisPlatform(COPY[a]) &&
+        entries.some(([p]) => a === p || a.startsWith(`${p}.`)),
     ).flatMap((a): [string, SchemaNode][] => {
       const node = nodeAt(schema, splitPath(a));
       return node ? [[a, node]] : [];
     });
   });
 </script>
+
+{#snippet fields(items: [string, SchemaNode][])}
+  {#each items as [path, node] (path)}
+    <Field {path} {node} depth={path.includes('.') ? 1 : 0} />
+  {/each}
+{/snippet}
 
 <section class="section" data-testid="settings-section" data-section={sectionId} data-layer={editor.layer}>
   {#if blurb}<p class="blurb">{blurb}</p>{/if}
@@ -82,8 +94,14 @@
   {:else if !editor.ready}
     <div class="loading"><Spinner size={16} /> {t('Loading settings…')}</div>
   {:else}
-    {#each basic as [path, node] (path)}
-      <Field {path} {node} depth={path.includes('.') ? 1 : 0} />
+    {#each groupRuns(basic) as run, i (i)}
+      {#if run.group}
+        <SettingsGroup heading={t(run.group)} data-testid="copy-group"
+          >{@render fields(run.items)}</SettingsGroup
+        >
+      {:else}
+        {@render fields(run.items)}
+      {/if}
     {/each}
   {/if}
   {#if after}{@render after()}{/if}
