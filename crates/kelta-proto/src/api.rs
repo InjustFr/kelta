@@ -25,7 +25,7 @@ use crate::ipc::{AccountTestResult, WindowState};
 use crate::model::{
     AttachInfo, ClaudeUsage, EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectDraft, ProjectInfo,
     ReviewNote, RunClaim, RunState, Scope, SessionInfo, ShipOrigin, SpawnRequest, StatusChange, StepStatus,
-    TemplateCtx, WorkItem, WorkStepStatus,
+    TemplateCtx, TicketStep, WorkItem, WorkStepStatus,
 };
 use crate::secret::{Secret, SecretBackendStatus, SecretCtx, SecretRef};
 use crate::settings::TrackerView;
@@ -573,6 +573,10 @@ pub trait WorkStore: Send + Sync {
     /// `claim_ticket` in one step (#235): puts `item` per [`WorkItem::claim_over`] against the unfinished
     /// item of its ticket; `Ok(Err(holder))` when that item holds the ticket.
     async fn claim_item(&self, item: &WorkItem) -> Result<Result<WorkItem, Box<WorkItem>>, KeltaError>;
+    /// Where `ticket` stands in its pipeline (#461), by account and key.
+    async fn ticket_step(&self, ticket: &TicketRef) -> Result<Option<TicketStep>, KeltaError>;
+    /// Insert or replace the ticket's row.
+    async fn put_ticket_step(&self, step: &TicketStep) -> Result<(), KeltaError>;
 }
 
 /// The unfinished item of `item`'s ticket, other than `item` itself (`WorkStore::claim_item`).

@@ -5,7 +5,7 @@ use std::path::Path;
 use kelta_core::store::{Store, migrations, q};
 use kelta_proto::api::{GrantStore, TrustStore, WorkStore};
 use kelta_proto::ids::{PluginId, SessionId, WorkItemId};
-use kelta_proto::model::{NextUpItem, NoteState, ReviewNote, StepStatus, WorkState};
+use kelta_proto::model::{NextUpItem, NoteState, ReviewNote, StepStatus, TicketStep, WorkState};
 use kelta_proto::store::{SCHEMA_VERSION, TriggerLogRow, tables};
 use kelta_proto::tracker::TicketRef;
 
@@ -74,6 +74,29 @@ async fn next_up_keeps_its_order_snoozes_and_seen_marks_across_a_restart() {
     assert_eq!(got.seen, ["jira:A-2"]);
     s.call(move |c| q::next_up_remove(c, &t("A-1"))).await.unwrap();
     assert_eq!(s.call(|c| q::next_up(c)).await.unwrap().items.len(), 2);
+}
+
+#[tokio::test]
+async fn ticket_steps_round_trip_across_a_restart() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db = tmp.path().join("kelta.db");
+    let t = |account: &str| TicketRef { account: account.into(), key: "A-1".into(), id: "1".into() };
+    let row = |step: &str, by: &str| TicketStep {
+        ticket: t("jira"),
+        source_id: Some("main".into()),
+        step_id: step.into(),
+        entered_at: "2026-10-15T10:00:00Z".into(),
+        by: by.into(),
+    };
+    {
+        let s = Store::open(&db).unwrap();
+        assert_eq!(s.ticket_step(&t("jira")).await.unwrap(), None);
+        s.put_ticket_step(&row("pr", "\"pr_opened\"")).await.unwrap();
+        s.put_ticket_step(&row("review", "\"pr_ready\"")).await.unwrap();
+    }
+    let s = Store::open(&db).unwrap();
+    assert_eq!(s.ticket_step(&t("jira")).await.unwrap(), Some(row("review", "\"pr_ready\"")));
+    assert_eq!(s.ticket_step(&t("linear")).await.unwrap(), None, "per account");
 }
 
 #[tokio::test]

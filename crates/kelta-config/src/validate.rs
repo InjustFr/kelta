@@ -275,7 +275,7 @@ pub fn id_issues(value: &Value) -> Vec<RawIssue> {
             let mut p = segs.clone();
             p.push(i.to_string());
             match item.get("id").and_then(Value::as_str) {
-                Some(id) if !id.is_empty() => {
+                Some(id) if !id.trim().is_empty() => {
                     if !seen.insert(id) {
                         p.push("id".into());
                         out.push(RawIssue::new(&p, format!("duplicate id `{id}` in `{dotted}`")));
@@ -528,7 +528,7 @@ fn pipeline_issues(out: &mut Vec<RawIssue>, base: &[String], list: Option<&Value
             base.iter().cloned().chain([i.to_string()]).chain(keys.iter().map(|k| (*k).to_owned())).collect()
         };
         match s.get("id").and_then(Value::as_str) {
-            Some(id) if !id.is_empty() => {
+            Some(id) if !id.trim().is_empty() => {
                 if !seen.insert(id) {
                     out.push(RawIssue::new(&at(&["id"]), format!("duplicate step id `{id}`")));
                 }
@@ -839,6 +839,7 @@ mod tests {
         let issues = layer_issues(Layer::Global, &dup, None);
         assert!(issues[0].message.contains("duplicate step id `a`"));
         assert_eq!(g(&json!({"work": {"pipeline": [{"id": ""}]}})), ["work.pipeline.0.id"]);
+        assert_eq!(g(&json!({"work": {"pipeline": [{"id": "  "}]}})), ["work.pipeline.0.id"]);
         let blank = src(json!([{"id": "a", "enter": ["merged", {"status": {"name": " "}}]}]));
         assert_eq!(g(&blank), ["sources.0.tracker.pipeline.0.enter.1.status.name"]);
         let proj = json!({"project": {"id": "x", "name": "X",

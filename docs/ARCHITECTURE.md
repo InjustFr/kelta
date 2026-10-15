@@ -1014,8 +1014,9 @@ notes(id PK, work_item, path, line_start, line_end, body, source, ext_ref, state
 nudges(repo, number, at, PK(repo, number))                -- my last nudge per PR (one per 24 h, `review_nudge`, v11)
 next_up(ticket_key PK, project, ticket_json, rank, snoozed_until)   -- my Next up list and snoozes, #145 (v13)
 seen_tickets(ticket_key PK, at)                           -- tickets I have seen (the `New` badge, v13)
+ticket_steps(ticket_key PK, source_id, step_id, entered_at, entered_by)   -- where each ticket stands in its pipeline, #461 (v19)
 ```
-Migrations: `crates/kelta-core/src/store/migrations.rs`, one per schema version (18 today, `kelta_proto::store::SCHEMA_VERSION`), each in its own transaction, recorded in `schema_version`.
+Migrations: `crates/kelta-core/src/store/migrations.rs`, one per schema version (19 today, `kelta_proto::store::SCHEMA_VERSION`), each in its own transaction, recorded in `schema_version`.
 
 `ui_state` keys: `tags` (`LocalTags`, #349), `start_options` (the last picked start options, a JSON map `PlanOptions.key` → values, #357), `claude.permission_mode` (the last mode a Claude session switched to, #277). Window geometry is in JSON files (§2.1); the WebGL probe result and the onboarding flag (`kelta.onboarding.done`) are in the webview's `localStorage`.
 

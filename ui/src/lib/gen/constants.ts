@@ -31,6 +31,7 @@ export const BUS_EVENTS = [
   "ticket.transitioned",
   "ticket.commented",
   "ticket.assigned",
+  "ticket.step",
   "worktree.created",
   "worktree.removed",
   "work.before_finish",

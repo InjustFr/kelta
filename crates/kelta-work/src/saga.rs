@@ -22,13 +22,16 @@ use kelta_proto::model::{
     ProjectInfo, RepoInfo, RestorePolicy, Scope, SessionInfo, SessionKind, SpawnRequest, StartWorkPlan,
     StepStatus, TemplateCtx, WORK_STEPS, WorkItem, WorkKind, WorkSource, WorkState,
 };
-use kelta_proto::settings::{EditorOpenMode, EditorRestore, SessionTemplate, Settings, TransitionTarget};
+use kelta_proto::settings::{
+    EditorOpenMode, EditorRestore, PipelineEvent, SessionTemplate, Settings, TransitionTarget,
+};
 use kelta_proto::tracker::{Assignee, Status, TicketRef, Transition};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
 use crate::claude::{self, ContextInfo, LaunchMode, LaunchSpec};
 use crate::layout::{self, SlotKind};
+use crate::pipeline::Signal;
 use crate::plan::{self, TicketSnap};
 use crate::template::{Ctx, Mode, render, render_shell, shell_quote, shell_words, slugify};
 use crate::{WorkService, editor, files, git};
@@ -62,7 +65,8 @@ pub(crate) struct Journal {
     /// SHA-256 of each include copy at copy time: Finish compares the copy to it, not to the main checkout.
     #[serde(default)]
     pub include_hashes: BTreeMap<String, String>,
-    /// Tracker side effects done (`assign`, `transition` on success; `comment` once attempted).
+    /// Tracker side effects done (`assign`, `transition` on success; `comment` once attempted); a pipeline
+    /// step's as `<step>:transition` / `<step>:comment` (#461).
     pub effects_done: BTreeSet<String>,
     /// A prompt for Claude held while it works, delivered on its next `Stop` (`deliver_prompt`).
     #[serde(default)]
@@ -1699,6 +1703,12 @@ impl WorkService {
         let Some(t) = item.ticket.clone() else { return Ok(Some("no ticket".into())) };
         let Some(plan) = j.plan.clone() else { return Ok(None) };
         let fx = plan.side_effects;
+        let steps = crate::pipeline::steps_of(env, item);
+        let started = Signal::Event(PipelineEvent::WorkStarted);
+        let at = crate::pipeline::current(&steps, self.store.ticket_step(&t).await.ok().flatten().as_ref());
+        // A sibling's start never moves the ticket back (#456): the plan's transition and comment wait.
+        let back = at > crate::pipeline::advance(&steps, None, &started);
+        self.signal(item, started, None).await;
         let tracker = match env.core.tracker_for(&t.account).await {
             Ok(tr) => tr,
             Err(e) => {
@@ -1708,11 +1718,11 @@ impl WorkService {
         };
         let ctx = self.item_ctx(env, item, j);
         let do_assign = fx.assign_me && !j.effects_done.contains("assign");
-        let do_transition = fx.transition_to.is_some() && !j.effects_done.contains("transition");
+        let do_transition = !back && fx.transition_to.is_some() && !j.effects_done.contains("transition");
         let comment = fx
             .comment
             .as_ref()
-            .filter(|_| !j.effects_done.contains("comment"))
+            .filter(|_| !back && !j.effects_done.contains("comment"))
             .and_then(|c| render(c, &ctx, Mode::Lenient).ok())
             .filter(|c| !c.trim().is_empty());
         // At most once: a comment cut off mid-step (quit, crash) is never posted again on Retry.
@@ -1833,19 +1843,6 @@ pub(crate) async fn transition_ticket(
     apply_transition(core, tracker, t, target, project, work, false).await
 }
 
-/// [`transition_ticket`] that never guesses: `Conflict` unless exactly one transition fits and
-/// it needs no fields (automatic Done move on merge, FLOW §4.6).
-pub(crate) async fn transition_ticket_strict(
-    core: &Arc<dyn CoreApi>,
-    tracker: &dyn Tracker,
-    t: &TicketRef,
-    target: &TransitionTarget,
-    project: &ProjectId,
-    work: &WorkItemId,
-) -> Result<String, KeltaError> {
-    apply_transition(core, tracker, t, target, project, work, true).await
-}
-
 /// Transitions leading to `target`; strict = exactly one and it needs no fields, else `Conflict`.
 pub(crate) fn pick_transition<'a>(
     transitions: &'a [Transition],
@@ -1874,7 +1871,7 @@ pub(crate) fn pick_transition<'a>(
     })
 }
 
-async fn apply_transition(
+pub(crate) async fn apply_transition(
     core: &Arc<dyn CoreApi>,
     tracker: &dyn Tracker,
     t: &TicketRef,

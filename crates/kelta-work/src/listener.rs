@@ -1,6 +1,6 @@
 //! Bus listener (one task, event-driven): `claude.file_edited` → editor reload/open
 //! (`editor.follow_claude_edits`), `session.exited` → release the HTTP consumer of a Claude session,
-//! `pr.merged` / `pr.closed` → Merged / PrClosed work items (FLOW §4.6).
+//! `pr.merged` / `pr.closed` → Merged / PrClosed work items (FLOW §4.6), `pr.updated` → ticket steps (#461).
 //! (`editor.follow_claude_edits`), `claude.hook` → work item signals (FLOW §2.3),
 //! `session.exited` → release the HTTP consumer of a Claude session, start queued work (#141) and
 //! orphan the session's running ticket claims (#235).
@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Weak;
 
+use kelta_proto::codehost::Review;
 use kelta_proto::events::{BusEvent, bus};
 use kelta_proto::hooks::HookPayload;
 use kelta_proto::ids::SessionId;
@@ -41,6 +42,15 @@ pub(crate) async fn run(me: Weak<WorkService>, mut rx: broadcast::Receiver<BusEv
                         tracing::debug!(error = %e.message, "follow_claude_edits failed");
                     }
                 });
+            }
+            bus::PR_UPDATED => {
+                let (Some(Ok(review)), Some(Ok(changes))) = (
+                    ev.payload.get("review").cloned().map(serde_json::from_value::<Review>),
+                    ev.payload.get("changes").cloned().map(serde_json::from_value::<Vec<String>>),
+                ) else {
+                    continue;
+                };
+                tokio::spawn(async move { svc.pr_updated(&review, &changes).await });
             }
             bus::PR_MERGED | bus::PR_CLOSED => {
                 let Some(review) =

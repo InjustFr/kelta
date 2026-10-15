@@ -2590,7 +2590,7 @@
   "Resume work on {key}": "Arbeit an {key} fortsetzen",
   "Start another PR on {key}": "Weiteren PR für {key} starten",
   "Pipeline": "Pipeline",
-  "Steps of this board's tickets; empty takes `work.pipeline`, else the steps built from\n`status_map` and `work.on_*` ([`effective_pipeline`]).": "Schritte der Tickets dieses Boards; leer übernimmt `work.pipeline`, sonst die aus\n`status_map` und `work.on_*` gebauten Schritte ([`effective_pipeline`]).",
+  "Steps of this board's tickets; empty takes `work.pipeline`, else the steps built from\n`status_map` and `work.on_*` (`effective_pipeline`).": "Schritte der Tickets dieses Boards; leer übernimmt `work.pipeline`, sonst die aus\n`status_map` und `work.on_*` gebauten Schritte ([`effective_pipeline`]).",
   "One step of a ticket's flow. An empty `enter` makes the step manual only.": "Ein Schritt im Ablauf eines Tickets. Ein leeres `enter` macht den Schritt nur manuell.",
   "Template posted on the ticket when the step is entered.": "Vorlage, die beim Eintritt in den Schritt am Ticket gepostet wird.",
   "`\"pr_ready\"` (an event) or `{ status = { name = \"PO Review\" } }` (the ticket reaching a status).": "`\"pr_ready\"` (ein Ereignis) oder `{ status = { name = \"PO Review\" } }` (das Ticket erreicht einen Status).",
@@ -2602,5 +2602,5 @@
   "Changes_requested": "Änderungen angefragt",
   "Deprecated: use `pipeline`; still read as its fallback. `start` / `review` / `done` → TransitionTarget; overrides `work.on_*` targets.": "Veraltet: `pipeline` verwenden; wird weiterhin als Fallback gelesen. `start` / `review` / `done` → TransitionTarget; überschreibt die `work.on_*`-Ziele.",
   "Deprecated: use `pipeline` steps; still read as their fallback.": "Veraltet: die Schritte von `pipeline` verwenden; werden weiterhin als Fallback gelesen.",
-  "Steps of a ticket's flow when its source sets no `tracker.pipeline`; empty builds them from\n`tracker.status_map` and `on_*` ([`effective_pipeline`]).": "Schritte im Ablauf eines Tickets, wenn seine Quelle kein `tracker.pipeline` setzt; leer werden sie aus\n`tracker.status_map` und `on_*` gebaut ([`effective_pipeline`])."
+  "Steps of a ticket's flow when its source sets no `tracker.pipeline`; empty builds them from\n`tracker.status_map` and `on_*` (`effective_pipeline`).": "Schritte im Ablauf eines Tickets, wenn seine Quelle kein `tracker.pipeline` setzt; leer werden sie aus\n`tracker.status_map` und `on_*` gebaut ([`effective_pipeline`])."
 }

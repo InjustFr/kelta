@@ -266,6 +266,7 @@ export type * from './TicketPage';
 export type * from './TicketParent';
 export type * from './TicketRef';
 export type * from './TicketSort';
+export type * from './TicketStep';
 export type * from './TicketsMode';
 export type * from './TicketsSettings';
 export type * from './Toast';

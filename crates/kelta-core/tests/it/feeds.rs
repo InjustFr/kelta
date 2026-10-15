@@ -373,6 +373,23 @@ async fn authored_changes_emit_pr_events() {
     e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
     assert!(pr_names(&mut rx).is_empty(), "failure → failure on the same head publishes nothing");
     assert_eq!(e.h.ui.notifications().len(), 3);
+    // Ready for review and a new reviewer are changes of their own (#461).
+    let changes = |rx: &mut _| -> Vec<serde_json::Value> {
+        bus_names(rx)
+            .into_iter()
+            .filter(|ev| ev.name == "pr.updated")
+            .map(|ev| ev.payload["changes"].clone())
+            .collect()
+    };
+    {
+        let mut l = e.host.reviews.lock();
+        l[0].draft = !l[0].draft;
+    }
+    e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
+    assert_eq!(changes(&mut rx), [serde_json::json!(["draft"])]);
+    e.host.reviews.lock()[0].waiting_on = vec!["bob".into()];
+    e.h.core.review_page(Scope::All, ReviewKind::Authored, true).await.unwrap();
+    assert_eq!(changes(&mut rx), [serde_json::json!(["reviewers"])]);
 }
 
 #[tokio::test]

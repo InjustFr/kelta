@@ -17,7 +17,8 @@ use kelta_proto::codehost::ReviewRef;
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::{PluginId, ProjectId, SessionId, TabId, WorkItemId};
 use kelta_proto::model::{
-    NextUp, NextUpItem, ReviewNote, StepStatus, WORK_STEPS, WorkItem, WorkKind, WorkState, WorkStepStatus,
+    NextUp, NextUpItem, ReviewNote, StepStatus, TicketStep, WORK_STEPS, WorkItem, WorkKind, WorkState,
+    WorkStepStatus,
 };
 use kelta_proto::settings::Source;
 use kelta_proto::store::{
@@ -458,6 +459,37 @@ pub mod q {
             .map_err(db_err)?;
         }
         tx.commit().map_err(db_err)
+    }
+
+    // ---- ticket_steps (#461) -------------------------------------------------------------------
+
+    pub fn ticket_step(c: &Connection, t: &TicketRef) -> R<Option<TicketStep>> {
+        c.query_row(
+            "SELECT source_id, step_id, entered_at, entered_by FROM ticket_steps WHERE ticket_key = ?1",
+            [ticket_key(t)],
+            |r| {
+                Ok(TicketStep {
+                    ticket: t.clone(),
+                    source_id: r.get(0)?,
+                    step_id: r.get(1)?,
+                    entered_at: r.get(2)?,
+                    by: r.get(3)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(db_err)
+    }
+
+    pub fn ticket_step_put(c: &Connection, s: &TicketStep) -> R<()> {
+        c.execute(
+            "INSERT INTO ticket_steps (ticket_key, source_id, step_id, entered_at, entered_by) VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(ticket_key) DO UPDATE SET source_id = excluded.source_id, step_id = excluded.step_id,
+             entered_at = excluded.entered_at, entered_by = excluded.entered_by",
+            params![ticket_key(&s.ticket), s.source_id, s.step_id, s.entered_at, s.by],
+        )
+        .map(|_| ())
+        .map_err(db_err)
     }
 
     // ---- provider_cache ------------------------------------------------------------------------
@@ -1097,6 +1129,16 @@ impl WorkStore for Store {
     async fn put_note(&self, note: &ReviewNote) -> Result<i64, KeltaError> {
         let note = note.clone();
         self.call(move |c| q::note_put(c, &note)).await
+    }
+
+    async fn ticket_step(&self, t: &TicketRef) -> Result<Option<TicketStep>, KeltaError> {
+        let t = t.clone();
+        self.call(move |c| q::ticket_step(c, &t)).await
+    }
+
+    async fn put_ticket_step(&self, s: &TicketStep) -> Result<(), KeltaError> {
+        let s = s.clone();
+        self.call(move |c| q::ticket_step_put(c, &s)).await
     }
 }
 

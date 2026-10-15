@@ -15,13 +15,14 @@ use kelta_proto::model::{
     PaneContent, Placement, RestorePolicy, SessionInfo, SessionKind, ShipOrigin, SkippedItem, SpawnRequest,
     StepStatus, WorkItem, WorkKind, WorkState,
 };
-use kelta_proto::settings::{EditorOpenMode, EditorRestore, TransitionTarget};
+use kelta_proto::settings::{EditorOpenMode, EditorRestore, PipelineEvent, TransitionTarget};
 use kelta_proto::tracker::TicketRef;
 
 use crate::claude::LaunchMode;
 use crate::fixloop::refuse_if_busy;
 use crate::layout::{self, SlotKind};
 use crate::nvim::NvimClient;
+use crate::pipeline::Signal;
 use crate::plan;
 use crate::saga::{self, COLS, Env, Journal, ROWS, await_exit};
 use crate::template::{Mode, render};
@@ -428,7 +429,7 @@ impl WorkService {
                 .with_project(item.project_id.clone())
                 .with_work_item(item.id.clone()),
         );
-        self.on_pr(&env, &item, &j, &review).await;
+        self.signal(&item, Signal::Event(PipelineEvent::PrOpened), Some(&review)).await;
         Ok(item)
     }
 
@@ -491,8 +492,7 @@ impl WorkService {
         item.pr_url = Some(review.url.clone());
         item.state = WorkState::PrOpen;
         self.save(&mut item).await?;
-        let env = self.env(&item.project_id, &item.repo_id)?;
-        self.on_pr(&env, &item, &self.load_journal(id), review).await;
+        self.signal(&item, Signal::Event(PipelineEvent::PrOpened), Some(review)).await;
         Ok(())
     }
 
@@ -591,41 +591,13 @@ impl WorkService {
         plan::siblings(&all, item).any(|w| w.pr_url.is_some() && !w.state.pr_done())
     }
 
-    /// On merge, move the ticket to Done only when exactly one transition fits and needs no
-    /// fields (FLOW §4.6). Returns why it was not moved, for the phase detail.
+    /// On merge, the ticket enters the step `merged` triggers once no sibling PR is open (#456); its
+    /// transition never guesses (FLOW §4.6). Returns why it was not moved, for the phase detail.
     async fn move_done(&self, item: &WorkItem) -> Option<String> {
-        let t = item.ticket.as_ref()?;
-        if self.open_sibling_pr(item).await {
+        if item.ticket.is_none() || self.open_sibling_pr(item).await {
             return None;
         }
-        let env = match self.env(&item.project_id, &item.repo_id) {
-            Ok(e) => e,
-            Err(e) => return Some(format!("ticket not moved: {}", e.message)),
-        };
-        let target = env
-            .project
-            .tracker
-            .as_ref()
-            .and_then(|b| b.status_map.done.clone())
-            .or_else(|| env.settings.work.on_merge.transition_to.clone())?;
-        let tracker = match env.core.tracker_for(&t.account).await {
-            Ok(x) => x,
-            Err(e) => return Some(format!("ticket not moved: {}", e.message)),
-        };
-        match saga::transition_ticket_strict(
-            &env.core,
-            tracker.as_ref(),
-            t,
-            &target,
-            &item.project_id,
-            &item.id,
-        )
-        .await
-        {
-            Ok(_) => None,
-            Err(e) if e.code == ErrorCode::Conflict => Some(CHOOSE_DONE.into()),
-            Err(e) => Some(format!("ticket not moved: {}", e.message)),
-        }
+        self.signal(item, Signal::Event(PipelineEvent::Merged), None).await
     }
 
     /// `git <args>` (a push) in a visible transient pane, awaited through `session.exited`; returns
@@ -702,52 +674,6 @@ impl WorkService {
         }
         if let Err(e) = self.update(&item.id, |w| std::mem::replace(&mut w.pr_title_needs_key, false)).await {
             tracing::warn!(error = %e.message, "could not clear pr_title_needs_key");
-        }
-    }
-
-    /// `work.on_pr`: transition (status_map.review overrides) + comment; non-fatal.
-    pub(crate) async fn on_pr(&self, env: &Env, item: &WorkItem, j: &Journal, review: &Review) {
-        let Some(t) = &item.ticket else { return };
-        // The ticket's first PR only (#456): a sibling with a PR already moved it.
-        let all = self.store.list_items(None).await.unwrap_or_default();
-        if plan::siblings(&all, item).any(|w| w.pr_url.is_some()) {
-            return;
-        }
-        let Ok(tracker) = env.core.tracker_for(&t.account).await else { return };
-        let on = &env.settings.work.on_pr;
-        let target = env
-            .project
-            .tracker
-            .as_ref()
-            .and_then(|b| b.status_map.review.clone())
-            .or_else(|| on.transition_to.clone());
-        if let Some(target) = target
-            && let Err(e) =
-                saga::transition_ticket(&env.core, tracker.as_ref(), t, &target, &item.project_id, &item.id)
-                    .await
-        {
-            env.core.toast(Toast::warn(format!("{}: transition failed — {}", t.key, e.message)));
-        }
-        if let Some(c) = &on.comment {
-            let mut ctx = self.item_ctx(env, item, j);
-            plan::add_review(&mut ctx, review);
-            if let Ok(body) = render(c, &ctx, Mode::Lenient)
-                && !body.trim().is_empty()
-            {
-                match tracker.comment(t, &body).await {
-                    Ok(()) => env.core.publish(
-                        BusEvent::new(
-                            bus::TICKET_COMMENTED,
-                            serde_json::json!({ "ticket": t, "markdown": body }),
-                        )
-                        .with_project(item.project_id.clone())
-                        .with_work_item(item.id.clone()),
-                    ),
-                    Err(e) => {
-                        env.core.toast(Toast::warn(format!("{}: comment failed — {}", t.key, e.message)))
-                    }
-                }
-            }
         }
     }
 
@@ -858,7 +784,7 @@ impl WorkService {
             {
                 let host = env.core.code_host_for(&binding.account).await?;
                 if let Some(review) = host.find_for_branch(&binding.repo, &item.branch).await? {
-                    self.on_pr(&env, &item, &j, &review).await;
+                    self.signal(&item, Signal::Event(PipelineEvent::PrOpened), Some(&review)).await;
                 }
             }
         }

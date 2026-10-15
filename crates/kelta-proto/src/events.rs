@@ -243,6 +243,8 @@ pub mod bus {
     pub const TICKET_TRANSITIONED: &str = "ticket.transitioned";
     pub const TICKET_COMMENTED: &str = "ticket.commented";
     pub const TICKET_ASSIGNED: &str = "ticket.assigned";
+    /// A ticket entered a pipeline step (`TicketStep`, #461).
+    pub const TICKET_STEP: &str = "ticket.step";
     pub const WORKTREE_CREATED: &str = "worktree.created";
     pub const WORKTREE_REMOVED: &str = "worktree.removed";
     pub const WORK_BEFORE_FINISH: &str = "work.before_finish";
@@ -289,6 +291,7 @@ pub mod bus {
         TICKET_TRANSITIONED,
         TICKET_COMMENTED,
         TICKET_ASSIGNED,
+        TICKET_STEP,
         WORKTREE_CREATED,
         WORKTREE_REMOVED,
         WORK_BEFORE_FINISH,

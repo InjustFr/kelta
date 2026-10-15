@@ -1293,7 +1293,7 @@ pub struct WorkSettings {
     pub on_pr: OnPr,
     pub on_merge: OnMerge,
     /// Steps of a ticket's flow when its source sets no `tracker.pipeline`; empty builds them from
-    /// `tracker.status_map` and `on_*` ([`effective_pipeline`]).
+    /// `tracker.status_map` and `on_*` (`effective_pipeline`).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[ts(as = "Option<Vec<StepDef>>", optional)]
     pub pipeline: Vec<StepDef>,
@@ -1888,7 +1888,7 @@ pub struct TrackerBinding {
     pub columns: Vec<ColumnSpec>,
     pub status_map: StatusMap,
     /// Steps of this board's tickets; empty takes `work.pipeline`, else the steps built from
-    /// `status_map` and `work.on_*` ([`effective_pipeline`]).
+    /// `status_map` and `work.on_*` (`effective_pipeline`).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[ts(as = "Option<Vec<StepDef>>", optional)]
     pub pipeline: Vec<StepDef>,

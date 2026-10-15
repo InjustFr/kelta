@@ -16,7 +16,7 @@ plan_preview: boolean,
 finish_first: boolean, default_template: string, review_template: string, on_start: OnStart, on_pr: OnPr, on_merge: OnMerge, 
 /**
  * Steps of a ticket's flow when its source sets no `tracker.pipeline`; empty builds them from
- * `tracker.status_map` and `on_*` ([`effective_pipeline`]).
+ * `tracker.status_map` and `on_*` (`effective_pipeline`).
  */
 pipeline?: Array<StepDef>, pr: PrSettings, 
 /**

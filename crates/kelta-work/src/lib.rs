@@ -23,6 +23,7 @@ mod fixloop;
 mod listener;
 mod notes;
 mod ops;
+mod pipeline;
 mod queue;
 mod rebase;
 mod review;
@@ -79,6 +80,8 @@ pub struct WorkService {
     shipping: Mutex<HashSet<WorkItemId>>,
     /// Serializes `pr_ended` across items, so the last merged PR of a ticket sees the others as done.
     merge_lock: tokio::sync::Mutex<()>,
+    /// Serializes ticket step moves (read, advance, effects, write; #461).
+    step_lock: tokio::sync::Mutex<()>,
     /// Serializes the existing-item check + insert of `start` (no twin items for one source).
     start_lock: tokio::sync::Mutex<()>,
     /// Serializes store writes; held only around load-modify-save (`save`, `update`).
@@ -111,6 +114,7 @@ impl WorkService {
             item_locks: Mutex::new(HashMap::new()),
             shipping: Mutex::new(HashSet::new()),
             merge_lock: tokio::sync::Mutex::new(()),
+            step_lock: tokio::sync::Mutex::new(()),
             start_lock: tokio::sync::Mutex::new(()),
             write_lock: tokio::sync::Mutex::new(()),
             fetched: Mutex::new(HashMap::new()),

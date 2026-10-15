@@ -1174,6 +1174,19 @@ pub struct SideEffects {
     pub run_setup: bool,
 }
 
+/// Where a ticket stands in its pipeline (#461): SQLite `ticket_steps`, bus `ticket.step`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct TicketStep {
+    pub ticket: TicketRef,
+    /// `[[sources]]` id the steps came from (`WorkItem.ticket_source`).
+    pub source_id: Option<String>,
+    pub step_id: String,
+    /// RFC 3339.
+    pub entered_at: String,
+    /// The trigger that entered the step, as JSON (`"pr_ready"`, `{"status":{"name":"PO Review"}}`).
+    pub by: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct StartWorkPlan {
     pub project_id: ProjectId,
