@@ -58,15 +58,58 @@ test.describe('palette', () => {
     await expect(first).toContainText('Settings: Keys');
     await input.fill('wip limit');
     await expect(first).toContainText('Work-in-progress limit');
+    await expect(first).toContainText('3');
     await page.keyboard.press('Enter');
-    await expect(page.locator('[data-testid="field"][data-path="tickets.wip_limit"]')).toBeVisible();
-    await expect(page.getByRole('searchbox', { name: 'Search settings' })).toHaveValue('tickets.wip_limit');
+    await expect(page.locator('[data-testid="field"][data-path="tickets.wip_limit"]')).toHaveAttribute(
+      'data-revealed',
+      '',
+    );
+    await expect(page.getByRole('searchbox', { name: 'Search settings' })).toHaveValue('');
 
     await page.keyboard.press('Escape');
     await page.keyboard.press('Control+Shift+K');
     await expect(input).toHaveValue('');
     await expect(page.getByTestId('palette').locator('.group').first()).toHaveText('Recent');
-    await expect(first).toContainText('Settings:');
+    await expect(page.getByTestId('palette-item').filter({ hasText: 'Settings:' }).first()).toBeVisible();
+  });
+
+  test('turns a setting on in place with Undo, ⌘↵ opens it in Settings (#478)', async ({ page }) => {
+    await boot(page);
+    const palette = page.getByTestId('palette');
+    const first = page.getByTestId('palette-item').first();
+    const reopen = async (): Promise<void> => {
+      await page.keyboard.press('Control+Shift+K');
+      await page.getByTestId('palette-input').fill('copy text when you select');
+    };
+    await reopen();
+    await expect(first).toContainText('Copy text when you select it');
+    await expect(first).toHaveAttribute('aria-checked', 'false');
+    await expect(palette.locator('.hints')).toContainText('Open in Settings');
+
+    await page.keyboard.press('Enter');
+    await expect(palette).toHaveCount(0);
+    await expect
+      .poll(async () => (await callsOf(page, 'settings_set')).at(-1)?.args)
+      .toMatchObject({ layer: 'global', path: 'terminal.copy_on_select', value: true });
+    await expect(page.getByTestId('toasts')).toContainText('Copy text when you select it turned on');
+
+    await reopen();
+    await expect(first).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
+
+    await page.getByTestId('toasts').getByRole('button', { name: 'Undo' }).click();
+    await expect
+      .poll(async () => (await callsOf(page, 'settings_reset')).at(-1)?.args)
+      .toMatchObject({ layer: 'global', path: 'terminal.copy_on_select' });
+
+    await reopen();
+    await expect(first).toHaveAttribute('aria-checked', 'false');
+    await page.keyboard.press('Control+Enter');
+    await expect(page.locator('[data-testid="field"][data-path="terminal.copy_on_select"]')).toHaveAttribute(
+      'data-revealed',
+      '',
+    );
+    expect((await callsOf(page, 'settings_set')).length).toBe(1);
   });
 
   test('searches tickets through tracker_search', async ({ page }) => {
