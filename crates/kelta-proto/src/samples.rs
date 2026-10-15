@@ -600,6 +600,18 @@ pub fn ui_event_samples() -> Vec<(&'static str, UiEvent)> {
         ),
         ("ui_event_work_updated", UiEvent::WorkUpdated { work: Box::new(work_item()) }),
         (
+            "ui_event_ticket_step",
+            UiEvent::TicketStep {
+                step: Box::new(TicketStep {
+                    ticket: ticket_ref(),
+                    source_id: Some("product".into()),
+                    step_id: "pr".into(),
+                    entered_at: "2026-10-15T10:00:00Z".into(),
+                    by: "\"pr_opened\"".into(),
+                }),
+            },
+        ),
+        (
             "ui_event_settings_changed",
             UiEvent::SettingsChanged {
                 layers: vec![Layer::Global],

@@ -10,7 +10,7 @@
   import { frames } from '$lib/terminal/raf';
   import { EmptyState } from '$lib/ui';
 
-  import { phaseNow, prOf } from './live';
+  import { phaseNow, prOf, stepNow } from './live';
   import { CLAUDE, PR, TICKET, workStage } from './stage';
   import Changes from './story/Changes.svelte';
   import Claude from './story/Claude.svelte';
@@ -36,7 +36,9 @@
   const item = $derived(work.get(id));
   const at = $derived.by(() => {
     if (!item) return CLAUDE;
-    return workStage(item, phaseNow(item), prOf(item), false).at;
+    const s = workStage(item, phaseNow(item), prOf(item), false, false, stepNow(item));
+    // On a pipeline track the first step is the work (Claude's section) and every later one has a PR.
+    return s.labels ? Math.min(s.at, PR) : s.at;
   });
 
   $effect(() => {

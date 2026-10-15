@@ -1,12 +1,14 @@
 // Store-connected view of a work item: its Claude session, PR, git status and phase.
 
-import type { Review, SessionInfo, WorkItem } from '$lib/gen';
-import { reviews, sessions, tickets, work } from '$lib/stores';
+import type { ProjectId, Review, SessionInfo, TicketRef, TrackerBinding, WorkItem } from '$lib/gen';
+import { reviews, sessions, settings, ticketSteps, tickets, work } from '$lib/stores';
 import { reviewKey } from '$lib/stores/reducers';
 import { ticketKey } from '$lib/stores/tickets.svelte';
 
 import { sessionTitle } from '../../shell/labels';
+import { effectivePipeline } from '../settings/lib/pipeline';
 import { phaseOf, questionOf, workKey, type Phase } from './phase';
+import type { Stepped } from './stage';
 
 const ALL = { kind: 'all' } as const;
 
@@ -101,3 +103,24 @@ export function sessionLabel(s: SessionInfo): string {
   const name = sessionTitle(s);
   return item ? `${siblingKey(item)} ${name}` : name;
 }
+
+// No source found: the default steps, as `steps_of` (crates/kelta-work/src/pipeline.rs) with a default binding.
+const NO_BINDING: Pick<TrackerBinding, 'status_map'> = { status_map: { start: null, review: null, done: null } };
+
+/** A ticket's stored step (#462) on its source's effective pipeline (the row's source, else `source`).
+ *  Null when Kelta never moved the ticket or the step left the pipeline: callers then derive the stage. */
+export function stepOf(
+  ref: TicketRef | null,
+  source: string | null = null,
+  projectId: ProjectId | null = null,
+): Stepped | null {
+  const row = ref ? ticketSteps.get(ref) : null;
+  const s = row ? settings.value(projectId) : null;
+  if (!row || !s) return null;
+  const src = s.sources.find((x) => x.id === (row.source_id ?? source));
+  const steps = effectivePipeline(src?.tracker ?? NO_BINDING, s.work);
+  const index = steps.findIndex((x) => x.id === row.step_id);
+  return index < 0 ? null : { index, steps: steps.map((x) => x.label) };
+}
+
+export const stepNow = (w: WorkItem): Stepped | null => stepOf(w.ticket, w.ticket_source ?? null, w.project_id);

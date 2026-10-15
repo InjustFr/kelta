@@ -99,4 +99,19 @@ test.describe('finish', () => {
     await expect(page.getByTestId('toasts')).toContainText('Finished 1 merged work item, 2 skipped');
     expect((await callsOf(page, 'work_finish_merged')).length).toBe(1);
   });
+
+  test('after create_pr the work card stays on PR while Claude works again (#462)', async ({ page }) => {
+    await boot(page);
+    const header = page.getByTestId('work-header');
+    await claudeStatus(page, 'done');
+    await dispatch(page, 'work.ship', { id: SHOP_142 });
+    const dialog = page.getByRole('dialog', { name: /^Ship SHOP-142/ });
+    await expect(dialog.getByLabel('Title')).toBeFocused();
+    await page.keyboard.press('Control+Enter');
+    await expect(dialog).toHaveCount(0);
+    await expect(header.getByRole('img', { name: /^At PR,/ })).toBeVisible();
+    await claudeStatus(page, 'working');
+    await expect(header).toHaveAttribute('data-phase', 'working');
+    await expect(header.getByRole('img', { name: /^At PR, waiting on others, Claude working;/ })).toBeVisible();
+  });
 });

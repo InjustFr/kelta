@@ -405,6 +405,25 @@ async fn work_updated_reaches_the_ui() {
 }
 
 #[tokio::test]
+async fn ticket_step_reaches_the_ui() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let row = kelta_proto::model::TicketStep {
+        ticket: kelta_proto::samples::ticket_ref(),
+        source_id: None,
+        step_id: "pr".into(),
+        entered_at: "2026-10-16T10:00:00Z".into(),
+        by: "\"pr_opened\"".into(),
+    };
+    h.core.publish(kelta_proto::events::BusEvent::new(
+        kelta_proto::events::bus::TICKET_STEP,
+        serde_json::json!(row),
+    ));
+    assert!(h.ui.events().iter().any(|e| matches!(e,
+        kelta_proto::events::UiEvent::TicketStep { step } if **step == row)));
+}
+
+#[tokio::test]
 async fn claude_ide_bridge_follows_the_setting() {
     let tmp = tempfile::tempdir().unwrap();
     let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);

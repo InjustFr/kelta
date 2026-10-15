@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import * as samples from '$lib/gen/fixtures';
 
 import { phaseOf, type PhaseGit, type PhaseItem, type PhasePr } from './phase';
-import { CLAUDE, DEPLOY, MERGE, PR, REVIEW, workHeader, workStage, type Mark } from './stage';
+import { CLAUDE, DEPLOY, MERGE, PR, REVIEW, stageName, workHeader, workStage, type Mark } from './stage';
 
 const item = { pr_url: null, review: null, feedback_at: null };
 
@@ -126,5 +126,51 @@ describe('workHeader (#428): the mark per phase row of FLOW §2.2', () => {
       section: 'in_flight',
     } as const;
     expect(workHeader(w(), waiting, null).why).toBe('Waiting on others: Claude working');
+  });
+});
+
+describe('on a stored ticket step (#462)', () => {
+  const steps = ['Implementing', 'PR', 'Review', 'Merge', 'Done'];
+  const labels = ['Ticket', ...steps];
+
+  it.each(['to_review', 'working', 'needs_you', 'replied'] as const)(
+    '%s keeps the ticket at PR and at Review',
+    (id) => {
+      for (const index of [1, 2]) {
+        const phase = { id, lamp: id === 'working' ? 'working' : 'done' } as const;
+        expect(workStage(item, phase, null, true, false, { index, steps })).toMatchObject({
+          at: index + 1,
+          reached: index + 1,
+          labels,
+        });
+      }
+    },
+  );
+
+  it('the phase keeps the mark and the working lamp', () => {
+    const step = { index: 1, steps };
+    expect(workStage(item, { id: 'working', lamp: 'working' }, null, false, false, step)).toEqual({
+      at: 2,
+      reached: 2,
+      mark: 'wait',
+      labels,
+      working: true,
+    });
+    expect(workStage(item, { id: 'checks_failed', lamp: 'error' }, null, true, false, step).mark).toBe('broken');
+    expect(workStage(item, { id: 'merged', lamp: 'none' }, null, true, true, step)).toMatchObject({
+      at: 2,
+      mark: 'wait',
+    });
+  });
+
+  it('a custom pipeline names its step on the track', () => {
+    const step = { index: 2, steps: ['Implementing', 'PR', 'PO Review', 'Merge'] };
+    const s = workStage(item, { id: 'in_review', lamp: 'none' }, null, false, false, step);
+    expect(stageName(s)).toBe('PO Review');
+  });
+
+  it('the work tab header takes the step', () => {
+    const phase = { id: 'working', lamp: 'working', label: 'Claude working', detail: '', section: 'in_flight' } as const;
+    expect(workHeader(item, phase, null, { index: 1, steps }).stage.at).toBe(2);
   });
 });

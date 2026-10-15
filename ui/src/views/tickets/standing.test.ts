@@ -71,6 +71,24 @@ describe('standing (#400)', () => {
     expect(standing(tk('in_progress'), { item, phase: fix, pr: null }, true, true).stage.mark).toBe('broken');
   });
 
+  it("a stored step places the ticket on its pipeline; without one, today's standing (#462)", () => {
+    const d = tk('in_progress', [{ draft: true }]);
+    expect(standing(d, null, true, false, null)).toEqual(standing(d, null, true, false));
+    expect(standing(d, null, true, false).stage.at).toBe(PR);
+    const step = { index: 2, steps: ['Implementing', 'PR', 'Review', 'Merge', 'Done'] };
+    expect(standing(d, null, true, false, step)).toEqual({
+      stage: { at: 3, reached: 3, mark: 'you', labels: ['Ticket', ...step.steps] },
+      where: 'The PR is still a draft.',
+    });
+    // A review fix (Claude working) stays at Review.
+    const item = { pr_url: null, review: null, feedback_at: null } as unknown as WorkItem;
+    const working = { id: 'working', lamp: 'working', section: 'in_flight', label: 'Claude working' } as Phase;
+    expect(standing(tk('in_progress'), { item, phase: working, pr: null }, false, false, step).stage).toMatchObject({
+      at: 3,
+      working: true,
+    });
+  });
+
   it('the row names the PR and its state', () => {
     expect(prState(tk('todo'))).toBeNull();
     expect(prState(tk('in_progress', [{ ci: 'failure' }]))).toEqual({ text: '#7 checks failed', bad: true });
