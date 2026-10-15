@@ -6,7 +6,7 @@ import { sheetRegistry } from '$app/registry';
 import type { ActionButtonDef, PaneContent, PluginInfo, ScreenDef, TemplateCtx } from '$lib/gen';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { layout, plugins, projects, reviews, sessions, settings, tools, ui, work } from '$lib/stores';
+import { layout, plugins, projects, reviews, sessions, settings, tools, toasts, ui, work } from '$lib/stores';
 import { idle } from '$lib/stores/loadable';
 
 import '../actions';
@@ -458,6 +458,8 @@ describe('recent places, pull requests, settings keys and prefixes (#420)', () =
       label: 'Work-in-progress limit',
     });
     expect(hit.detail).toContain('The Doing header warns above it');
+    expect(hit.value).toBe('3');
+    expect(hit.checked).toBeUndefined();
     await import('../../views/settings/actions');
     await hit.run();
     expect(ui.settings).toEqual({ section: 'worktree' });
@@ -478,5 +480,53 @@ describe('recent places, pull requests, settings keys and prefixes (#420)', () =
     expect(parseQuery('>split')).toEqual({ groups: ['Actions', 'Commands', 'Tools'], text: 'split' });
     expect(parseQuery(', wip limit ')).toEqual({ groups: ['Settings'], text: 'wip limit' });
     expect(parseQuery(' wip limit')).toEqual({ groups: null, text: 'wip limit' });
+  });
+});
+
+describe('settings in place (#478)', () => {
+  const keyItem = (path: string) => settingsItems().find((i) => i.id === `setting-key:${path}`)!;
+  const copyOnSelect = (): boolean =>
+    (settings.value() as unknown as { terminal: { copy_on_select: boolean } }).terminal.copy_on_select;
+  const setCalls = (cmd: string) => mock.calls.filter((c) => c.cmd === cmd);
+
+  it('shows on/off settings as a switch and others with their value', async () => {
+    await settings.loadSchema();
+    const onOff = keyItem('terminal.copy_on_select');
+    expect(onOff.checked).toBe(false);
+    expect(onOff.value).toBeUndefined();
+    expect(onOff.open).toBeDefined();
+    expect(keyItem('tickets.wip_limit').value).toBe('3');
+  });
+
+  it('↵ flips an on/off setting in All projects, with Undo', async () => {
+    await settings.loadSchema();
+    await keyItem('terminal.copy_on_select').run();
+    expect(setCalls('settings_set').at(-1)!.args).toMatchObject({
+      layer: 'global',
+      path: 'terminal.copy_on_select',
+      value: true,
+    });
+    expect(copyOnSelect()).toBe(true);
+    expect(ui.settings).toBeNull();
+    const last = toasts.list.at(-1)!;
+    expect(last.toast.text).toBe('Copy text when you select it turned on');
+    expect(last.toast.action).toMatchObject({
+      command: 'settings.restore',
+      args: { path: 'terminal.copy_on_select', value: null },
+    });
+    await toasts.run(last.id);
+    expect(setCalls('settings_reset').at(-1)!.args).toMatchObject({
+      layer: 'global',
+      path: 'terminal.copy_on_select',
+    });
+    expect(copyOnSelect()).toBe(false);
+  });
+
+  it('⌘↵ opens an on/off setting on its row in Settings', async () => {
+    await settings.loadSchema();
+    keyItem('terminal.copy_on_select').open!();
+    expect(ui.settings).toEqual({ section: 'terminal' });
+    expect(takeKeyRequest()).toBe('terminal.copy_on_select');
+    ui.settings = null;
   });
 });

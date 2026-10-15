@@ -31,7 +31,7 @@
   import { effectiveBindings } from './lib/chords';
   import { isRecord } from './lib/paths';
   import { repoRelevant } from './lib/schema';
-  import { buildSearchIndex, isInline, searchSettings, type SearchHit } from './lib/search';
+  import { buildSearchIndex, isInline, searchSettings, type SearchEntry, type SearchHit } from './lib/search';
   import { SECTION_GROUPS, sectionLabel } from './lib/sections';
   import { health } from './lib/health.svelte';
   import RepoTrust from './RepoTrust.svelte';
@@ -74,8 +74,13 @@
     if (wanted && sections.some((s) => s.id === wanted)) sectionId = wanted;
     const key = takeKeyRequest();
     if (key) {
-      query = key;
-      active = 0;
+      // ⌘K (#478): the row itself in its section; the search until the index is built
+      const entry = untrack(() => index.find((e) => e.kind === 'key' && e.path === key));
+      if (entry) open(entry);
+      else {
+        query = key;
+        active = 0;
+      }
     }
     const toml = takeTomlRequest();
     if (toml) {
@@ -181,6 +186,9 @@
       if (!el) return false;
       el.closest('details')?.setAttribute('open', ''); // an Advanced key
       el.scrollIntoView?.({ block: 'center' });
+      el.removeAttribute('data-revealed');
+      void el.offsetWidth; // restarts the highlight on a row revealed before
+      el.setAttribute('data-revealed', '');
       then?.(el);
       return true;
     };
@@ -195,7 +203,7 @@
     };
   }
 
-  function open(h: SearchHit): void {
+  function open(h: SearchEntry): void {
     query = '';
     sectionId = h.section;
     editor.raw = !!h.toml; // TOML-only keys open Edit TOML
@@ -464,6 +472,11 @@
 </div>
 
 <style>
+  /* The row ⌘K or a search result opened: a short accent wash. */
+  main :global([data-revealed]) {
+    animation: k-revealed 1.6s var(--k-ease);
+  }
+
   .layer-help {
     margin: 0;
     padding: var(--k-space-2) var(--k-space-4);
