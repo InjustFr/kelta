@@ -120,19 +120,19 @@ impl WorkService {
     ) -> Result<TicketStep, KeltaError> {
         let items = self.store.list_items(None).await?;
         // Its newest unfinished item (the UI's `ticketWork`, #466): the journal and steps live there.
-        let item = items
+        let mine: Vec<&WorkItem> = items
             .iter()
             .filter(|w| {
                 w.state != WorkState::Finished
                     && w.ticket.as_ref().is_some_and(|x| x.account == ticket.account && x.key == ticket.key)
             })
-            .max_by(|a, b| a.created_at.cmp(&b.created_at))
-            .ok_or_else(|| {
-                KeltaError::not_found(format!(
-                    "{} has no unfinished work item: start work on it first",
-                    ticket.key
-                ))
-            })?;
+            .collect();
+        let item = mine.iter().copied().max_by(|a, b| a.created_at.cmp(&b.created_at)).ok_or_else(|| {
+            KeltaError::not_found(format!(
+                "{} has no unfinished work item: start work on it first",
+                ticket.key
+            ))
+        })?;
         let env = self.env(&item.project_id, &item.repo_id)?;
         let steps = steps_of(&env, item);
         let lock = self.step_lock(ticket);
@@ -150,12 +150,14 @@ impl WorkService {
         };
         // The step `work_started` enters runs its effects in the Start saga only, as `signal` (#466).
         let start = advance(&steps, None, &Signal::Event(PipelineEvent::WorkStarted)) == Some(next);
-        // A transition that failed is retried by moving to its step again (#466).
-        let retry = !start
-            && step.transition_to.is_some()
-            && !self.load_journal(&item.id).effects_done.contains(&format!("{}:transition", step.id));
+        // A transition that failed is retried by moving to its step again (#466): only the `<step>:failed`
+        // marker of the item that tried it says so (not a missing `:transition`, which a sibling or a
+        // status entry never journals); that item retries it, so its journal keeps the comment once.
+        let fkey = format!("{}:failed", step.id);
+        let failed =
+            mine.iter().copied().find(|w| !start && self.load_journal(&w.id).effects_done.contains(&fkey));
         if at == Some(next)
-            && !retry
+            && failed.is_none()
             && let Some(r) = self.store.ticket_step(ticket).await?
         {
             return Ok(r);
@@ -163,7 +165,7 @@ impl WorkService {
         let why = match at {
             Some(c) if next < c => None,
             _ if start => None,
-            _ => self.enter_effects(&env, item, step, &Signal::Manual, None).await,
+            _ => self.enter_effects(&env, failed.unwrap_or(item), step, &Signal::Manual, None).await,
         };
         let row = self.put_step(&env, item, ticket, step, "manual".into()).await;
         match why {
@@ -240,7 +242,11 @@ impl WorkService {
     ) -> Option<String> {
         let t = item.ticket.as_ref()?;
         let mut j = self.load_journal(&item.id);
-        let (tk, ck) = (format!("{}:transition", step.id), format!("{}:comment", step.id));
+        let (tk, ck, fk) = (
+            format!("{}:transition", step.id),
+            format!("{}:comment", step.id),
+            format!("{}:failed", step.id),
+        );
         let target = step
             .transition_to
             .as_ref()
@@ -278,6 +284,7 @@ impl WorkService {
             .await
             {
                 Ok(_) => {
+                    j.effects_done.remove(&fk);
                     j.effects_done.insert(tk);
                 }
                 Err(e) if strict && e.code == ErrorCode::Conflict => why = Some(CHOOSE_DONE.into()),
@@ -288,6 +295,7 @@ impl WorkService {
                     if *sig != Signal::Manual {
                         env.core.toast(Toast::warn(format!("{}: {msg}", t.key)));
                     }
+                    j.effects_done.insert(fk);
                     why = Some(msg);
                 }
             }

@@ -847,3 +847,37 @@ async fn next_step_without_a_stored_step_skips_the_start_effects() {
     assert_eq!(w.move_step(&t, None).await.unwrap().step_id, "implementing");
     assert_eq!((transitions(&fx, "t3"), started_comments(&fx)), (0, 0));
 }
+
+#[tokio::test]
+async fn a_retry_at_the_start_step_still_runs_its_effects_once() {
+    need_git!();
+    let fx = Fx::new();
+    start_pipeline(&fx);
+    let w = fx.service();
+    let mut t = samples::ticket_ref();
+    t.key = "SHOP-141".into();
+    let mut plan = w.plan(&project(), WorkSource::Ticket { ticket: t }).await.unwrap();
+    plan.side_effects.comment = Some("Started".into());
+    plan.side_effects.transition_to = Some(TransitionTarget::Name { name: "Nowhere".into() });
+    let item = w.start(plan).await.unwrap();
+    assert_eq!(step_of(&fx, &item).await.as_deref(), Some("implementing"), "the start row is stored");
+    w.retry_step(&item.id, "tracker_side_effects").await.unwrap();
+    let c = fx.tracker.calls();
+    let count = |p: &str| c.iter().filter(|x| x.starts_with(p)).count();
+    assert_eq!((count("transitions:"), count("comment:")), (2, 1), "{c:?}");
+}
+
+#[tokio::test]
+async fn moving_to_the_current_step_from_a_sibling_item_does_not_rerun_it() {
+    need_git!();
+    let fx = Fx::new();
+    start_pipeline(&fx);
+    let w = fx.service();
+    w.ensure_listener();
+    let first = started(&fx, &w, "SHOP-141").await;
+    w.link_pr(&first.id, &pr_review(91)).await.unwrap();
+    wait_step(&fx, &first, "pr").await;
+    let second = another(&fx, &w).await;
+    w.move_step(second.ticket.as_ref().unwrap(), Some("pr")).await.unwrap();
+    assert_eq!(transitions(&fx, "t10"), 1, "no retry without a failure");
+}
