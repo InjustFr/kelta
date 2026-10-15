@@ -539,7 +539,10 @@ mod tests {
     async fn preview_leaves_pr_values_out_of_a_pr_title_and_body() {
         let (s, d) = (Settings::default(), kelta_proto::dirs::Dirs::under(Path::new("/k")));
         let p = |path: &'static str, t: &'static str| preview(&s, &d, path, t);
-        assert_eq!(p("work.pr.title_template", "[{pr.number}|{pr.url}|{pr.title}]").await.unwrap().text, "[||]");
+        assert_eq!(
+            p("work.pr.title_template", "[{pr.number}|{pr.url}|{pr.title}]").await.unwrap().text,
+            "[||]"
+        );
         assert_eq!(p("work.pr.body_template", "{closes}").await.unwrap().text, "Closes #214");
         assert_eq!(p("sources.tracker.pipeline.comment", "{pr.number} {closes}").await.unwrap().text, "215 ");
     }

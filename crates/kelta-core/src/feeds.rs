@@ -20,8 +20,8 @@ use kelta_proto::ext::Urgency;
 use kelta_proto::ids::{AccountId, ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{NextUp, NextUpItem, PaneContent, Scope, WorkItem, WorkState};
 use kelta_proto::settings::{
-    AccountKind, BlockedMarker, ColumnSpec, ProjectConfig, Settings, Source, SourceField, TrackerBinding,
-    StepDef, TrackerView, Trigger, effective_pipeline,
+    AccountKind, BlockedMarker, ColumnSpec, ProjectConfig, Settings, Source, SourceField, StepDef,
+    TrackerBinding, TrackerView, Trigger, effective_pipeline,
 };
 use kelta_proto::store::{ProviderCacheRow, SeenReviewRow};
 use kelta_proto::tracker::{
