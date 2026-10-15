@@ -3,6 +3,7 @@ import type { OnMerge } from "./OnMerge";
 import type { OnPr } from "./OnPr";
 import type { OnStart } from "./OnStart";
 import type { PrSettings } from "./PrSettings";
+import type { StepDef } from "./StepDef";
 
 export type WorkSettings = { 
 /**
@@ -12,7 +13,12 @@ plan_preview: boolean,
 /**
  * Starting a new work item while other work is unfinished lists that work first.
  */
-finish_first: boolean, default_template: string, review_template: string, on_start: OnStart, on_pr: OnPr, on_merge: OnMerge, pr: PrSettings, 
+finish_first: boolean, default_template: string, review_template: string, on_start: OnStart, on_pr: OnPr, on_merge: OnMerge, 
+/**
+ * Steps of a ticket's flow when its source sets no `tracker.pipeline`; empty builds them from
+ * `tracker.status_map` and `on_*` ([`effective_pipeline`]).
+ */
+pipeline?: Array<StepDef>, pr: PrSettings, 
 /**
  * Branch of a scratch work item (New work item, `kelta-ctl start --task`); `{slug}` = slug of
  * the task's first line.

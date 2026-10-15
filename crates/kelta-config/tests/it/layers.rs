@@ -8,8 +8,9 @@ use kelta_config::ConfigService;
 use kelta_proto::api::SettingsSource;
 use kelta_proto::dirs::CliArgs;
 use kelta_proto::ids::{PluginId, ProjectId};
-use kelta_proto::settings::{Layer, RuntimeOverrides, Severity};
+use kelta_proto::settings::{Layer, RuntimeOverrides, Severity, TransitionTarget};
 use kelta_proto::testing::MemTrustStore;
+use kelta_proto::tracker::StatusCategory;
 use serde_json::json;
 
 fn pid(s: &str) -> ProjectId {
@@ -581,6 +582,45 @@ fn a_bad_project_colour_is_a_warning() {
     assert_eq!(issues[0].issue.line, Some(4));
     assert!(issues[0].issue.message.contains("theme colour or #rrggbb"), "{issues:?}");
     assert_eq!(issues[0].issue.severity, Severity::Warning);
+}
+
+#[test]
+fn status_map_and_on_targets_are_deprecation_warnings() {
+    let e = env();
+    e.global(
+        r#"
+[work.on_pr]
+transition_to = { category = "done" }
+
+[[sources]]
+id = "mine"
+tracker = { account = "gh", status_map = { done = { name = "Shipped" } } }
+
+[[sources]]
+id = "empty"
+tracker = { account = "gh", status_map = {} }
+"#,
+    );
+    let svc = e.load();
+    let issues = svc.issues();
+    let got: Vec<_> = issues.iter().map(|i| (i.issue.path.as_str(), i.issue.severity)).collect();
+    assert_eq!(
+        got,
+        [
+            ("sources.0.tracker.status_map", Severity::Warning),
+            ("work.on_pr.transition_to", Severity::Warning)
+        ]
+    );
+    assert!(issues[0].issue.message.contains("deprecated"), "{issues:?}");
+    let eff = svc.effective(None);
+    assert_eq!(
+        eff.sources[0].tracker.status_map.done,
+        Some(TransitionTarget::Name { name: "Shipped".into() })
+    );
+    assert_eq!(
+        eff.work.on_pr.transition_to,
+        Some(TransitionTarget::Category { category: StatusCategory::Done })
+    );
 }
 
 #[test]

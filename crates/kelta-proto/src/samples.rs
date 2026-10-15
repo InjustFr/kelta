@@ -190,6 +190,7 @@ pub fn tracker_binding() -> TrackerBinding {
             review: Some(TransitionTarget::Name { name: "In Review".into() }),
             done: Some(TransitionTarget::Category { category: StatusCategory::Done }),
         },
+        pipeline: Vec::new(),
         repo_rules: vec![RepoRule {
             r#match: RepoMatch { component: Some("frontend".into()), ..RepoMatch::default() },
             repo: "web".into(),

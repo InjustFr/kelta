@@ -160,6 +160,9 @@ pub const STATUS_COLOR: &str = "a status colour must be a theme colour or #rrggb
 
 pub const SOURCE_FIELD: &str = "a source field needs the tracker's field id";
 
+pub const STATUS_MAP_DEPRECATED: &str =
+    "`status_map` is deprecated: set `pipeline` steps instead (it is still read)";
+
 /// Keys a hand-written file may get wrong without losing the rest of it: on load and in the settings
 /// editor the key is dropped and its issue becomes this warning (`*` matches any one segment). IPC
 /// writes stay strict ([`layer_issues`]).
@@ -210,11 +213,45 @@ pub fn lenient_issues(layer: Layer, value: &mut Value, stem: Option<&str>) -> (V
             }
         }
         if !again {
-            // in SOFT_KEYS order, whichever drop revealed them
+            // in SOFT_KEYS order, whichever drop revealed them; deprecations last
             warnings.sort_by_key(|(k, _)| *k);
-            return (raw, warnings.into_iter().map(|(_, w)| w).collect());
+            let mut out: Vec<RawIssue> = warnings.into_iter().map(|(_, w)| w).collect();
+            out.extend(deprecated_issues(value));
+            return (raw, out);
         }
     }
+}
+
+/// Deprecated keys that are still read: warnings, the key is kept.
+fn deprecated_issues(value: &Value) -> Vec<RawIssue> {
+    let path = |segs: &[&str]| -> Vec<String> { segs.iter().map(|s| (*s).to_owned()).collect() };
+    // an empty `status_map = {}` (left by UI and migration writes) maps nothing
+    let set = |m: Option<&Value>| m.and_then(Value::as_object).is_some_and(|m| !m.is_empty());
+    let mut out = Vec::new();
+    if set(value.pointer("/project/tracker/status_map")) {
+        out.push(RawIssue::new(&path(&["project", "tracker", "status_map"]), STATUS_MAP_DEPRECATED));
+    }
+    for (i, s) in value.get("sources").and_then(Value::as_array).into_iter().flatten().enumerate() {
+        if set(s.pointer("/tracker/status_map")) {
+            let at = path(&["sources", &i.to_string(), "tracker", "status_map"]);
+            out.push(RawIssue::new(&at, STATUS_MAP_DEPRECATED));
+        }
+    }
+    for (on, key) in [
+        ("on_start", "transition_to"),
+        ("on_start", "comment"),
+        ("on_pr", "transition_to"),
+        ("on_pr", "comment"),
+        ("on_merge", "transition_to"),
+    ] {
+        if value.pointer(&format!("/work/{on}/{key}")).is_some() {
+            let msg = format!(
+                "`work.{on}.{key}` is deprecated: set `work.pipeline` steps instead (it is still read)"
+            );
+            out.push(RawIssue::new(&path(&["work", on, key]), msg));
+        }
+    }
+    out
 }
 
 /// [`position`] for non-blocking issues.
@@ -482,6 +519,31 @@ fn dup_ids(out: &mut Vec<RawIssue>, base: &[String], list: Option<&Value>, what:
     }
 }
 
+/// `pipeline` steps: a non-empty, unique `id`; a status trigger names a status.
+fn pipeline_issues(out: &mut Vec<RawIssue>, base: &[String], list: Option<&Value>) {
+    let Some(Value::Array(steps)) = list else { return };
+    let mut seen = HashSet::new();
+    for (i, s) in steps.iter().enumerate() {
+        let at = |keys: &[&str]| -> Vec<String> {
+            base.iter().cloned().chain([i.to_string()]).chain(keys.iter().map(|k| (*k).to_owned())).collect()
+        };
+        match s.get("id").and_then(Value::as_str) {
+            Some(id) if !id.is_empty() => {
+                if !seen.insert(id) {
+                    out.push(RawIssue::new(&at(&["id"]), format!("duplicate step id `{id}`")));
+                }
+            }
+            _ => out.push(RawIssue::new(&at(&["id"]), "a pipeline step needs a non-empty `id`")),
+        }
+        for (j, t) in s.get("enter").and_then(Value::as_array).into_iter().flatten().enumerate() {
+            if t.pointer("/status/name").and_then(Value::as_str).is_some_and(|n| n.trim().is_empty()) {
+                let p = at(&["enter", &j.to_string(), "status", "name"]);
+                out.push(RawIssue::new(&p, "a status trigger needs a status name"));
+            }
+        }
+    }
+}
+
 /// Rules of the `[project]` table; `stem` is the file stem when known.
 pub fn project_issues(value: &Value, stem: Option<&str>) -> Vec<RawIssue> {
     let mut out = Vec::new();
@@ -530,6 +592,9 @@ pub fn project_issues(value: &Value, stem: Option<&str>) -> Vec<RawIssue> {
         let mut v = base.clone();
         v.push("views".into());
         dup_ids(&mut out, &v, t.get("views"), "view");
+        let mut p = base.clone();
+        p.push("pipeline".into());
+        pipeline_issues(&mut out, &p, t.get("pipeline"));
         let mut c = base;
         c.push("columns".into());
         dup_ids(&mut out, &c, t.get("columns"), "column");
@@ -553,6 +618,7 @@ pub fn source_issues(value: &Value) -> Vec<RawIssue> {
         }
         dup_ids(&mut out, &at(&["tracker", "views"]), field("views"), "view");
         dup_ids(&mut out, &at(&["tracker", "columns"]), field("columns"), "column");
+        pipeline_issues(&mut out, &at(&["tracker", "pipeline"]), field("pipeline"));
         if field("repo_rules").and_then(Value::as_array).is_some_and(|a| !a.is_empty()) {
             out.push(RawIssue::new(
                 &at(&["tracker", "repo_rules"]),
@@ -696,6 +762,7 @@ pub fn layer_issues(layer: Layer, value: &Value, stem: Option<&str>) -> Vec<RawI
         out.extend(repo_key_issues(value));
     }
     out.extend(id_issues(value));
+    pipeline_issues(&mut out, &["work".to_owned(), "pipeline".to_owned()], value.pointer("/work/pipeline"));
     out.extend(template_issues(value));
     if layer == Layer::Project {
         out.extend(project_issues(value, stem));
@@ -751,6 +818,32 @@ mod tests {
         let issues = layer_issues(Layer::Project, &v, Some("x"));
         assert_eq!(issues.len(), 1, "{issues:?}");
         assert!(issues[0].message.contains("global only"));
+    }
+
+    #[test]
+    fn pipeline_rules() {
+        let paths = |v: &Value, l: Layer, stem: Option<&str>| -> Vec<String> {
+            layer_issues(l, v, stem).iter().map(|i| join_path(&i.path)).collect()
+        };
+        let src =
+            |steps: Value| json!({"sources": [{"id": "a", "tracker": {"account": "j", "pipeline": steps}}]});
+        let g = |v: &Value| paths(v, Layer::Global, None);
+        let step = |id: &str| json!({"id": id, "label": id});
+        let ok = src(json!([
+            {"id": "a", "label": "A", "enter": ["pr_ready", {"status": {"name": "PO Review"}}]},
+            {"id": "b", "label": "B", "transition_to": {"name": "Done"}},
+        ]));
+        assert!(g(&ok).is_empty());
+        let dup = src(json!([step("a"), step("b"), step("a")]));
+        assert_eq!(g(&dup), ["sources.0.tracker.pipeline.2.id"]);
+        let issues = layer_issues(Layer::Global, &dup, None);
+        assert!(issues[0].message.contains("duplicate step id `a`"));
+        assert_eq!(g(&json!({"work": {"pipeline": [{"id": ""}]}})), ["work.pipeline.0.id"]);
+        let blank = src(json!([{"id": "a", "enter": ["merged", {"status": {"name": " "}}]}]));
+        assert_eq!(g(&blank), ["sources.0.tracker.pipeline.0.enter.1.status.name"]);
+        let proj = json!({"project": {"id": "x", "name": "X",
+            "tracker": {"account": "j", "pipeline": [{"id": "a"}, {"id": "a"}]}}});
+        assert_eq!(paths(&proj, Layer::Project, Some("x")), ["project.tracker.pipeline.1.id"]);
     }
 
     #[test]
