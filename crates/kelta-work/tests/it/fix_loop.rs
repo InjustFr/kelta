@@ -858,15 +858,17 @@ async fn link_pr_links_once_without_claude_and_adds_an_item_to_a_held_ticket() {
 
     // The PR does not name the ticket: linked after the fact.
     let t = ticket("SHOP-141");
-    let item = w.link_ticket_pr(&project(), t.clone(), &r).await.unwrap();
+    let (item, linked) = w.link_ticket_pr(&project(), t.clone(), &r).await.unwrap();
+    assert!(linked);
     assert_eq!(item.ticket.as_ref().map(|x| x.key.as_str()), Some("SHOP-141"));
     assert_eq!((item.kind, item.state.clone()), (WorkKind::Ticket, WorkState::PrOpen), "{:?}", item.steps);
     assert_eq!((item.branch.as_str(), item.pr_url.as_deref()), ("feat/outside", Some(r.url.as_str())));
     assert_eq!(git(&item.worktree, &["rev-parse", "HEAD"]), head);
     assert_eq!(fx.spawned_of(|k| *k == SessionKind::Claude).len(), claudes, "no Claude started");
 
-    let again = w.link_ticket_pr(&project(), t.clone(), &r).await.unwrap();
-    assert_eq!(again.id, item.id, "a second call is a no-op");
+    let (again, linked) = w.link_ticket_pr(&project(), t.clone(), &r).await.unwrap();
+    assert!(!linked, "a second call is a no-op");
+    assert_eq!(again.id, item.id);
     assert_eq!(w.list(None).await.unwrap().len(), 2);
 
     // The PR is SHOP-141's: another ticket cannot take it.
@@ -883,11 +885,13 @@ async fn link_pr_links_once_without_claude_and_adds_an_item_to_a_held_ticket() {
     r2.r#ref.number = 97;
     r2.url = "https://github.com/acme/shop-api/pull/97".into();
     r2.source_branch = "feat/outside-2".into();
-    let second = w.link_ticket_pr(&project(), ticket("SHOP-142"), &r2).await.unwrap();
+    let (second, linked) = w.link_ticket_pr(&project(), ticket("SHOP-142"), &r2).await.unwrap();
+    assert!(linked);
     assert_ne!(second.id, held.id);
     assert_eq!(second.ticket, held.ticket);
     assert_eq!((second.branch.as_str(), second.pr_url.as_deref()), ("feat/outside-2", Some(r2.url.as_str())));
-    let again = w.link_ticket_pr(&project(), ticket("SHOP-142"), &r2).await.unwrap();
+    let (again, linked) = w.link_ticket_pr(&project(), ticket("SHOP-142"), &r2).await.unwrap();
+    assert!(!linked);
     assert_eq!(again.id, second.id, "the same PR again is a no-op");
     assert_eq!(w.list(None).await.unwrap().len(), 3);
 

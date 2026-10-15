@@ -476,13 +476,13 @@ pub trait CoreApi: Send + Sync {
         Err(KeltaError::unsupported("work_release"))
     }
     /// MCP `link_pr` (#453): the work item of `ticket` adopting `pr`'s head branch, created without
-    /// Claude or reused; `Conflict` naming the item that holds the ticket or the PR.
+    /// Claude or reused; `bool` is false when it was linked already (no change); `Conflict` naming the item that holds the ticket or the PR.
     async fn work_link_pr(
         &self,
         _project: &ProjectId,
         _ticket: TicketRef,
         _pr: Review,
-    ) -> Result<WorkItem, KeltaError> {
+    ) -> Result<(WorkItem, bool), KeltaError> {
         Err(KeltaError::unsupported("work_link_pr"))
     }
     async fn editor_open(

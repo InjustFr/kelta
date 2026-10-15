@@ -93,6 +93,44 @@ async fn ship_refuses_without_commits_and_while_claude_works() {
 }
 
 #[tokio::test]
+async fn create_pr_then_link_pr_is_a_no_op_also_when_the_repo_case_differs() {
+    need_git!();
+    use kelta_proto::api::CodeHost;
+    let fx = Fx::new();
+    let w = fx.service();
+    let item = started(&fx, &w, "SHOP-141").await;
+    commit(&item, "a.txt");
+    set_claude_status(&fx, &item, SessionStatus::Working);
+    let task = tokio::spawn({
+        let (w, id) = (w.clone(), item.id.clone());
+        async move { w.create_pr(&id, PrDraft::default(), ShipOrigin::Mcp).await }
+    });
+    let push = fx.wait_session(|s| s.name == "git push").await;
+    git(&item.worktree, &["push", "-q", "-u", "origin", &item.branch]);
+    fx.core.exit_session(&push, 0);
+    let out = task.await.unwrap().unwrap();
+    assert_eq!(out.state, WorkState::PrOpen);
+    let binding = samples::project_info().repos[0].code_host.clone().unwrap();
+    let pr = fx.host.find_for_branch(&binding.repo, &item.branch).await.unwrap().unwrap();
+    assert_eq!(out.pr_url.as_deref(), Some(pr.url.as_str()));
+
+    let t = item.ticket.clone().unwrap();
+    let (same, linked) = w.link_ticket_pr(&project(), t.clone(), &pr).await.unwrap();
+    assert!(!linked, "create_pr linked it already");
+    assert_eq!(same.id, item.id);
+
+    // Another URL and a repo name in other case: found by head branch in the bound repo.
+    let mut upper = pr.clone();
+    upper.r#ref.repo = pr.r#ref.repo.to_uppercase();
+    upper.url = pr.url.replace(&pr.r#ref.repo, &upper.r#ref.repo);
+    assert_ne!(upper.url, pr.url);
+    let (same, linked) = w.link_ticket_pr(&project(), t, &upper).await.unwrap();
+    assert!(!linked);
+    assert_eq!(same.id, item.id);
+    assert_eq!(w.list(None).await.unwrap().len(), 1, "no second item");
+}
+
+#[tokio::test]
 async fn mcp_ship_holds_the_lock_and_names_it() {
     need_git!();
     let fx = Fx::new();

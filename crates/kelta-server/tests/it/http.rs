@@ -624,7 +624,7 @@ async fn link_pr_resolves_my_pr_and_passes_conflicts_on() {
     );
     let mut w = samples::work_item();
     w.branch = pr.source_branch.clone();
-    e.fake.respond("work_link_pr", serde_json::to_value(&w).unwrap());
+    e.fake.respond("work_link_pr", json!([w, true]));
     let link =
         |pr: Value| global_call(port, "link_pr", json!({ "key": "SHOP-151", "account": account, "pr": pr }));
 
@@ -639,11 +639,38 @@ async fn link_pr_resolves_my_pr_and_passes_conflicts_on() {
     let (text, err) = link(json!(format!("#{number}"))).await;
     assert!(!err, "by number: {text}");
 
+    e.fake.respond("work_link_pr", json!([w, false]));
+    let (text, err) = link(json!(url)).await;
+    assert!(!err && text.starts_with("Linked already: no change. SHOP-151"), "{text}");
+    assert!(text.contains(&w.id.to_string()), "{text}");
+
     let (text, err) = link(json!("https://github.com/acme/shop-api/pull/1")).await;
     assert!(err && text.starts_with("NotFound:"), "{text}");
     e.fake.fail("work_link_pr", kelta_proto::error::KeltaError::conflict("SHOP-151 is held by work item w1"));
     let (text, err) = link(json!(url)).await;
     assert!(err && text == "Conflict: SHOP-151 is held by work item w1", "{text}");
+    e.server.release_http();
+}
+
+#[tokio::test]
+async fn link_pr_in_a_session_uses_the_session_project() {
+    let e = common::env();
+    let session = samples::session_info();
+    let (sid, mine) = (session.id.clone(), session.project_id.clone());
+    e.fake.insert_session(session);
+    e.server.register_session(&sid, "ht", Some("mt"));
+    let port = e.server.ensure_http().await.unwrap();
+    let account = samples::ticket_ref().account;
+    let mut pr = samples::review();
+    pr.kind = kelta_proto::codehost::ReviewKind::Authored;
+    let url = pr.url.clone();
+    e.fake.respond("review_list", json!([{ "review": pr, "project_ids": ["other", mine], "waiting": [] }]));
+    e.fake.respond("work_link_pr", json!([samples::work_item(), true]));
+    let args = json!({ "key": "SHOP-151", "account": account, "pr": url });
+    let (text, err) = call(port, sid.as_str(), "mt", "link_pr", args).await;
+    assert!(!err, "{text}");
+    let c = e.fake.calls().into_iter().rfind(|c| c.method == "work_link_pr").unwrap();
+    assert_eq!(c.args["project"], json!(mine));
     e.server.release_http();
 }
 
@@ -664,7 +691,7 @@ async fn link_pr_moves_the_ticket_to_the_status_given() {
         json!([{ "review": pr, "project_ids": [samples::project_info().id], "waiting": [] }]),
     );
     // A repeat call on a linked PR returns the same item: the fake answers every call alike.
-    e.fake.respond("work_link_pr", serde_json::to_value(samples::work_item()).unwrap());
+    e.fake.respond("work_link_pr", json!([samples::work_item(), true]));
     let link = |status: Option<&str>| {
         let mut args = json!({ "key": "SHOP-141", "account": account, "pr": url });
         if let Some(s) = status {

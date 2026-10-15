@@ -756,16 +756,23 @@ async fn link_pr(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &Value)
             ));
         }
     };
+    let session_project = sid.and_then(|s| core.session_get(s)).map(|s| s.project_id);
     let project = opt_arg(args, "project")
         .map(ProjectId::new)
+        // The calling session's project when it binds the PR's repo (#458): several projects may.
+        .or_else(|| session_project.clone().filter(|p| item.project_ids.contains(p)))
         .or_else(|| item.project_ids.first().cloned())
         .or_else(|| projects.into_iter().next())
-        .or_else(|| sid.and_then(|s| core.session_get(s)).map(|s| s.project_id))
+        .or(session_project)
         .ok_or_else(|| format!("no Kelta project for {}; pass `project`", item.review.url))?;
     let (t, url) = (ticket.clone(), item.review.url.clone());
-    let w = core.work_link_pr(&project, ticket, item.review.clone()).await.map_err(coded)?;
-    let linked =
-        format!("Linked {} to {url}: work item {} on {} ({}).", t.key, w.id, w.branch, w.worktree.display());
+    let (w, fresh) = core.work_link_pr(&project, ticket, item.review.clone()).await.map_err(coded)?;
+    let at = format!("work item {} on {} ({})", w.id, w.branch, w.worktree.display());
+    let linked = if fresh {
+        format!("Linked {} to {url}: {at}.", t.key)
+    } else {
+        format!("Linked already: no change. {} and {url} are on {at}.", t.key)
+    };
     let Some(status) = opt_arg(args, "status") else { return Ok(linked) };
     let moved = async {
         let to = role_target(core, &project, &status)?.unwrap_or_else(|| status.clone());

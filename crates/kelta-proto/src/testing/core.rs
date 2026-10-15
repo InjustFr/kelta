@@ -618,7 +618,7 @@ impl CoreApi for FakeCore {
         project: &ProjectId,
         ticket: TicketRef,
         pr: crate::codehost::Review,
-    ) -> Result<WorkItem, KeltaError> {
+    ) -> Result<(WorkItem, bool), KeltaError> {
         self.record(
             "work_link_pr",
             serde_json::json!({ "project": project, "ticket": ticket, "pr": pr.url }),
