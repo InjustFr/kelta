@@ -1,16 +1,19 @@
-import { render } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { SettingsSectionId } from '$app/registry';
 import { createMockTransport } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
+import { settings, ui } from '$lib/stores';
 
 import schemaJson from '../../../../schema/settings.schema.json';
 import { COPY, COPY_DONE, SECTION_COPY, type CopyTable } from './copy';
 import { joinPath, splitPath } from './lib/paths';
 import { childEntries, enumOptions, fieldKind, leafFields, nodeAt, type SchemaNode } from './lib/schema';
 import { SECTION_ROOTS } from './lib/sections';
+import { takeSourceRequest } from './actions';
 import SectionForm from './SectionForm.svelte';
+import Worktree from './sections/Worktree.svelte';
 
 const schema = schemaJson as unknown as SchemaNode;
 const onOs = (p: 'MacIntel' | 'Linux x86_64') => vi.spyOn(navigator, 'platform', 'get').mockReturnValue(p);
@@ -78,6 +81,24 @@ describe('settings copy table', () => {
     unmount();
   });
 
+  it('leafFields orders keys by the table across roots and drops a root of the other OS', () => {
+    const paths = () => leafFields(schema, SECTION_ROOTS.worktree!).map((f) => f.path);
+    expect(paths().slice(0, 4)).toEqual([
+      'work.on_start.assign_me',
+      'work.plan_preview',
+      'work.finish_first',
+      'work.default_template',
+    ]);
+    const saved = COPY.tickets!; // not inject(): its afterEach would delete the real entry
+    COPY.tickets = { ...saved, platform: 'linux' };
+    try {
+      onOs('MacIntel');
+      expect(paths()).not.toContain('tickets.wip_limit');
+    } finally {
+      COPY.tickets = saved;
+    }
+  });
+
   it('fields follow the table order under group headings, the rest A→Z', async () => {
     inject({
       'window.restore_geometry': { order: 0, group: 'On launch' },
@@ -114,5 +135,57 @@ describe('settings copy table', () => {
       }
       expect([...missing]).toEqual([]);
     }
+  });
+});
+
+describe('Settings → Work items', () => {
+  it('stage links, groups in the order work happens, no ticket move outside Advanced, the note opens Sources → Steps', async () => {
+    const { transport } = createMockTransport();
+    setTransport(transport);
+    await settings.load();
+    await import('./actions');
+    const seen = vi.fn();
+    Element.prototype.scrollIntoView = seen;
+    const { container, unmount } = render(Worktree, { layer: 'global', projectId: null, repoId: null });
+    await waitFor(() => expect(container.querySelector('[data-path]')).toBeTruthy());
+    const paths = (els: Element[]) => els.map((e) => e.getAttribute('data-path'));
+    const fields = [...container.querySelectorAll('[data-testid="field"]')];
+    expect(paths(fields.filter((f) => !f.closest('[data-testid="advanced"]')))).toEqual([
+      'work.on_start.assign_me',
+      'work.plan_preview',
+      'work.finish_first',
+      'work.default_template',
+      'worktree.branch_template',
+      'worktree.root',
+      'worktree.include',
+      'worktree.setup',
+      'worktree.setup_blocking',
+      'worktree.teardown',
+      'work.pr.title_template',
+      'work.pr.body_template',
+      'work.pr.draft',
+      'work.pr.merge_method',
+      'work.on_merge.offer_cleanup',
+      'tickets.wip_limit',
+      'work.return_brief_after_mins',
+    ]);
+    const stages = ['Starting', 'Branch folder', 'Pull request', 'After merge', 'Limits'];
+    expect(
+      [...container.querySelectorAll('[data-testid="copy-group"] h3')].map((h) => h.textContent),
+    ).toEqual(stages);
+    const nav = within(container.querySelector('[data-testid="work-stages"]') as HTMLElement);
+    expect(nav.getAllByRole('button').map((b) => b.textContent?.trim())).toEqual(stages);
+    const advanced = container.querySelector('[data-testid="advanced"]')!;
+    for (const p of ['work.on_pr.comment', 'work.on_start.transition_to'])
+      expect(advanced.querySelector(`[data-path="${p}"]`), p).toBeTruthy();
+
+    await fireEvent.click(nav.getByRole('button', { name: 'After merge' }));
+    expect((seen.mock.contexts[0] as HTMLElement).dataset.group).toBe('After merge');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit steps in Sources' }));
+    expect(ui.settings).toEqual({ section: 'sources' });
+    expect(takeSourceRequest()).toEqual({ id: settings.value()!.sources[0]!.id, steps: true });
+    ui.settings = null;
+    unmount();
   });
 });

@@ -9,14 +9,14 @@
   import Spinner from '$lib/ui/Spinner.svelte';
   import type { Snippet } from 'svelte';
 
-  import { COPY, groupRuns, onThisPlatform } from './copy';
+  import { COPY, COPY_DONE, groupRuns, onThisPlatform } from './copy';
   import Field from './fields/Field.svelte';
   import SettingsGroup from './layout/SettingsGroup.svelte';
   import SettingsDisclosure from './layout/SettingsDisclosure.svelte';
   import { useEditor } from './lib/editor.svelte';
   import { joinPath, splitPath } from './lib/paths';
-  import { childEntries, fieldKind, nodeAt, repoRelevant, type SchemaNode } from './lib/schema';
-  import { ADVANCED, isAdvanced, SECTION_BLURB, SECTION_ROOTS, TOML_ROOTS } from './lib/sections';
+  import { childEntries, fieldKind, leafFields, nodeAt, repoRelevant, type SchemaNode } from './lib/schema';
+  import { ADVANCED, SECTION_BLURB, SECTION_ROOTS, TOML_ROOTS } from './lib/sections';
 
   interface Props extends Partial<SettingsSectionProps> {
     sectionId: SettingsSectionId;
@@ -39,15 +39,23 @@
   }: Props = $props();
 
   const editor = useEditor(() => ({ layer, projectId, repoId }));
-  const roots = $derived((SECTION_ROOTS[sectionId] ?? []).filter((r) => !skip.includes(r)));
+  const roots = $derived(
+    (SECTION_ROOTS[sectionId] ?? []).filter((r) => !skip.includes(r) && onThisPlatform(COPY[r])),
+  );
   const blurb = $derived(t(SECTION_BLURB[sectionId] ?? ''));
   const tomlRoots = $derived(TOML_ROOTS[sectionId] ?? []);
 
-  /** What the form renders: the children of a lone root group, else each root. */
+  /** What the form renders: the children of a lone root group, the leaves of a finished multi-root section, else each root. */
   const entries = $derived.by((): [string, SchemaNode][] => {
     const schema = editor.schema;
     if (!schema) return [];
     const all = SECTION_ROOTS[sectionId] ?? [];
+    // A finished section (every key labelled, COPY_DONE) with several roots: its copy groups span roots,
+    // so it shows leaves in the copy order rather than one group per root.
+    if (all.length > 1 && COPY_DONE.includes(sectionId))
+      return leafFields(schema, roots)
+        .map((f): [string, SchemaNode] => [f.path, f.node])
+        .filter(([path]) => !skip.includes(path));
     return roots.flatMap((root): [string, SchemaNode][] => {
       const node = schema.properties?.[root];
       if (!node) return [];
@@ -59,7 +67,8 @@
     });
   });
   const visible = (path: string) => editor.layer !== 'repo' || repoRelevant(path);
-  const basic = $derived(entries.filter(([path]) => !isAdvanced(path)));
+  const underAdvanced = (path: string) => ADVANCED.some((a) => path === a || path.startsWith(`${a}.`));
+  const basic = $derived(entries.filter(([path]) => !underAdvanced(path)));
   const advanced = $derived.by((): [string, SchemaNode][] => {
     const schema = editor.schema;
     if (!schema) return [];
@@ -68,7 +77,7 @@
         !skip.includes(a) &&
         visible(a) &&
         onThisPlatform(COPY[a]) &&
-        entries.some(([p]) => a === p || a.startsWith(`${p}.`)),
+        entries.some(([p]) => a === p || a.startsWith(`${p}.`) || p.startsWith(`${a}.`)),
     ).flatMap((a): [string, SchemaNode][] => {
       const node = nodeAt(schema, splitPath(a));
       return node ? [[a, node]] : [];
@@ -96,7 +105,7 @@
   {:else}
     {#each groupRuns(basic) as run, i (i)}
       {#if run.group}
-        <SettingsGroup heading={t(run.group)} data-testid="copy-group"
+        <SettingsGroup heading={t(run.group)} data-testid="copy-group" data-group={run.group}
           >{@render fields(run.items)}</SettingsGroup
         >
       {:else}
