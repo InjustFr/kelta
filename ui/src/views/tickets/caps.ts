@@ -20,7 +20,9 @@ export type TicketAction =
   | 'branch'
   | 'browser'
   | 'tag'
-  | 'another';
+  | 'another'
+  | 'next_step'
+  | 'move_step';
 
 /** Action bar order, with the key that runs each one in the detail. */
 export const TICKET_ACTIONS: readonly { id: TicketAction; key: string }[] = [
@@ -37,6 +39,8 @@ export const TICKET_ACTIONS: readonly { id: TicketAction; key: string }[] = [
   { id: 'browser', key: 'o' },
   { id: 'tag', key: 't' },
   { id: 'another', key: 'N' },
+  { id: 'next_step', key: 'e' },
+  { id: 'move_step', key: 'E' },
 ];
 
 /** Opens the detail's More menu (Cmd+. on macOS, Ctrl+. on Linux). */
@@ -70,6 +74,8 @@ export function blockedReason(
     case 'workflow':
       return workflowReason(workflows);
     case 'another':
+    case 'next_step':
+    case 'move_step':
       return ticketWork(item.ticket.ref).length > 0
         ? null
         : t('No work on this ticket yet. Start work first.');

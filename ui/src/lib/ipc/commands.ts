@@ -77,6 +77,7 @@ import type {
   TicketItem,
   TicketPage,
   TicketRef,
+  TicketStep,
   ToolCheck,
   ToolHandle,
   ToolId,
@@ -285,6 +286,8 @@ export interface Commands {
   next_up_remove: { args: { ticket: TicketRef }; result: null };
   /** Clears the tickets' `New` badge. */
   ticket_seen: { args: { tickets: TicketRef[] }; result: null };
+  /** Manual step move (#463): `step_id`, or the step after the current one (`null`, Next step). */
+  ticket_step_set: { args: { ticket: TicketRef; step_id: string | null }; result: TicketStep };
   /** My local tags (#349): Kelta-local, never sent to a tracker or code host. */
   tags_get: { args: NoArgs; result: LocalTags };
   /** Replaces the whole set; returns it as stored. */
@@ -509,6 +512,7 @@ export const COMMAND_NAMES = [
   'next_up_put',
   'next_up_remove',
   'ticket_seen',
+  'ticket_step_set',
   'tags_get',
   'tags_set',
   'review_list',
@@ -755,6 +759,7 @@ export const nextUpList = wrap('next_up_list');
 export const nextUpPut = wrap('next_up_put');
 export const nextUpRemove = wrap('next_up_remove');
 export const ticketSeen = wrap('ticket_seen');
+export const ticketStepSet = wrap('ticket_step_set');
 export const tagsGet = wrap('tags_get');
 export const tagsSet = wrap('tags_set');
 

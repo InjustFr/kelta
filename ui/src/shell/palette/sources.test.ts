@@ -222,6 +222,9 @@ describe('palette sources', () => {
     // Actions owned by other lanes are not offered until they are registered; goto.N is omitted.
     expect(items.find((i) => i.id.startsWith('action:project.goto'))).toBeUndefined();
     expect(items.find((i) => i.id === 'action:tickets.open')).toBeUndefined();
+    expect(items.map((i) => i.label)).toEqual(
+      expect.arrayContaining(['Work: Next step', 'Work: Move to step…']),
+    );
   });
 
   it('lists tools of the active project and settings sections', () => {

@@ -171,6 +171,8 @@ describe('work tab header', () => {
       'Finish…',
       'Open ticket',
       'Start another PR',
+      'Next step',
+      'Move to step…',
       'Ship',
       'Rebase onto main',
       'Mark reviewed',
@@ -239,8 +241,8 @@ describe('work tab header', () => {
     mountHeader(w);
     const menu = await openMenu();
     const entries = within(menu).getAllByRole('menuitem');
-    expect(entries.length).toBe(11); // the 9 that can run, the enabled plugin's action, then 1 not available
-    const last = entries[9]!;
+    expect(entries.length).toBe(13); // the 11 that can run, the enabled plugin's action, then 1 not available
+    const last = entries[11]!;
     expect(last.textContent).toContain('Deploy to QA');
     expect(last.textContent).toContain('QA');
     await fireEvent.click(last);

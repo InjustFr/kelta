@@ -2617,5 +2617,12 @@
   "Changes_requested": "Änderungen angefragt",
   "Deprecated: use `pipeline`; still read as its fallback. `start` / `review` / `done` → TransitionTarget; overrides `work.on_*` targets.": "Veraltet: `pipeline` verwenden; wird weiterhin als Fallback gelesen. `start` / `review` / `done` → TransitionTarget; überschreibt die `work.on_*`-Ziele.",
   "Deprecated: use `pipeline` steps; still read as their fallback.": "Veraltet: die Schritte von `pipeline` verwenden; werden weiterhin als Fallback gelesen.",
-  "Steps of a ticket's flow when its source sets no `tracker.pipeline`; empty builds them from\n`tracker.status_map` and `on_*` (`effective_pipeline`).": "Schritte im Ablauf eines Tickets, wenn seine Quelle kein `tracker.pipeline` setzt; leer werden sie aus\n`tracker.status_map` und `on_*` gebaut (`effective_pipeline`)."
+  "Steps of a ticket's flow when its source sets no `tracker.pipeline`; empty builds them from\n`tracker.status_map` and `on_*` (`effective_pipeline`).": "Schritte im Ablauf eines Tickets, wenn seine Quelle kein `tracker.pipeline` setzt; leer werden sie aus\n`tracker.status_map` und `on_*` gebaut (`effective_pipeline`).",
+  "Move to step…": "Zu Schritt wechseln…",
+  "{key} moved to step {step}": "{key} ist jetzt bei Schritt {step}",
+  "Move {key} to step": "{key} zu Schritt verschieben",
+  "Step…": "Schritt…",
+  "No matching step": "Kein passender Schritt",
+  "Work: Next step": "Arbeit: Nächster Schritt",
+  "Work: Move to step…": "Arbeit: Zu Schritt wechseln…"
 }

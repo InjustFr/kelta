@@ -569,6 +569,46 @@ async fn a_status_trigger_enters_po_review_without_a_transition() {
     assert_eq!(comments(), 1);
 }
 
+#[tokio::test]
+async fn a_manual_move_runs_the_entered_step_forward_and_nothing_back() {
+    need_git!();
+    let fx = Fx::new();
+    fx.settings(|s| {
+        s.work.pipeline = vec![
+            step("implementing", on(PipelineEvent::WorkStarted), None, None),
+            step("pr", on(PipelineEvent::PrOpened), None, None),
+            step("po", on(PipelineEvent::Approved), Some("In Review"), Some("Ready for PO")),
+            step("done", on(PipelineEvent::Merged), None, None),
+        ];
+    });
+    let w = fx.service();
+    let item = started(&fx, &w, "SHOP-141").await;
+    let t = item.ticket.clone().unwrap();
+    assert_eq!(w.move_step(&t, None).await.unwrap().step_id, "pr", "Next step");
+    let row = w.move_step(&t, Some("po")).await.unwrap();
+    assert_eq!((row.step_id.as_str(), row.by.as_str()), ("po", "manual"));
+    let moves = || fx.tracker.calls().iter().filter(|c| c.starts_with("transition:SHOP-141:t10")).count();
+    assert_eq!(moves(), 1);
+    assert!(comments_have(&fx, "Ready for PO"));
+
+    let calls = fx.tracker.calls().len();
+    let published = || fx.core.published().iter().filter(|e| e.name == bus::TICKET_STEP).count();
+    let before = published();
+    w.move_step(&t, Some("implementing")).await.unwrap();
+    assert_eq!(step_of(&fx, &item).await.as_deref(), Some("implementing"));
+    assert_eq!(fx.tracker.calls().len(), calls, "a backward move runs no side effect");
+    assert_eq!(published(), before + 1);
+
+    let err = w.move_step(&t, Some("nope")).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidArgument);
+    assert!(err.message.contains("unknown step `nope`"), "{}", err.message);
+    w.move_step(&t, Some("done")).await.unwrap();
+    assert_eq!(w.move_step(&t, None).await.unwrap_err().code, ErrorCode::InvalidArgument, "past the last");
+    let mut other = t.clone();
+    other.key = "SHOP-999".into();
+    assert_eq!(w.move_step(&other, None).await.unwrap_err().code, ErrorCode::NotFound);
+}
+
 fn comments_have(fx: &Fx, text: &str) -> bool {
     fx.tracker.ticket("SHOP-141").unwrap().comments.iter().any(|c| c.body_html.contains(text))
 }

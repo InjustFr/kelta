@@ -182,6 +182,8 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("work.link", "Work: Link to ticket", [], None, Global),
     a!("work.create_ticket", "Work: Create ticket", [], None, Global),
     a!("work.open_ticket", "Work: Open ticket", [], None, Global),
+    a!("work.next_step", "Work: Next step", [], None, Global),
+    a!("work.move_step", "Work: Move to step…", [], None, Global),
     a!("work.open_pr", "Work: Open PR", [], None, Global),
     a!("work.finish", "Work: Finish", [], None, Global),
     a!("work.park", "Work: Park", [], None, Global),

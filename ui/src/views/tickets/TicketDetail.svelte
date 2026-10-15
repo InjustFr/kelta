@@ -45,6 +45,7 @@
   import { siblingKey } from '../work/live';
   import { resumeWork, startAnotherPr, startPreview, startWorkOnTicket, ticketWork } from '../work/startWork';
   import ActionBar from './ActionBar.svelte';
+  import { moveStep, pickStep } from './step';
   import { blockedReason, TICKET_ACTIONS, type TicketAction } from './caps';
   import PickMenu from './PickMenu.svelte';
   import { discard, refine, refines } from './refine.svelte';
@@ -365,6 +366,12 @@
       }
       case 'another':
         void startAnotherPr(ref, workItem?.project_id ?? null);
+        break;
+      case 'next_step':
+        void moveStep(ref, null);
+        break;
+      case 'move_step':
+        pickStep(ref);
         break;
       case 'move':
         picker = statusBtn ?? null;

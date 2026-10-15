@@ -399,7 +399,7 @@ Every event carries `{name, ts, project_id?, session_id?, work_item_id?, payload
 | `ticket.started` | `{ticket: TicketRef, worktree, branch, work_item_id}` |
 | `ticket.transitioned` | `{ticket, from: Status, to: Status}` |
 | `ticket.commented` / `ticket.assigned` | `{ticket, ...}` |
-| `ticket.step` | `TicketStep{ticket, source_id?, step_id, entered_at, by}` (the ticket entered a pipeline step; forward only) |
+| `ticket.step` | `TicketStep{ticket, source_id?, step_id, entered_at, by}` (the ticket entered a pipeline step; forward only, but for a manual move, #463) |
 | `worktree.created` / `worktree.removed` | `{path, branch, repo_id}` |
 | `work.before_finish` (blocking) / `work.finished` | `{work_item_id, opts}` |
 | `work.updated` | `{work: WorkItem}` (any item or saga step change; core relays it to the UI) |

@@ -224,6 +224,7 @@ async fn mcp_initialize_list_and_call() {
             "comment_ticket_by_key",
             "update_ticket_body",
             "close_ticket",
+            "move_ticket_step",
             "claim_ticket",
             "report_progress",
             "release_ticket",
@@ -475,6 +476,7 @@ async fn global_mcp_serves_the_board_tools() {
             "comment_ticket_by_key",
             "update_ticket_body",
             "close_ticket",
+            "move_ticket_step",
             "claim_ticket",
             "report_progress",
             "release_ticket",
@@ -734,6 +736,39 @@ async fn link_pr_moves_the_ticket_to_the_status_given() {
     assert_eq!(e.fake.calls().iter().filter(|c| c.method == "work_link_pr").count(), 4);
     let (text, err) = link(None).await;
     assert!(!err && text.starts_with("Linked SHOP-141"), "{text}");
+    e.server.release_http();
+}
+
+#[tokio::test]
+async fn move_ticket_step_passes_the_step_and_names_an_unknown_one() {
+    let e = common::env();
+    e.server.set_install_token(Some("it"));
+    let port = e.server.ensure_http().await.unwrap();
+    let account = samples::ticket_ref().account;
+    let row = kelta_proto::model::TicketStep {
+        ticket: samples::ticket_ref(),
+        source_id: None,
+        step_id: "po".into(),
+        entered_at: String::new(),
+        by: "manual".into(),
+    };
+    e.fake.respond("ticket_step_set", serde_json::to_value(row).unwrap());
+    let go = |args: Value| global_call(port, "move_ticket_step", args);
+
+    let (text, err) = go(json!({ "key": "SHOP-141", "account": account, "step": "po" })).await;
+    assert!(!err && text == "SHOP-141 is now at step po.", "{text}");
+    let call = e.fake.calls().into_iter().rfind(|c| c.method == "ticket_step_set").unwrap();
+    assert_eq!(
+        (call.args["ticket"]["key"].as_str(), call.args["step_id"].as_str()),
+        (Some("SHOP-141"), Some("po"))
+    );
+
+    let unknown = "unknown step `nope`; the steps are implementing, pr, po";
+    e.fake.fail("ticket_step_set", kelta_proto::error::KeltaError::invalid(unknown));
+    let (text, err) = go(json!({ "key": "SHOP-141", "account": account, "step": "nope" })).await;
+    assert!(err && text == format!("InvalidArgument: {unknown}"), "{text}");
+    let (text, err) = go(json!({ "key": "SHOP-141", "account": account })).await;
+    assert!(err && text.contains("missing argument `step`"), "{text}");
     e.server.release_http();
 }
 
