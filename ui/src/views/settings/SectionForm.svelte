@@ -103,7 +103,7 @@
   {:else if !editor.ready}
     <div class="loading"><Spinner size={16} /> {t('Loading settings…')}</div>
   {:else}
-    {#each groupRuns(basic) as run, i (i)}
+    {#each groupRuns(basic.filter(([path]) => visible(path))) as run, i (i)}
       {#if run.group}
         <SettingsGroup heading={t(run.group)} data-testid="copy-group" data-group={run.group}
           >{@render fields(run.items)}</SettingsGroup

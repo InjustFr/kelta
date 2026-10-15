@@ -188,4 +188,18 @@ describe('Settings → Work items', () => {
     ui.settings = null;
     unmount();
   });
+
+  it('at the repo layer only the Branch folder group shows, with no stage links or Sources note', async () => {
+    const { transport } = createMockTransport();
+    setTransport(transport);
+    await settings.load();
+    const { container, unmount } = render(Worktree, { layer: 'repo', projectId: null, repoId: 'r1' });
+    await waitFor(() => expect(container.querySelector('[data-path]')).toBeTruthy());
+    expect(
+      [...container.querySelectorAll('[data-testid="copy-group"] h3')].map((h) => h.textContent),
+    ).toEqual(['Branch folder']);
+    expect(container.querySelector('[data-testid="work-stages"]')).toBeNull();
+    expect(container.querySelector('[data-testid="steps-note"]')).toBeNull();
+    unmount();
+  });
 });

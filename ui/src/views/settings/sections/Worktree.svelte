@@ -23,19 +23,21 @@
 
 <SectionForm sectionId="worktree" {...props}>
   {#snippet before()}
-    <nav class="stages" aria-label={t('Jump to a stage')} data-testid="work-stages">
-      {#each STAGES as stage (stage)}
-        <Button size="sm" variant="ghost" onclick={() => jump(stage)}>{t(stage)}</Button>
-      {/each}
-    </nav>
-    <p class="note" data-testid="steps-note">
-      <span
-        >{t(
-          'Where the ticket moves and what gets commented at each stage come from the steps of its board.',
-        )}</span
-      >
-      <Button size="sm" variant="ghost" onclick={editSteps}>{t('Edit steps in Sources')}</Button>
-    </p>
+    {#if props.layer !== 'repo'}
+      <nav class="stages" aria-label={t('Jump to a stage')} data-testid="work-stages">
+        {#each STAGES as stage (stage)}
+          <Button size="sm" variant="ghost" onclick={() => jump(stage)}>{t(stage)}</Button>
+        {/each}
+      </nav>
+      <p class="note" data-testid="steps-note">
+        <span
+          >{t(
+            'Where the ticket moves and what gets commented at each stage come from the steps of its board.',
+          )}</span
+        >
+        <Button size="sm" variant="ghost" onclick={editSteps}>{t('Edit steps in Sources')}</Button>
+      </p>
+    {/if}
   {/snippet}
 </SectionForm>
 
