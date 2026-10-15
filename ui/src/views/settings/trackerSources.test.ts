@@ -288,6 +288,18 @@ describe('Settings → Sources', () => {
     expect(ui.sheets.at(-1)).toEqual({ key: 'tracker.source_picker', props: {} });
   });
 
+  it("settings.open with anchor steps brings that source's Steps into view", async () => {
+    const seen = vi.fn();
+    Element.prototype.scrollIntoView = seen;
+    await import('./actions');
+    await dispatch('settings.open', { section: 'sources', source_id: 'billing', anchor: 'steps' });
+    mountSources();
+    await waitFor(() => expect(seen).toHaveBeenCalled());
+    const el = seen.mock.contexts[0] as HTMLElement;
+    expect(el.dataset.testid).toBe('pipeline-steps');
+    expect((el.closest('[data-source-card]') as HTMLElement).dataset.sourceCard).toBe('billing');
+  });
+
   it('scrolls to the source asked while Settings is already open on Sources (#340)', async () => {
     const seen = vi.fn();
     Element.prototype.scrollIntoView = seen;

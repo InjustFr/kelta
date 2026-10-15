@@ -122,6 +122,7 @@
 
 {#if source}
   <SettingsGroup
+    data-testid="pipeline-steps"
     heading={t('Steps')}
     description={t(
       'A step is entered on its events or when the ticket reaches its status, then can move the ticket and post a comment. A step with neither is entered by hand.',
