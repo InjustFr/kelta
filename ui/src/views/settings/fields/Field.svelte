@@ -38,9 +38,11 @@
     depth?: number;
     /** Override the derived title. */
     title?: string;
+    /** Shown but not editable: another setting turns it off. */
+    disabled?: boolean;
   }
 
-  let { path, node, depth = 0, title }: Props = $props();
+  let { path, node, depth = 0, title, disabled = false }: Props = $props();
 
   const editor = useEditor();
   const kind = $derived(TOGGLE_VALUES[path] ? 'bool' : fieldKind(node));
@@ -89,7 +91,7 @@
     <SettingsRow
       label={kind !== 'bool' ? label : undefined}
       for={id}
-      readonly={!access.editable}
+      readonly={!access.editable || disabled}
       data-testid="field"
       data-path={path}
       data-kind={kind}
@@ -126,7 +128,7 @@
           {label}
           template={isTemplate}
           browse={path === 'plugins.dev_paths'}
-          readonly={!access.editable || !!editor.saving[path]}
+          readonly={!access.editable || disabled || !!editor.saving[path]}
           onchange={(v) => void editor.set(path, v)}
         />
       {/snippet}

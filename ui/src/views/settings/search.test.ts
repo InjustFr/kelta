@@ -30,6 +30,8 @@ const first = (q: string) => searchSettings(index(), q)[0]!;
 const TABLE: [string, string | RegExp][] = [
   ['clipboard', /^key:terminal\./],
   ['do not disturb', 'key:notifications.quiet_hours'],
+  ['dnd', 'key:notifications.quiet_hours'],
+  ['quiet hours', 'key:notifications.quiet_hours'],
   ['branch name', 'key:worktree.branch_template'],
   ['worktree folder', 'key:worktree.root'],
   ['how often', 'key:polling.focused_secs'],

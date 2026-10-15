@@ -69,7 +69,7 @@ export const SECTION_COPY: Partial<Record<SettingsSectionId, CopyTable>> = {
 /** Every entry by dotted settings path. */
 export const COPY: CopyTable = Object.assign({}, ...Object.values(SECTION_COPY));
 
-/** Sections whose copy is finished: every key has a label (copy.test.ts). Notifications joins with #472. */
+/** Sections whose copy is finished: every key has a label (copy.test.ts). */
 export const COPY_DONE: readonly SettingsSectionId[] = [
   'general',
   'keys',
@@ -84,6 +84,7 @@ export const COPY_DONE: readonly SettingsSectionId[] = [
   'reviews',
   'performance',
   'tools',
+  'notifications',
 ];
 
 export const onThisPlatform = (entry: CopyEntry | undefined): boolean =>
