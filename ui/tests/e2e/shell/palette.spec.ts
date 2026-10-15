@@ -79,10 +79,10 @@ test.describe('palette', () => {
     const first = page.getByTestId('palette-item').first();
     const reopen = async (): Promise<void> => {
       await page.keyboard.press('Control+Shift+K');
-      await page.getByTestId('palette-input').fill('copy on select');
+      await page.getByTestId('palette-input').fill('copy text when you select');
     };
     await reopen();
-    await expect(first).toContainText('Copy on select');
+    await expect(first).toContainText('Copy text when you select it');
     await expect(first).toHaveAttribute('aria-checked', 'false');
     await expect(palette.locator('.hints')).toContainText('Open in Settings');
 
@@ -91,7 +91,7 @@ test.describe('palette', () => {
     await expect
       .poll(async () => (await callsOf(page, 'settings_set')).at(-1)?.args)
       .toMatchObject({ layer: 'global', path: 'terminal.copy_on_select', value: true });
-    await expect(page.getByTestId('toasts')).toContainText('Copy on select turned on');
+    await expect(page.getByTestId('toasts')).toContainText('Copy text when you select it turned on');
 
     await reopen();
     await expect(first).toHaveAttribute('aria-checked', 'true');
