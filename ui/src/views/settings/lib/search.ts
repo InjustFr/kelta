@@ -104,8 +104,6 @@ export function changedSettings(index: readonly SearchEntry[], files: readonly L
   });
 }
 
-const isAdvancedPath = (p: string): boolean => ADVANCED.some((a) => p === a || p.startsWith(`${a}.`));
-
 export function buildSearchIndex(
   schema: SchemaNode,
   sections: readonly SettingsSection[],
