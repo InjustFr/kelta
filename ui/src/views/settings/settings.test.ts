@@ -101,6 +101,22 @@ describe('Control', () => {
     expect(onchange).toHaveBeenCalledWith(true);
   });
 
+  it('a two-value key is a toggle: session host writes daemon / inprocess (#470)', async () => {
+    const onchange = vi.fn();
+    render(Control, {
+      node: nodeAt(schema, ['terminal', 'session_host'])!,
+      value: 'daemon',
+      path: 'terminal.session_host',
+      onchange,
+      label: 'Keep sessions running after Kelta quits',
+    });
+    const sw = screen.getByRole('switch') as HTMLInputElement;
+    expect(sw.getAttribute('aria-checked') ?? String(sw.checked)).toBe('true');
+    expect(document.querySelector('textarea')).toBeNull();
+    await fireEvent.click(sw);
+    expect(onchange).toHaveBeenCalledWith('inprocess');
+  });
+
   it('int commits a number and rejects a fraction', async () => {
     const onchange = mount({ type: 'integer' }, 3);
     const input = screen.getByRole('spinbutton');

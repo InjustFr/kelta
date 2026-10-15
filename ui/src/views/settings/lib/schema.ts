@@ -363,6 +363,13 @@ export function isTemplatePath(path: string): boolean {
   return TEMPLATE_PATTERNS.some((p) => p.test(path));
 }
 
+// ---- toggle hints -----------------------------------------------------------------------------
+
+/** Two-value keys edited as a toggle: [value when on, value when off]. */
+export const TOGGLE_VALUES: Record<string, readonly [on: string, off: string]> = {
+  'terminal.session_host': ['daemon', 'inprocess'],
+};
+
 // ---- traversal --------------------------------------------------------------------------------
 
 export interface LeafField {

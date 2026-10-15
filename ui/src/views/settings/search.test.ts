@@ -94,8 +94,8 @@ describe('settings search ranking', () => {
   });
 
   it('Advanced keys come after the rest', () => {
-    const hits = searchSettings(index(), 'clipboard');
-    const at = hits.findIndex((h) => h.id === 'key:terminal.osc52');
+    const hits = searchSettings(index(), 'lines');
+    const at = hits.findIndex((h) => h.id === 'key:terminal.view_scrollback');
     expect(at).toBeGreaterThan(-1);
     expect(hits.findLastIndex((h) => !h.advanced)).toBeLessThan(at);
   });
