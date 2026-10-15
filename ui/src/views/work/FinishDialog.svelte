@@ -19,7 +19,9 @@
 
   let { item, onclose, ondone }: Props = $props();
 
-  const doneTarget = $derived(projects.byId(item.project_id)?.tracker?.status_map.done ?? null);
+  const tracker = $derived(projects.byId(item.project_id)?.tracker);
+  // The last step's target (#464), else the deprecated status_map.done; the step engine (#461) owns the rest.
+  const doneTarget = $derived(tracker?.pipeline?.at(-1)?.transition_to ?? tracker?.status_map.done ?? null);
   // Merged / closed on the host: prefilled cleanup (FLOW §4.6). The ticket was already moved on
   // merge when unambiguous; otherwise the Done status is chosen here, never guessed.
   const ended = $derived(item.state.kind === 'merged' || item.state.kind === 'pr_closed');

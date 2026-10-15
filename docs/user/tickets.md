@@ -19,7 +19,7 @@ Projects v2 board, a GitLab project, a Linear team, a Gitea repo. A source can h
 accounts, so one board can show Jira and GitHub tickets together.
 
 - Sources live in your global settings (Settings > Sources), not in each project: one `[[sources]]` entry holds
-  the account, the views, the columns and the status mapping, and lists the projects it feeds (none is fine). A
+  the account, the views, the columns and the steps of its tickets, and lists the projects it feeds (none is fine). A
   board shared by several projects is set up once. Settings > Projects shows which sources feed each project.
   Boards from older versions moved out of the project files on first launch (a copy of each project file is kept
   in `projects/.trash/`).
