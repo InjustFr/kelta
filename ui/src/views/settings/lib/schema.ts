@@ -4,7 +4,7 @@
 // live in `../copy`.
 
 import type { JsonValue } from '$lib/gen';
-import { msg, t } from '$lib/i18n/index.svelte';
+import { t } from '$lib/i18n/index.svelte';
 
 import { COPY, onThisPlatform, type CopyEntry } from '../copy';
 import { getAt, joinPath, splitPath } from './paths';
@@ -358,11 +358,6 @@ const TEMPLATE_PATTERNS: RegExp[] = [
   /^claude\.prompt_templates\./,
   /^session_templates\.\d+\.layout/,
 ];
-
-// One literal: the i18n catalog check reads message keys from the source.
-export const TEMPLATE_HELP = msg(
-  'Placeholders: {project.id|name|root} {repo.id|path|name} {worktree} {branch} {base} {key} {slug} {type} {ticket.key|title|url|file} {pr.url|number|head|base|title} {session.id|name|cwd} {sid8} {run} {port} {config_dir} {data_dir} {home} {user}. Filters: |slug |shell |json; {a|b} = first non-empty.',
-);
 
 export function isTemplatePath(path: string): boolean {
   return TEMPLATE_PATTERNS.some((p) => p.test(path));

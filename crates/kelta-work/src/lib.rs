@@ -48,7 +48,7 @@ use kelta_proto::ext::BlockingOutcome;
 use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{
     DeltaFile, EditorTarget, FinishMergedReport, FinishOpts, GitStatus, RebaseOp, SendFile, SessionInfo,
-    ShipOrigin, StartWorkPlan, StepStatus, WORK_STEPS, WorkItem, WorkSource, WorkStepStatus,
+    ShipOrigin, StartWorkPlan, StepStatus, TemplatePreview, WORK_STEPS, WorkItem, WorkSource, WorkStepStatus,
 };
 use kelta_proto::tracker::TicketRef;
 use parking_lot::{Mutex, RwLock};
@@ -503,6 +503,12 @@ impl WorkService {
         // The queue survived the restart: fill the free slots.
         self.kick_queue();
         r
+    }
+
+    /// `template_preview` (#479): the live example under a template setting.
+    pub async fn template_preview(&self, path: &str, template: &str) -> Result<TemplatePreview, KeltaError> {
+        // shortcut: global settings (type_map, slug_max), not the edited project's; pass the project if one overrides them.
+        plan::preview(&self.api()?.settings(None), &self.dirs, path, template).await
     }
 
     // ---- shared internals -----------------------------------------------------------------
