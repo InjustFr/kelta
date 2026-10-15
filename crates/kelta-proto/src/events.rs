@@ -9,7 +9,8 @@ use crate::ctl::CtlCommand;
 use crate::ext::Urgency;
 use crate::ids::{AccountId, ProjectId, ScreenInstanceId, SessionId, WorkItemId};
 use crate::model::{
-    Attention, ClaudeRun, Layout, OpenPaneRequest, OutsideSession, ProjectInfo, Scope, SessionInfo, WorkItem,
+    Attention, ClaudeRun, Layout, OpenPaneRequest, OutsideSession, ProjectInfo, Scope, SessionInfo,
+    TicketStep, WorkItem,
 };
 use crate::settings::Layer;
 
@@ -104,6 +105,9 @@ pub enum UiEvent {
     ReviewsChanged { scope: Scope, new_keys: Vec<ReviewRef> },
     #[serde(rename = "work.updated")]
     WorkUpdated { work: Box<WorkItem> },
+    /// A ticket entered a pipeline step (#461); core relays bus `ticket.step` (#462).
+    #[serde(rename = "ticket.step")]
+    TicketStep { step: Box<TicketStep> },
     #[serde(rename = "settings.changed")]
     SettingsChanged { layers: Vec<Layer>, paths: Vec<String>, requires_restart: Vec<String> },
     #[serde(rename = "account.status")]
@@ -153,6 +157,7 @@ impl UiEvent {
             Self::TicketsChanged { .. } => "tickets.changed",
             Self::ReviewsChanged { .. } => "reviews.changed",
             Self::WorkUpdated { .. } => "work.updated",
+            Self::TicketStep { .. } => "ticket.step",
             Self::SettingsChanged { .. } => "settings.changed",
             Self::AccountStatusChanged { .. } => "account.status",
             Self::Toast { .. } => "toast",

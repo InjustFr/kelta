@@ -23,9 +23,9 @@
   import { frames } from '$lib/terminal/raf';
 
   import { jumpOutside, nowSummary, refreshNow } from '../views/inbox/now';
-  import { phaseNow, prOf, siblingKey, workTitle } from '../views/work/live';
+  import { phaseNow, prOf, siblingKey, stepNow, workTitle } from '../views/work/live';
   import { maxLamp, outsidePhase, workKey } from '../views/work/phase';
-  import { STAGES, workStage } from '../views/work/stage';
+  import { stageName, workStage } from '../views/work/stage';
   import { confirms } from './confirm.svelte';
   import { chordFor, runLine, sessionTitle, statusLabel } from './labels';
   import {
@@ -240,9 +240,9 @@
     return tab.title.slice(key.length).trim() || title;
   }
 
-  /** The stage word on the right of a work row: Claude, PR, Review, Merge or Deploy. */
+  /** The stage word on the right of a work row: its pipeline step (#462), else Claude, PR, Review, Merge or Deploy. */
   function stageWord(item: WorkItem): string {
-    return t(STAGES[workStage(item, phaseNow(item), prOf(item), false).at]!);
+    return stageName(workStage(item, phaseNow(item), prOf(item), false, false, stepNow(item)));
   }
 
   function rowIcon(tab: Tab): string {

@@ -9,9 +9,21 @@ import { ticketKey } from '$lib/stores/tickets.svelte';
 import { waits, zoneOf } from '../inbox/groups';
 import { ticketWork } from '../work/startWork';
 import { waitingStatuses } from '../inbox/nextUp.svelte';
-import { phaseNow, prOf } from '../work/live';
+import { phaseNow, prOf, stepOf } from '../work/live';
 import { outsidePhase, type Phase } from '../work/phase';
-import { CLAUDE, DEPLOY, MERGE, PR, REVIEW, TICKET, stage, workStage, type Stage } from '../work/stage';
+import {
+  CLAUDE,
+  DEPLOY,
+  MERGE,
+  PR,
+  REVIEW,
+  TICKET,
+  onStep,
+  stage,
+  workStage,
+  type Stage,
+  type Stepped,
+} from '../work/stage';
 import { mainPr, prLabel } from './prs';
 
 export interface Standing {
@@ -23,12 +35,14 @@ export interface Standing {
 /**
  * `work`: the ticket's unfinished work item, its phase and PR (as Now reads them). `mine`: assigned to me.
  * `waiting`: the ticket sits in a status its source lists as waiting for a deploy (#391).
+ * `step`: the ticket's stored pipeline step (#462); without it, the work item, PR and tracker place the ticket as before.
  */
 export function standing(
   item: Pick<TicketItem, 'ticket' | 'prs'>,
   work: { item: WorkItem; phase: Phase; pr: Review | null } | null,
   mine: boolean,
   waiting: boolean,
+  step: Stepped | null = null,
 ): Standing {
   const deploy = t('Waiting for a deploy. Nothing for you to do.');
   if (item.ticket.status.category === 'done') return { stage: stage(DEPLOY, 'done'), where: t('Done.') };
@@ -38,7 +52,7 @@ export function standing(
     const deploying = waiting && phase.section !== 'needs_you' && phase.section !== 'fix';
     const yours = zoneOf(phase.section) === 'yours';
     return {
-      stage: workStage(work.item, phase, work.pr, yours, deploying),
+      stage: workStage(work.item, phase, work.pr, yours, deploying, step),
       where: deploying
         ? deploy
         : yours
@@ -46,6 +60,12 @@ export function standing(
           : t('{phase}.', { phase: phase.label }),
     };
   }
+  const r = byPr(item, mine, waiting, deploy);
+  return step ? { ...r, stage: onStep(r.stage, step) } : r;
+}
+
+/** Without a work item: the linked PR, else the tracker's word for it (#400). */
+function byPr(item: Pick<TicketItem, 'prs'>, mine: boolean, waiting: boolean, deploy: string): Standing {
   const pr = mainPr(item.prs);
   const live = pr && pr.state !== 'closed' ? pr : null;
   // No branch or PR seen: the track takes the tracker's word for the stages before.
@@ -84,13 +104,16 @@ export function standingNow(item: TicketItem, mine: boolean): Standing {
   );
   const w = lagging ?? (item.work_item_id ? work.get(item.work_item_id) : null);
   const live = w && w.state.kind !== 'finished' ? w : null;
+  // The stored step (#462) places the ticket; its least advanced item and PR only say whose move.
+  const step = stepOf(item.ticket.ref, item.source_ids[0] ?? null, live?.project_id ?? null);
   const key = ticketKey(item.ticket.ref);
   const outside = live ? null : sessions.elsewhere.find((o) => o.ticket && ticketKey(o.ticket) === key);
   if (outside && item.ticket.status.category !== 'done') {
     const phase = outsidePhase(outside);
     const yours = zoneOf(phase.section) === 'yours';
+    const st = stage(CLAUDE, yours ? 'you' : 'wait');
     return {
-      stage: stage(CLAUDE, yours ? 'you' : 'wait'),
+      stage: step ? onStep(st, step, phase.lamp === 'working') : st,
       where: yours
         ? t('{phase}. Your move in the Queue.', { phase: phase.label })
         : t('{phase}.', { phase: phase.label }),
@@ -101,6 +124,7 @@ export function standingNow(item: TicketItem, mine: boolean): Standing {
     live ? { item: live, phase: phaseNow(live), pr: prOf(live) } : null,
     mine,
     waits(item, waitingStatuses()),
+    step,
   );
 }
 

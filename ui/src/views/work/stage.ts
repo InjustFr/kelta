@@ -34,6 +34,10 @@ export interface Stage {
   mark: Mark;
   /** Only the tracker's word for it (#400): no branch or PR seen, so the line is dotted. */
   unconfirmed?: boolean;
+  /** A pipeline track (#462): Ticket, then the source's step labels; STAGES when absent. */
+  labels?: readonly string[];
+  /** Claude works on the item: a working lamp on the current step (#462). */
+  working?: boolean;
 }
 
 /** Phases past Claude; every other phase sits with Claude (asking, working, to review, failed start). */
@@ -62,22 +66,48 @@ export const stage = (at: number, mark: Mark, reached = at): Stage => ({
   mark,
 });
 
-/** A work item's stage. `mine`: its row is in Your move. `deploying`: its ticket waits for a deploy. */
+/** A ticket's stored pipeline step (#462): its index in `steps`, the labels of its source's effective pipeline. */
+export interface Stepped {
+  index: number;
+  steps: readonly string[];
+}
+
+/** `s` on the stored step: the track is Ticket then the steps, the step is where the ticket stands (forward
+ *  only, so also the furthest), and `s` (the phase's stage) keeps only its mark. */
+export function onStep(s: Stage, step: Stepped, working = false): Stage {
+  const at = step.index + 1;
+  return {
+    at,
+    reached: at,
+    mark: s.mark,
+    labels: [STAGES[TICKET], ...step.steps],
+    ...(working ? { working } : {}),
+  };
+}
+
+/** The name of the stage the item is at, translated. */
+export const stageName = (s: Stage): string => t((s.labels ?? STAGES)[s.at]!);
+
+/** A work item's stage. `mine`: its row is in Your move. `deploying`: its ticket waits for a deploy.
+ *  `step`: the ticket's stored step (#462), which places it; the phase then decides only the mark. */
 export function workStage(
   item: Pick<WorkItem, 'pr_url' | 'review' | 'feedback_at'>,
   phase: Pick<Phase, 'id' | 'lamp'>,
   pr: Pick<Review, 'decision'> | null,
   mine: boolean,
   deploying = false,
+  step: Stepped | null = null,
 ): Stage {
-  if (deploying) return stage(DEPLOY, 'wait');
   const reviewed = !!item.feedback_at || pr?.decision === 'changes_requested' || pr?.decision === 'approved';
   const opened = !!item.pr_url || !!item.review || pr !== null;
-  return stage(
-    AT[phase.id] ?? CLAUDE,
-    phase.lamp === 'error' ? 'broken' : mine ? 'you' : 'wait',
-    reviewed ? REVIEW : opened ? PR : CLAUDE,
-  );
+  const s = deploying
+    ? stage(DEPLOY, 'wait')
+    : stage(
+        AT[phase.id] ?? CLAUDE,
+        phase.lamp === 'error' ? 'broken' : mine ? 'you' : 'wait',
+        reviewed ? REVIEW : opened ? PR : CLAUDE,
+      );
+  return step ? onStep(s, step, phase.lamp === 'working') : s;
 }
 
 /** The work tab header (#428): the item's stage, its mark by Now's zone, and why in one sentence. */
@@ -85,10 +115,11 @@ export function workHeader(
   item: Pick<WorkItem, 'pr_url' | 'review' | 'feedback_at'>,
   phase: Pick<Phase, 'id' | 'lamp' | 'label' | 'detail' | 'section'>,
   pr: Pick<Review, 'decision'> | null,
+  step: Stepped | null = null,
 ): { stage: Stage; why: string } {
   const zone = zoneOf(phase.section);
   return {
-    stage: workStage(item, phase, pr, zone === 'yours'),
+    stage: workStage(item, phase, pr, zone === 'yours', false, step),
     why: t('{whose}: {what}', {
       whose: t(ZONES.find((z) => z.id === zone)!.label),
       what: phase.detail ? `${phase.label}, ${phase.detail}` : phase.label,

@@ -577,6 +577,8 @@ pub trait WorkStore: Send + Sync {
     async fn ticket_step(&self, ticket: &TicketRef) -> Result<Option<TicketStep>, KeltaError>;
     /// Insert or replace the ticket's row.
     async fn put_ticket_step(&self, step: &TicketStep) -> Result<(), KeltaError>;
+    /// Every stored ticket step (#462, `ticket_steps`). SQLite keys rows by account and key, so `ticket.id` is empty there.
+    async fn ticket_steps(&self) -> Result<Vec<TicketStep>, KeltaError>;
 }
 
 /// The unfinished item of `item`'s ticket, other than `item` itself (`WorkStore::claim_item`).

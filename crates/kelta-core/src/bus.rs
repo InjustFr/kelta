@@ -1,11 +1,11 @@
 //! EventBus (ARCHITECTURE §6.3): a `tokio::sync::broadcast` (capacity 1024). The trigger engine
 //! has its own subscription (`PluginHost::start`, called by core at startup). Some events are also
 //! handled by core, synchronously on publish: window focus changes (scheduler intervals),
-//! `work.updated` (relayed to the UI as `UiEvent::WorkUpdated`) and ticket writes (ticket lists
+//! `work.updated` (relayed to the UI as `UiEvent::WorkUpdated`), `ticket.step` (`UiEvent::TicketStep`) and ticket writes (ticket lists
 //! refresh now).
 
 use kelta_proto::events::{BusEvent, UiEvent, bus};
-use kelta_proto::model::WorkItem;
+use kelta_proto::model::{TicketStep, WorkItem};
 
 use crate::Core;
 
@@ -20,6 +20,10 @@ pub fn publish(core: &Core, ev: BusEvent) {
             _ => tracing::warn!("work.updated without a work item"),
         },
         bus::TICKET_TRANSITIONED | bus::TICKET_ASSIGNED => core.on_ticket_written(&ev.payload),
+        bus::TICKET_STEP => match serde_json::from_value::<TicketStep>(ev.payload.clone()) {
+            Ok(step) => core.emit(UiEvent::TicketStep { step: Box::new(step) }),
+            Err(_) => tracing::warn!("ticket.step without a ticket step"),
+        },
         _ => {}
     }
     // No receiver = nobody listening; not an error.

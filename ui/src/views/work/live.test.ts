@@ -4,10 +4,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { WorkItem } from '$lib/gen';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { tickets, work } from '$lib/stores';
+import * as samples from '$lib/gen/fixtures';
+import { settings, ticketSteps, tickets, work } from '$lib/stores';
 import { idle } from '$lib/stores/loadable';
 
-import { workTitle } from './live';
+import { stepOf, workTitle } from './live';
 
 let mock: MockControls;
 
@@ -38,5 +39,30 @@ describe('workTitle', () => {
     workTitle(w);
     await Promise.resolve();
     expect(mock.calls.some((c) => c.cmd === 'tracker_get')).toBe(false);
+  });
+});
+
+describe('stepOf (#462)', () => {
+  const def = (id: string, label: string) => ({ id, label, enter: [], transition_to: null, comment: null });
+  const ref = samples.ticket.ref;
+
+  it('is the stored step on the effective pipeline, null without a row or for a step that left it', () => {
+    ticketSteps.byKey = {};
+    settings.accept(null, {
+      ...samples.effectiveSettings,
+      value: {
+        ...samples.settingsDefault,
+        work: {
+          ...samples.settingsDefault.work,
+          pipeline: [def('implementing', 'Implementing'), def('pr', 'PR'), def('po', 'PO Review')],
+        },
+      },
+    } as never);
+    expect(stepOf(ref)).toBeNull();
+    const row = { ticket: ref, source_id: null, step_id: 'po', entered_at: '', by: '' };
+    ticketSteps.apply({ type: 'ticket.step', step: row });
+    expect(stepOf(ref)).toEqual({ index: 2, steps: ['Implementing', 'PR', 'PO Review'] });
+    ticketSteps.apply({ type: 'ticket.step', step: { ...row, step_id: 'gone' } });
+    expect(stepOf(ref)).toBeNull();
   });
 });

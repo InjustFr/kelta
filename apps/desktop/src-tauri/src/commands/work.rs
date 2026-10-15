@@ -182,6 +182,12 @@ pub async fn work_disarm_merge(core: State<'_, Arc<Core>>, id: WorkItemId) -> Re
     core.work().disarm_merge(&id).await
 }
 
+/// Every stored ticket step (#462): where each ticket stands in its pipeline (`ticket.id` empty).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn ticket_steps(core: State<'_, Arc<Core>>) -> Res<Vec<TicketStep>> {
+    core.work().ticket_steps().await
+}
+
 /// Louis's `next:` note on the item (null or blank clears it).
 #[tauri::command(rename_all = "snake_case")]
 pub async fn work_set_note(

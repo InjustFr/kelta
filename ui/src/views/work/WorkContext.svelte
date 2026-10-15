@@ -18,7 +18,7 @@
   import { focusedSessionId } from '../../shell/nav';
   import { pluginActions, runPluginAction, workCtx } from '../plugins/actions';
   import { blockedReason, runPrimary, runWorkAction, workMenu, type WorkAction } from './actions';
-  import { phaseNow, prOf, workTitle } from './live';
+  import { phaseNow, prOf, stepNow, workTitle } from './live';
   import { workKey } from './phase';
   import StageTrack from './shared/StageTrack.svelte';
   import { workHeader } from './stage';
@@ -30,7 +30,7 @@
   const item = $derived(work.get(workItemId));
   const ticketRef = $derived(item?.ticket ?? null);
   const phase = $derived(item ? phaseNow(item) : null);
-  const head = $derived(item && phase ? workHeader(item, phase, prOf(item)) : null);
+  const head = $derived(item && phase ? workHeader(item, phase, prOf(item), stepNow(item)) : null);
   const project = $derived(projects.byId(projectId));
   const tabId = $derived(layout.get(projectId)?.tabs.find((t) => t.work_item_id === workItemId)?.id);
   const primaryBlocked = $derived(item && phase?.primary ? blockedReason(phase.primary, item, phase) : null);

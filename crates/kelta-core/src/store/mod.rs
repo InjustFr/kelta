@@ -492,6 +492,30 @@ pub mod q {
         .map_err(db_err)
     }
 
+    pub fn ticket_steps(c: &Connection) -> R<Vec<TicketStep>> {
+        let mut st = c
+            .prepare("SELECT ticket_key, source_id, step_id, entered_at, entered_by FROM ticket_steps")
+            .map_err(db_err)?;
+        st.query_map([], |r| {
+            let k: String = r.get(0)?;
+            let (account, key) = k.split_once(':').unwrap_or(("", &k));
+            Ok(TicketStep {
+                ticket: TicketRef {
+                    account: kelta_proto::ids::AccountId::new(account),
+                    key: key.into(),
+                    id: String::new(),
+                },
+                source_id: r.get(1)?,
+                step_id: r.get(2)?,
+                entered_at: r.get(3)?,
+                by: r.get(4)?,
+            })
+        })
+        .map_err(db_err)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db_err)
+    }
+
     // ---- provider_cache ------------------------------------------------------------------------
 
     /// Startup cleanup of rows nothing reads any more: cache entries not refreshed for 30 days (gone
@@ -1139,6 +1163,10 @@ impl WorkStore for Store {
     async fn put_ticket_step(&self, s: &TicketStep) -> Result<(), KeltaError> {
         let s = s.clone();
         self.call(move |c| q::ticket_step_put(c, &s)).await
+    }
+
+    async fn ticket_steps(&self) -> Result<Vec<TicketStep>, KeltaError> {
+        self.call(|c| q::ticket_steps(c)).await
     }
 }
 

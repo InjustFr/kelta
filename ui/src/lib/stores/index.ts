@@ -12,6 +12,7 @@ import { ReviewsStore } from './reviews.svelte';
 import { SessionsStore } from './sessions.svelte';
 import { SettingsStore } from './settings.svelte';
 import { TagsStore } from './tags.svelte';
+import { TicketStepsStore } from './ticketSteps.svelte';
 import { TicketsStore } from './tickets.svelte';
 import { ToastsStore } from './toasts.svelte';
 import { ToolsStore } from './tools.svelte';
@@ -19,7 +20,16 @@ import { UiStore } from './ui.svelte';
 import { WorkStore } from './work.svelte';
 
 export { AttentionStore, LayoutStore, PluginsStore, ProjectsStore, ReviewsStore, SessionsStore };
-export { SettingsStore, TagsStore, TicketsStore, ToastsStore, ToolsStore, UiStore, WorkStore };
+export {
+  SettingsStore,
+  TagsStore,
+  TicketStepsStore,
+  TicketsStore,
+  ToastsStore,
+  ToolsStore,
+  UiStore,
+  WorkStore,
+};
 export type { Loadable } from './loadable';
 export { GLOBAL, type GlobalView } from './ui.svelte';
 export * from './reducers';
@@ -30,6 +40,7 @@ export const layout = new LayoutStore();
 export const tickets = new TicketsStore();
 export const reviews = new ReviewsStore();
 export const work = new WorkStore();
+export const ticketSteps = new TicketStepsStore();
 export const settings = new SettingsStore();
 export const attention = new AttentionStore();
 export const toasts = new ToastsStore();
@@ -49,6 +60,7 @@ const ALL = [
   tickets,
   reviews,
   work,
+  ticketSteps,
   settings,
   attention,
   toasts,
@@ -95,6 +107,7 @@ export function bootstrap(): Promise<BootstrapResult> {
       ],
       ['session_list', sessions.load()],
       ['work_list', work.load()],
+      ['ticket_steps', ticketSteps.load()],
       ['tags_get', tags.load()],
       ['settings_effective', settings.load().then((r) => (r.error ? Promise.reject(r.error) : r))],
     ];

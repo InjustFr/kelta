@@ -39,6 +39,7 @@ import type {
   TicketDetail,
   TicketItem,
   TicketRef,
+  TicketStep,
   ToolInfo,
   Transition,
   UiEvent,
@@ -138,6 +139,8 @@ export interface MockState {
   outside: OutsideSession[];
   /** `app_update_status`; `app_update_check` stamps `checked_at`. */
   update: UpdateStatus;
+  /** Stored ticket steps (#462); `work_create_pr` stores `pr`. */
+  ticketSteps: TicketStep[];
 }
 
 interface MockOptions {
@@ -309,6 +312,7 @@ function freshState(): MockState {
     prRuns: {},
     outside: [],
     update: { ...clone(samples.updateStatus), state: { type: 'up_to_date' } },
+    ticketSteps: [],
   };
 }
 
@@ -1704,6 +1708,18 @@ export function createMockTransport(options: MockOptions = {}): {
       w.review_due = false; // a UI Ship counts as review
       w.pr_title_needs_key = false;
       void draft;
+      // As the engine on pr_opened (#461). shortcut: always `pr`, not forward-only; enough for the mock.
+      if (w.ticket) {
+        const step: TicketStep = {
+          ticket: clone(w.ticket),
+          source_id: w.ticket_source ?? null,
+          step_id: 'pr',
+          entered_at: new Date().toISOString(),
+          by: '"pr_opened"',
+        };
+        state.ticketSteps = [...state.ticketSteps.filter((s) => !sameRef(s.ticket, step.ticket)), step];
+        emit({ type: 'ticket.step', step: clone(step) });
+      }
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
     },
@@ -1957,6 +1973,7 @@ export function createMockTransport(options: MockOptions = {}): {
       return clone(w);
     },
     work_notes: ({ id }) => notesOf(id),
+    ticket_steps: () => clone(state.ticketSteps),
     work_note_resolve: ({ id, note }) => {
       const n = (state.notes[id] ?? []).find((x) => x.id === note);
       if (!n) throw err('not_found', `note ${note}`);

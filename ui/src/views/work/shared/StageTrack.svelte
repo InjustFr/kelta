@@ -1,8 +1,9 @@
 <script lang="ts">
-  // The stage track (#399): Ticket to Deploy. The line runs to the furthest stage reached, the mark sits
+  // The stage track (#399): Ticket to Deploy, or Ticket then the source's pipeline steps (#462). The line runs to the furthest stage reached, the mark sits
   // where the item is now and its shape says whose move it is. Now, Tickets and Reviews rows share it;
   // `labels` names every stage under its dot (#438).
   import { msg, t } from '$lib/i18n/index.svelte';
+  import { Lamp } from '$lib/ui';
 
   import { STAGES, type Mark, type Stage } from '../stage';
 
@@ -22,25 +23,37 @@
     broken: msg('broken'),
     done: msg('done'),
   };
-  const last = STAGES.length - 1;
+  // A pipeline track (#462) names Ticket then the source's steps; else the six default stages.
+  const names = $derived(stage.labels ?? STAGES);
+  const last = $derived(names.length - 1);
+  const whose = $derived(
+    stage.working ? `${t(WHOSE[stage.mark])}, ${t('Claude working')}` : t(WHOSE[stage.mark]),
+  );
   const pct = (i: number): string => `${(i / last) * 100}%`;
   const label = $derived(
     stage.unconfirmed
       ? t('At {stage} per the tracker; no branch or PR found for the stages before', {
-          stage: t(STAGES[stage.at]!),
+          stage: t(names[stage.at]!),
         })
       : t('At {stage}, {whose}; furthest stage reached: {reached}', {
-          stage: t(STAGES[stage.at]!),
-          whose: t(WHOSE[stage.mark]),
-          reached: t(STAGES[stage.reached]!),
+          stage: t(names[stage.at]!),
+          whose,
+          reached: t(names[stage.reached]!),
         }),
   );
 </script>
 
 {#if labels}
   <!-- One column per stage: a long name widens its column instead of running into the next (#438). -->
-  <span class="track labelled" role="img" aria-label={label} title={label} data-mark={stage.mark}>
-    {#each STAGES as name, i (i)}<span class="stop"
+  <span
+    class="track labelled"
+    role="img"
+    aria-label={label}
+    title={label}
+    data-mark={stage.mark}
+    style:grid-template-columns={`repeat(${names.length}, 1fr)`}
+  >
+    {#each names as name, i (i)}<span class="stop"
         ><span class="dot"
           >{#if i > 0}<span
               class="seg l"
@@ -52,13 +65,15 @@
               class:unconfirmed={stage.unconfirmed}
             ></span>{/if}<i class:past={!stage.unconfirmed && i <= stage.reached} style:left="50%"
           ></i>{#if i === stage.at}<span class="mark {stage.mark}" style:left="50%"></span>{/if}</span
-        ><span class="name" class:now={i === stage.at}>{t(name)}</span></span
+        ><span class="name" class:now={i === stage.at}
+          >{#if i === stage.at && stage.working}<Lamp level="working" />{/if}{t(name)}</span
+        ></span
       >{/each}
   </span>
 {:else}
   <span class="track" class:named role="img" aria-label={label} title={label} data-mark={stage.mark}>
     <span class="line" class:unconfirmed={stage.unconfirmed} style:width={pct(stage.reached)}></span>
-    {#each STAGES as _, i (i)}<i class:past={!stage.unconfirmed && i <= stage.reached} style:left={pct(i)}
+    {#each names as _, i (i)}<i class:past={!stage.unconfirmed && i <= stage.reached} style:left={pct(i)}
       ></i>{/each}
     <span class="mark {stage.mark}" style:left={pct(stage.at)}></span>
     {#if named}<span
@@ -66,9 +81,9 @@
         class:first={stage.at === 0}
         class:last={stage.at === last}
         style:left={pct(stage.at)}
-        >{stage.unconfirmed
-          ? t('{stage}, per the tracker', { stage: t(STAGES[stage.at]!) })
-          : t(STAGES[stage.at]!)}</span
+        >{#if stage.working}<Lamp level="working" />{/if}{stage.unconfirmed
+          ? t('{stage}, per the tracker', { stage: t(names[stage.at]!) })
+          : t(names[stage.at]!)}</span
       >{/if}
   </span>
 {/if}
@@ -165,6 +180,13 @@
     background: var(--k-fg-subtle);
   }
 
+  .name,
+  .here {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
   .here {
     position: absolute;
     top: 19px;
@@ -185,7 +207,6 @@
 
   .labelled {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
     height: auto;
     margin-inline: 0;
     container-type: inline-size;
