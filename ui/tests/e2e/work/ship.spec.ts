@@ -112,6 +112,8 @@ test.describe('finish', () => {
     await expect(header.getByRole('img', { name: /^At PR,/ })).toBeVisible();
     await claudeStatus(page, 'working');
     await expect(header).toHaveAttribute('data-phase', 'working');
-    await expect(header.getByRole('img', { name: /^At PR, waiting on others, Claude working;/ })).toBeVisible();
+    await expect(
+      header.getByRole('img', { name: /^At PR, waiting on others, Claude working;/ }),
+    ).toBeVisible();
   });
 });

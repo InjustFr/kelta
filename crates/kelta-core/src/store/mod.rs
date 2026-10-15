@@ -1166,7 +1166,7 @@ impl WorkStore for Store {
     }
 
     async fn ticket_steps(&self) -> Result<Vec<TicketStep>, KeltaError> {
-        self.call(q::ticket_steps).await
+        self.call(|c| q::ticket_steps(c)).await
     }
 }
 

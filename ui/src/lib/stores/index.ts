@@ -20,7 +20,16 @@ import { UiStore } from './ui.svelte';
 import { WorkStore } from './work.svelte';
 
 export { AttentionStore, LayoutStore, PluginsStore, ProjectsStore, ReviewsStore, SessionsStore };
-export { SettingsStore, TagsStore, TicketStepsStore, TicketsStore, ToastsStore, ToolsStore, UiStore, WorkStore };
+export {
+  SettingsStore,
+  TagsStore,
+  TicketStepsStore,
+  TicketsStore,
+  ToastsStore,
+  ToolsStore,
+  UiStore,
+  WorkStore,
+};
 export type { Loadable } from './loadable';
 export { GLOBAL, type GlobalView } from './ui.svelte';
 export * from './reducers';

@@ -156,7 +156,9 @@ describe('on a stored ticket step (#462)', () => {
       labels,
       working: true,
     });
-    expect(workStage(item, { id: 'checks_failed', lamp: 'error' }, null, true, false, step).mark).toBe('broken');
+    expect(workStage(item, { id: 'checks_failed', lamp: 'error' }, null, true, false, step).mark).toBe(
+      'broken',
+    );
     expect(workStage(item, { id: 'merged', lamp: 'none' }, null, true, true, step)).toMatchObject({
       at: 2,
       mark: 'wait',
@@ -170,7 +172,13 @@ describe('on a stored ticket step (#462)', () => {
   });
 
   it('the work tab header takes the step', () => {
-    const phase = { id: 'working', lamp: 'working', label: 'Claude working', detail: '', section: 'in_flight' } as const;
+    const phase = {
+      id: 'working',
+      lamp: 'working',
+      label: 'Claude working',
+      detail: '',
+      section: 'in_flight',
+    } as const;
     expect(workHeader(item, phase, null, { index: 1, steps }).stage.at).toBe(2);
   });
 });

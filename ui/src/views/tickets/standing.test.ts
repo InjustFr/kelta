@@ -82,8 +82,15 @@ describe('standing (#400)', () => {
     });
     // A review fix (Claude working) stays at Review.
     const item = { pr_url: null, review: null, feedback_at: null } as unknown as WorkItem;
-    const working = { id: 'working', lamp: 'working', section: 'in_flight', label: 'Claude working' } as Phase;
-    expect(standing(tk('in_progress'), { item, phase: working, pr: null }, false, false, step).stage).toMatchObject({
+    const working = {
+      id: 'working',
+      lamp: 'working',
+      section: 'in_flight',
+      label: 'Claude working',
+    } as Phase;
+    expect(
+      standing(tk('in_progress'), { item, phase: working, pr: null }, false, false, step).stage,
+    ).toMatchObject({
       at: 3,
       working: true,
     });

@@ -4,7 +4,10 @@ import type { PipelineEvent, StepDef, TrackerBinding, TransitionTarget, WorkSett
 // Mirror of kelta_proto::settings::effective_pipeline (settings.rs): keep the two in step.
 /** The steps of a board's tickets: its `pipeline`, else `work.pipeline`, else the flow `status_map`
  *  and `work.on_*` describe (a `status_map` key wins over its `on_*` target). */
-export function effectivePipeline(tracker: Pick<TrackerBinding, 'pipeline' | 'status_map'>, work: WorkSettings): StepDef[] {
+export function effectivePipeline(
+  tracker: Pick<TrackerBinding, 'pipeline' | 'status_map'>,
+  work: WorkSettings,
+): StepDef[] {
   if (tracker.pipeline?.length) return tracker.pipeline;
   if (work.pipeline?.length) return work.pipeline;
   const map = tracker.status_map;

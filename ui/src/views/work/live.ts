@@ -105,7 +105,9 @@ export function sessionLabel(s: SessionInfo): string {
 }
 
 // No source found: the default steps, as `steps_of` (crates/kelta-work/src/pipeline.rs) with a default binding.
-const NO_BINDING: Pick<TrackerBinding, 'status_map'> = { status_map: { start: null, review: null, done: null } };
+const NO_BINDING: Pick<TrackerBinding, 'status_map'> = {
+  status_map: { start: null, review: null, done: null },
+};
 
 /** A ticket's stored step (#462) on its source's effective pipeline (the row's source, else `source`).
  *  Null when Kelta never moved the ticket or the step left the pipeline: callers then derive the stage. */
@@ -123,4 +125,5 @@ export function stepOf(
   return index < 0 ? null : { index, steps: steps.map((x) => x.label) };
 }
 
-export const stepNow = (w: WorkItem): Stepped | null => stepOf(w.ticket, w.ticket_source ?? null, w.project_id);
+export const stepNow = (w: WorkItem): Stepped | null =>
+  stepOf(w.ticket, w.ticket_source ?? null, w.project_id);

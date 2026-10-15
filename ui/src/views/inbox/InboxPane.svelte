@@ -56,7 +56,16 @@
   import { isAuthError } from '../work/common';
   import { sendToClaude } from '../work/fixloop.svelte';
   import AskBar from '../work/AskBar.svelte';
-  import { askerOf, claudeOf, phaseNow, prOf, sessionLabel, siblingKey, stepNow, workTitle } from '../work/live';
+  import {
+    askerOf,
+    claudeOf,
+    phaseNow,
+    prOf,
+    sessionLabel,
+    siblingKey,
+    stepNow,
+    workTitle,
+  } from '../work/live';
   import { ticketWork } from '../work/startWork';
   import { loadGlobalLayout, persistPaneContent } from '../work/nav';
   import {

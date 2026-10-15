@@ -76,7 +76,13 @@ export interface Stepped {
  *  only, so also the furthest), and `s` (the phase's stage) keeps only its mark. */
 export function onStep(s: Stage, step: Stepped, working = false): Stage {
   const at = step.index + 1;
-  return { at, reached: at, mark: s.mark, labels: [STAGES[TICKET], ...step.steps], ...(working ? { working } : {}) };
+  return {
+    at,
+    reached: at,
+    mark: s.mark,
+    labels: [STAGES[TICKET], ...step.steps],
+    ...(working ? { working } : {}),
+  };
 }
 
 /** The name of the stage the item is at, translated. */
