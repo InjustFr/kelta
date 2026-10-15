@@ -485,6 +485,8 @@ describe('recent places, pull requests, settings keys and prefixes (#420)', () =
 
 describe('settings in place (#478)', () => {
   const keyItem = (path: string) => settingsItems().find((i) => i.id === `setting-key:${path}`)!;
+  const copyOnSelect = (): boolean =>
+    (settings.value() as unknown as { terminal: { copy_on_select: boolean } }).terminal.copy_on_select;
   const setCalls = (cmd: string) => mock.calls.filter((c) => c.cmd === cmd);
 
   it('shows on/off settings as a switch and others with their value', async () => {
@@ -504,7 +506,7 @@ describe('settings in place (#478)', () => {
       path: 'terminal.copy_on_select',
       value: true,
     });
-    expect((settings.value() as any).terminal.copy_on_select).toBe(true);
+    expect(copyOnSelect()).toBe(true);
     expect(ui.settings).toBeNull();
     const last = toasts.list.at(-1)!;
     expect(last.toast.text).toBe('Copy on select turned on');
@@ -513,8 +515,11 @@ describe('settings in place (#478)', () => {
       args: { path: 'terminal.copy_on_select', value: null },
     });
     await toasts.run(last.id);
-    expect(setCalls('settings_reset').at(-1)!.args).toMatchObject({ layer: 'global', path: 'terminal.copy_on_select' });
-    expect((settings.value() as any).terminal.copy_on_select).toBe(false);
+    expect(setCalls('settings_reset').at(-1)!.args).toMatchObject({
+      layer: 'global',
+      path: 'terminal.copy_on_select',
+    });
+    expect(copyOnSelect()).toBe(false);
   });
 
   it('⌘↵ opens an on/off setting on its row in Settings', async () => {

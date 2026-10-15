@@ -123,7 +123,8 @@
           <span class="label">{item.label}</span>
           {#if item.detail}<span class="detail">{item.detail}</span>{/if}
           {#if item.value}<span class="value">{item.value}</span>{/if}
-          {#if item.checked !== undefined}<span class="switch" class:on={item.checked} aria-hidden="true"></span>{/if}
+          {#if item.checked !== undefined}<span class="switch" class:on={item.checked} aria-hidden="true"
+            ></span>{/if}
           {#if item.kbd}<Kbd chord={item.kbd} />{/if}
         </div>
       {:else}

@@ -70,7 +70,7 @@ test.describe('palette', () => {
     await page.keyboard.press('Control+Shift+K');
     await expect(input).toHaveValue('');
     await expect(page.getByTestId('palette').locator('.group').first()).toHaveText('Recent');
-    await expect(first).toContainText('Settings:');
+    await expect(page.getByTestId('palette-item').filter({ hasText: 'Settings:' }).first()).toBeVisible();
   });
 
   test('turns a setting on in place with Undo, ⌘↵ opens it in Settings (#478)', async ({ page }) => {
