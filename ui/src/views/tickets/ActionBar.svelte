@@ -44,6 +44,8 @@
     browser: t('Open in browser'),
     tag: t('Tags…'),
     another: t('Start another PR'),
+    next_step: t('Next step'),
+    move_step: t('Move to step…'),
   });
   /** The row; the rest of TICKET_ACTIONS goes under More. Open PR only joins it when the ticket has a PR. */
   const ROW: readonly TicketAction[] = ['start', 'move', 'pr', 'comment'];

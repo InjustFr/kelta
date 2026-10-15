@@ -222,6 +222,9 @@ describe('palette sources', () => {
     // Actions owned by other lanes are not offered until they are registered; goto.N is omitted.
     expect(items.find((i) => i.id.startsWith('action:project.goto'))).toBeUndefined();
     expect(items.find((i) => i.id === 'action:tickets.open')).toBeUndefined();
+    expect(items.map((i) => i.label)).toEqual(
+      expect.arrayContaining(['Work: Next step', 'Work: Move to step…']),
+    );
   });
 
   it('lists tools of the active project and settings sections', () => {
@@ -456,6 +459,13 @@ describe('recent places, pull requests, settings keys and prefixes (#420)', () =
     expect(ui.settings).toEqual({ section: 'worktree' });
     expect(takeKeyRequest()).toBe('tickets.wip_limit');
     ui.settings = null;
+  });
+
+  it('matches a settings key by a keyword of the copy table', async () => {
+    await settings.loadSchema();
+    const item = settingsItems().find((i) => i.id === 'setting-key:app.updates')!;
+    expect(item.label).toBe('Check for updates automatically');
+    expect(itemText(item)).toContain('upgrade');
   });
 
   it('prefixes narrow the query to their group', () => {

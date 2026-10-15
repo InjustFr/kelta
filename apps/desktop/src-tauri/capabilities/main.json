@@ -110,6 +110,7 @@
     "allow-next-up-put",
     "allow-next-up-remove",
     "allow-ticket-seen",
+    "allow-ticket-step-set",
     "allow-tags-get",
     "allow-tags-set",
     "allow-review-list",

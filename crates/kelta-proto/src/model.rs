@@ -1183,7 +1183,7 @@ pub struct TicketStep {
     pub step_id: String,
     /// RFC 3339.
     pub entered_at: String,
-    /// The trigger that entered the step, as JSON (`"pr_ready"`, `{"status":{"name":"PO Review"}}`).
+    /// The trigger that entered the step, as JSON (`"pr_ready"`, `{"status":{"name":"PO Review"}}`), or `manual` (#463).
     pub by: String,
 }
 

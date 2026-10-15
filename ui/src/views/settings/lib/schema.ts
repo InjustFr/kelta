@@ -1,11 +1,13 @@
 // Schema-driven form model: turns the flattened settings JSON Schema (`schema/settings.schema.json`,
 // annotated with `x-kelta-*`) into field kinds. No per-key code lives in the renderer; the only
-// key-aware tables here are presentation hints (template placeholders, acronyms).
+// key-aware tables here are presentation hints (template placeholders, acronyms); the words per key
+// live in `../copy`.
 
 import type { JsonValue } from '$lib/gen';
 import { msg, t } from '$lib/i18n/index.svelte';
 
-import { getAt, joinPath } from './paths';
+import { COPY, onThisPlatform, type CopyEntry } from '../copy';
+import { getAt, joinPath, splitPath } from './paths';
 
 export interface SchemaNode {
   type?: string | string[];
@@ -154,16 +156,20 @@ export function fieldKind(input: SchemaNode): FieldKind {
   }
 }
 
-/** Child property schemas of a group, scalars first, then nested structures; each alphabetical. Deprecated keys still load, unshown. */
-export function childEntries(node: SchemaNode): [string, SchemaNode][] {
+/** Child property schemas of a group. With the group's `path`: keys meant for another OS drop out and the
+ *  copy table's `order` comes first. Then scalars before nested structures, each A→Z. Deprecated keys still load, unshown. */
+export function childEntries(node: SchemaNode, path?: string): [string, SchemaNode][] {
   const props = resolve(node).node.properties ?? {};
+  const copyOf = (key: string): CopyEntry | undefined =>
+    path === undefined ? undefined : COPY[joinPath([...splitPath(path), key])];
+  const order = (key: string): number => copyOf(key)?.order ?? Number.MAX_SAFE_INTEGER;
   const weight = (n: SchemaNode): number => {
     const k = fieldKind(n);
     return k === 'group' || k === 'object-map' || k === 'keyed-list' ? 1 : 0;
   };
   return Object.entries(props)
-    .filter(([, n]) => !n.deprecated)
-    .sort(([ka, a], [kb, b]) => weight(a) - weight(b) || ka.localeCompare(kb));
+    .filter(([key, n]) => !n.deprecated && onThisPlatform(copyOf(key)))
+    .sort(([ka, a], [kb, b]) => order(ka) - order(kb) || weight(a) - weight(b) || ka.localeCompare(kb));
 }
 
 /** Schema of a map's values / a list's items. */
@@ -192,48 +198,34 @@ export interface EnumOption {
 /** `app.language` values, named in their own language. */
 export const LANGUAGE_NAMES: Record<string, string> = { en: 'English', fr: 'Français', de: 'Deutsch' };
 
-export function enumOptions(node: SchemaNode): EnumOption[] {
+export function enumOptions(node: SchemaNode, path?: string): EnumOption[] {
   const r = resolve(node).node;
+  const options = path === undefined ? undefined : COPY[path]?.options;
   const values = (r.enum ?? []).filter((v): v is string => typeof v === 'string');
   return values.map((value, i) => {
-    const description = r.enumDescriptions?.[i];
+    const copy = options?.[value];
+    const description = copy?.help ?? r.enumDescriptions?.[i];
     return {
       value,
-      label: LANGUAGE_NAMES[value] ?? t(value[0]!.toUpperCase() + value.slice(1)),
+      label: copy ? t(copy.label) : (LANGUAGE_NAMES[value] ?? t(value[0]!.toUpperCase() + value.slice(1))),
       description: description && t(description),
     };
   });
 }
 
-/** UI wording for settings whose generated title or doc comment speaks implementation. */
-export const COPY: Record<string, { label?: string; help?: string }> = {
-  env: { label: msg('Environment variables') },
-  'app.restore_mode': {
-    label: msg('Reopen sessions on launch'),
-    help: msg(
-      'Lazy reopens each session when you first look at it, eager reopens all of them at startup, none starts empty.',
-    ),
-  },
-  'app.confirm_quit_with_running': { label: msg('Ask before quitting while sessions run') },
-  'app.quit_sessions': {
-    label: msg('Sessions on quit'),
-    help: msg(
-      'Ask, keep them running in the background (they are back on the next launch), or stop them all.',
-    ),
-  },
-  'app.updates': {
-    label: msg('Check for updates automatically'),
-    help: msg('On start and when Kelta gets focus, at most every 6 hours. Check now works either way.'),
-  },
-  'app.dark_theme': {
-    label: msg('Dark theme'),
-    help: msg('Theme id used in dark mode: bezel-dark or a [themes.<id>] with base = "dark".'),
-  },
-  'app.light_theme': {
-    label: msg('Light theme'),
-    help: msg('Theme id used in light mode: bezel-light or a [themes.<id>] with base = "light".'),
-  },
-};
+/** Label of a settings key: its copy entry, else its name. */
+export function labelOf(path: string): string {
+  const label = COPY[path]?.label;
+  return label ? t(label) : titleOf(splitPath(path).at(-1) ?? path);
+}
+
+/** Help of a settings key: its copy entry, else its doc comment. */
+export function helpOf(path: string, node: SchemaNode): string {
+  const help = COPY[path]?.help;
+  return help ? t(help) : descriptionOf(node);
+}
+
+export const keywordsOf = (path: string): string[] => (COPY[path]?.keywords ?? []).map((k) => t(k));
 
 const ACRONYMS: Record<string, string> = {
   mcp: 'MCP',
@@ -391,7 +383,7 @@ export function leafFields(schema: SchemaNode, roots: readonly string[]): LeafFi
   const visit = (segs: string[], node: SchemaNode): void => {
     const kind = fieldKind(node);
     if (kind === 'group') {
-      for (const [k, child] of childEntries(node)) visit([...segs, k], child);
+      for (const [k, child] of childEntries(node, joinPath(segs))) visit([...segs, k], child);
       return;
     }
     out.push({ segs, path: joinPath(segs), node, kind });

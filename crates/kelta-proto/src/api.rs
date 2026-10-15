@@ -485,6 +485,14 @@ pub trait CoreApi: Send + Sync {
     ) -> Result<(WorkItem, bool), KeltaError> {
         Err(KeltaError::unsupported("work_link_pr"))
     }
+    /// Manual step move (#463, MCP `move_ticket_step`): to `step_id`, `None` = the step after the current one.
+    async fn ticket_step_set(
+        &self,
+        _ticket: &TicketRef,
+        _step_id: Option<&str>,
+    ) -> Result<TicketStep, KeltaError> {
+        Err(KeltaError::unsupported("ticket_step_set"))
+    }
     async fn editor_open(
         &self,
         target: EditorTarget,

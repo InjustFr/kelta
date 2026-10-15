@@ -1911,6 +1911,10 @@
   "Linux, focused terminal: who gets a plain `ctrl+<letter>` bound in Kelta.": "Linux, terminal actif : qui reçoit un `ctrl+<lettre>` simple lié dans Kelta.",
   "Terminal_first": "Le terminal d’abord",
   "Kelta_first": "Kelta d’abord",
+  "Terminal first": "Le terminal d’abord",
+  "Kelta first": "Kelta d’abord",
+  "upgrade": "mise à niveau",
+  "new version": "nouvelle version",
   "List keys": "Touches des listes",
   "Prefix": "Préfixe",
   "Prefix bindings": "Associations du préfixe",
@@ -2632,5 +2636,12 @@
   "Changes_requested": "Changements demandés",
   "Deprecated: use `pipeline`; still read as its fallback. `start` / `review` / `done` → TransitionTarget; overrides `work.on_*` targets.": "Obsolète : utilisez `pipeline` ; toujours lu en repli. `start` / `review` / `done` → TransitionTarget ; remplace les cibles `work.on_*`.",
   "Deprecated: use `pipeline` steps; still read as their fallback.": "Obsolète : utilisez les étapes de `pipeline` ; toujours lu en repli.",
-  "Steps of a ticket's flow when its source sets no `tracker.pipeline`; empty builds them from\n`tracker.status_map` and `on_*` (`effective_pipeline`).": "Étapes du parcours d’un ticket quand sa source ne définit pas `tracker.pipeline` ; vide, elles viennent de\n`tracker.status_map` et `on_*` (`effective_pipeline`)."
+  "Steps of a ticket's flow when its source sets no `tracker.pipeline`; empty builds them from\n`tracker.status_map` and `on_*` (`effective_pipeline`).": "Étapes du parcours d’un ticket quand sa source ne définit pas `tracker.pipeline` ; vide, elles viennent de\n`tracker.status_map` et `on_*` (`effective_pipeline`).",
+  "Move to step…": "Passer à l'étape…",
+  "{key} moved to step {step}": "{key} est passé à l'étape {step}",
+  "Move {key} to step": "Passer {key} à l'étape",
+  "Step…": "Étape…",
+  "No matching step": "Aucune étape correspondante",
+  "Work: Next step": "Travail : étape suivante",
+  "Work: Move to step…": "Travail : passer à l'étape…"
 }

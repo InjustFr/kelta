@@ -1401,6 +1401,13 @@ export function createMockTransport(options: MockOptions = {}): {
       for (const t of tickets) if (!state.nextUp.seen.includes(refKey(t))) state.nextUp.seen.push(refKey(t));
       return null;
     },
+    ticket_step_set: ({ ticket, step_id }) => ({
+      ticket: { ...ticket },
+      source_id: null,
+      step_id: step_id ?? 'pr',
+      entered_at: new Date().toISOString(),
+      by: 'manual',
+    }),
     tags_get: () => clone(state.tags),
     tags_set: ({ tags }) => {
       state.tags = JSON.parse(JSON.stringify(tags)) as LocalTags; // args may be $state proxies

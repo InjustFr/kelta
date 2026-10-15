@@ -21,6 +21,7 @@ export type SheetKey =
   | 'work_dialog'
   | 'tracker.source_picker'
   | 'tickets.move'
+  | 'tickets.step'
   | 'tickets.comment'
   | 'reviews.comment'
   | 'workflow_run'

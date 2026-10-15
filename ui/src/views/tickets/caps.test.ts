@@ -55,6 +55,8 @@ describe('blockedReason', () => {
     expect(blockedReason('block', item, null)).toMatch(/blocked marker/);
     expect(blockedReason('pr', item, null)).toMatch(/No pull request/);
     expect(blockedReason('branch', item, null)).toMatch(/Start work first/);
+    expect(blockedReason('next_step', item, null)).toMatch(/Start work first/);
+    expect(blockedReason('move_step', item, null)).toMatch(/Start work first/);
     expect(blockedReason('move', item, null)).toBeNull();
     expect(blockedReason('workflow', item, null, [])).toBe(
       'No workflows in .claude/workflows or ~/.claude/workflows',
