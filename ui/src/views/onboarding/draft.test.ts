@@ -19,6 +19,7 @@ describe('defaultView', () => {
   it('bindTracker starts the binding with that one view', () => {
     const b = bindTracker('gitlab-work', 'gitlab', 'grp/app');
     expect(b.account).toBe('gitlab-work');
+    expect(b).not.toHaveProperty('status_map');
     expect(b.views).toMatchObject([{ id: 'mine', project: 'grp/app', who: 'mine' }]);
   });
 });
