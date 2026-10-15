@@ -99,6 +99,24 @@ describe('settings copy table', () => {
     }
   });
 
+  it('Terminal is grouped by task, scrollback outside Advanced (#470)', async () => {
+    onOs('MacIntel');
+    const { container, unmount } = await renderForm('terminal');
+    const heads = [...container.querySelectorAll('[data-testid="copy-group"] h3')].map((h) => h.textContent);
+    expect(heads).toEqual([
+      'Text',
+      'Cursor',
+      'Clipboard',
+      'Keyboard',
+      'Scrollback & history',
+      'Shell',
+      'Sound',
+    ]);
+    for (const p of ['terminal.scrollback', 'terminal.osc52'])
+      expect(container.querySelector(`[data-path="${p}"]`)!.closest('[data-testid="advanced"]')).toBeNull();
+    unmount();
+  });
+
   it('fields follow the table order under group headings, the rest A→Z', async () => {
     inject({
       'window.restore_geometry': { order: 0, group: 'On launch' },

@@ -66,7 +66,8 @@ pub(crate) struct Journal {
     #[serde(default)]
     pub include_hashes: BTreeMap<String, String>,
     /// Tracker side effects done (`assign`, `transition` on success; `comment` once attempted); a pipeline
-    /// step's as `<step>:transition` / `<step>:comment` (#461).
+    /// step's as `<step>:transition` / `<step>:comment` (#461); `entered` once this item entered the
+    /// ticket's start step, so its Retry runs the start effects and siblings do not (#466).
     pub effects_done: BTreeSet<String>,
     /// A prompt for Claude held while it works, delivered on its next `Stop` (`deliver_prompt`).
     #[serde(default)]
@@ -246,6 +247,8 @@ impl WorkService {
         source: WorkSource,
         repo_hint: Option<String>,
         another: bool,
+        // The ticket's [[sources]] id (Core's hint), whose pipeline gives the start effects (#466).
+        ticket_source: Option<&str>,
     ) -> Result<StartWorkPlan, KeltaError> {
         // A ticket or PR resumes its work item where it lives, across projects. Branch sources
         // stay per project, the same `wip/` name can exist in two repos. `another` (a ticket only,
@@ -259,7 +262,7 @@ impl WorkService {
                 plan::existing_for(&all, &source).filter(|w| &w.project_id != project_id).filter(hosts)
             {
                 // The route's repo belongs to the planned project: dropped here.
-                return Box::pin(self.build_plan(&w.project_id, source, None, false)).await;
+                return Box::pin(self.build_plan(&w.project_id, source, None, false, ticket_source)).await;
             }
         }
         let project = project_of(&core, project_id)?;
@@ -328,7 +331,7 @@ impl WorkService {
                 ctx.set("branch", branch.clone());
                 ctx.set("worktree", path.to_string_lossy().into_owned());
                 let claude = plan::claude_plan(&settings, "default", "ticket", &ctx);
-                let mut side = plan::side_effects(&settings, &project, true, &ctx);
+                let mut side = plan::side_effects(&settings, &project, ticket_source, true, &ctx);
                 side.assign_me &= tracker.caps().assign;
                 let base = match (&existing, adopt) {
                     (Some(w), _) => w.base.clone(),
@@ -368,13 +371,13 @@ impl WorkService {
                         })
                     });
                     if let Some(w) = elsewhere {
-                        return Box::pin(self.build_plan(&w.project_id, source, None, false)).await;
+                        return Box::pin(self.build_plan(&w.project_id, source, None, false, None)).await;
                     }
                 }
                 if existing.is_none() && r.kind == ReviewKind::Authored {
                     // Made outside Kelta: adopt its head branch as a scratch item so pushes update it.
                     let source = WorkSource::Branch { name: r.source_branch.clone(), task: None, repo: None };
-                    let mut plan = Box::pin(self.build_plan(project_id, source, None, false)).await?;
+                    let mut plan = Box::pin(self.build_plan(project_id, source, None, false, None)).await?;
                     plan.base = r.target_branch.clone();
                     plan.adopt_pr = Some(r.url.clone());
                     return Ok(plan);
@@ -406,7 +409,7 @@ impl WorkService {
                 ctx.set("branch", branch.clone());
                 ctx.set("worktree", path.to_string_lossy().into_owned());
                 let claude = plan::claude_plan(&settings, "review", "review", &ctx);
-                let mut side = plan::side_effects(&settings, &project, false, &ctx);
+                let mut side = plan::side_effects(&settings, &project, None, false, &ctx);
                 side.run_setup = !settings.worktree.setup.is_empty();
                 Ok(plan::assemble(
                     &project,
@@ -467,7 +470,7 @@ impl WorkService {
                 }
                 ctx.set("worktree", path.to_string_lossy().into_owned());
                 let claude = plan::claude_plan(&settings, "default", "standalone", &ctx);
-                let side = plan::side_effects(&settings, &project, false, &ctx);
+                let side = plan::side_effects(&settings, &project, None, false, &ctx);
                 Ok(plan::assemble(
                     &project,
                     source.clone(),
@@ -1705,9 +1708,15 @@ impl WorkService {
         let fx = plan.side_effects;
         let steps = crate::pipeline::steps_of(env, item);
         let started = Signal::Event(PipelineEvent::WorkStarted);
-        let at = crate::pipeline::current(&steps, self.store.ticket_step(&t).await.ok().flatten().as_ref());
-        // A sibling's start never moves the ticket back (#456): the plan's transition and comment wait.
-        let back = at > crate::pipeline::advance(&steps, None, &started);
+        let start = crate::pipeline::advance(&steps, None, &started);
+        let at = self.standing(env, item, &t, &steps, &started).await;
+        // The start effects run once per (ticket, start step) (#466): for the item that enters it (`entered`,
+        // also on its Retry); a sibling's Start at or past it, or a Resume past it, runs none.
+        let back = at > start || (at.is_some() && at == start && !j.effects_done.contains("entered"));
+        if !back {
+            j.effects_done.insert("entered".to_owned());
+            self.save_journal(&item.id, j)?;
+        }
         self.signal(item, started, None).await;
         let tracker = match env.core.tracker_for(&t.account).await {
             Ok(tr) => tr,

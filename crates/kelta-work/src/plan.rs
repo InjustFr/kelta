@@ -9,7 +9,7 @@ use kelta_proto::model::{
     BranchChoice, BranchExists, ClaudePlan, PORT_BLOCK, ProjectInfo, RepoInfo, SideEffects, StartWorkPlan,
     TemplatePreview, WorkItem, WorkSource, WorkState,
 };
-use kelta_proto::settings::{PipelineEvent, Settings, StartOption, effective_pipeline};
+use kelta_proto::settings::{PipelineEvent, Settings, StartOption};
 use kelta_proto::tracker::{Ticket, TrackerKind};
 
 use crate::git;
@@ -239,10 +239,14 @@ pub fn pr_title_with_key(title: &str, key: &str, key_regex: &str) -> Option<Stri
 }
 
 /// Default side effects: the transition and comment of the step `work_started` enters (#461).
-pub fn side_effects(settings: &Settings, project: &ProjectInfo, ticket: bool, ctx: &Ctx) -> SideEffects {
-    // shortcut: the project board's steps, not the ticket source's (core sets `ticket_source` after
-    // the plan); pass the source when a project has two boards with different pipelines.
-    let steps = effective_pipeline(&project.tracker.clone().unwrap_or_default(), &settings.work);
+pub fn side_effects(
+    settings: &Settings,
+    project: &ProjectInfo,
+    source: Option<&str>,
+    ticket: bool,
+    ctx: &Ctx,
+) -> SideEffects {
+    let steps = crate::pipeline::steps_for(settings, project, source);
     let start = crate::pipeline::advance(&steps, None, &Signal::Event(PipelineEvent::WorkStarted))
         .filter(|_| ticket)
         .map(|i| &steps[i]);

@@ -239,7 +239,8 @@ async fn route_repo_sets_the_plan_repo_unless_an_item_or_the_project_says_otherw
     p.repos.push(web);
     fx.core.add_project(p.clone());
     let w = fx.service();
-    let plan = |repo: Option<&str>| w.plan_with_repo(&p.id, ticket("SHOP-141"), repo.map(Into::into), false);
+    let plan =
+        |repo: Option<&str>| w.plan_with_repo(&p.id, ticket("SHOP-141"), repo.map(Into::into), false, None);
     assert_eq!(plan(Some("web")).await.unwrap().repo_id, "web", "the route's repo");
     assert_eq!(plan(Some("gone")).await.unwrap().repo_id, "api", "not in the project: primary");
     w.start(plan(None).await.unwrap()).await.unwrap();
@@ -347,6 +348,7 @@ async fn retry_side_effects_redoes_failures_but_never_the_comment() {
     let effects = item.steps.iter().find(|s| s.step == "tracker_side_effects").unwrap();
     assert!(effects.detail.as_deref().unwrap_or_default().contains("transition failed"), "{effects:?}");
 
+    // #466: the item that entered the start step retries its effects there.
     w.retry_step(&item.id, "tracker_side_effects").await.unwrap();
     let t = fx.tracker.calls();
     let count = |p: &str| t.iter().filter(|c| c.starts_with(p)).count();
@@ -874,7 +876,7 @@ async fn start_another_pr_adds_an_item_with_its_own_branch_and_worktree() {
     // Start work keeps resuming the first item.
     assert_eq!(w.plan(&project(), ticket("SHOP-141")).await.unwrap().existing, Some(first.id.clone()));
 
-    let plan = w.plan_with_repo(&project(), ticket("SHOP-141"), None, true).await.unwrap();
+    let plan = w.plan_with_repo(&project(), ticket("SHOP-141"), None, true, None).await.unwrap();
     assert_eq!((plan.existing.as_ref(), plan.branch_exists.as_ref()), (None, None));
     assert_eq!(plan.branch, format!("{}-2", first.branch), "the template's branch, suffixed");
     let second = w.start(plan).await.unwrap();
@@ -886,6 +888,35 @@ async fn start_another_pr_adds_an_item_with_its_own_branch_and_worktree() {
     assert_eq!(second.ticket, first.ticket);
     let md = fx.context_md();
     assert!(md.contains(&format!("  - {} (no pull request yet)\n", first.branch)), "the sibling: {md}");
+}
+
+#[tokio::test]
+async fn the_start_sheet_uses_the_ticket_sources_start_effects() {
+    use kelta_proto::settings::{PipelineEvent, Source, StepDef, TrackerBinding, Trigger};
+    let fx = Fx::new();
+    fx.settings(|s| {
+        s.sources.push(Source {
+            id: "b".into(),
+            tracker: TrackerBinding {
+                pipeline: vec![StepDef {
+                    id: "go".into(),
+                    label: "go".into(),
+                    enter: vec![Trigger::Event(PipelineEvent::WorkStarted)],
+                    transition_to: Some(TransitionTarget::Name { name: "In Review".into() }),
+                    comment: Some("From b".into()),
+                }],
+                ..samples::tracker_binding()
+            },
+            ..Source::default()
+        });
+    });
+    let w = fx.service();
+    let plan = w.plan_with_repo(&project(), ticket("SHOP-141"), None, false, Some("b")).await.unwrap();
+    let fxs = plan.side_effects;
+    assert_eq!(fxs.transition_to, Some(TransitionTarget::Name { name: "In Review".into() }));
+    assert_eq!(fxs.comment.as_deref(), Some("From b"));
+    let other = w.plan(&project(), ticket("SHOP-141")).await.unwrap();
+    assert_ne!(other.side_effects.transition_to, Some(TransitionTarget::Name { name: "In Review".into() }));
 }
 
 #[tokio::test]

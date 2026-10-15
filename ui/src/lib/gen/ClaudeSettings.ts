@@ -21,7 +21,7 @@ hook_transport: HookTransport,
  */
 mcp: boolean, 
 /**
- * Board-wide MCP writes (move, comment, edit, close any ticket by key); off = read-only board tools.
+ * Board-wide MCP writes (move, comment, edit, close any ticket by key, move its pipeline step); off = read-only board tools.
  */
 mcp_board_writes: boolean, 
 /**

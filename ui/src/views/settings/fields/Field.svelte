@@ -21,6 +21,7 @@
     labelOf,
     repoRelevant,
     resolve,
+    TOGGLE_VALUES,
     type SchemaNode,
   } from '../lib/schema';
   import { isAdvanced } from '../lib/sections';
@@ -42,7 +43,7 @@
   let { path, node, depth = 0, title }: Props = $props();
 
   const editor = useEditor();
-  const kind = $derived(fieldKind(node));
+  const kind = $derived(TOGGLE_VALUES[path] ? 'bool' : fieldKind(node));
   const segs = $derived(splitPath(path));
   const label = $derived(title ?? labelOf(path));
   const description = $derived(helpOf(path, node));
