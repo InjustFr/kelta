@@ -453,6 +453,7 @@ pub trait CoreApi: Send + Sync {
     }
     /// MCP `claim_ticket` (#235): a work item for `ticket` adopting `worktree` (default: the project's
     /// primary repo) and `branch`, claimed by `run`. `Conflict` naming the holder when it is taken.
+    /// `adopt` false: the caller's Claude is never given to the item (a multi-ticket orchestrator, #497).
     async fn work_claim(
         &self,
         _project: &ProjectId,
@@ -460,6 +461,7 @@ pub trait CoreApi: Send + Sync {
         _worktree: Option<PathBuf>,
         _branch: Option<String>,
         _run: RunClaim,
+        _adopt: bool,
     ) -> Result<WorkItem, KeltaError> {
         Err(KeltaError::unsupported("work_claim"))
     }

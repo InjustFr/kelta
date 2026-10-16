@@ -1027,18 +1027,34 @@ pub struct LocalTag {
 pub const PORT_BLOCK: u16 = 10;
 
 impl WorkItem {
+    /// #497: `sid` holds this item: its run's session or, with no run, one of its own sessions (the
+    /// Claude that Start work gave it).
+    pub fn claimed_by(&self, sid: Option<&SessionId>) -> bool {
+        sid.is_some_and(|s| match &self.run {
+            Some(r) => r.session_id.as_ref() == Some(s),
+            None => self.session_ids.contains(s),
+        })
+    }
+
     /// `claim_ticket` of `self` against `held`, an unfinished item of the same ticket: an orphaned
-    /// claim, or one of the same run (equal `run_id`s; lanes of one orchestrator share a session),
-    /// is taken over (same id, the new run's worktree); so is a `blocked` or `failed` one, whose lane
-    /// has ended. Anything else wins and comes back as `Err`.
+    /// claim, or one of the same run (equal `run_id`s), is taken over (same id, the new run's
+    /// worktree); so is a `blocked` or `failed` one, whose lane has ended, and the holder's own
+    /// re-claim (#497: `claimed_by` the claiming session, run ids equal or one missing; the lanes of
+    /// one orchestrator share a session, so two different run ids still conflict). Anything else wins
+    /// and comes back as `Err`.
     pub fn claim_over(self, held: Option<WorkItem>) -> Result<WorkItem, Box<WorkItem>> {
         let Some(mut h) = held else { return Ok(self) };
         let new = self.run.as_ref();
-        let take = h.run.as_ref().is_some_and(|r| {
-            matches!(r.state, RunState::Orphaned | RunState::Blocked | RunState::Failed)
-                || (r.run_id.is_some() && r.run_id == new.and_then(|n| n.run_id.clone()))
-        });
-        if !take {
+        let held_id = h.run.as_ref().and_then(|r| r.run_id.as_ref());
+        let new_id = new.and_then(|n| n.run_id.as_ref());
+        let ended = h
+            .run
+            .as_ref()
+            .is_some_and(|r| matches!(r.state, RunState::Orphaned | RunState::Blocked | RunState::Failed));
+        let same_run = held_id.is_some() && held_id == new_id;
+        let mine = h.claimed_by(new.and_then(|n| n.session_id.as_ref()))
+            && !matches!((held_id, new_id), (Some(a), Some(b)) if a != b);
+        if !(ended || same_run || mine) {
             return Err(Box::new(h));
         }
         (h.repo_id, h.worktree, h.branch, h.base, h.run) =
@@ -1350,4 +1366,43 @@ pub struct TemplateCtx {
     /// Extra string placeholders.
     #[serde(default)]
     pub extra: BTreeMap<String, String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn item(id: &str, sid: Option<&str>, run_id: Option<&str>, worktree: &str) -> WorkItem {
+        WorkItem {
+            id: WorkItemId::new(id),
+            worktree: worktree.into(),
+            run: Some(RunClaim {
+                session_id: sid.map(SessionId::new),
+                run_id: run_id.map(Into::into),
+                ..RunClaim::default()
+            }),
+            ..WorkItem::default()
+        }
+    }
+
+    #[test]
+    fn claim_over_gives_the_holder_session_its_item_but_not_another_lane() {
+        let held = |sid, run_id| item("held", sid, run_id, "/old");
+        let new = |sid, run_id| item("new", sid, run_id, "/new");
+        // The holder's own re-claim: same run id, or either one missing.
+        for (h, n) in [(Some("r1"), Some("r1")), (Some("r1"), None), (None, Some("r1"))] {
+            let got = new(Some("a"), n).claim_over(Some(held(Some("a"), h))).unwrap();
+            assert_eq!((got.id, got.worktree), (WorkItemId::new("held"), "/new".into()));
+        }
+        // The item's own Claude (an item with no run) claims it: `run` is set.
+        let mut start = item("held", None, None, "/old");
+        (start.run, start.session_ids) = (None, vec![SessionId::new("a")]);
+        let got = new(Some("a"), None).claim_over(Some(start.clone())).unwrap();
+        assert!(got.run.is_some());
+        assert!(new(Some("b"), None).claim_over(Some(start)).is_err());
+        // Another lane of one session, another session, and unowned claims still conflict.
+        assert!(new(Some("a"), Some("r2")).claim_over(Some(held(Some("a"), Some("r1")))).is_err());
+        assert!(new(Some("b"), None).claim_over(Some(held(Some("a"), None))).is_err());
+        assert!(new(None, None).claim_over(Some(held(None, None))).is_err());
+    }
 }

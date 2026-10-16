@@ -4,10 +4,13 @@
 use std::path::PathBuf;
 
 use crate::common::{Fx, git, has_git, project};
-use kelta_proto::api::{Tracker, WorkStore};
+use crate::signals::{hook, wait_item};
+use kelta_proto::api::{CoreApi, Tracker, WorkStore};
 use kelta_proto::error::ErrorCode;
 use kelta_proto::ids::{SessionId, WorkItemId};
-use kelta_proto::model::{ClaudeMeta, Lifecycle, PaneContent, RunClaim, RunState, SessionInfo, WorkState};
+use kelta_proto::model::{
+    ClaudeMeta, Lifecycle, PaneContent, RunClaim, RunState, SessionInfo, SessionKind, WorkSource, WorkState,
+};
 use kelta_proto::samples;
 use kelta_proto::tracker::TicketRef;
 use serde_json::json;
@@ -456,4 +459,92 @@ async fn an_adopted_claude_resumes_in_the_runs_cwd() {
     let args: Vec<String> = serde_json::from_value(last.args["args"].clone()).unwrap();
     assert_eq!(args[..2], ["--resume".to_owned(), "run-uuid".to_owned()]);
     assert_eq!(last.args["cwd"], json!(s.cwd), "the run's cwd, not the claimed worktree");
+}
+
+#[tokio::test]
+async fn the_holder_session_re_claims_its_ticket_without_conflict() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    session(&fx, "orch-a", "kelta-a6");
+    let w = fx.service();
+    let (t, p) = (samples::ticket_ref(), project());
+    let bare = RunClaim { run_id: None, ..run("orch-a") };
+
+    let a = w.claim(&p, t.clone(), None, None, bare.clone()).await.unwrap();
+    // The second claim names its worktree: the same item, re-pointed.
+    let wt = run_worktree(&fx, "feat/ticket-142");
+    let b = w.claim(&p, t.clone(), Some(wt.clone()), None, bare).await.unwrap();
+    assert_eq!(b.id, a.id);
+    assert_eq!(b.worktree.canonicalize().unwrap(), wt.canonicalize().unwrap());
+    assert_eq!(b.branch, "feat/ticket-142");
+    // A run id set while the held one is missing is still the holder.
+    let c = w.claim(&p, t, None, None, run("orch-a")).await.unwrap();
+    assert_eq!(c.id, a.id);
+    assert_eq!(fx.store.list_items(None).await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn a_bare_re_claim_keeps_the_items_worktree() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    session(&fx, "orch-a", "kelta-a6");
+    let w = fx.service();
+    let wt = run_worktree(&fx, "feat/ticket-142");
+    let (t, p) = (samples::ticket_ref(), project());
+    let a = w.claim(&p, t.clone(), Some(wt.clone()), None, run("orch-a")).await.unwrap();
+    let b = w.claim(&p, t, None, None, run("orch-a")).await.unwrap();
+    assert_eq!(b.id, a.id);
+    assert_eq!(b.worktree.canonicalize().unwrap(), wt.canonicalize().unwrap());
+    assert_eq!(b.branch, "feat/ticket-142");
+}
+
+#[tokio::test]
+async fn an_items_own_claude_claims_its_ticket() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    let w = fx.service();
+    let mut t = samples::ticket_ref();
+    t.key = "SHOP-141".into();
+    let plan = w.plan(&project(), WorkSource::Ticket { ticket: t.clone() }).await.unwrap();
+    let item = w.start(plan).await.unwrap();
+    let claude = fx.spawned_of(|k| *k == SessionKind::Claude)[0].id.clone();
+
+    let own = RunClaim { run_id: None, session_id: Some(claude.clone()), ..run("x") };
+    let got = w.claim(&project(), t.clone(), None, None, own).await.unwrap();
+    assert_eq!(got.worktree.canonicalize().unwrap(), item.worktree.canonicalize().unwrap());
+    assert_eq!((&got.id, &got.branch), (&item.id, &item.branch));
+    assert_eq!(got.run.unwrap().session_id, Some(claude));
+    assert_eq!(fx.store.list_items(None).await.unwrap().len(), 1);
+    // Another session still gets the Conflict.
+    session(&fx, "orch-b", "kelta-b2");
+    let e = w.claim(&project(), t, None, None, run("orch-b")).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Conflict);
+}
+
+#[tokio::test]
+async fn hooks_follow_the_unfinished_item_of_a_reused_session() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    let s = run_claude(&fx);
+    let w = fx.service();
+    let a = w.claim(&project(), samples::ticket_ref(), None, None, run("run-s")).await.unwrap();
+    w.adopt_run(&a.id, &s).await.unwrap();
+    w.release("SHOP-142", None, Some(&s.id)).await.unwrap();
+
+    let next = TicketRef { key: "SHOP-143".into(), id: "10143".into(), ..samples::ticket_ref() };
+    let wt = run_worktree(&fx, "feat/ticket-143");
+    let b = w.claim(&project(), next, Some(wt), None, run("run-s")).await.unwrap();
+    w.adopt_run(&b.id, &s).await.unwrap();
+    assert_eq!(w.for_session(&s.id).await.unwrap().id, b.id);
+
+    fx.core.publish(hook(&s.id, "SessionStart", json!({ "session_id": "after-clear", "source": "clear" })));
+    wait_item(&fx, &b, |i| i.claude_uuid.as_deref() == Some("after-clear")).await;
 }
