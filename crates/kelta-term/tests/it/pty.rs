@@ -390,6 +390,47 @@ fn flood_keeps_inflight_bounded_and_ends_with_a_snapshot() {
     assert!(m.text_tail(5).contains("flood done"), "{}", m.text_tail(5));
 }
 
+/// #515: a view acking every frame as it arrives (keltad's connection thread) hits the session lock
+/// on every chunk the reader parses. The child still runs to completion and in-flight stays under HIGH.
+#[test]
+fn flood_with_a_continuously_acking_view_completes() {
+    let sim = tui_sim();
+    let h = host(Arc::new(PortablePty));
+    let ev = Arc::new(Events::default());
+    let id = SessionId::new("acked-flood");
+    let view = SlowView {
+        frames: Arc::default(),
+        unacked: Arc::new(AtomicI64::new(0)),
+        max_unacked: Arc::new(AtomicI64::new(0)),
+    };
+    h.spawn(spec("acked-flood", sim.to_str().unwrap(), &["--flood", "10"], 120, 40, ev.clone())).unwrap();
+    let info = h.attach(&id, 120, 40, Box::new(view.clone())).unwrap();
+    std::thread::scope(|s| {
+        s.spawn(|| {
+            loop {
+                let batch = std::mem::take(&mut *view.frames.lock().unwrap());
+                for f in &batch {
+                    let n = frames::ack_len(f);
+                    h.ack(&id, info.generation, n);
+                    // In flight until acked: decrement after the ack.
+                    view.unacked.fetch_sub(i64::from(n), Ordering::SeqCst);
+                }
+                // The stream ends with the Exit frame.
+                if batch.last().is_some_and(|f| f[0] == kelta_proto::term::FRAME_EXIT) {
+                    break;
+                }
+                if batch.is_empty() {
+                    std::thread::yield_now();
+                }
+            }
+        });
+        assert_eq!(ev.wait_exit(Duration::from_secs(240)), (Some(0), None));
+    });
+    let max = view.max_unacked.load(Ordering::SeqCst);
+    assert!(max <= i64::from(HIGH_WATERMARK), "in-flight peaked at {max}");
+    assert!(h.stats().sessions[0].bytes_in >= 10 * 1024 * 1024);
+}
+
 #[test]
 fn attach_detach_generations_and_exit_banner() {
     let h = host(Arc::new(PortablePty));
