@@ -8,13 +8,13 @@
 
   const editor = useEditor(() => ({ layer: props.layer, projectId: props.projectId, repoId: props.repoId }));
   const v = (key: string) => editor.valueOf(`terminal.${key}`);
-  // The disk caps only matter while scrolled-off lines are saved.
-  const skip = $derived(
+  // The disk caps only matter while scrolled-off lines are saved: shown disabled, not skipped, so search hits still land.
+  const disabled = $derived(
     v('history_log') === false ? ['terminal.history_log_mb', 'terminal.history_log_total_mb'] : [],
   );
 </script>
 
-<SectionForm sectionId="terminal" {...props} {skip}>
+<SectionForm sectionId="terminal" {...props} {disabled}>
   {#snippet before()}
     {#if editor.ready}
       <p

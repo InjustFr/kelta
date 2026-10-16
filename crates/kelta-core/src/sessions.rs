@@ -1456,7 +1456,8 @@ impl Core {
                 None => n.title.clone(),
             };
             let mut toast = Toast::info(text);
-            toast.action = Some(ToastAction {
+            // secondary, not action: an action would take toast.run_last and escape the focus-mode hold (#482)
+            toast.secondary = Some(ToastAction {
                 label: "Notification settings".into(),
                 command: "settings.open".into(),
                 args: Some(serde_json::json!({ "section": "notifications" })),

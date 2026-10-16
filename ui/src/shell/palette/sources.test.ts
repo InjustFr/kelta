@@ -530,6 +530,15 @@ describe('settings in place (#478)', () => {
     expect(copyOnSelect()).toBe(false);
   });
 
+  it('a failed read of All projects aborts the flip with a toast, nothing written (#482)', async () => {
+    await settings.loadSchema();
+    mock.failNext('settings_layer_get', { code: 'internal', message: 'disk' });
+    await keyItem('terminal.copy_on_select').run();
+    expect(setCalls('settings_set')).toEqual([]);
+    expect(toasts.list.at(-1)!.toast.level).toBe('error');
+    expect(copyOnSelect()).toBe(false);
+  });
+
   it('⌘↵ opens an on/off setting on its row in Settings', async () => {
     await settings.loadSchema();
     keyItem('terminal.copy_on_select').open!();

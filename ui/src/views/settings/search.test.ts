@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/sve
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { settingsSections } from '$app/registry';
-import { createMockTransport } from '$lib/ipc/mock';
+import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { dispatch } from '$lib/actions';
 import { projects, settings, ui } from '$lib/stores';
@@ -246,5 +246,52 @@ describe('Changed by you (#474)', () => {
     const hits = searchSettings(rows, 'font size');
     expect(hits.map((h) => h.file.where)).toEqual(['All projects', 'Shop']);
     expect(hits.every((h) => h.path === 'terminal.font_size')).toBe(true);
+  });
+});
+
+describe('Applies to banner and pending keys (#482)', () => {
+  const mount = async (setup?: (c: MockControls) => void) => {
+    const { transport, controls } = createMockTransport();
+    setup?.(controls);
+    setTransport(transport);
+    await Promise.all([projects.load(), settings.load()]);
+    return render(SettingsPane, {
+      projectId: 'shop',
+      tabId: 't1',
+      paneId: 'p1',
+      visible: true,
+      focused: true,
+      content: { kind: 'settings', section: 'general' },
+    });
+  };
+
+  it('the banner names the project before its file is read and counts settings set here', async () => {
+    await mount((c) => c.failAlways('settings_layer_get', { code: 'internal' }));
+    await fireEvent.click(screen.getByTestId('applies-to'));
+    await fireEvent.click(screen.getByRole('menuitem', { name: /^Shop(?! ›)/ }));
+    await waitFor(() =>
+      expect(screen.getByTestId('layer-help').textContent?.trim()).toBe(
+        'Changes here apply to Shop only. 0 settings set here.',
+      ),
+    );
+  });
+
+  it('settings.open { key } a repository layer does not show lands in the search', async () => {
+    const r = await mount();
+    await fireEvent.click(screen.getByTestId('applies-to'));
+    await fireEvent.click(screen.getAllByRole('menuitem', { name: /^Shop ›/ })[0]!);
+    await waitFor(() =>
+      expect(document.querySelector('[data-testid="settings-section"]')?.getAttribute('data-layer')).toBe(
+        'repo',
+      ),
+    );
+    await dispatch('settings.open', { key: 'tickets.wip_limit' });
+    await r.rerender({ content: { kind: 'settings', section: 'worktree' } });
+    await waitFor(() =>
+      expect((screen.getByRole('searchbox', { name: 'Search settings' }) as HTMLInputElement).value).toBe(
+        'tickets.wip_limit',
+      ),
+    );
+    ui.settings = null;
   });
 });

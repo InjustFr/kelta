@@ -108,6 +108,11 @@ registerAction('claude.hooks_never', async () => {
 export async function toggleSetting(path: string, label: string): Promise<void> {
   const editor = new SettingsEditor(); // the global layer
   await editor.refreshDoc();
+  if (!editor.doc) {
+    // unread: Undo would remove the key instead of restoring it (#482)
+    toasts.error(editor.loadError ?? '', label);
+    return;
+  }
   const before = editor.layerValue(path) ?? null; // unset there: Undo removes the key
   const on = editor.valueOf(path) !== true;
   if (!(await editor.set(path, on))) {

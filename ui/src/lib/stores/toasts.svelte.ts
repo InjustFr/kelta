@@ -123,7 +123,8 @@ export class ToastsStore {
 
   apply(ev: UiEvent): void {
     // A toast asking a choice stays until answered.
-    if (ev.type === 'toast') this.push(ev.toast, { view: null, ...(ev.toast.secondary && { timeoutMs: 0 }) });
+    if (ev.type === 'toast')
+      this.push(ev.toast, { view: null, ...(ev.toast.action && ev.toast.secondary && { timeoutMs: 0 }) });
     else if (ev.type === 'focus.held') this.heldRemote = ev.count;
   }
 }

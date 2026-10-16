@@ -13,12 +13,13 @@
 
   const jump = (group: string) =>
     document.querySelector(`[data-group="${CSS.escape(group)}"]`)?.scrollIntoView?.({ block: 'start' });
+  const sources = $derived(settings.value()?.sources ?? []);
+  // the board feeding this project, else the first (#482)
+  const source = $derived(
+    sources.find((s) => !!props.projectId && s.projects.includes(props.projectId)) ?? sources[0],
+  );
   const editSteps = () =>
-    void dispatch('settings.open', {
-      section: 'sources',
-      source_id: settings.value()?.sources[0]?.id,
-      anchor: 'steps',
-    });
+    void dispatch('settings.open', { section: 'sources', source_id: source?.id, anchor: 'steps' });
 </script>
 
 <SectionForm sectionId="worktree" {...props}>
@@ -35,7 +36,8 @@
             'Where the ticket moves and what gets commented at each stage come from the steps of its board.',
           )}</span
         >
-        <Button size="sm" variant="ghost" onclick={editSteps}>{t('Edit steps in Sources')}</Button>
+        {#if source}<Button size="sm" variant="ghost" onclick={editSteps}>{t('Edit steps in Sources')}</Button
+          >{/if}
       </p>
     {/if}
   {/snippet}

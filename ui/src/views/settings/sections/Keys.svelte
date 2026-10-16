@@ -148,13 +148,14 @@
   async function apply(action: string, chords: string[], taken: readonly string[] = []): Promise<void> {
     pending = null;
     const c = normalizeChord(chords[0] ?? '');
-    // The other actions give the chord up first (read before the writes re-derive `bindings`).
+    // Read before the writes re-derive `bindings`.
     const freed = taken.map(
       (id) => [id, (bindings[id] ?? []).filter((x) => normalizeChord(x) !== c)] as const,
     );
+    // The new chord first: if a write fails, no action has lost the shortcut (#482).
+    if (!(await editor.set(joinPath(['keys', 'bindings', action]), chords as JsonValue))) return;
     for (const [id, rest] of freed)
       if (!(await editor.set(joinPath(['keys', 'bindings', id]), rest as JsonValue))) return;
-    await editor.set(joinPath(['keys', 'bindings', action]), chords as JsonValue);
   }
 
   async function resetBinding(action: string): Promise<void> {
@@ -197,7 +198,7 @@
   {#snippet after()}
     <div class="keys" data-testid="keys-section">
       <SettingsGroup heading={t('Bindings')}>
-        {#if editor.layer !== 'global'}
+        {#if editor.layer === 'project'}
           <p class="hint">
             {t('The same for every project.')}
             <Button size="sm" variant="ghost" onclick={() => editor.target({ layer: 'global', repoId: null })}

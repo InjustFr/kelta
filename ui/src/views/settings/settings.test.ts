@@ -158,7 +158,8 @@ describe('Control', () => {
   });
 
   it.each([
-    ['garbage', 'Enter both times'],
+    ['garbage', 'Not a valid time range'],
+    ['25:00-08:00', 'Not a valid time range'],
     ['10:00-10:00', 'Pick two different times'],
   ])('quiet hours: a bad stored value %s shows the inline error (#472)', (value, error) => {
     render(Control, {

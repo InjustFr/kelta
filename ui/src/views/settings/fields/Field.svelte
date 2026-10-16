@@ -139,7 +139,7 @@
             >{t('{where} uses {value} →', { where: o.file.where, value: shown(o.value) })}</Button
           >
         {/each}
-        {#if setHere && access.editable}
+        {#if setHere && access.editable && !disabled}
           <IconButton
             icon="rotate-ccw-clock"
             size="sm"

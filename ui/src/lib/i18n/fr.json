@@ -705,9 +705,9 @@
     "one": "{n} modification",
     "other": "{n} modifications"
   },
-  "Changes here apply to {where} only. {n} settings differ from All projects.": {
-    "one": "Les modifications ici ne s’appliquent qu’à {where}. {n} réglage diffère de Tous les projets.",
-    "other": "Les modifications ici ne s’appliquent qu’à {where}. {n} réglages diffèrent de Tous les projets."
+  "Changes here apply to {where} only. {n} settings set here.": {
+    "one": "Les modifications ici ne s’appliquent qu’à {where}. {n} réglage défini ici.",
+    "other": "Les modifications ici ne s’appliquent qu’à {where}. {n} réglages définis ici."
   },
   "{where} uses {value} →": "{where} utilise {value} →",
   "Inherited from All projects": "Hérité de Tous les projets",
@@ -3009,7 +3009,7 @@
   "Boards you take tickets from, which projects they feed, how tickets route to a repository, and how often they refresh.": "Les tableaux d’où vous prenez des tickets, les projets qu’ils alimentent, comment les tickets sont routés vers un dépôt, et à quelle fréquence ils s’actualisent.",
   "Profile list": "Liste des profils",
   "Tell me when": "Me prévenir quand",
-  "Quiet time": "Tranquillité",
+  "Quiet time": "Moments de calme",
   "Desktop notifications": "Notifications de bureau",
   "Turn off to silence everything below.": "Désactivez pour faire taire tout ce qui suit.",
   "It asks a question, waits for input, or replied without changes.": "Il pose une question, attend une saisie ou a répondu sans modification.",
@@ -3033,6 +3033,7 @@
   "Until": "Jusqu’à",
   "to": "à",
   "Enter both times, or clear both.": "Saisissez les deux heures, ou videz les deux.",
+  "Not a valid time range, pick two times.": "Plage horaire invalide, choisissez deux heures.",
   "Pick two different times.": "Choisissez deux heures différentes.",
   "Nothing shows? Allow Kelta in your system’s notification settings.": "Rien ne s’affiche ? Autorisez Kelta dans les réglages de notifications du système.",
   "Changed by you": "Modifié par vous",
