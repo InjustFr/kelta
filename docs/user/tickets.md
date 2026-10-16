@@ -329,9 +329,10 @@ The tools work on any ticket of your Kelta projects by key:
 | `update_ticket_body` | replace the description (e.g. tick acceptance boxes); fails without writing when it changed since the revision you read (GitHub) |
 | `close_ticket` | close, with an optional comment first (GitHub issues) |
 | `move_ticket_step` | move to a step of its pipeline: forward runs that step's status move and comment, backward only corrects where Kelta has it |
+| `run_workflow` | start a workflow in a background Claude tab: with `key` a ticket run (claims the ticket; a run already live on it comes back `running: true`), else the `global` workflow of `project`; refused `Busy` once live Claude sessions reach `claude.max_live` |
 | `list_review_requests` | pull requests awaiting your review |
 
-`claude.mcp_board_writes = false` keeps the board tools read-only (`list_tickets`, `get_ticket_by_key`). A ticket
+`claude.mcp_board_writes = false` keeps the board tools read-only (`list_tickets`, `get_ticket_by_key`) and turns off `run_workflow`. A ticket
 the lists do not show needs its `account` (the tracker account id) besides its key.
 
 Sessions Kelta starts get more tools (the linked ticket, the pull request, `ask`, `notify`...), and Claude can
