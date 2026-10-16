@@ -28,6 +28,7 @@ use crate::saga::{self, COLS, Env, Journal, ROWS, await_exit};
 use crate::template::{Mode, render};
 use crate::{WorkService, editor, files, git};
 
+const CONVERSATION_GONE: &str = "Previous conversation not found; started a new Claude.";
 /// Push sessions wait for credentials typed by the user; bounded anyway.
 const PUSH_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 /// A resumed Claude that exits non-zero this fast had its `--resume` refused.
@@ -106,7 +107,7 @@ impl WorkService {
             item.session_ids.retain(|s| s != old);
         }
         let rx = env.core.subscribe();
-        // A conversation exists once a Claude ran for the item; `--resume` falls back to `--continue`.
+        // A conversation exists once a Claude ran for the item; a refused `--resume` starts a fresh Claude (watch_resume).
         let resume = had.and(item.claude_uuid.clone());
         let mode = match resume.clone() {
             Some(uuid) => LaunchMode::Resume { uuid, prompt: None },
@@ -263,7 +264,8 @@ impl WorkService {
         self.spawn_leaf(env, item, j, kind, name).await
     }
 
-    /// `--resume` refused (fast non-zero exit) → relaunch with `--continue` in the same pane.
+    /// `--resume` refused (fast non-zero exit) → a fresh Claude (`--session-id <new uuid>`) in the same pane;
+    /// never `--continue`, which would pick whatever conversation last ran in the cwd (#498).
     fn watch_resume(
         &self,
         mut rx: tokio::sync::broadcast::Receiver<kelta_proto::events::BusEvent>,
@@ -280,18 +282,24 @@ impl WorkService {
             if code == 0 {
                 return;
             }
-            let Ok(mut item) = svc.load(&id).await else { return };
+            let uuid = uuid::Uuid::new_v4().to_string();
+            // `update`, not `save`: save keeps the stored uuid.
+            let Ok(mut item) = svc
+                .update(&id, |it| {
+                    it.claude_uuid = Some(uuid.clone());
+                    true
+                })
+                .await
+            else {
+                return;
+            };
             let Ok(env) = svc.env(&item.project_id, &item.repo_id) else { return };
             let mut j = svc.load_journal(&id);
-            tracing::info!(work_item = %id, "claude --resume refused; falling back to --continue");
-            let with_prompt = prompt.is_some();
-            match svc.spawn_claude(&env, &mut item, &mut j, LaunchMode::Continue { prompt }).await {
+            tracing::info!(work_item = %id, "claude --resume refused; starting a new Claude");
+            let mode = LaunchMode::New { uuid, prompt: prompt.unwrap_or_default() };
+            match svc.spawn_claude(&env, &mut item, &mut j, mode).await {
                 Ok(new) => {
-                    core.toast(Toast::warn(if with_prompt {
-                        "Previous conversation not found; Claude continued the latest one in this worktree with your prompt."
-                    } else {
-                        "Previous conversation not found; Claude continued the latest one in this worktree."
-                    }));
+                    core.toast(Toast::warn(CONVERSATION_GONE));
                     let title = Self::tab_title(&item, &j);
                     let old = PaneContent::Terminal { session_id: sid.clone() };
                     let _ = svc.open_pane(&env, &mut item, &title, old, Placement::Focused, true).await;
@@ -323,7 +331,8 @@ impl WorkService {
     }
 
     /// Spawn request restoring a Dormant Claude session that belongs to a work item:
-    /// `claude --resume <uuid>` (or `--continue` with `fallback`), with its per-session files
+    /// `claude --resume <uuid>`, or with `fallback` (resume refused) a fresh `--session-id <new uuid>`
+    /// stored as the item's `claude_uuid`, never `--continue` (#498). Its per-session files are
     /// regenerated (the runtime dir does not survive a reboot). `None` = not a work item session.
     pub async fn claude_restore_request(
         &self,
@@ -331,8 +340,23 @@ impl WorkService {
         fallback: bool,
         prompt: Option<String>,
     ) -> Result<Option<SpawnRequest>, KeltaError> {
-        let Some(item) = self.for_session(session).await else { return Ok(None) };
+        let Some(mut item) = self.for_session(session).await else { return Ok(None) };
         let Some(uuid) = item.claude_uuid.clone() else { return Ok(None) };
+        let mode = if fallback {
+            let uuid = uuid::Uuid::new_v4().to_string();
+            item = self
+                .update(&item.id, |it| {
+                    it.claude_uuid = Some(uuid.clone());
+                    true
+                })
+                .await?;
+            if let Ok(core) = self.api() {
+                core.toast(Toast::warn(CONVERSATION_GONE));
+            }
+            LaunchMode::New { uuid, prompt: prompt.unwrap_or_default() }
+        } else {
+            LaunchMode::Resume { uuid, prompt }
+        };
         let env = self.env(&item.project_id, &item.repo_id)?;
         let mut j = self.load_journal(&item.id);
         let run = self.ensure_claude_run(&item, &mut j)?;
@@ -345,8 +369,6 @@ impl WorkService {
             self.http_sessions.lock().insert(session.clone());
         }
         self.save_journal(&item.id, &j)?;
-        let mode =
-            if fallback { LaunchMode::Continue { prompt } } else { LaunchMode::Resume { uuid, prompt } };
         Ok(Some(self.claude_request(&env, &item, &j, &run, mode, port, session)))
     }
 

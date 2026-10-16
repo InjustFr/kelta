@@ -117,13 +117,9 @@ fn argv_with_spaces() {
     let resume = LaunchSpec {
         mode: LaunchMode::Resume { uuid: "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b".into(), prompt: None },
         mcp_file: None,
-        ..spec.clone()
+        ..spec
     };
     insta::assert_json_snapshot!("claude_argv_resume", claude::argv(&resume));
-    let cont = LaunchSpec { mode: LaunchMode::Continue { prompt: None }, ..spec };
-    let a = claude::argv(&cont);
-    assert_eq!(a[0], "--continue");
-    assert!(!a.iter().any(|x| x.starts_with("Work on")));
 }
 
 #[test]

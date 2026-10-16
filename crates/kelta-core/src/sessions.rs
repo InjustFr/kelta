@@ -1014,7 +1014,8 @@ impl Core {
         .map(|m| kelta_work::claude::enum_str(&m));
         let mut launch = restore_launch(spec, policy, &claude.binary, use_continue, mode.as_deref());
         // A work item's Claude needs its per-session files regenerated (the runtime dir does not
-        // survive a reboot): kelta-work builds the full argv.
+        // survive a reboot): kelta-work builds the full argv. With `use_continue` (resume refused)
+        // it starts a fresh `--session-id` Claude instead of `--continue` (#498).
         if matches!(policy, RestorePolicy::ClaudeResume { .. }) && spec.work_item_id.is_some() {
             match self.work.claude_restore_request(id, use_continue, None).await {
                 Ok(Some(req)) => {
@@ -1960,7 +1961,7 @@ impl Core {
                 self.emit(UiEvent::SessionUpdated { session: Box::new(info) });
             }
             Next::Continue(cols, rows) => {
-                tracing::info!(session = %id, "claude --resume refused; retrying with --continue");
+                tracing::info!(session = %id, "claude --resume refused; retrying (--continue, or a fresh Claude for a work item)");
                 let weak = self.me.clone();
                 let sid = id.clone();
                 self.rt.spawn(async move {
