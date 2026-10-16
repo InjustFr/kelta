@@ -443,7 +443,10 @@ async fn adopted_live_claudes_keep_the_http_server_on_their_port() {
 
     // The reference is the Claude's: its exit stops the server (nothing else holds it).
     core.session_kill(&claude.id, false).await.unwrap();
-    assert!(eventually(|| core.server().http_port().is_none()).await, "adopted Claude's reference not released");
+    assert!(
+        eventually(|| core.server().http_port().is_none()).await,
+        "adopted Claude's reference not released"
+    );
     core.shutdown().await.unwrap();
     term.close();
     keltad.join().unwrap();

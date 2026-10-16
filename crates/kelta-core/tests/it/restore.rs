@@ -373,7 +373,9 @@ async fn a_restored_claude_gets_an_mcp_json_for_the_current_port() {
     settle().await;
     assert_eq!(h.core.session_get(&s.id).unwrap().lifecycle, Lifecycle::Dormant);
     h.core.session_attach(&s.id, 80, 24, Box::new(RecordingSink::new())).await.unwrap();
-    assert!(h.term.with_session(&s.id, |x| x.spec.args.clone()).unwrap().contains(&"--mcp-config".to_owned()));
+    assert!(
+        h.term.with_session(&s.id, |x| x.spec.args.clone()).unwrap().contains(&"--mcp-config".to_owned())
+    );
     let port = h.core.server().http_port().unwrap();
     let got = std::fs::read_to_string(&file).unwrap();
     assert!(got.contains(&format!("127.0.0.1:{port}/mcp/{}", s.id)), "{got}");
