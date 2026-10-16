@@ -201,6 +201,23 @@ async fn tool_check_runs_the_check_argv() {
     assert_eq!(env.host.tool_check(&ToolId::new("nope")).await.unwrap_err().code, ErrorCode::NotFound);
 }
 
+/// A check slower than its cap is not "not installed": the hint says it timed out.
+#[tokio::test(start_paused = true)]
+async fn a_check_that_times_out_says_so() {
+    let env = common::Env::new().with_settings(|s| {
+        s.tools.push(ToolDef {
+            id: "slow".into(),
+            command: Some("x".into()),
+            check: Some(vec!["sleep".into(), "60".into()]),
+            install_hint: Some("brew install slow".into()),
+            ..Default::default()
+        });
+    });
+    let c = env.host.tool_check(&ToolId::new("slow")).await.unwrap();
+    assert!(!c.installed);
+    assert_eq!(c.install_hint.as_deref(), Some("`sleep` did not answer within 5 s"));
+}
+
 /// A plugin's relative tool command / check program is its own file, whatever Kelta's cwd is.
 #[tokio::test]
 async fn plugin_tool_check_resolves_relative_paths_in_the_plugin_dir() {

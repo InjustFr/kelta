@@ -690,7 +690,10 @@ impl PluginHost {
     }
 }
 
+const CHECK_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// Run a `check` argv (5 s cap): exit 0 = installed; first output line = version.
+/// A timeout says so in the `install_hint`: a slow check is not a missing tool.
 async fn run_check(argv: &[String], path: Option<&str>, hint: Option<String>) -> ToolCheck {
     let Some((program, args)) = argv.split_first() else {
         return ToolCheck { installed: false, version: None, install_hint: hint };
@@ -702,13 +705,18 @@ async fn run_check(argv: &[String], path: Option<&str>, hint: Option<String>) ->
         cmd.env("PATH", p);
     }
     // one-shot: tool_check deadline
-    let out = tokio::time::timeout(Duration::from_secs(5), cmd.output()).await;
+    let out = tokio::time::timeout(CHECK_TIMEOUT, cmd.output()).await;
     match out {
         Ok(Ok(o)) if o.status.success() => {
             let text =
                 String::from_utf8_lossy(if o.stdout.is_empty() { &o.stderr } else { &o.stdout }).into_owned();
             let version = text.lines().map(str::trim).find(|l| !l.is_empty()).map(|l| truncate(l, 120));
             ToolCheck { installed: true, version, install_hint: None }
+        }
+        Err(_) => {
+            tracing::warn!(tool = %program, timeout = ?CHECK_TIMEOUT, "tool check timed out");
+            let hint = format!("`{program}` did not answer within {} s", CHECK_TIMEOUT.as_secs());
+            ToolCheck { installed: false, version: None, install_hint: Some(hint) }
         }
         _ => ToolCheck { installed: false, version: None, install_hint: hint },
     }
