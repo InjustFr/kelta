@@ -619,6 +619,50 @@ async fn a_ticket_page_reaches_the_status_poll() {
 }
 
 #[tokio::test]
+async fn a_project_pipeline_reaches_the_status_poll_outside_the_sources() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut ps = projects(tmp.path());
+    // shop's board has no status step, and blog has no board: its tickets follow the global pipeline.
+    ps[0].tracker.as_mut().unwrap().pipeline = vec![StepDef {
+        id: "implementing".into(),
+        enter: vec![Trigger::Event(PipelineEvent::WorkStarted)],
+        ..Default::default()
+    }];
+    ps[1].tracker = None;
+    let e = env_in(tmp.path(), ListHost::new(vec![]), FakeTracker::new(), ps);
+    e.h.cfg.update(|s| {
+        s.work.pipeline = vec![
+            StepDef {
+                id: "implementing".into(),
+                enter: vec![Trigger::Event(PipelineEvent::WorkStarted)],
+                ..Default::default()
+            },
+            StepDef {
+                id: "in_review".into(),
+                enter: vec![Trigger::Status { status: TransitionTarget::Name { name: "In Review".into() } }],
+                ..Default::default()
+            },
+        ];
+    });
+    let it = WorkItem {
+        kind: WorkKind::Ticket,
+        project_id: ProjectId::new("blog"),
+        ticket: Some(TicketRef { account: "jira-acme".into(), key: "SHOP-143".into(), id: "10143".into() }),
+        ..work_item("feat/SHOP-143", None)
+    };
+    e.h.core.store().call(move |c| q::work_put(c, &it)).await.unwrap();
+    e.h.core.tracker_list(Scope::All, None, None, None, None, true).await.unwrap();
+    for _ in 0..200 {
+        let rows = e.h.core.work().ticket_steps().await.unwrap();
+        if rows.iter().any(|r| r.ticket.key == "SHOP-143" && r.step_id == "in_review") {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    panic!("the project pipeline never reached the status poll");
+}
+
+#[tokio::test]
 async fn authored_always_includes_drafts_requested_follows_the_setting() {
     let tmp = tempfile::tempdir().unwrap();
     let mut mine = review("acme/shop-api", 90, ReviewKind::Authored);

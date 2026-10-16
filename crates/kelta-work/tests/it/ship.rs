@@ -1,5 +1,6 @@
 //! Ship preconditions and origin, merge detection (Merged + guarded Done move), Finish all merged.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -736,6 +737,25 @@ async fn a_sibling_start_at_the_start_step_posts_the_comment_once() {
 }
 
 #[tokio::test]
+async fn sibling_starts_at_once_post_the_start_comment_once() {
+    need_git!();
+    let fx = Fx::new();
+    start_pipeline(&fx);
+    let w = fx.service();
+    let mut t = samples::ticket_ref();
+    t.key = "SHOP-141".into();
+    let mut a = w.plan(&project(), WorkSource::Ticket { ticket: t.clone() }).await.unwrap();
+    let mut b =
+        w.plan_with_repo(&project(), WorkSource::Ticket { ticket: t }, None, true, None).await.unwrap();
+    a.another = true;
+    b.branch = format!("{}-2", a.branch);
+    b.worktree_path = PathBuf::from(format!("{}-2", a.worktree_path.display()));
+    let (x, y) = tokio::join!(w.start(a), w.start(b));
+    assert_eq!((x.unwrap().state, y.unwrap().state), (WorkState::Active, WorkState::Active));
+    assert_eq!((transitions(&fx, "t3"), started_comments(&fx)), (1, 1));
+}
+
+#[tokio::test]
 async fn a_sibling_start_never_moves_the_ticket_back() {
     need_git!();
     let fx = Fx::new();
@@ -825,6 +845,53 @@ async fn a_failed_manual_move_is_reported_and_retried() {
     assert_eq!(step_of(&fx, &item).await.as_deref(), Some("po"), "stored anyway");
     assert!(w.move_step(&t, Some("po")).await.is_err());
     assert_eq!(transitions(&fx, "t10"), 2, "retried, no early Ok");
+}
+
+#[tokio::test]
+async fn a_retry_at_the_same_step_keeps_the_trigger_that_entered_it() {
+    need_git!();
+    let fx = Fx::new();
+    fx.settings(|s| {
+        s.work.pipeline = vec![
+            step("implementing", on(PipelineEvent::WorkStarted), None, None),
+            step("pr", on(PipelineEvent::PrOpened), Some("In Review"), None),
+        ];
+    });
+    let w = fx.service();
+    w.ensure_listener();
+    let item = started(&fx, &w, "SHOP-141").await;
+    let t = item.ticket.clone().unwrap();
+    fx.tracker.require_fields("t10");
+    w.link_pr(&item.id, &pr_review(91)).await.unwrap();
+    wait_step(&fx, &item, "pr").await;
+    assert!(w.move_step(&t, Some("pr")).await.is_err());
+    assert_eq!(transitions(&fx, "t10"), 2, "retried");
+    let by = fx.store.ticket_step(&t).await.unwrap().unwrap().by;
+    assert_eq!(by, serde_json::to_string(&on(PipelineEvent::PrOpened)).unwrap());
+}
+
+#[tokio::test]
+async fn a_step_entered_by_its_status_clears_its_failed_transition() {
+    need_git!();
+    let fx = Fx::new();
+    let po = Trigger::Status { status: TransitionTarget::Name { name: "PO Review".into() } };
+    fx.settings(|s| {
+        s.work.pipeline = vec![
+            step("implementing", on(PipelineEvent::WorkStarted), None, None),
+            step("po", po, Some("In Review"), None),
+        ];
+    });
+    let w = fx.service();
+    let item = started(&fx, &w, "SHOP-141").await;
+    let t = item.ticket.clone().unwrap();
+    fx.tracker.require_fields("t10");
+    assert!(w.move_step(&t, Some("po")).await.is_err());
+    let mut tk = fx.tracker.ticket("SHOP-141").unwrap().ticket;
+    tk.status = samples::status("12", "PO Review", StatusCategory::InReview);
+    w.ticket_statuses(std::slice::from_ref(&tk)).await;
+    assert_eq!(step_of(&fx, &item).await.as_deref(), Some("po"));
+    assert!(w.move_step(&t, Some("po")).await.is_ok(), "nothing left to retry");
+    assert_eq!(transitions(&fx, "t10"), 1, "2 with the marker left behind");
 }
 
 #[tokio::test]

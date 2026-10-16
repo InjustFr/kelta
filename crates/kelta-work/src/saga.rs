@@ -1716,6 +1716,9 @@ impl WorkService {
         let steps = crate::pipeline::steps_of(env, item);
         let started = Signal::Event(PipelineEvent::WorkStarted);
         let start = crate::pipeline::advance(&steps, None, &started);
+        // Under the ticket's step lock (#481): two sibling Starts at once can't both see no step and both enter it.
+        let lock = self.step_lock(&t);
+        let guard = lock.lock().await;
         let at = self.standing(env, item, &t, &steps, &started).await;
         // The start effects run once per (ticket, start step) (#466): for the item that enters it (`entered`,
         // also on its Retry); a sibling's Start at or past it, or a Resume past it, runs none.
@@ -1724,7 +1727,8 @@ impl WorkService {
             j.effects_done.insert("entered".to_owned());
             self.save_journal(&item.id, j)?;
         }
-        self.signal(item, started, None).await;
+        self.signal_locked(env, item, &t, &steps, started, None).await;
+        drop(guard);
         let tracker = match env.core.tracker_for(&t.account).await {
             Ok(tr) => tr,
             Err(e) => {

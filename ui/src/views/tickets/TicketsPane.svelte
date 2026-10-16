@@ -46,8 +46,8 @@
   import { runPrimary } from '../work/actions';
   import { onActions, onRefresh } from '../work/ui.svelte';
   import AskBar from '../work/AskBar.svelte';
-  import { askerOf, phaseNow } from '../work/live';
-  import { STAGES } from '../work/stage';
+  import { askerOf, phaseNow, stepOf } from '../work/live';
+  import { STAGES, trackEnd } from '../work/stage';
   import { outsidePhase, questionOf } from '../work/phase';
   import CommentDialog from './CommentDialog.svelte';
   import MoveDialogs from './MoveDialogs.svelte';
@@ -382,6 +382,12 @@
     toggled = { ...toggled, [`${groupBy}:${row.group.id}`]: !row.open };
   }
 
+  /** The track end in the header (#481): rows on a stored step end at their pipeline's last step. */
+  const end = $derived(
+    trackEnd(
+      shown.map((i) => stepOf(i.ticket.ref, i.source_ids[0] ?? null, i.project_ids[0] ?? null)?.steps),
+    ),
+  );
   /** The key column fits the longest key in view, capped so a long key cannot take the title's room. */
   const keyChars = $derived(Math.min(12, Math.max(4, ...shown.map((i) => i.ticket.ref.key.length))));
   const showSource = $derived(groupBy !== 'source' && !source && sources.length > 1);
@@ -1106,7 +1112,7 @@
         <div class="list" style:--key-chars={keyChars}>
           <div class="cols" aria-hidden="true">
             <span></span>
-            <span class="ends"><span>{t(STAGES[0])}</span><span>{t(STAGES[STAGES.length - 1])}</span></span>
+            <span class="ends"><span>{t(STAGES[0])}</span><span>{end}</span></span>
             <span class="right">{t('In status')}</span>
           </div>
           <VirtualList

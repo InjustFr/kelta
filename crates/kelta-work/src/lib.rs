@@ -86,6 +86,8 @@ pub struct WorkService {
     /// Serializes ticket step moves per ticket (read, advance, effects, write; #461), never across tickets (#466).
     step_locks: Mutex<HashMap<TicketKey, Arc<tokio::sync::Mutex<()>>>>,
     /// Last status id the ticket poll saw per ticket with work (#466): only a change signals.
+    /// Never pruned (#481): a pruned ticket that gets new work would re-signal its unchanged status; the map is in
+    /// memory (empty after a restart) and holds one id per ticket worked in a session.
     seen_status: Mutex<HashMap<TicketKey, String>>,
     /// Serializes the existing-item check + insert of `start` (no twin items for one source).
     start_lock: tokio::sync::Mutex<()>,

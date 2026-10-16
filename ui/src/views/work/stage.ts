@@ -88,6 +88,12 @@ export function onStep(s: Stage, step: Stepped, working = false): Stage {
 /** The name of the stage the item is at, translated. */
 export const stageName = (s: Stage): string => t((s.labels ?? STAGES)[s.at]!);
 
+/** A column header's last stage (#481): where every row's track ends (`Stage.labels`, else STAGES), blank when they differ. */
+export function trackEnd(tracks: readonly (readonly string[] | null | undefined)[]): string {
+  const ends = new Set(tracks.map((l) => (l ?? STAGES)[(l ?? STAGES).length - 1]!));
+  return ends.size === 1 ? t([...ends][0]!) : '';
+}
+
 /** A work item's stage. `mine`: its row is in Your move. `deploying`: its ticket waits for a deploy.
  *  `step`: the ticket's stored step (#462), which places it; the phase then decides only the mark. */
 export function workStage(
