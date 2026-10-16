@@ -7,9 +7,10 @@ use crate::common::{Fx, git, has_git, project};
 use kelta_proto::api::{Tracker, WorkStore};
 use kelta_proto::error::ErrorCode;
 use kelta_proto::ids::{SessionId, WorkItemId};
-use kelta_proto::model::{Lifecycle, RunClaim, RunState, SessionInfo, WorkState};
+use kelta_proto::model::{ClaudeMeta, Lifecycle, PaneContent, RunClaim, RunState, SessionInfo, WorkState};
 use kelta_proto::samples;
 use kelta_proto::tracker::TicketRef;
+use serde_json::json;
 
 fn run(sid: &str) -> RunClaim {
     RunClaim {
@@ -33,6 +34,20 @@ fn session(fx: &Fx, sid: &str, name: &str) {
         name: name.into(),
         ..samples::session_info()
     });
+}
+
+/// The Claude of a Kelta-started run, in the repo it was started in (#491).
+fn run_claude(fx: &Fx) -> SessionInfo {
+    let s = SessionInfo {
+        id: SessionId::new("run-s"),
+        name: "kelta-ticket-pass · SHOP-142".into(),
+        cwd: fx.repo.clone(),
+        work_item_id: None,
+        claude: Some(ClaudeMeta { session_uuid: "run-uuid".into(), ..ClaudeMeta::default() }),
+        ..samples::session_info()
+    };
+    fx.core.insert_session(s.clone());
+    s
 }
 
 /// A worktree the run made itself, as `kelta-ticket-pass` does.
@@ -382,4 +397,63 @@ async fn the_check_finishes_claims_no_live_run_will_release() {
     assert!(wt_closed.join("README.md").exists());
     assert!(git(&fx.repo, &["branch", "--list", "feat/closed"]).contains("feat/closed"));
     assert_eq!(state(open.id).await, WorkState::Active);
+}
+
+#[tokio::test]
+async fn a_run_claude_adopted_by_its_item_opens_in_its_tab_and_release_leaves_it() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    let s = run_claude(&fx);
+    let w = fx.service();
+    let item = w.claim(&project(), samples::ticket_ref(), None, None, run("run-s")).await.unwrap();
+    let item = w.adopt_run(&item.id, &s).await.unwrap();
+    assert_eq!(
+        (item.session_ids.clone(), item.claude_uuid.as_deref()),
+        (vec![s.id.clone()], Some("run-uuid"))
+    );
+
+    // The run's own workflow claims its worktree: same item, same Claude.
+    let wt = run_worktree(&fx, "feat/ticket-142");
+    let took = w.claim(&project(), samples::ticket_ref(), Some(wt), None, run("run-s")).await.unwrap();
+    assert_eq!((&took.id, &took.session_ids), (&item.id, &vec![s.id.clone()]));
+
+    w.resume(&item.id).await.unwrap();
+    let calls = fx.core.calls();
+    let spawns: Vec<_> = calls.iter().filter(|c| c.method == "session_spawn").collect();
+    assert!(spawns.iter().all(|c| c.args["kind"]["type"] != "claude"), "the run's Claude is reused");
+    assert!(!spawns.is_empty() && spawns.iter().all(|c| c.args["cwd"] == json!(took.worktree)));
+    assert!(fx.core.opened().iter().any(|(_, r)| {
+        r.content == (PaneContent::Terminal { session_id: s.id.clone() })
+            && r.work_item_id.as_ref() == Some(&item.id)
+    }));
+
+    w.release("SHOP-142", None, Some(&s.id)).await.unwrap();
+    let killed = fx.core.calls().iter().any(|c| c.method == "session_kill" && c.args["id"] == "run-s");
+    assert!(!killed, "release_ticket comes from the run: Finish leaves it running");
+}
+
+#[tokio::test]
+async fn an_adopted_claude_resumes_in_the_runs_cwd() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    let s = run_claude(&fx);
+    let w = fx.service();
+    let wt = run_worktree(&fx, "feat/ticket-142");
+    let item = w.claim(&project(), samples::ticket_ref(), Some(wt), None, run("run-s")).await.unwrap();
+    w.adopt_run(&item.id, &s).await.unwrap();
+
+    fx.core.exit_session(&s.id, 0);
+    w.resume(&item.id).await.unwrap();
+    let calls = fx.core.calls();
+    let last = calls
+        .iter()
+        .rfind(|c| c.method == "session_spawn" && c.args["kind"]["type"] == "claude")
+        .expect("Claude respawned");
+    let args: Vec<String> = serde_json::from_value(last.args["args"].clone()).unwrap();
+    assert_eq!(args[..2], ["--resume".to_owned(), "run-uuid".to_owned()]);
+    assert_eq!(last.args["cwd"], json!(s.cwd), "the run's cwd, not the claimed worktree");
 }

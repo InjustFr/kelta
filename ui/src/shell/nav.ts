@@ -86,13 +86,17 @@ export function bandTabs(projectId: ProjectId): { work: RailRow[]; claude: RailR
       const tab = tabs.find((tab) => tab.work_item_id === item.id);
       return tab ? [{ project: projectId, tab, item }] : [];
     });
+  const workTabs = new Set(work.map((r) => r.tab?.id));
   const claude = sessions
     .forProject(projectId)
     .filter((s) => s.kind.type === 'claude' && !s.work_item_id)
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
     .flatMap((session) => {
       const loc = l ? findSession(l, session.id) : null;
-      return loc && l ? [{ project: projectId, tab: findTab(l, loc.tabId), session }] : [];
+      // A run's Claude adopted by a work item (#491) shows as that item's row.
+      return loc && l && !workTabs.has(loc.tabId)
+        ? [{ project: projectId, tab: findTab(l, loc.tabId), session }]
+        : [];
     });
   const shown = new Set([...work, ...claude].map((r) => r.tab?.id));
   return { work, claude, more: tabs.filter((tab) => !shown.has(tab.id)) };

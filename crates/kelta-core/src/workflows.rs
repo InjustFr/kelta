@@ -89,7 +89,7 @@ impl Core {
             phase: def.is_none().then(|| "Starting".into()),
             ..RunClaim::default()
         };
-        self.work.claim(&project, ticket.clone(), None, None, run).await?;
+        let item = self.work.claim(&project, ticket.clone(), None, None, run).await?;
         let owner = sid.clone();
         let title = format!("{} · {}", wf.label, ticket.key);
         let info = match self.launch(&project, &ticket, &wf.name, def.as_ref(), &run_id, sid, &title).await {
@@ -101,6 +101,10 @@ impl Core {
             }
         };
         self.session_link(&info.id, None, Some(ticket))?;
+        // #491: the claimed item adopts the run's Claude; opening the item moves it into the item's tab.
+        if let Err(e) = self.work.adopt_run(&item.id, &info).await {
+            tracing::warn!(work = %item.id, error = %e.message, "run's Claude not adopted");
+        }
         self.background_tab(&project, &info, title)?;
         Ok(WorkflowStart { session: info, running: false })
     }

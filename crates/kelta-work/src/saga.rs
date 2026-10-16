@@ -75,6 +75,12 @@ pub(crate) struct Journal {
     /// `head sha:failed check names` the `fix_checks` trigger action last sent (once per failure).
     #[serde(default)]
     pub checks_sent: Option<String>,
+    /// The Claude of the Kelta-started run this item adopted (`adopt_run`, #491): Finish leaves it running, as before.
+    #[serde(default)]
+    pub run_session: Option<SessionId>,
+    /// Where the item's Claude runs when not the worktree: the adopted run's cwd, so `--resume` finds its conversation.
+    #[serde(default)]
+    pub claude_cwd: Option<PathBuf>,
 }
 
 impl Journal {
@@ -1508,7 +1514,7 @@ impl WorkService {
             name: Some(spec.name.clone()),
             program: Some(env.settings.claude.binary.clone()),
             args: claude::argv(&spec),
-            cwd: Some(item.worktree.clone()),
+            cwd: Some(j.claude_cwd.clone().unwrap_or_else(|| item.worktree.clone())),
             env: BTreeMap::new(),
             cols: COLS,
             rows: ROWS,

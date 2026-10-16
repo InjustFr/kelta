@@ -154,6 +154,8 @@ async fn run_claims_then_starts_claude_in_a_background_tab() {
 
     let items = h.core.work_list(None).await.unwrap();
     assert_eq!(items.len(), 1);
+    assert_eq!(items[0].session_ids, vec![info.id.clone()], "the item adopts the run's Claude (#491)");
+    assert_eq!(items[0].claude_uuid.as_deref(), info.claude.as_ref().map(|c| c.session_uuid.as_str()));
     let run = items[0].run.clone().unwrap();
     assert_eq!(json["run"], run.run_id.clone().unwrap());
     assert_eq!((run.state, run.phase.as_deref()), (RunState::Running, Some("Starting")));
@@ -199,6 +201,14 @@ async fn run_claims_then_starts_claude_in_a_background_tab() {
     assert_eq!(took.id, items[0].id);
     assert_eq!(took.branch, "feat/ticket-142");
     assert_eq!(took.worktree.canonicalize().unwrap(), wt.canonicalize().unwrap());
+    assert_eq!(took.session_ids, vec![info.id.clone()]);
+
+    // Opening the item moves the run's Claude into the item's tab and closes the run's.
+    h.core.work().resume(&took.id).await.unwrap();
+    let l = h.core.layout_get(&shop).unwrap();
+    assert!(l.tabs.iter().all(|t| t.title != "kelta-ticket-pass · SHOP-142"), "the run's tab is gone");
+    let tab = l.tabs.iter().find(|t| t.work_item_id.as_ref() == Some(&took.id)).unwrap();
+    assert!(kelta_core::layout::sessions_in(&tab.root).contains(&info.id));
 }
 
 #[tokio::test]

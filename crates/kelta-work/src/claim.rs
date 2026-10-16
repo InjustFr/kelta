@@ -7,7 +7,7 @@ use kelta_proto::codehost::Review;
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{
-    FinishOpts, Lifecycle, RunClaim, RunState, WorkItem, WorkKind, WorkSource, WorkState,
+    FinishOpts, Lifecycle, RunClaim, RunState, SessionInfo, WorkItem, WorkKind, WorkSource, WorkState,
 };
 use kelta_proto::tracker::{StatusCategory, TicketRef};
 
@@ -100,6 +100,29 @@ impl WorkService {
                 Err(KeltaError::conflict(format!("{key} is held by {who}")))
             }
         }
+    }
+
+    /// #491: a run Kelta started (`workflow_run`) gives its Claude to the item it claimed. Opening the
+    /// item (`reopen` -> `arrange`) moves that session's pane from the run's background tab into the
+    /// item's tab, which empties and closes the old one. Resume, review feedback and hooks reach its
+    /// conversation, and a respawn resumes it in the run's cwd.
+    pub async fn adopt_run(&self, id: &WorkItemId, claude: &SessionInfo) -> Result<WorkItem, KeltaError> {
+        let lock = self.item_lock(id);
+        let _guard = lock.lock().await;
+        let mut j = self.load_journal(id);
+        // A takeover from an ended run replaces that run's session.
+        let old = j.claude_session.replace(claude.id.clone());
+        j.run_session = Some(claude.id.clone());
+        j.claude_cwd = Some(claude.cwd.clone());
+        self.save_journal(id, &j)?;
+        let uuid = claude.claude.as_ref().map(|c| c.session_uuid.clone()).filter(|u| !u.is_empty());
+        self.update(id, |w| {
+            w.session_ids.retain(|s| Some(s) != old.as_ref() && s != &claude.id);
+            w.session_ids.push(claude.id.clone());
+            w.claude_uuid.clone_from(&uuid);
+            true
+        })
+        .await
     }
 
     /// MCP `link_pr` (#453): the work item of `ticket` on `pr`'s head branch, without Claude. The
