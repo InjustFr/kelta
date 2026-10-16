@@ -91,7 +91,27 @@ impl WorkService {
         advance(&steps, None, &sig)?;
         let lock = self.step_lock(t);
         let _g = lock.lock().await;
-        let next = advance(&steps, self.standing(&env, item, t, &steps, &sig).await, &sig)?;
+        self.signal_locked(&env, item, t, &steps, sig, review).await
+    }
+
+    /// `signal` with the ticket's step lock already held by the caller (the Start saga's `step_effects`, #481).
+    pub(crate) async fn signal_locked(
+        &self,
+        env: &Env,
+        item: &WorkItem,
+        t: &TicketRef,
+        steps: &[StepDef],
+        sig: Signal,
+        review: Option<&Review>,
+    ) -> Option<String> {
+        // The tracker reached these steps' status itself: a failed transition there has nothing left to retry,
+        // even when the ticket already stands at the step (a failed manual move stores it, #481).
+        if matches!(sig, Signal::Status(_)) {
+            for s in steps.iter().filter(|s| s.enter.iter().any(|x| fires(x, &sig))) {
+                self.clear_failed(t, &s.id).await;
+            }
+        }
+        let next = advance(steps, self.standing(env, item, t, steps, &sig).await, &sig)?;
         let step = &steps[next];
         let by = step
             .enter
@@ -103,16 +123,34 @@ impl WorkService {
         let why = if sig == Signal::Event(PipelineEvent::WorkStarted) {
             None
         } else {
-            self.enter_effects(&env, item, step, &sig, review).await
+            self.enter_effects(env, item, step, &sig, review).await
         };
-        self.put_step(&env, item, t, step, by).await;
+        self.put_step(env, item, t, step, by).await;
         why
+    }
+
+    /// Drops `<step>:failed` (#466) from every unfinished item of `t`: `move_step` looks for it on any of them.
+    async fn clear_failed(&self, t: &TicketRef, step: &str) {
+        let fk = format!("{step}:failed");
+        let items = self.store.list_items(None).await.unwrap_or_default();
+        let mine = items.iter().filter(|w| {
+            w.state != WorkState::Finished
+                && w.ticket.as_ref().is_some_and(|x| x.account == t.account && x.key == t.key)
+        });
+        for w in mine {
+            let mut j = self.load_journal(&w.id);
+            if j.effects_done.remove(&fk)
+                && let Err(e) = self.save_journal_fresh(&w.id, &mut j)
+            {
+                tracing::warn!(error = %e.message, "step failure marker not cleared");
+            }
+        }
     }
 
     /// Manual move (#463, Tauri `ticket_step_set`, MCP `move_ticket_step`): to `step_id`, or to the step
     /// after the current one (`None`, Next step). Forward runs the entered step's effects as a signal
     /// does, stores the step even when its transition fails and returns that failure as an error
-    /// (moving there again retries it, #466); back is a correction that only stores the step (`by` = `manual`).
+    /// (moving there again retries it, #466); back is a correction that only stores the step (`by` = `manual`; a same-step retry keeps its `by`).
     pub async fn move_step(
         &self,
         ticket: &TicketRef,
@@ -156,9 +194,10 @@ impl WorkService {
         let fkey = format!("{}:failed", step.id);
         let failed =
             mine.iter().copied().find(|w| !start && self.load_journal(&w.id).effects_done.contains(&fkey));
-        if at == Some(next)
-            && failed.is_none()
-            && let Some(r) = self.store.ticket_step(ticket).await?
+        // A same-step retry keeps the trigger that entered the step, so removing the step still clamps through it (#481).
+        let same = if at == Some(next) { self.store.ticket_step(ticket).await? } else { None };
+        if failed.is_none()
+            && let Some(r) = same.clone()
         {
             return Ok(r);
         }
@@ -167,7 +206,8 @@ impl WorkService {
             _ if start => None,
             _ => self.enter_effects(&env, failed.unwrap_or(item), step, &Signal::Manual, None).await,
         };
-        let row = self.put_step(&env, item, ticket, step, "manual".into()).await;
+        let by = same.map_or_else(|| "manual".to_owned(), |r| r.by);
+        let row = self.put_step(&env, item, ticket, step, by).await;
         match why {
             Some(why) => Err(KeltaError::upstream(format!("{}: {why}", ticket.key))),
             None => Ok(row),
