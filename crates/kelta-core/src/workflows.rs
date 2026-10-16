@@ -11,7 +11,7 @@ use kelta_proto::ext::{WorkflowDef, WorkflowOn};
 use kelta_proto::ids::{ProjectId, SessionId};
 use kelta_proto::model::{
     Lifecycle, OpenPaneRequest, PaneContent, Placement, RestorePolicy, RunClaim, RunState, SessionInfo,
-    SessionKind, SpawnRequest, WorkState, WorkflowInfo, WorkflowSource, WorkflowStart,
+    SessionKind, SpawnRequest, WorkItem, WorkState, WorkflowInfo, WorkflowSource, WorkflowStart,
 };
 use kelta_proto::settings::Settings;
 use kelta_proto::tracker::TicketRef;
@@ -154,6 +154,7 @@ impl Core {
         let prompt = render(&def.prompt, &vars, Mode::Lenient)?;
         let s = self.cfg.effective(Some(&project));
         let info = self.spawn_run(&project, self.fresh_session_id(), &title, cwd, Some(&prompt), &s).await?;
+        self.unadopted_runs.lock().insert(info.id.clone());
         // shortcut: in memory, so a run started before a restart is not found; persist when that matters.
         if let Some(k) = key {
             self.pr_runs.lock().insert(k, info.id.clone());
@@ -164,6 +165,24 @@ impl Core {
 
     fn live_session(&self, sid: &SessionId) -> Option<SessionInfo> {
         self.sessions.lock().get(sid).map(|e| e.info.clone()).filter(|s| s.lifecycle == Lifecycle::Live)
+    }
+
+    /// #493: a run with no ticket (`workflow_run_on`) that claims one through MCP gives its Claude to the
+    /// claimed item, as `workflow_run` does (#491): once per run, never for another caller.
+    pub(crate) async fn adopt_claiming_run(&self, item: WorkItem) -> WorkItem {
+        let sid = item.run.as_ref().and_then(|r| r.session_id.clone());
+        let Some(info) =
+            sid.filter(|s| self.unadopted_runs.lock().remove(s)).and_then(|s| self.live_session(&s))
+        else {
+            return item;
+        };
+        match self.work.adopt_run(&item.id, &info).await {
+            Ok(w) => w,
+            Err(e) => {
+                tracing::warn!(work = %item.id, error = %e.message, "run's Claude not adopted");
+                item
+            }
+        }
     }
 
     /// The live session of a run holding `ticket`.
@@ -271,7 +290,14 @@ impl Core {
             close_on_exit: Default::default(),
             template_id: None,
         };
-        self.spawn_claude(sid, base, s, None, prompt).await
+        // #493: the run's MCP calls carry its session (session tools, claim adoption), as a work item's do.
+        let port = if s.claude.mcp { self.server.ensure_http().await.ok() } else { None };
+        let info = self.spawn_claude(sid, base, s, None, prompt, port).await;
+        if port.is_some() {
+            // The spawned session holds its own reference.
+            self.server.release_http();
+        }
+        info
     }
 
     /// The run's session in a new tab that does not take focus.

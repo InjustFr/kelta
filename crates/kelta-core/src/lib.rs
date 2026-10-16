@@ -202,6 +202,9 @@ pub struct Core {
     pub(crate) refines: Mutex<std::collections::HashMap<SessionId, TicketRef>>,
     /// Config workflow runs on a PR (#355): `account:repo#number` → the run's session.
     pub(crate) pr_runs: Mutex<std::collections::HashMap<String, SessionId>>,
+    /// Runs started with no ticket (`workflow_run_on`) that have not adopted a claimed item yet (#493).
+    // shortcut: in memory, so a run that outlives an app restart claims without adoption; persist when that matters.
+    pub(crate) unadopted_runs: Mutex<std::collections::HashSet<SessionId>>,
     /// The registration Kelta serves while the global `/mcp` holds an HTTP server reference (Claude Code
     /// registration, ticket #234); locked for a whole install / remove so concurrent ones take one reference
     /// and one token (#294).
@@ -372,6 +375,7 @@ impl Core {
                 oauth_polling: Mutex::default(),
                 refines: Mutex::default(),
                 pr_runs: Mutex::default(),
+                unadopted_runs: Mutex::default(),
                 claude_mcp_ref: tokio::sync::Mutex::new(None),
                 claude_mcp_recheck: rt::OneShot::default(),
                 claude_mode: Mutex::new(None),
@@ -890,7 +894,8 @@ impl CoreApi for Core {
         branch: Option<String>,
         run: kelta_proto::model::RunClaim,
     ) -> Result<WorkItem, KeltaError> {
-        self.work.claim(project, ticket, worktree, branch, run).await
+        let w = self.work.claim(project, ticket, worktree, branch, run).await?;
+        Ok(self.adopt_claiming_run(w).await)
     }
     async fn work_report(
         &self,

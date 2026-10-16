@@ -54,13 +54,14 @@ pub fn claude_hooks_settings(ctl: &Path, extra: &BTreeMap<String, serde_json::Va
 }
 
 /// Claude argv for a standalone/template session; `remembered` = the mode used when the profile
-/// forces none (none either: Claude's own default).
+/// forces none (none either: Claude's own default); `mcp_file` = the run's per-session `mcp.json` (#493).
 pub fn claude_args(
     claude: &ClaudeSettings,
     profile: Option<&str>,
     remembered: Option<PermissionMode>,
     uuid: &str,
     settings_file: &Path,
+    mcp_file: Option<&Path>,
     prompt: Option<&str>,
 ) -> Vec<String> {
     let mut a = vec!["--session-id".to_owned(), uuid.to_owned()];
@@ -78,6 +79,9 @@ pub fn claude_args(
         a.extend(["--permission-mode".to_owned(), kelta_work::claude::enum_str(&m)]);
     }
     a.extend(["--settings".to_owned(), settings_file.to_string_lossy().into_owned()]);
+    if let Some(m) = mcp_file {
+        a.extend(["--mcp-config".to_owned(), m.to_string_lossy().into_owned()]);
+    }
     for t in &claude.allowed_tools {
         a.extend(["--allowedTools".to_owned(), t.clone()]);
     }
@@ -155,7 +159,8 @@ impl Core {
             .cloned()
     }
 
-    /// A standalone Claude session: the hooks file, a `--session-id`, and resume on restore.
+    /// A standalone Claude session: the hooks file, a `--session-id`, and resume on restore; with `mcp_port`,
+    /// a per-session `mcp.json` so its MCP calls reach `/mcp/<sid>` (#493).
     pub(crate) async fn spawn_claude(
         &self,
         id: SessionId,
@@ -163,16 +168,34 @@ impl Core {
         s: &Settings,
         profile: Option<&str>,
         prompt: Option<&str>,
+        mcp_port: Option<u16>,
     ) -> Result<SessionInfo, KeltaError> {
-        let file = self.dirs.session_runtime(&id.sid8()).join("claude-settings.json");
+        let dir = self.dirs.session_runtime(&id.sid8());
+        let file = dir.join("claude-settings.json");
         let hooks = claude_hooks_settings(&self.dirs.stable_ctl(), &s.claude.extra_hooks);
         write_private(&file, &serde_json::to_string_pretty(&hooks)?)?;
+        let mcp = match mcp_port {
+            Some(p) => {
+                let f = dir.join(kelta_work::claude::MCP_FILE);
+                write_private(&f, &kelta_work::claude::mcp_json(p, id.as_str()).to_string())?;
+                Some(f)
+            }
+            None => None,
+        };
         let uuid = uuid::Uuid::new_v4().to_string();
         let req = SpawnRequest {
             id: None,
             kind: SessionKind::Claude,
             program: Some(s.claude.binary.clone()),
-            args: claude_args(&s.claude, profile, *self.claude_mode.lock(), &uuid, &file, prompt),
+            args: claude_args(
+                &s.claude,
+                profile,
+                *self.claude_mode.lock(),
+                &uuid,
+                &file,
+                mcp.as_deref(),
+                prompt,
+            ),
             restore: RestorePolicy::ClaudeResume {
                 uuid,
                 profile: Some(profile.unwrap_or("default").to_owned()),
@@ -239,7 +262,8 @@ impl Core {
                     None => None,
                 };
                 let id = self.fresh_session_id();
-                let info = self.spawn_claude(id, base, s, profile.as_deref(), prompt.as_deref()).await?;
+                let info =
+                    self.spawn_claude(id, base, s, profile.as_deref(), prompt.as_deref(), None).await?;
                 Ok(Some((term(&info), Some(info))))
             }
             "editor" => {
@@ -420,11 +444,11 @@ mod tests {
     #[test]
     fn claude_argv() {
         let c = ClaudeSettings::default();
-        let a = claude_args(&c, Some("review"), None, "U", Path::new("/r/s.json"), Some("hi"));
+        let a = claude_args(&c, Some("review"), None, "U", Path::new("/r/s.json"), None, Some("hi"));
         assert_eq!(&a[..2], &["--session-id".to_owned(), "U".to_owned()]);
         assert!(a.windows(2).any(|w| w[0] == "--permission-mode" && w[1] == "plan"));
         assert_eq!(&a[a.len() - 2..], &["--".to_owned(), "hi".to_owned()]);
-        let a = claude_args(&c, None, None, "U", Path::new("/r/s.json"), None);
+        let a = claude_args(&c, None, None, "U", Path::new("/r/s.json"), None, None);
         assert!(!a.contains(&"--".to_owned()));
     }
 
@@ -436,9 +460,23 @@ mod tests {
             extra_args: vec!["--add-dir".into(), "/x".into()],
             ..ClaudeSettings::default()
         };
-        let a = claude_args(&c, None, None, "U", Path::new("/r/s.json"), Some("/probe"));
+        let a = claude_args(&c, None, None, "U", Path::new("/r/s.json"), None, Some("/probe"));
         assert_eq!(&a[a.len() - 4..], &["--add-dir", "/x", "--", "/probe"]);
         assert!(a.windows(2).any(|w| w == ["--allowedTools", "mcp__kelta__*"]));
+    }
+
+    /// #493: a run's per-session `--mcp-config` comes before the `--` prompt.
+    #[test]
+    fn claude_argv_mcp_config_before_the_prompt() {
+        let c = ClaudeSettings { allowed_tools: vec!["mcp__kelta__*".into()], ..ClaudeSettings::default() };
+        let mcp = Some(Path::new("/r/mcp.json"));
+        let a = claude_args(&c, None, None, "U", Path::new("/r/s.json"), mcp, Some("go"));
+        assert!(a.windows(2).any(|w| w == ["--mcp-config", "/r/mcp.json"]));
+        let at = |x: &str| a.iter().position(|v| v == x).unwrap();
+        assert!(at("--mcp-config") < at("--"));
+        assert_eq!(&a[a.len() - 2..], &["--".to_owned(), "go".to_owned()]);
+        let a = claude_args(&c, None, None, "U", Path::new("/r/s.json"), None, Some("go"));
+        assert!(!a.contains(&"--mcp-config".to_owned()));
     }
 
     /// #277: the default profile forces no mode, the remembered one applies; a profile mode wins.
@@ -446,7 +484,7 @@ mod tests {
     fn claude_argv_permission_mode() {
         let c = ClaudeSettings::default();
         let mode = |profile, remembered| {
-            let a = claude_args(&c, profile, remembered, "U", Path::new("/r/s.json"), None);
+            let a = claude_args(&c, profile, remembered, "U", Path::new("/r/s.json"), None, None);
             a.windows(2).find(|w| w[0] == "--permission-mode").map(|w| w[1].clone())
         };
         assert_eq!(mode(None, None), None);
