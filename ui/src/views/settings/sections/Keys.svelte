@@ -197,7 +197,14 @@
   {#snippet after()}
     <div class="keys" data-testid="keys-section">
       <SettingsGroup heading={t('Bindings')}>
-        {#if !access.editable && access.reason}<p class="hint">{access.reason}</p>{/if}
+        {#if editor.layer !== 'global'}
+          <p class="hint">
+            {t('The same for every project.')}
+            <Button size="sm" variant="ghost" onclick={() => editor.target({ layer: 'global', repoId: null })}
+              >{t('Change in All projects →')}</Button
+            >
+          </p>
+        {:else if !access.editable && access.reason}<p class="hint">{access.reason}</p>{/if}
         <div class="filter">
           {#if pressMode}
             <div
@@ -322,15 +329,18 @@
                     </td>
                     <td>
                       {#if a.prefix !== null || a.id in prefixMap}
-                        <input
-                          class="prefix"
-                          aria-label={t('Prefix key for {action}', { action: t(a.label) })}
-                          maxlength="1"
-                          placeholder={a.prefix ?? ''}
-                          value={prefixMap[a.id] ?? ''}
-                          disabled={!access.editable}
-                          onchange={(e) => setPrefix(a.id, e.currentTarget.value)}
-                        />
+                        {#if !access.editable}
+                          <code>{prefixMap[a.id] ?? a.prefix ?? ''}</code>
+                        {:else}
+                          <input
+                            class="prefix"
+                            aria-label={t('Prefix key for {action}', { action: t(a.label) })}
+                            maxlength="1"
+                            placeholder={a.prefix ?? ''}
+                            value={prefixMap[a.id] ?? ''}
+                            onchange={(e) => setPrefix(a.id, e.currentTarget.value)}
+                          />
+                        {/if}
                       {/if}
                     </td>
                     <td class="actions">

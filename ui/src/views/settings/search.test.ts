@@ -169,6 +169,8 @@ describe('Changed by you (#474)', () => {
       projectId: null,
       repoId: null,
       where: 'All projects',
+      path: '/x/config.toml',
+      trusted: null,
       value: { terminal: { font_size: 15 }, keys: { bindings: { 'palette.open': ['cmd+p'] } }, sources: [] },
     },
     {
@@ -176,6 +178,8 @@ describe('Changed by you (#474)', () => {
       projectId: 'shop',
       repoId: null,
       where: 'Shop',
+      path: '/x/config.toml',
+      trusted: null,
       value: { project: { id: 'shop' }, terminal: { font_size: 16 } },
     },
     {
@@ -183,6 +187,8 @@ describe('Changed by you (#474)', () => {
       projectId: 'shop',
       repoId: 'api',
       where: 'Shop › api',
+      path: '/x/config.toml',
+      trusted: null,
       value: { worktree: { setup: ['pnpm i'] } },
     },
   ];
