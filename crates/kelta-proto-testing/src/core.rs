@@ -581,6 +581,23 @@ impl CoreApi for FakeCore {
             .collect())
     }
 
+    /// Set with `respond("work_claim", item)`; unsupported otherwise.
+    async fn work_claim(
+        &self,
+        project: &ProjectId,
+        ticket: TicketRef,
+        worktree: Option<PathBuf>,
+        branch: Option<String>,
+        _run: kelta_proto::model::RunClaim,
+        _adopt: bool,
+    ) -> Result<WorkItem, KeltaError> {
+        self.record(
+            "work_claim",
+            serde_json::json!({ "project": project, "ticket": ticket, "worktree": worktree, "branch": branch }),
+        );
+        self.overridden("work_claim").unwrap_or_else(|| Err(KeltaError::unsupported("work_claim")))
+    }
+
     async fn work_for_session(&self, id: &SessionId) -> Option<WorkItem> {
         self.record("work_for_session", serde_json::json!({ "id": id }));
         self.work_items.lock().iter().find(|w| w.session_ids.contains(id)).cloned()

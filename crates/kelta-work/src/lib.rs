@@ -33,6 +33,7 @@ mod status;
 
 pub use ops::selection_ref;
 pub use plan::pr_title_with_key;
+pub use queue::live_claudes;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};

@@ -210,4 +210,4 @@ the arguments to the running instance and raises its window.
 
 `kelta-ctl`: `toggle`, `palette`, `next`, `back`, `open <path>`, `focus-project <id>`, `start <ticket> [--project]`,
 `start --task <text> [--project]` (a work item with no ticket), `new --template <id> [--cwd] [--project]`,
-`emit <custom.event>`, `trust <repo>`, `editor-open <file>[:line]`, `plugin install <src>`, `version`.
+`emit <custom.event> [--json '{…}'] [--project <id>]`, `trust <repo>`, `editor-open <file>[:line]`, `plugin install <src>`, `version`.

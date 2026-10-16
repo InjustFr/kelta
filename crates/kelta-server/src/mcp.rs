@@ -16,6 +16,7 @@ use kelta_proto::ext::Urgency;
 use kelta_proto::ids::{AccountId, ProjectId, SessionId};
 use kelta_proto::model::{
     EditorTarget, Lifecycle, ProjectInfo, RunClaim, RunState, Scope, SessionKind, ShipOrigin, WorkItem,
+    WorkState,
 };
 use kelta_proto::settings::{AccountKind, ClaudeSettings, Layer, Settings, TransitionTarget};
 use kelta_proto::tracker::{Ticket, TicketRef, Transition};
@@ -160,6 +161,7 @@ const BOARD_WRITES: &[&str] = &[
     "update_ticket_body",
     "close_ticket",
     "move_ticket_step",
+    "run_workflow",
 ];
 
 fn listed(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, name: &str) -> bool {
@@ -398,6 +400,19 @@ pub(crate) fn tool_defs() -> Value {
             },
         },
         {
+            "name": "run_workflow",
+            "description": "Start a workflow run in a background Claude tab, as `w` does. With `key`: a ticket workflow on that ticket; the run claims it, and a run already live on it comes back with running: true instead of a second one. Without `key`: the `on = \"global\"` [[workflows]] entry `workflow` of `project` (default: this session's project). Refused with `Busy: N of M Claude slots in use` while live Claude sessions reach claude.max_live. Returns JSON {session_id, name, running}.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "workflow": { "type": "string", "description": "Saved workflow name or [[workflows]] id" },
+                    "key": key, "account": account,
+                    "project": { "type": "string", "description": "Kelta project id of a run without `key` (default: this session's); ignored with `key` (the ticket's project)" }
+                },
+                "required": ["workflow"], "additionalProperties": false
+            },
+        },
+        {
             "name": "link_pr",
             "description": "Link one of my open pull requests to a ticket after the fact (a PR opened before its ticket existed): Kelta tracks the ticket as a work item on the PR's head branch, in the worktree that has it checked out or a new one, without starting Claude; the ticket then reads Resume work. Linked already: no change. A ticket that has work items gets one more for this PR. Fails with Conflict, naming the holder, when a work item of another ticket holds the PR. With `status` (needs `claude.mcp_board_writes`), the ticket then moves (also when linked already); a failed move keeps the link and returns a warning.",
             "inputSchema": {
@@ -524,6 +539,7 @@ async fn call_tool(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, name: &str,
             core.work_release(key, opt_arg(args, "sha"), sid).await.map_err(coded)?;
             Ok(format!("{key} released ({outcome})."))
         }
+        "run_workflow" => run_workflow(core, sid, args).await,
         "link_pr" => link_pr(core, sid, args).await,
         "list_review_requests" => list_review_requests(core).await,
         "get_setup" => Ok(setup_summary(&core.project_list(), &core.settings(None)).to_string()),
@@ -710,13 +726,27 @@ async fn by_key(core: &Arc<dyn CoreApi>, args: &Value) -> Result<(Arc<dyn Tracke
 async fn ref_by_key(core: &Arc<dyn CoreApi>, args: &Value) -> Result<(TicketRef, Vec<ProjectId>), String> {
     let key = str_arg(args, "key")?;
     let account = args.get("account").and_then(Value::as_str).filter(|a| !a.is_empty()).map(AccountId::new);
-    let listed = core.ticket_by_key(key, account.as_ref()).await.ok().flatten();
-    match (listed, account) {
-        (Some(i), _) => Ok((i.ticket.r#ref, i.project_ids)),
+    if let Some(i) = core.ticket_by_key(key, account.as_ref()).await.ok().flatten() {
+        return Ok((i.ticket.r#ref, i.project_ids));
+    }
+    // A ticket filed after Kelta's last poll is in no list, but its holder's unfinished item has the full ref.
+    let held: Vec<(TicketRef, ProjectId)> = core
+        .work_list(None)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|w| w.state != WorkState::Finished)
+        .filter_map(|w| Some((w.ticket?, w.project_id)))
+        .filter(|(t, _)| t.key == key && account.as_ref().is_none_or(|a| &t.account == a))
+        .collect();
+    match (held.first(), account) {
+        (Some((t, p)), _) if held.iter().all(|(h, _)| h.account == t.account) => {
+            Ok((t.clone(), vec![p.clone()]))
+        }
         (None, Some(account)) => {
             Ok((TicketRef { account, key: key.to_owned(), id: key.to_owned() }, Vec::new()))
         }
-        (None, None) => Err(format!("{key} is not in Kelta's ticket lists; pass its `account`")),
+        _ => Err(format!("{key} is not in Kelta's ticket lists; pass its `account`")),
     }
 }
 
@@ -757,6 +787,30 @@ async fn claim_ticket(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &V
         .await
         .map_err(coded)?;
     Ok(format!("Claimed {key}: work item {} on {} ({}).", w.id, w.branch, w.worktree.display()))
+}
+
+async fn run_workflow(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &Value) -> ToolResult {
+    let workflow = str_arg(args, "workflow")?;
+    let max = core.settings(None).claude.max_live;
+    // shortcut: start-work sagas between their slot and their Claude spawn (WorkService::starting) are not
+    // counted, CoreApi does not expose them; expose them if MCP runs overbook during batch starts.
+    let live = kelta_work::live_claudes(&core.session_list(None), &Default::default(), None);
+    if max > 0 && live >= max as usize {
+        return Err(format!("Busy: {live} of {max} Claude slots in use"));
+    }
+    let start = if opt_arg(args, "key").is_some() {
+        let (ticket, _) = ref_by_key(core, args).await?;
+        core.workflow_start(None, workflow, Some(ticket)).await
+    } else {
+        let project = opt_arg(args, "project")
+            .map(ProjectId::new)
+            .or_else(|| sid.and_then(|s| core.session_get(s)).map(|s| s.project_id))
+            .ok_or_else(|| "InvalidArgument: pass `project` or `key` outside a Kelta session".to_owned())?;
+        core.workflow_start(Some(&project), workflow, None).await
+    }
+    .map_err(coded)?;
+    Ok(json!({ "session_id": start.session.id, "name": start.session.name, "running": start.running })
+        .to_string())
 }
 
 async fn link_pr(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &Value) -> ToolResult {
@@ -1123,6 +1177,7 @@ mod tests {
             assert_eq!(session_tool_names(&core.settings(None).claude), listed);
             assert!(["link_pr", "report_progress", "ask"].iter().all(|n| listed.iter().any(|l| l == n)));
             assert_eq!(listed.iter().any(|l| l == "close_ticket"), writes);
+            assert_eq!(listed.iter().any(|l| l == "run_workflow"), writes);
         }
     }
 

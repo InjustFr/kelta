@@ -28,7 +28,8 @@ const USAGE: &str = "usage: kelta-ctl <command>
   start <ticket key|url> [--project <id>]  start work on a ticket
   start --task <text> [--project <id>]     new work item without a ticket (wip/ branch + Claude)
   new --template <id> [--cwd <dir>] [--project <id>]
-  emit <custom.event> [--json '<json>']    publish a custom.* bus event
+  emit <custom.event> [--json '<json>'] [--project <id>]
+                                           publish a custom.* bus event (in a project)
   trust <repo path>                        review and trust a repository's .kelta config
   editor-open <file>[:line]                open a file in the editor
   plugin install <src>                     install a plugin (path, git URL or archive)
@@ -380,7 +381,7 @@ fn build(args: &[String]) -> Result<Value, String> {
             envelope("new", json!({ "template": template, "cwd": cwd, "project": opts.get("project") }))
         }
         "emit" => {
-            let (pos, opts) = parse_opts(rest, &["json"])?;
+            let (pos, opts) = parse_opts(rest, &["json", "project"])?;
             let name = one(&pos, "event name")?;
             if !name.starts_with("custom.") || name.len() == "custom.".len() {
                 return Err(format!("only custom.* events can be emitted, got {name:?}"));
@@ -389,7 +390,7 @@ fn build(args: &[String]) -> Result<Value, String> {
                 Some(j) => serde_json::from_str::<Value>(j).map_err(|e| format!("--json: {e}"))?,
                 None => json!({}),
             };
-            envelope("emit", json!({ "name": name, "payload": payload }))
+            envelope("emit", json!({ "name": name, "payload": payload, "project": opts.get("project") }))
         }
         "trust" => {
             let (pos, _) = parse_opts(rest, &[])?;
@@ -477,7 +478,11 @@ mod tests {
         );
         assert_eq!(
             build(&s(&["emit", "custom.x", "--json", "{\"a\":1}"])).unwrap(),
-            json!({"v":1,"cmd":"emit","name":"custom.x","payload":{"a":1}})
+            json!({"v":1,"cmd":"emit","name":"custom.x","payload":{"a":1},"project":null})
+        );
+        assert_eq!(
+            build(&s(&["emit", "custom.morning", "--project", "shop"])).unwrap(),
+            json!({"v":1,"cmd":"emit","name":"custom.morning","payload":{},"project":"shop"})
         );
         assert!(build(&s(&["emit", "pr.created"])).is_err());
         assert!(build(&s(&["new"])).is_err());

@@ -441,7 +441,7 @@ pub trait CoreApi: Send + Sync {
     async fn work_fix_checks(&self, _review: &Review) -> Result<String, KeltaError> {
         Err(KeltaError::unsupported("work_fix_checks"))
     }
-    /// The `run_workflow` trigger action (#488): `workflow_run` on `ticket` (claims it; a live run on it
+    /// The `run_workflow` trigger action (#488) and MCP tool (#500): `workflow_run` on `ticket` (claims it; a live run on it
     /// comes back `running`), else `workflow_run_on` of the `on = "global"` entry in `project`.
     async fn workflow_start(
         &self,
