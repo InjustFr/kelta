@@ -31,11 +31,7 @@ impl WorkService {
         // #497: the holder's re-claim without `worktree` keeps the item's worktree, branch and base.
         let kept = match &worktree {
             Some(_) => None,
-            None => kelta_proto::api::claim_holder(
-                &self.store.list_items(None).await?,
-                &WorkItem { ticket: Some(ticket.clone()), ..WorkItem::default() },
-            )
-            .filter(|h| h.claimed_by(run.session_id.as_ref())),
+            None => self.held_by(&ticket, run.session_id.as_ref()).await?,
         };
         let path = match (worktree, &kept) {
             (Some(w), _) => w,
@@ -115,6 +111,18 @@ impl WorkService {
                 Err(KeltaError::conflict(format!("{key} is held by {who}")))
             }
         }
+    }
+
+    /// #497: the unfinished item of `ticket` that `sid` holds (`WorkItem::claimed_by`): a re-claim of it
+    /// takes it over and never adopts (#494).
+    pub async fn held_by(
+        &self,
+        ticket: &TicketRef,
+        sid: Option<&SessionId>,
+    ) -> Result<Option<WorkItem>, KeltaError> {
+        let probe = WorkItem { ticket: Some(ticket.clone()), ..WorkItem::default() };
+        Ok(kelta_proto::api::claim_holder(&self.store.list_items(None).await?, &probe)
+            .filter(|h| h.claimed_by(sid)))
     }
 
     /// #491: a run Kelta started (`workflow_run`) gives its Claude to the item it claimed. Opening the
