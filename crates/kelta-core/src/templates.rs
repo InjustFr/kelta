@@ -83,6 +83,8 @@ pub fn claude_args(
     }
     a.extend(claude.extra_args.iter().cloned());
     if let Some(p) = prompt.filter(|p| !p.trim().is_empty()) {
+        // `--` ends the options: the variadic `--allowedTools` / extra args must not swallow the prompt.
+        a.push("--".to_owned());
         a.push(p.to_owned());
     }
     a
@@ -421,7 +423,22 @@ mod tests {
         let a = claude_args(&c, Some("review"), None, "U", Path::new("/r/s.json"), Some("hi"));
         assert_eq!(&a[..2], &["--session-id".to_owned(), "U".to_owned()]);
         assert!(a.windows(2).any(|w| w[0] == "--permission-mode" && w[1] == "plan"));
-        assert_eq!(a.last().map(String::as_str), Some("hi"));
+        assert_eq!(&a[a.len() - 2..], &["--".to_owned(), "hi".to_owned()]);
+        let a = claude_args(&c, None, None, "U", Path::new("/r/s.json"), None);
+        assert!(!a.contains(&"--".to_owned()));
+    }
+
+    /// #490: with `allowed_tools` set, the prompt follows `--` so the variadic flag cannot swallow it.
+    #[test]
+    fn claude_argv_prompt_after_double_dash() {
+        let c = ClaudeSettings {
+            allowed_tools: vec!["mcp__kelta__*".into()],
+            extra_args: vec!["--add-dir".into(), "/x".into()],
+            ..ClaudeSettings::default()
+        };
+        let a = claude_args(&c, None, None, "U", Path::new("/r/s.json"), Some("/probe"));
+        assert_eq!(&a[a.len() - 4..], &["--add-dir", "/x", "--", "/probe"]);
+        assert!(a.windows(2).any(|w| w == ["--allowedTools", "mcp__kelta__*"]));
     }
 
     /// #277: the default profile forces no mode, the remembered one applies; a profile mode wins.
