@@ -226,11 +226,15 @@ fn union<T: PartialEq + Clone>(into: &mut Vec<T>, from: &[T]) {
     }
 }
 
+/// Open work items by `(account, key)`: a claim by key carries `id == key`, a listed ticket its provider id.
+pub type WorkByTicket = HashMap<(AccountId, String), WorkItem>;
+
+fn work_of<'a>(work: &'a WorkByTicket, r: &TicketRef) -> Option<&'a WorkItem> {
+    work.get(&(r.account.clone(), r.key.clone()))
+}
+
 /// Merge pages from several queries: de-dup by ref, union of project, source and view ids.
-pub fn merge_tickets(
-    pages: Vec<(Vec<Ticket>, &TicketQuery)>,
-    work: &HashMap<TicketRef, WorkItem>,
-) -> Vec<TicketItem> {
+pub fn merge_tickets(pages: Vec<(Vec<Ticket>, &TicketQuery)>, work: &WorkByTicket) -> Vec<TicketItem> {
     let mut out: Vec<TicketItem> = Vec::new();
     let mut index: HashMap<TicketRef, usize> = HashMap::new();
     for (tickets, q) in pages {
@@ -243,7 +247,7 @@ pub fn merge_tickets(
                 }
                 None => {
                     index.insert(t.r#ref.clone(), out.len());
-                    let work_item_id = work.get(&t.r#ref).map(|w| w.id.clone());
+                    let work_item_id = work_of(work, &t.r#ref).map(|w| w.id.clone());
                     out.push(TicketItem {
                         ticket: t,
                         project_ids: q.projects.clone(),
@@ -701,9 +705,9 @@ impl Core {
         }
     }
 
-    async fn work_by_ticket(&self) -> HashMap<TicketRef, WorkItem> {
+    async fn work_by_ticket(&self) -> WorkByTicket {
         let items = self.store.call(|c| q::work_open(c)).await.unwrap_or_default();
-        items.into_iter().filter_map(|w| w.ticket.clone().map(|t| (t, w))).collect()
+        items.into_iter().filter_map(|w| w.ticket.clone().map(|t| ((t.account, t.key), w))).collect()
     }
 
     /// Every review list in the provider cache (both kinds, all code-host accounts); never fetches.
@@ -717,14 +721,8 @@ impl Core {
     }
 
     /// Core-filled ticket fields: linked PRs and the tracker's caps.
-    fn enrich(
-        &self,
-        i: &mut TicketItem,
-        work: &HashMap<TicketRef, WorkItem>,
-        reviews: &[Review],
-        people: &[Person],
-    ) {
-        let w = work.get(&i.ticket.r#ref);
+    fn enrich(&self, i: &mut TicketItem, work: &WorkByTicket, reviews: &[Review], people: &[Person]) {
+        let w = work_of(work, &i.ticket.r#ref);
         let repos = self.code_repos(&i.project_ids);
         i.prs = ticket_prs(&i.ticket.r#ref.key, w, w.and_then(|w| self.work_binding(w)), reviews, &repos);
         i.caps = self.tracker_of(&i.ticket.r#ref.account).map(|t| t.caps()).unwrap_or_default();
@@ -932,7 +930,7 @@ impl Core {
                 hits.insert(
                     0,
                     TicketItem {
-                        work_item_id: work.get(&d.ticket.r#ref).map(|w| w.id.clone()),
+                        work_item_id: work_of(&work, &d.ticket.r#ref).map(|w| w.id.clone()),
                         ticket: d.ticket,
                         project_ids: q.projects,
                         source_ids: q.sources,
@@ -977,7 +975,7 @@ impl Core {
         }
         let mut d = r?;
         let work = self.work_by_ticket().await;
-        let w = work.get(&d.ticket.r#ref);
+        let w = work_of(&work, &d.ticket.r#ref);
         let projects: Vec<ProjectId> =
             self.project_for_account(&t.account).map(|p| p.id.clone()).into_iter().collect();
         let repos = self.code_repos(&projects);
@@ -993,7 +991,7 @@ impl Core {
         let people = self.people_of(d.children.iter().map(|c| &c.ticket), &reviews).await;
         for c in &mut d.children {
             *c = TicketItem {
-                work_item_id: work.get(&c.ticket.r#ref).map(|w| w.id.clone()),
+                work_item_id: work_of(&work, &c.ticket.r#ref).map(|w| w.id.clone()),
                 ticket: std::mem::take(&mut c.ticket),
                 project_ids: projects.clone(),
                 ..TicketItem::default()
