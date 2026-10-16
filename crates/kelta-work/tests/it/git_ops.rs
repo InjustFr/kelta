@@ -512,3 +512,17 @@ async fn snapshot_takes_untracked_files_and_leaves_head_index_and_stash() {
     let files = git(repo, &["ls-tree", "-r", "--name-only", &sha]);
     assert!(!files.lines().any(|f| f == ".env"), "ignored files stay out: {files}");
 }
+
+#[tokio::test]
+async fn concurrent_worktree_adds_in_one_repo_all_succeed() {
+    need_git!();
+    let fx = Fx::new();
+    let adds = (0..4).map(|i| {
+        let (repo, path) = (fx.repo.clone(), fx.wt_root.join(format!("w{i}")));
+        async move { kelta_work::git::worktree_add(&repo, &path, &format!("feat/w{i}"), Some("main")).await }
+    });
+    for r in futures::future::join_all(adds).await {
+        r.unwrap();
+    }
+    assert_eq!(fx.worktree_count(), 5, "main plus four");
+}
