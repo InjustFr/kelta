@@ -110,6 +110,13 @@ if want rust; then
   [ "${QA_KEEP_GOING:-0}" != 1 ] || keep_going=--keep-going
   step cargo clippy "${scope[@]}" --all-targets --locked $keep_going -- -D warnings
 
+  # kelta-term's tests exec the tui-sim fixture: build it here, not inside a test's own nextest clock (#517).
+  # tui_sim() in crates/kelta-term/tests/it/common/mod.rs finds target/debug/tui-sim and builds nothing.
+  if [ ${#pkgs[@]} -eq 0 ] || [[ " ${pkgs[*]} " == *" kelta-term "* ]]; then
+    section "cargo build -p tui-sim --locked"
+    step cargo build -p tui-sim --locked
+  fi
+
   # --no-fail-fast: one run lists every failing test, not just the first failing binary.
   if command -v cargo-nextest >/dev/null 2>&1; then
     section "cargo nextest run ${scope[*]} --locked --no-fail-fast --retries 1"
