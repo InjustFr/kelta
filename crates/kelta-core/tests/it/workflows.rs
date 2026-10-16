@@ -570,13 +570,14 @@ async fn emit_with_project_starts_a_global_run_through_a_trigger() {
         payload: serde_json::json!({}),
         project: Some(ProjectId::new(p)),
     };
-    // Core's startup task subscribes the trigger engine to the bus; an event published first is missed.
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     let err = h.core.ctl(emit("nope")).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::NotFound);
-    h.core.ctl(emit("shop")).await.unwrap();
+    // Core's startup task subscribes the trigger engine to the bus with no readiness signal: re-emit until it hears one.
     let mut run = None;
-    for _ in 0..300 {
+    for i in 0..300 {
+        if i % 20 == 0 {
+            h.core.ctl(emit("shop")).await.unwrap();
+        }
         run = h.core.session_list(None).into_iter().find(|s| s.kind == SessionKind::Claude);
         if run.is_some() {
             break;
