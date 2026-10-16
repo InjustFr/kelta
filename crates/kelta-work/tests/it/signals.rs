@@ -23,7 +23,7 @@ macro_rules! need_git {
     };
 }
 
-fn hook(sid: &SessionId, event: &str, extra: serde_json::Value) -> BusEvent {
+pub(crate) fn hook(sid: &SessionId, event: &str, extra: serde_json::Value) -> BusEvent {
     let mut payload = json!({ "hook_event_name": event });
     if let (Some(p), Some(e)) = (payload.as_object_mut(), extra.as_object()) {
         p.extend(e.clone());
@@ -42,7 +42,7 @@ async fn started(fx: &Fx) -> (Arc<WorkService>, WorkItem, SessionId) {
 }
 
 /// Polls the store (test-only) until `pred` holds.
-async fn wait_item(fx: &Fx, item: &WorkItem, pred: impl Fn(&WorkItem) -> bool) -> WorkItem {
+pub(crate) async fn wait_item(fx: &Fx, item: &WorkItem, pred: impl Fn(&WorkItem) -> bool) -> WorkItem {
     for _ in 0..500 {
         let cur = fx.store.get_item(&item.id).await.unwrap().unwrap();
         if pred(&cur) {

@@ -351,11 +351,12 @@ pub(crate) fn tool_defs() -> Value {
         },
         {
             "name": "claim_ticket",
-            "description": "Claim a ticket for this run: Kelta tracks it as a work item adopting the run's worktree and branch (never removed by Kelta), shown on the ticket with the run's phase. Fails with Conflict, naming the holder, when the ticket already has live work; pick another ticket then. Does not move the ticket on the board.",
+            "description": "Claim a ticket for this run: Kelta tracks it as a work item adopting the run's worktree and branch (never removed by Kelta), shown on the ticket with the run's phase. Fails with Conflict, naming the holder, when the ticket already has live work; pick another ticket then. Claims belong to the claiming session: re-claiming a ticket this session holds returns its item; naming `worktree`/`branch` re-points it, omitting them keeps the item's. Lanes of one session pass distinct `run.id`s and conflict with each other. Does not move the ticket on the board.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "key": key, "account": account,
+                    "adopt": { "type": "boolean", "description": "Default true: a run Kelta started gives its Claude to the item it claims first. false keeps this conversation out of the item (an orchestrator claiming many tickets)." },
                     "project": { "type": "string", "description": "Kelta project id (default: the ticket's)" },
                     "worktree": { "type": "string", "description": "Absolute path of a git worktree of one of the project's repos (default: the primary repo)" },
                     "branch": { "type": "string", "description": "Default: the worktree's checked-out branch" },
@@ -751,6 +752,7 @@ async fn claim_ticket(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &V
             opt_arg(args, "worktree").map(PathBuf::from),
             opt_arg(args, "branch"),
             claim,
+            args.get("adopt").and_then(Value::as_bool).unwrap_or(true),
         )
         .await
         .map_err(coded)?;
