@@ -681,3 +681,29 @@ async fn run_workflow_starts_a_ticket_or_global_run_and_logs_it() {
         env.core.calls().into_iter().skip(before).filter(|c| c.method == "workflow_start").collect();
     assert_eq!(after.len(), 2, "only the two config triggers started a run");
 }
+
+#[tokio::test]
+async fn a_run_done_trigger_starts_the_next_workflow() {
+    use kelta_proto::samples;
+    let env = common::Env::new().with_settings(|st| {
+        st.triggers = vec![trigger(
+            "next-on-done",
+            bus::RUN_STATE_CHANGED,
+            &[("payload.state", s("done"))],
+            vec![ActionDef::RunWorkflow { workflow: "next-ticket".into(), ticket: None }],
+        )];
+    });
+    for (previous, state) in [("running", "blocked"), ("blocked", "running"), ("running", "done")] {
+        let payload = json!({
+            "work": samples::work_item(), "ticket": samples::ticket_ref(), "state": state,
+            "previous": previous, "phase": null, "note": null,
+        });
+        env.host.on_event(&ev(bus::RUN_STATE_CHANGED, payload)).await;
+    }
+    env.host.settle().await;
+    let calls: Vec<_> = env.core.calls().into_iter().filter(|c| c.method == "workflow_start").collect();
+    assert_eq!(calls.len(), 1, "only the done edge");
+    assert_eq!(calls[0].args["workflow"], "next-ticket");
+    assert_eq!(calls[0].args["project"], "shop");
+    assert!(calls[0].args["ticket"].is_null());
+}
