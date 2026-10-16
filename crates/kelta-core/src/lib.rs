@@ -893,9 +893,10 @@ impl CoreApi for Core {
         worktree: Option<PathBuf>,
         branch: Option<String>,
         run: kelta_proto::model::RunClaim,
+        adopt: bool,
     ) -> Result<WorkItem, KeltaError> {
         let w = self.work.claim(project, ticket, worktree, branch, run).await?;
-        Ok(self.adopt_claiming_run(w).await)
+        Ok(if adopt { self.adopt_claiming_run(w).await } else { w })
     }
     async fn work_report(
         &self,
