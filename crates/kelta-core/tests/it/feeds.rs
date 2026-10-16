@@ -682,6 +682,32 @@ async fn a_ticket_claimed_by_a_run_carries_its_work_item_id() {
 }
 
 #[tokio::test]
+async fn a_ticket_claimed_by_key_before_it_is_listed_carries_its_work_item_id() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    // `claim_ticket{key, account}` for a ticket Kelta has not listed: the ref's id is the key
+    let it = WorkItem {
+        kind: WorkKind::Ticket,
+        ticket: Some(TicketRef {
+            account: "jira-acme".into(),
+            key: "SHOP-143".into(),
+            id: "SHOP-143".into(),
+        }),
+        run: Some(RunClaim::default()),
+        ..work_item("feat/SHOP-143", Some("https://github.com/acme/shop-api/pull/90"))
+    };
+    let id = it.id.clone();
+    e.h.core.store().call(move |c| q::work_put(c, &it)).await.unwrap();
+    // the list carries SHOP-143 under its provider id
+    let page = e.h.core.tracker_list(Scope::All, None, None, None, None, true).await.unwrap();
+    let listed = page.items.iter().find(|i| i.ticket.r#ref.key == "SHOP-143").unwrap();
+    assert_ne!(listed.ticket.r#ref.id, "SHOP-143");
+    assert_eq!(listed.work_item_id, Some(id));
+    let d = e.h.core.tracker_get(&listed.ticket.r#ref).await.unwrap();
+    assert_eq!(d.prs.len(), 1, "the detail finds the work item's PR");
+}
+
+#[tokio::test]
 async fn authored_always_includes_drafts_requested_follows_the_setting() {
     let tmp = tempfile::tempdir().unwrap();
     let mut mine = review("acme/shop-api", 90, ReviewKind::Authored);
