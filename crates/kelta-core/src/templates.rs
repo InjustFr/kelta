@@ -159,8 +159,8 @@ impl Core {
             .cloned()
     }
 
-    /// A standalone Claude session: the hooks file, a `--session-id`, and resume on restore; with `mcp_port`,
-    /// a per-session `mcp.json` so its MCP calls reach `/mcp/<sid>` (#493).
+    /// A standalone Claude session: the hooks file, a `--session-id`, and resume on restore; with `claude.mcp`,
+    /// a per-session `mcp.json` so its MCP calls reach `/mcp/<sid>` (#493, #496).
     pub(crate) async fn spawn_claude(
         &self,
         id: SessionId,
@@ -168,16 +168,20 @@ impl Core {
         s: &Settings,
         profile: Option<&str>,
         prompt: Option<&str>,
-        mcp_port: Option<u16>,
     ) -> Result<SessionInfo, KeltaError> {
         let dir = self.dirs.session_runtime(&id.sid8());
         let file = dir.join("claude-settings.json");
         let hooks = claude_hooks_settings(&self.dirs.stable_ctl(), &s.claude.extra_hooks);
         write_private(&file, &serde_json::to_string_pretty(&hooks)?)?;
-        let mcp = match mcp_port {
+        let port = if s.claude.mcp { self.server.ensure_http().await.ok() } else { None };
+        let mcp = match port {
             Some(p) => {
                 let f = dir.join(kelta_work::claude::MCP_FILE);
-                write_private(&f, &kelta_work::claude::mcp_json(p, id.as_str()).to_string())?;
+                write_private(&f, &kelta_work::claude::mcp_json(p, id.as_str()).to_string()).inspect_err(
+                    |_| {
+                        self.server.release_http();
+                    },
+                )?;
                 Some(f)
             }
             None => None,
@@ -202,7 +206,12 @@ impl Core {
             },
             ..base
         };
-        self.spawn_session_with_id(id, req).await
+        let info = self.spawn_session_with_id(id, req).await;
+        if port.is_some() {
+            // The spawned session holds its own reference.
+            self.server.release_http();
+        }
+        info
     }
 
     /// Spawn one template leaf; returns the pane content (+ the session) or `None` when skipped.
@@ -262,8 +271,7 @@ impl Core {
                     None => None,
                 };
                 let id = self.fresh_session_id();
-                let info =
-                    self.spawn_claude(id, base, s, profile.as_deref(), prompt.as_deref(), None).await?;
+                let info = self.spawn_claude(id, base, s, profile.as_deref(), prompt.as_deref()).await?;
                 Ok(Some((term(&info), Some(info))))
             }
             "editor" => {

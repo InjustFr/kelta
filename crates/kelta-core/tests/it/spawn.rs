@@ -194,6 +194,29 @@ async fn template_spawns_a_tab_with_claude_hooks() {
     );
 }
 
+/// #496: a `⌘T` Claude has its own `mcp.json` (its MCP calls reach `/mcp/<sid>`); off with `claude.mcp`.
+#[tokio::test]
+async fn a_plain_claude_tab_gets_its_own_mcp_json() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let shop = ProjectId::new("shop");
+    let spawn =
+        || h.core.session_spawn_template(&shop, "claude+editor", TemplateCtx::default(), Placement::NewTab);
+    let claude = spawn().await.unwrap().remove(0);
+    let args = h.term.with_session(&claude.id, |s| s.spec.args.clone()).unwrap();
+    let at = args.iter().position(|a| a == "--mcp-config").expect("--mcp-config");
+    let mcp: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&args[at + 1]).unwrap()).unwrap();
+    let url = mcp["mcpServers"]["kelta"]["url"].as_str().unwrap();
+    assert!(url.ends_with(&format!("/mcp/{}", claude.id)), "{mcp}");
+
+    h.cfg.update(|s| s.claude.mcp = false);
+    let off = spawn().await.unwrap().remove(0);
+    let args = h.term.with_session(&off.id, |s| s.spec.args.clone()).unwrap();
+    assert!(!args.iter().any(|a| a == "--mcp-config"), "{args:?}");
+    assert!(!h.core.dirs().session_runtime(&off.id.sid8()).join("mcp.json").exists());
+}
+
 /// #277: a Claude session starts in the last mode a session switched to, kept across restarts; a
 /// mode Kelta forced at launch (plan) is not remembered. #304: neither are the dangerous modes, and a
 /// resumed session drops its launch-time mode for the remembered one.

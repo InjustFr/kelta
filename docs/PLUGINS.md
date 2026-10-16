@@ -143,7 +143,7 @@ pub enum Matcher { Str(String) /* exact; "glob:…" ; "re:…" ; "!…" negation
 | `notify` | `title`, `body?`, `urgency? (low\|normal\|critical)` | desktop notification (respects quiet hours) | `notify` |
 | `toast` | `text`, `level?` | in-app toast | — |
 | `run` | `command`, `args?`, `cwd?`, `env?`, `stdin? = "event"\|"none"`, `timeout_ms? = 60000`, `show? = none\|toast_on_error\|pane` | background exec (no shell; `sh -c` must be explicit) with the login shell's `PATH` (a Dock-launched Kelta finds `kubectl`, `gh`, Homebrew tools; a plugin's `env` cannot set `PATH`, `DYLD_*` or `LD_*`); output to trigger log; `pane` runs it in a visible session instead | `exec:<command>` |
-| `spawn_session` | `template? \| command+args`, `cwd?`, `placement?`, `focus? = false` | new session in the event's project | `sessions.spawn` |
+| `spawn_session` | `template? \| command+args`, `cwd?`, `placement?`, `focus? = false` | new session in the event's project; use `template` for a Claude session (hooks, status, its own MCP), `command = "claude"` is a plain command with none of them | `sessions.spawn` |
 | `send_keys` | `session = "{event.session_id}"\|"claude"\|"editor"`, `text`, `bracketed? = true` | writes into a PTY | `terminal.write` |
 | `open_tool` | `tool`, `placement?` (default: the tool's) | `tool_open` | `sessions.spawn` |
 | `open_screen` | `plugin?`, `screen`, `params?`, `placement?` | opens a plugin screen in the run's project (Home without one); every string in `params` is a template, delivered expanded in `kelta:init.params` (e.g. `params = { ticket = "{ticket.key}", work = "{work.id}" }`) | `ui.open` |
