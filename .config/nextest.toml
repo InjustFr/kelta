@@ -17,6 +17,7 @@ priority = 90
 [[profile.default.overrides]]
 filter = '''
 (package(kelta-term) & (binary(resources) | test(=pty::flood_keeps_inflight_bounded_and_ends_with_a_snapshot)
+                        | test(=pty::flood_with_a_continuously_acking_view_completes)
                         | test(=pty::acked_views_never_time_out)))
 | (package(kelta-work) & (test(/^fix_loop::/) | test(/^ship::/) | test(=saga::collision_suffix_and_reuse)))
 | (package(kelta-secrets) & test(=command_refs_run_without_a_shell))
