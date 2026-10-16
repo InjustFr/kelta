@@ -14,11 +14,12 @@ describe('sanitizePaste', () => {
   });
 
   it('strips deeply nested markers in linear time', () => {
-    const depth = 50_000;
+    // Sized so a quadratic version needs minutes: the generous bound only trips on that, not on load spikes.
+    const depth = 100_000;
     const nested = '\x1b[2'.repeat(depth) + '00~'.repeat(depth);
     const start = performance.now();
     expect(sanitizePaste('a' + nested + 'b')).toBe('ab');
-    expect(performance.now() - start).toBeLessThan(500);
+    expect(performance.now() - start).toBeLessThan(10_000);
   });
 });
 

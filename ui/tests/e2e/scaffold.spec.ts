@@ -13,7 +13,7 @@ test.describe('scaffold', () => {
     });
 
     await page.goto('/');
-    await expect(page.locator('#app')).not.toBeEmpty();
+    await page.locator('#app > *').first().waitFor();
     await page.waitForFunction(() => window.__kelta?.stores.projects.loaded === true);
 
     const state = await page.evaluate(async () => {
