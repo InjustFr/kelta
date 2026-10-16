@@ -134,11 +134,13 @@ pub fn worktree_path(settings: &Settings, ctx: &Ctx) -> Result<PathBuf, KeltaErr
     let rendered = render(&settings.worktree.root, ctx, Mode::Strict)?;
     let p = tidy_path(&expand_home(&rendered, home_dir().as_deref()));
     if !p.is_absolute() {
-        return Err(KeltaError::invalid(format!("worktree.root must be absolute: {}", p.display())));
+        return Err(KeltaError::invalid(format!("worktree.root must be absolute: {}", p.display()))
+            .with_detail(serde_json::json!({ "setting": "worktree.root" })));
     }
     // A placeholder value (ticket key from a tracker) must not climb out of the root.
     if p.components().any(|c| c == std::path::Component::ParentDir) {
-        return Err(KeltaError::invalid(format!("worktree.root must not contain `..`: {}", p.display())));
+        return Err(KeltaError::invalid(format!("worktree.root must not contain `..`: {}", p.display()))
+            .with_detail(serde_json::json!({ "setting": "worktree.root" })));
     }
     Ok(p)
 }
@@ -554,7 +556,10 @@ mod tests {
         let ok = Ctx::new().with("key", "SHOP-1");
         assert_eq!(worktree_path(&s, &ok).unwrap(), PathBuf::from("/wt/SHOP-1"));
         let evil = Ctx::new().with("key", "../x");
-        assert!(worktree_path(&s, &evil).is_err());
+        assert_eq!(
+            worktree_path(&s, &evil).unwrap_err().detail,
+            Some(serde_json::json!({ "setting": "worktree.root" }))
+        );
     }
 
     #[test]

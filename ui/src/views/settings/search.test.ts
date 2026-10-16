@@ -5,13 +5,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { settingsSections } from '$app/registry';
 import { createMockTransport } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
-import { projects, settings } from '$lib/stores';
+import { dispatch } from '$lib/actions';
+import { projects, settings, ui } from '$lib/stores';
+import { idle } from '$lib/stores/loadable';
 
 import schemaJson from '../../../../schema/settings.schema.json';
 import { effectiveBindings } from './lib/chords';
 import type { LayerFile } from './lib/editor.svelte';
 import type { SchemaNode } from './lib/schema';
 import { buildSearchIndex, changedSettings, isInline, resettable, searchSettings } from './lib/search';
+import './actions';
 import SettingsPane from './SettingsPane.svelte';
 
 const schema = schemaJson as unknown as SchemaNode;
@@ -153,6 +156,26 @@ describe('settings search results', () => {
     within(li).getByRole('button', { name: 'Open' });
   });
 
+  it('settings.open { key } lands on the highlighted row in its section, also before the schema has loaded (#477)', async () => {
+    settings.schema = idle();
+    await dispatch('settings.open', { key: 'tickets.wip_limit' });
+    const box = await pane();
+    await waitFor(
+      () =>
+        expect(
+          document
+            .querySelector('[data-testid="field"][data-path="tickets.wip_limit"]')
+            ?.hasAttribute('data-revealed'),
+        ).toBe(true),
+      { timeout: 3000 },
+    );
+    expect((box as HTMLInputElement).value).toBe('');
+    expect(document.querySelector('nav [aria-current="page"]')?.getAttribute('data-section')).toBe(
+      'worktree',
+    );
+    ui.settings = null;
+  });
+
   it('nothing found offers ⌘K and the TOML file', async () => {
     const box = await pane();
     await fireEvent.input(box, { target: { value: 'zzqqxxkk' } });
@@ -169,6 +192,8 @@ describe('Changed by you (#474)', () => {
       projectId: null,
       repoId: null,
       where: 'All projects',
+      path: '/x/config.toml',
+      trusted: null,
       value: { terminal: { font_size: 15 }, keys: { bindings: { 'palette.open': ['cmd+p'] } }, sources: [] },
     },
     {
@@ -176,6 +201,8 @@ describe('Changed by you (#474)', () => {
       projectId: 'shop',
       repoId: null,
       where: 'Shop',
+      path: '/x/config.toml',
+      trusted: null,
       value: { project: { id: 'shop' }, terminal: { font_size: 16 } },
     },
     {
@@ -183,6 +210,8 @@ describe('Changed by you (#474)', () => {
       projectId: 'shop',
       repoId: 'api',
       where: 'Shop › api',
+      path: '/x/config.toml',
+      trusted: null,
       value: { worktree: { setup: ['pnpm i'] } },
     },
   ];

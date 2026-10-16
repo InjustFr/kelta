@@ -406,6 +406,19 @@ async fn collision_with_a_checked_out_branch_reuses_its_worktree() {
 }
 
 #[tokio::test]
+async fn a_step_failing_on_a_setting_offers_to_open_it() {
+    need_git!();
+    let fx = Fx::new();
+    fx.settings(|s| s.worktree.env_template = "../escape.kelta".into());
+    let w = fx.service();
+    let plan = w.plan(&project(), ticket("SHOP-141")).await.unwrap();
+    let item = w.start(plan).await.unwrap();
+    assert!(matches!(item.state, WorkState::Failed { .. }), "{:?}", item.state);
+    let toast = fx.core.toasts().into_iter().find(|t| t.text.starts_with("Start work failed")).unwrap();
+    assert_eq!(toast.secondary.unwrap().args, Some(serde_json::json!({ "key": "worktree.env_template" })));
+}
+
+#[tokio::test]
 async fn setup_blocking_orders_claude_after_setup_and_skip_continues() {
     need_git!();
     let fx = Fx::new();

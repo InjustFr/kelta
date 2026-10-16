@@ -1155,6 +1155,16 @@
                       >{t(groupHints[r.group.id]!)}</span
                     >{/if}
                 </button>
+                {#if overWip}
+                  <span class="wip-change"
+                    ><Button
+                      size="sm"
+                      variant="ghost"
+                      onclick={() => void dispatch('settings.open', { key: 'tickets.wip_limit' })}
+                      >{t('Change the limit')}</Button
+                    ></span
+                  >
+                {/if}
               {:else if r.kind === 'ask'}
                 {#if r.line === 'question'}
                   {@const q = questionOf(r.session)?.question ?? ''}
@@ -1463,6 +1473,15 @@
   .wip-note {
     font-weight: 400;
     font-size: var(--k-font-size-xs);
+  }
+
+  .wip-change {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: var(--k-space-3);
+    display: flex;
+    align-items: center;
   }
 
   /* Lanes are bezel trays on the well, so each lane (and an empty drop target) has an edge. */

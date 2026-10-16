@@ -42,6 +42,8 @@
     browse?: boolean;
     /** Settings path: enum option labels come from the copy table. */
     path?: string;
+    /** Greyed in while the box is empty: the value a project inherits (#475). */
+    placeholder?: string;
   }
 
   let {
@@ -54,6 +56,7 @@
     id,
     browse = false,
     path,
+    placeholder,
   }: Props = $props();
 
   const resolved = $derived(resolve(node));
@@ -249,6 +252,7 @@
       id={idAttr}
       class="num"
       type="number"
+      {placeholder}
       aria-label={label}
       value={text}
       oninput={(e) => (text = e.currentTarget.value)}
@@ -290,6 +294,7 @@
       <TextInput
         id={idAttr}
         bind:value={text}
+        {placeholder}
         aria-label={label}
         disabled={readonly}
         spellcheck={false}

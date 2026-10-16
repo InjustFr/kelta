@@ -15,6 +15,7 @@
     EmptyState,
     ErrorState,
     Icon,
+    IconButton,
     LoadBar,
     Menu,
     Select,
@@ -605,8 +606,8 @@
             >
               {#snippet row(l)}
                 {#if l.type === 'section'}
-                  {@const quiet = SECTIONS.find((s) => s.id === l.section)?.quiet}
-                  <h2 class="section" class:quiet data-section={l.section}>
+                  {@const sec = SECTIONS.find((s) => s.id === l.section)}
+                  <h2 class="section" class:quiet={sec?.quiet} data-section={l.section}>
                     <button
                       type="button"
                       tabindex="-1"
@@ -617,6 +618,14 @@
                       {t(l.label)}
                       <span class="count">{l.count}</span>
                     </button>
+                    {#if sec?.setting}
+                      <IconButton
+                        icon="settings"
+                        size="sm"
+                        label={t('Settings for {section}', { section: t(l.label) })}
+                        onclick={() => void dispatch('settings.open', { key: sec.setting })}
+                      />
+                    {/if}
                   </h2>
                 {:else if l.type === 'none'}
                   <p class="none">{l.text}</p>
@@ -920,6 +929,9 @@
   }
 
   .section {
+    display: flex;
+    align-items: center;
+    padding-right: var(--k-space-3);
     margin: 0;
     height: 100%;
     background: var(--k-bg);

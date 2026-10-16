@@ -255,7 +255,7 @@
           <Icon name="info" size={16} />
           <span>{t('Accounts are global settings.')}</span>
           <Button size="sm" onclick={() => editor.target({ layer: 'global', repoId: null })}
-            >{t('Switch to Global')}</Button
+            >{t('Change in All projects →')}</Button
           >
         </div>
       {/if}

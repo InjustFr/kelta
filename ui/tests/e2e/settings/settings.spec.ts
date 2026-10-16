@@ -17,7 +17,8 @@ test.describe('settings pane', () => {
     await expect(field.locator('[data-testid="source-badge"]')).toHaveAttribute('data-source', 'default');
 
     // switch to the Project layer
-    await page.getByRole('button', { name: 'Project', exact: true }).click();
+    await page.getByTestId('applies-to').click();
+    await page.getByRole('menuitem', { name: /^Shop(?! ›)/ }).click();
     await expect(page.locator('[data-testid="settings-section"]')).toHaveAttribute('data-layer', 'project');
 
     const input = field.getByRole('spinbutton');
@@ -70,6 +71,51 @@ test.describe('settings pane', () => {
           .at(-1)?.args,
     );
     expect(last).toMatchObject({ layer: 'global', path: 'terminal.font_size' });
+    expect(errors).toEqual([]);
+  });
+
+  test('Applies to: overrides in All projects, inherited values and global-only rows in a project, repository trust (#475)', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    await page.goto(`${HARNESS}?view=settings&section=terminal`);
+    await expect(page.locator('[data-testid="settings-section"]')).toBeVisible();
+    // the mock shares one effective state: the global value goes last
+    await page.evaluate(async () => {
+      const { __ipc } = window as unknown as { __ipc: typeof Ipc };
+      await __ipc.settingsSet({
+        layer: 'project',
+        project_id: 'shop',
+        path: 'terminal.font_size',
+        value: 16,
+      });
+      await __ipc.settingsSet({ layer: 'global', path: 'terminal.font_size', value: 14 });
+    });
+    const font = page.locator('[data-testid="field"][data-path="terminal.font_size"]');
+    await expect(font.getByTestId('override')).toHaveText('Shop uses 16 →');
+    await font.getByTestId('override').click();
+    await expect(page.getByTestId('applies-to')).toHaveText('Shop');
+    await expect(page.getByTestId('layer-help')).toContainText('Changes here apply to Shop only.');
+    await expect(font).toHaveAttribute('data-revealed', '');
+    await expect(font.getByTestId('reset')).toHaveAccessibleName('Use the All projects value again');
+
+    const line = page.locator('[data-testid="field"][data-path="terminal.line_height"]');
+    await expect(line.getByRole('spinbutton')).toHaveValue('');
+    await expect(line.getByRole('spinbutton')).toHaveAttribute('placeholder', '1.15');
+    await expect(line).toContainText('Inherited from All projects');
+
+    await page.locator('nav [data-section="general"]').click();
+    const lang = page.locator('[data-testid="field"][data-path="app.language"]');
+    await expect(lang.getByRole('combobox')).toHaveCount(0);
+    await expect(lang).toContainText('The same for every project.');
+    await lang.getByRole('button', { name: 'Change in All projects →' }).click();
+    await expect(page.getByTestId('applies-to')).toHaveText('All projects');
+    await expect(lang.getByRole('combobox')).toBeEnabled();
+
+    await page.getByTestId('applies-to').click();
+    await page.getByRole('menuitem', { name: /^Shop › api/ }).click();
+    await expect(page.getByTestId('repo-untrusted')).toBeVisible();
     expect(errors).toEqual([]);
   });
 
@@ -245,7 +291,7 @@ test.describe('settings pane', () => {
     await page.getByRole('button', { name: /^Conflicts/ }).click();
     await expect(detach).toHaveCount(0);
     await expect(split).toHaveCount(0);
-    await page.getByRole('button', { name: /^All/ }).click();
+    await page.getByTestId('keys-section').getByRole('button', { name: /^All/ }).click();
 
     await page.getByRole('button', { name: 'Reset Split right to default' }).click();
     await expect(split).not.toContainText('Unbound');
@@ -280,6 +326,25 @@ test.describe('settings over the window (#410)', () => {
     await expect(page.getByTestId('settings-pane')).toBeVisible();
     await page.keyboard.press('Meta+Comma');
     await expect(page.getByTestId('settings-pane')).toHaveCount(0);
+  });
+
+  test('settings.open { key } and the terminal pane menu land on the highlighted row (#477)', async ({
+    page,
+  }) => {
+    await boot(page);
+    const revealed = page.locator('[data-testid="field"][data-revealed]');
+    const current = page.locator('[data-testid="settings-pane"] nav [aria-current="page"]');
+    await dispatch(page, 'settings.open', { key: 'tickets.wip_limit' });
+    await expect(revealed).toHaveAttribute('data-path', 'tickets.wip_limit');
+    await expect(current).toHaveAttribute('data-section', 'worktree');
+    await expect(page.getByRole('searchbox', { name: 'Search settings' })).toHaveValue('');
+    await dispatch(page, 'settings.open'); // closes it
+    await expect(page.getByTestId('settings-pane')).toHaveCount(0);
+    const term = page.getByTestId('pane').filter({ has: page.getByTestId('terminal-pane') });
+    await term.first().getByRole('button', { name: 'Pane menu' }).click();
+    await page.getByRole('menuitem', { name: 'Lines kept…' }).click();
+    await expect(revealed).toHaveAttribute('data-path', /^terminal\.scrollback\./);
+    await expect(current).toHaveAttribute('data-section', 'terminal');
   });
 
   test('deep links land on their section from the palette and from a banner action', async ({ page }) => {

@@ -13,7 +13,7 @@
   const LABEL: Record<Layer, string> = $derived({
     default: t('Default'),
     plugin: t('Plugin'),
-    global: t('Global'),
+    global: t('All projects'),
     project: t('Project'),
     repo: t('Repo'),
     runtime: t('Runtime'),

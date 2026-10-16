@@ -35,7 +35,8 @@ test('picking a built-in dark theme with the keyboard re-themes the window', asy
   ).toBeFocused();
 
   // The slots are global-only: other layers get a note instead of the picker.
-  await page.getByRole('button', { name: 'Project', exact: true }).click();
+  await page.getByTestId('applies-to').click();
+  await page.getByRole('menuitem', { name: /^Shop(?! ›)/ }).click();
   await expect(page.getByTestId('theme-note')).toHaveText('Themes are chosen in global settings.');
   await expect(page.getByTestId('theme-picker')).toHaveCount(0);
 });

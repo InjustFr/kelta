@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use base64::Engine as _;
 use kelta_proto::api::{FrameSink, TerminalEvents};
 use kelta_proto::error::{ErrorCode, KeltaError};
-use kelta_proto::events::{BusEvent, Notification, Toast, UiEvent, bus};
+use kelta_proto::events::{BusEvent, Notification, Toast, ToastAction, UiEvent, bus};
 use kelta_proto::ext::Urgency;
 use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{
@@ -1455,7 +1455,13 @@ impl Core {
                 Some(b) => format!("{} — {b}", n.title),
                 None => n.title.clone(),
             };
-            self.emit(UiEvent::Toast { toast: Toast::info(text) });
+            let mut toast = Toast::info(text);
+            toast.action = Some(ToastAction {
+                label: "Notification settings".into(),
+                command: "settings.open".into(),
+                args: Some(serde_json::json!({ "section": "notifications" })),
+            });
+            self.emit(UiEvent::Toast { toast });
         }
     }
 
@@ -1811,11 +1817,18 @@ impl Core {
             TerminalEvent::Exited { code, signal } => self.on_exited(id, code, signal),
             TerminalEvent::AckTimeout { .. } => self.on_ack_timeout(),
             TerminalEvent::MemoryCapReached { cap_mb } => self.emit(UiEvent::Toast {
-                toast: Toast::warn(format!(
-                    "Terminal scrollback reached the {cap_mb} MB cap (terminal.memory_cap_mb): \
-                     the least recently viewed sessions keep their last {} lines.",
-                    kelta_term::SHRINK_FLOOR
-                )),
+                toast: Toast {
+                    action: Some(ToastAction {
+                        label: "Open setting".into(),
+                        command: "settings.open".into(),
+                        args: Some(serde_json::json!({ "key": "terminal.memory_cap_mb" })),
+                    }),
+                    ..Toast::warn(format!(
+                        "Terminal scrollback reached the {cap_mb} MB cap (terminal.memory_cap_mb): \
+                         the least recently viewed sessions keep their last {} lines.",
+                        kelta_term::SHRINK_FLOOR
+                    ))
+                },
             }),
         }
     }

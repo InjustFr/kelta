@@ -63,10 +63,19 @@ export class ToastsStore {
     return this.push({ level: 'warn', text, action: null });
   }
 
-  /** Toast for a failed operation (any thrown value; IPC errors keep their message). */
+  /** Toast for a failed operation (any thrown value; IPC errors keep their message). A core error naming a setting (`detail.setting`, #477) offers to open it. */
   error(err: unknown, context?: string): number {
-    const message = typeof err === 'string' ? err : toIpcError(context ?? 'ui', err).message;
-    return this.push({ level: 'error', text: context ? `${context}: ${message}` : message, action: null });
+    const e = typeof err === 'string' ? null : toIpcError(context ?? 'ui', err);
+    const message = e ? e.message : (err as string);
+    const key = (e?.detail as { setting?: unknown } | null | undefined)?.setting;
+    return this.push({
+      level: 'error',
+      text: context ? `${context}: ${message}` : message,
+      action:
+        typeof key === 'string'
+          ? { label: t('Open setting'), command: 'settings.open', args: { key } }
+          : null,
+    });
   }
 
   /** The most recent toast still shown that has an action (`toast.run_last`, ⇧⌘O). */

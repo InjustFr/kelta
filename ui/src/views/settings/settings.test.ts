@@ -8,6 +8,7 @@ import { setTransport } from '$lib/ipc/transport';
 import schemaJson from '../../../../schema/settings.schema.json';
 import Control from './fields/Control.svelte';
 import SourceBadge from './fields/SourceBadge.svelte';
+import { SettingsEditor, type LayerFile } from './lib/editor.svelte';
 import { splitPath } from './lib/paths';
 import { fieldKind, leafFields, nodeAt, type FieldKind, type SchemaNode } from './lib/schema';
 import { ADVANCED, isAdvanced, SECTION_GROUPS, SECTION_ROOTS, TOML_ROOTS } from './lib/sections';
@@ -100,6 +101,19 @@ describe('Control', () => {
     const onchange = mount({ type: 'boolean' }, false);
     await fireEvent.click(screen.getByRole('switch'));
     expect(onchange).toHaveBeenCalledWith(true);
+  });
+
+  it('a number shows the inherited value as its placeholder (#475)', () => {
+    render(Control, {
+      node: { type: 'number' },
+      value: undefined,
+      placeholder: '1.15',
+      onchange: vi.fn(),
+      label: 'Thing',
+    });
+    const input = screen.getByRole('spinbutton') as HTMLInputElement;
+    expect(input.getAttribute('placeholder')).toBe('1.15');
+    expect(input.value).toBe('');
   });
 
   it('a two-value key is a toggle: session host writes daemon / inprocess (#470)', async () => {
@@ -214,12 +228,49 @@ describe('Control', () => {
   });
 });
 
+describe('SettingsEditor: Applies to (#475)', () => {
+  const file = (where: string, projectId: string | null, value: object): LayerFile => ({
+    layer: projectId ? 'project' : 'global',
+    projectId,
+    repoId: null,
+    where,
+    value: value as LayerFile['value'],
+    path: '/x.toml',
+    trusted: null,
+  });
+
+  it('All projects lists the files that set a key to another value; a project inherits it, global-only keys say so', async () => {
+    const { transport } = createMockTransport();
+    setTransport(transport);
+    const ed = new SettingsEditor();
+    await ed.load();
+    const here = ed.valueOf('terminal.font_size');
+    ed.files = [
+      file('All projects', null, { terminal: { font_size: here } }),
+      file('Shop', 'shop', { terminal: { font_size: 16 } }),
+      file('Billing', 'billing', { terminal: { font_size: here } }),
+    ];
+    expect(ed.overrides('terminal.font_size').map((o) => [o.file.where, o.value])).toEqual([['Shop', 16]]);
+    expect(ed.inherited('terminal.line_height')).toBeUndefined();
+    expect(ed.globalOnly('app.language')).toBe(false);
+
+    await ed.target({ layer: 'project', projectId: 'shop' });
+    expect(ed.overrides('terminal.font_size')).toEqual([]);
+    expect(ed.inherited('terminal.line_height')).toBe(1.15);
+    expect(ed.globalOnly('app.language')).toBe(true);
+    expect(ed.globalOnly('terminal.font_size')).toBe(false);
+    expect(ed.access('app.language').editable).toBe(false);
+    await ed.set('terminal.line_height', 1.3);
+    expect(ed.inherited('terminal.line_height')).toBeUndefined();
+  });
+});
+
 describe('SourceBadge', () => {
   it.each(['default', 'plugin', 'global', 'project', 'repo', 'runtime'] as const)('%s', (source) => {
     const { container, unmount } = render(SourceBadge, { source, path: 'a.b' });
     const el = container.querySelector('[data-testid="source-badge"]')!;
     expect(el.getAttribute('data-source')).toBe(source);
-    expect(el.textContent?.toLowerCase()).toContain(source);
+    expect(el.textContent?.toLowerCase()).toContain(source === 'global' ? 'all projects' : source);
     unmount();
   });
 });

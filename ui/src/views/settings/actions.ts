@@ -20,7 +20,7 @@ let sourceRequest: { id: string; steps: boolean } | null = null;
 
 let keyRequest: string | null = null;
 
-/** Settings key the Settings pane searches for, once (⌘K's settings results). */
+/** Settings key whose row the Settings pane opens, once (⌘K, a feature's link #477). */
 export function takeKeyRequest(): string | null {
   const key = keyRequest;
   keyRequest = null;
