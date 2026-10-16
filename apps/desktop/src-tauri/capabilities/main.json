@@ -146,6 +146,7 @@
     "allow-work-mark-reviewed",
     "allow-work-set-note",
     "allow-work-left",
+    "allow-work-seen",
     "allow-work-start-now",
     "allow-work-queue-front",
     "allow-work-start-claude",

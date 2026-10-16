@@ -221,6 +221,12 @@ pub async fn work_left(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<WorkIt
     core.work().left(&id).await
 }
 
+/// The item's tab is shown in the focused window: Claude's reply is read (#489).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn work_seen(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<WorkItem> {
+    core.work().seen(&id).await
+}
+
 /// Start a queued item now, over `claude.max_live` (#141).
 #[tauri::command(rename_all = "snake_case")]
 pub async fn work_start_now(core: State<'_, Arc<Core>>, id: WorkItemId) -> Res<WorkItem> {

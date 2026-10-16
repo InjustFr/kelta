@@ -1,6 +1,6 @@
 //! Durable Claude signals on work items (FLOW §2.3): `review_due` / `claude_replied` from real
 //! `Stop` hooks (changes = a non-empty delta since Louis's last review, `review.rs`), cleared by
-//! `UserPromptSubmit` and Mark reviewed; `claude_uuid` follows the hook
+//! `UserPromptSubmit`, Mark reviewed (`review_due`) and `work_seen` (`claude_replied`); `claude_uuid` follows the hook
 //! session id (B3). Everything travels in `work.updated`.
 
 use kelta_proto::error::KeltaError;
@@ -123,5 +123,11 @@ impl WorkService {
             changed
         })
         .await
+    }
+
+    /// `work_seen`: the item's tab is shown in the focused window, so Louis read Claude's reply (#489).
+    /// Clears `claude_replied` only; `review_due` waits for Mark reviewed (opening is not reviewing).
+    pub async fn seen(&self, id: &WorkItemId) -> Result<WorkItem, KeltaError> {
+        self.update(id, |w| std::mem::take(&mut w.claude_replied)).await
     }
 }

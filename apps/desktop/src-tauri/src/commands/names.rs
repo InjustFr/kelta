@@ -144,6 +144,7 @@ pub const COMMANDS: &[&str] = &[
     "work_mark_reviewed",
     "work_set_note",
     "work_left",
+    "work_seen",
     "work_start_now",
     "work_queue_front",
     "work_start_claude",

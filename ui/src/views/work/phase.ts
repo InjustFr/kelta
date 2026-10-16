@@ -310,7 +310,10 @@ function phaseRow(
       t('Review changes'),
       'to_review',
     );
-  if (item.claude_replied)
+  // Local work beats remote verdicts: only when the local HEAD is the PR head.
+  const atPrHead = !git?.unpushed && !git?.dirty;
+  // Claude pushed or opened the PR (#489): an open PR at the local HEAD is placed by its state, not the reply.
+  if (item.claude_replied && !(pr && atPrHead))
     return p(
       'replied',
       t('Claude replied'),
@@ -332,8 +335,6 @@ function phaseRow(
       t('Rebase onto origin/{branch}', { branch: item.branch }),
       'fix',
     );
-  // Local work beats remote verdicts: only when the local HEAD is the PR head.
-  const atPrHead = !git?.unpushed && !git?.dirty;
   if (pr && atPrHead) {
     const onHead = !pr.decision_head || pr.decision_head === pr.head_sha;
     const red = pr.ci === 'failure' || pr.ci === 'error';

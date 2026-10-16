@@ -473,7 +473,7 @@ pub enum WorkSource { Ticket{ ticket }, Review{ review }, Branch{ name, task: Op
 // `git diff <reviewed> <last>` (`refs/kelta/wi/<id>/reviewed`, else the merge base with <base>) → review_due
 // + `delta` (ReviewDelta chip), else claude_replied; never for review checkouts; hooks of one session apply
 // in order; `claude_message` keeps the full last message). Both refs are deleted by Finish and the startup prune, cleared by `UserPromptSubmit`; review_due also by a UI `work_create_pr` (`origin = ui`; MCP `create_pr` is `origin = mcp`), Finish and
-// `work_mark_reviewed`; claude_replied by Finish. Store writes: `save` never writes these two (it keeps the
+// `work_mark_reviewed`; claude_replied by Finish and `work_seen`. Store writes: `save` never writes these two (it keeps the
 // stored values); `update(id, |w| ..)` re-loads under a write lock held only around load-modify-save and is
 // their only writer. Long operations (`create_pr`, `finish`) end with `update` of their own fields.
 // claude_uuid follows the session id of any hook of the item's Claude (/clear, in-Claude /resume).
@@ -648,6 +648,7 @@ Every command below is listed in `apps/desktop/src-tauri/src/commands/names.rs` 
 | `work_mark_reviewed` | `{id}` | `WorkItem` (clears `review_due` and `delta`; `refs/kelta/wi/<id>/reviewed` = `last`) | |
 | `work_set_note` | `{id, note: Option<String>}` | `WorkItem` (`next_note`; blank clears) | |
 | `work_left` | `{id}` | `WorkItem` (`left_at` = now; the return strip's clock) | |
+| `work_seen` | `{id}` | `WorkItem` (clears `claude_replied`: the item's tab is shown in the focused window, #489) | |
 | `work_start_now` | `{id}` | `WorkItem` | a `Queued` item starts now, over `claude.max_live` (#141) |
 | `work_queue_front` | `{id}` | `WorkItem` | the `Queued` item starts next |
 | `work_start_claude` | `{id}` | `WorkItem` | a Claude for an item with none alive: resumes its conversation (else a fresh one), split into its work tab |
