@@ -1,7 +1,7 @@
 // Split, resize, zoom and close on the mock layout (ARCH §5.1).
 import { expect, test, type Page } from '@playwright/test';
 
-import { boot, callLog, callsOf, dispatch, unfold, waitForAttached } from './helpers';
+import { boot, bootSettled, callLog, callsOf, dispatch, unfold, waitForAttached } from './helpers';
 
 const panes = (page: Page) => page.locator('[data-testid="workspace"] [data-testid="pane"]');
 
@@ -9,12 +9,6 @@ async function paneWidths(page: Page): Promise<number[]> {
   return page.evaluate(() =>
     [...document.querySelectorAll('[data-testid="pane"]')].map((e) => e.getBoundingClientRect().width),
   );
-}
-
-/** Boots and waits for the work tab's Story panel: its lazy chunk lands after boot and narrows the pane area (#483). */
-async function bootSettled(page: Page): Promise<void> {
-  await boot(page);
-  await expect(page.getByTestId('story-panel')).toBeVisible();
 }
 
 test.describe('layout', () => {

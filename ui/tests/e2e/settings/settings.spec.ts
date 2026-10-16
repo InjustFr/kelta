@@ -313,6 +313,8 @@ test.describe('settings over the window (#410)', () => {
       });
     const before = await where();
     await page.keyboard.press('Meta+Comma');
+    // SettingsPane is a lazy chunk (GlobalHost): a load, not an assertion (#485, #487).
+    await page.getByTestId('settings-pane').waitFor();
     await expect(page.getByTestId('settings-pane')).toBeVisible();
     await expect(page.getByTestId('workspace')).toHaveCount(0);
     await expect(page.getByTestId('rail')).toBeVisible();
