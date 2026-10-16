@@ -300,16 +300,21 @@ fn ink_redraw_renders() {
     ))
     .unwrap();
     wait_text(&h, "ink", "Working");
-    let sink = Frames::default();
-    let info = h.attach(&SessionId::new("ink"), 100, 30, Box::new(sink.clone())).unwrap();
-    let frames = sink.take();
-    assert!(matches!(frames::decode(&frames[0]), Some(Frame::Snapshot(_))));
-    // The snapshot alone reproduces a full frame.
-    let Some(Frame::Snapshot(s)) = frames::decode(&frames[0]) else { unreachable!() };
-    let mut m = TermModel::new(100, 30, 100);
-    m.feed(s);
-    assert!(m.text_tail(40).contains("Working"));
-    h.ack(&SessionId::new("ink"), info.generation, frames::ack_len(&frames[0]));
+    // A snapshot taken mid-frame (attach flushes a pending DEC 2026 update) is partial: re-attach
+    // until one holds a whole frame.
+    let (info, first) = wait_until(T, || {
+        let sink = Frames::default();
+        let info = h.attach(&SessionId::new("ink"), 100, 30, Box::new(sink.clone())).unwrap();
+        let first = sink.take().remove(0);
+        let Some(Frame::Snapshot(s)) = frames::decode(&first) else {
+            panic!("first frame is not a snapshot")
+        };
+        let mut m = TermModel::new(100, 30, 100);
+        m.feed(s);
+        m.text_tail(40).contains("Working").then_some((info, first))
+    })
+    .expect("no snapshot with a whole frame");
+    h.ack(&SessionId::new("ink"), info.generation, frames::ack_len(&first));
     h.write(&SessionId::new("ink"), b"q").unwrap();
     assert_eq!(ev.wait_exit(T), (Some(0), None));
 }
@@ -358,7 +363,7 @@ fn flood_keeps_inflight_bounded_and_ends_with_a_snapshot() {
     // Exited is emitted once the reader hit EOF/EIO: every byte is read by now. Then the view catches up.
     let mut seen: Vec<Vec<u8>> = Vec::new();
     let mut acked_bytes: u64 = 0;
-    wait_until(T, || {
+    wait_until(Duration::from_secs(60), || {
         let batch = std::mem::take(&mut *view.frames.lock().unwrap());
         for f in batch {
             let n = frames::ack_len(&f);

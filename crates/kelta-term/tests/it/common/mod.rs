@@ -61,24 +61,24 @@ pub fn tui_sim() -> PathBuf {
         let target = std::env::var_os("CARGO_TARGET_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|| workspace_root().join("target"));
-        for profile in ["debug", "release"] {
-            let p = target.join(profile).join("tui-sim");
-            if p.is_file() {
-                return p;
-            }
-        }
+        let found = ["debug", "release"].iter().map(|p| target.join(p).join("tui-sim")).find(|p| p.is_file());
         let dir = target.join("kelta-term-fixtures");
         std::fs::create_dir_all(&dir).unwrap();
         let lock = std::fs::File::create(dir.join("build.lock")).unwrap();
         lock.lock().unwrap(); // released when `lock` drops
-        let status = Command::new(env!("CARGO"))
-            .args(["build", "-p", "tui-sim", "--locked", "--target-dir"])
-            .arg(&dir)
-            .current_dir(workspace_root())
-            .status()
-            .expect("cargo build -p tui-sim");
-        assert!(status.success(), "building tui-sim failed");
-        let bytes = std::fs::read(dir.join("debug/tui-sim")).unwrap();
+        let src = found.unwrap_or_else(|| {
+            let status = Command::new(env!("CARGO"))
+                .args(["build", "-p", "tui-sim", "--locked", "--target-dir"])
+                .arg(&dir)
+                .current_dir(workspace_root())
+                .status()
+                .expect("cargo build -p tui-sim");
+            assert!(status.success(), "building tui-sim failed");
+            dir.join("debug/tui-sim")
+        });
+        // A concurrent `cargo build` may be re-linking `src` right now: retry until it is back.
+        let bytes =
+            wait_until(Duration::from_secs(30), || std::fs::read(&src).ok()).expect("tui-sim unreadable");
         let mut hasher = std::hash::DefaultHasher::new();
         std::hash::Hash::hash(&bytes, &mut hasher);
         let copy = dir.join(format!("tui-sim-{:016x}", std::hash::Hasher::finish(&hasher)));
