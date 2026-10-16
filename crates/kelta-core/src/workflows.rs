@@ -102,9 +102,7 @@ impl Core {
         };
         self.session_link(&info.id, None, Some(ticket))?;
         // #491: the claimed item adopts the run's Claude; opening the item moves it into the item's tab.
-        if let Err(e) = self.work.adopt_run(&item.id, &info).await {
-            tracing::warn!(work = %item.id, error = %e.message, "run's Claude not adopted");
-        }
+        self.adopt_session(&item, &info).await;
         self.background_tab(&project, &info, title)?;
         Ok(WorkflowStart { session: info, running: false })
     }
@@ -154,7 +152,6 @@ impl Core {
         let prompt = render(&def.prompt, &vars, Mode::Lenient)?;
         let s = self.cfg.effective(Some(&project));
         let info = self.spawn_run(&project, self.fresh_session_id(), &title, cwd, Some(&prompt), &s).await?;
-        self.unadopted_runs.lock().insert(info.id.clone());
         // shortcut: in memory, so a run started before a restart is not found; persist when that matters.
         if let Some(k) = key {
             self.pr_runs.lock().insert(k, info.id.clone());
@@ -167,22 +164,43 @@ impl Core {
         self.sessions.lock().get(sid).map(|e| e.info.clone()).filter(|s| s.lifecycle == Lifecycle::Live)
     }
 
-    /// #493: a run with no ticket (`workflow_run_on`) that claims one through MCP gives its Claude to the
-    /// claimed item, as `workflow_run` does (#491): once per run, never for another caller.
-    pub(crate) async fn adopt_claiming_run(&self, item: WorkItem) -> WorkItem {
-        let sid = item.run.as_ref().and_then(|r| r.session_id.clone());
-        let Some(info) =
-            sid.filter(|s| self.unadopted_runs.lock().remove(s)).and_then(|s| self.live_session(&s))
+    /// #491/#494: `item` adopts the Claude `info` (`WorkService::adopt_run`) and the session links back to
+    /// it (`SessionInfo.work_item_id` and its ticket: sidebar and Background rows, `open_in_editor`,
+    /// `get_ticket`). `None` when the adoption failed (logged).
+    async fn adopt_session(&self, item: &WorkItem, info: &SessionInfo) -> Option<WorkItem> {
+        match self.work.adopt_run(&item.id, info).await {
+            Ok(w) => {
+                if let Err(e) = self.session_link(&info.id, Some(w.id.clone()), w.ticket.clone()) {
+                    tracing::warn!(work = %w.id, error = %e.message, "adopted Claude not linked");
+                }
+                Some(w)
+            }
+            Err(e) => {
+                tracing::warn!(work = %item.id, error = %e.message, "run's Claude not adopted");
+                None
+            }
+        }
+    }
+
+    /// #494: the claiming session becomes the claimed item's Claude when it is a live Kelta Claude in no
+    /// unfinished work item, whatever started it (a run, a trigger, a plain tab). Read from the store, so
+    /// it holds after a restart; one session, at most one live item.
+    pub(crate) async fn adopt_claiming_session(&self, item: WorkItem) -> WorkItem {
+        let Some(info) = item
+            .run
+            .as_ref()
+            .and_then(|r| r.session_id.as_ref())
+            .and_then(|s| self.live_session(s))
+            .filter(|s| s.kind == SessionKind::Claude)
         else {
             return item;
         };
-        match self.work.adopt_run(&item.id, &info).await {
-            Ok(w) => w,
-            Err(e) => {
-                tracing::warn!(work = %item.id, error = %e.message, "run's Claude not adopted");
-                item
-            }
+        // shortcut: one lock for all sessions, adoptions are rare; shard per sid if it ever contends.
+        let _guard = self.adopt_lock.lock().await;
+        if self.work.for_session(&info.id).await.is_some_and(|w| w.state != WorkState::Finished) {
+            return item;
         }
+        self.adopt_session(&item, &info).await.unwrap_or(item)
     }
 
     /// The live session of a run holding `ticket`.
