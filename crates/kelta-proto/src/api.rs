@@ -25,7 +25,7 @@ use crate::ipc::{AccountTestResult, WindowState};
 use crate::model::{
     AttachInfo, ClaudeUsage, EditorTarget, OpenPaneRequest, PaneRef, Placement, ProjectDraft, ProjectInfo,
     ReviewNote, RunClaim, RunState, Scope, SessionInfo, ShipOrigin, SpawnRequest, StatusChange, StepStatus,
-    TemplateCtx, TicketStep, WorkItem, WorkStepStatus,
+    TemplateCtx, TicketStep, WorkItem, WorkStepStatus, WorkflowStart,
 };
 use crate::secret::{Secret, SecretBackendStatus, SecretCtx, SecretRef};
 use crate::settings::TrackerView;
@@ -440,6 +440,16 @@ pub trait CoreApi: Send + Sync {
     /// owning it, once per head SHA and failed-check set; `Ok` says what was sent or why nothing was.
     async fn work_fix_checks(&self, _review: &Review) -> Result<String, KeltaError> {
         Err(KeltaError::unsupported("work_fix_checks"))
+    }
+    /// The `run_workflow` trigger action (#488): `workflow_run` on `ticket` (claims it; a live run on it
+    /// comes back `running`), else `workflow_run_on` of the `on = "global"` entry in `project`.
+    async fn workflow_start(
+        &self,
+        _project: Option<&ProjectId>,
+        _workflow: &str,
+        _ticket: Option<TicketRef>,
+    ) -> Result<WorkflowStart, KeltaError> {
+        Err(KeltaError::unsupported("workflow_start"))
     }
     /// MCP `claim_ticket` (#235): a work item for `ticket` adopting `worktree` (default: the project's
     /// primary repo) and `branch`, claimed by `run`. `Conflict` naming the holder when it is taken.

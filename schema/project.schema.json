@@ -610,6 +610,32 @@
             "action"
           ],
           "type": "object"
+        },
+        {
+          "description": "Starts a workflow run as `w` on a ticket and the palette's \"Run <label>\" do (#488): with `ticket`,\n`workflow_run` on it (claims it; a run live on it is returned instead), else the `on = \"global\"`\n`[[workflows]]` entry in the event's project.",
+          "properties": {
+            "action": {
+              "const": "run_workflow",
+              "type": "string"
+            },
+            "ticket": {
+              "default": null,
+              "description": "Template naming the ticket, e.g. `\"{ticket.key}\"`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "workflow": {
+              "description": "Id of a saved or `[[workflows]]` workflow.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "workflow"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -1853,6 +1879,32 @@
                   },
                   "required": [
                     "action"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "description": "Starts a workflow run as `w` on a ticket and the palette's \"Run <label>\" do (#488): with `ticket`,\n`workflow_run` on it (claims it; a run live on it is returned instead), else the `on = \"global\"`\n`[[workflows]]` entry in the event's project.",
+                  "properties": {
+                    "action": {
+                      "const": "run_workflow",
+                      "type": "string"
+                    },
+                    "ticket": {
+                      "default": null,
+                      "description": "Template naming the ticket, e.g. `\"{ticket.key}\"`.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "workflow": {
+                      "description": "Id of a saved or `[[workflows]]` workflow.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "workflow"
                   ],
                   "type": "object"
                 }
@@ -5978,6 +6030,32 @@
                   },
                   "required": [
                     "action"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "description": "Starts a workflow run as `w` on a ticket and the palette's \"Run <label>\" do (#488): with `ticket`,\n`workflow_run` on it (claims it; a run live on it is returned instead), else the `on = \"global\"`\n`[[workflows]]` entry in the event's project.",
+                  "properties": {
+                    "action": {
+                      "const": "run_workflow",
+                      "type": "string"
+                    },
+                    "ticket": {
+                      "default": null,
+                      "description": "Template naming the ticket, e.g. `\"{ticket.key}\"`.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "workflow": {
+                      "description": "Id of a saved or `[[workflows]]` workflow.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "workflow"
                   ],
                   "type": "object"
                 }

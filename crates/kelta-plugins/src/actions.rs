@@ -387,7 +387,7 @@ impl PluginHost {
             }
             ActionDef::TransitionTicket { to_category, to_name } => {
                 cx.require(Permission::TicketsWrite)?;
-                let t = self.ticket_ref(cx)?;
+                let t = self.ticket_ref(cx, None)?;
                 let tracker = core.tracker_for(&t.account).await?;
                 let transitions = tracker.transitions(&t).await?;
                 let wanted_name = to_name.as_deref().map(|n| cx.x(n)).transpose()?;
@@ -411,7 +411,7 @@ impl PluginHost {
             }
             ActionDef::CommentTicket { body } => {
                 cx.require(Permission::TicketsWrite)?;
-                let t = self.ticket_ref(cx)?;
+                let t = self.ticket_ref(cx, None)?;
                 let body = cx.x(body)?;
                 core.tracker_for(&t.account).await?.comment(&t, &body).await?;
                 self.publish(with_ids(
@@ -422,7 +422,7 @@ impl PluginHost {
             }
             ActionDef::AssignTicket { to } => {
                 cx.require(Permission::TicketsWrite)?;
-                let t = self.ticket_ref(cx)?;
+                let t = self.ticket_ref(cx, None)?;
                 let who = match cx.x(to)?.as_str() {
                     "me" => Assignee::Me,
                     "none" | "" => Assignee::None,
@@ -568,6 +568,22 @@ impl PluginHost {
                     })?;
                 core.work_fix_checks(&review).await
             }
+            ActionDef::RunWorkflow { workflow, ticket } => {
+                // It spawns Claude and types the workflow's prompt into it.
+                cx.require(Permission::SessionsSpawn)?;
+                cx.require(Permission::TerminalWrite)?;
+                let ticket = match ticket {
+                    Some(t) => {
+                        cx.require(Permission::TicketsRead)?;
+                        Some(self.ticket_ref(cx, Some(cx.x(t)?))?)
+                    }
+                    None => None,
+                };
+                let workflow = cx.x(workflow)?;
+                let start = core.workflow_start(cx.project.as_ref(), &workflow, ticket).await?;
+                let state = if start.running { "already running" } else { "started" };
+                Ok(format!("{workflow} {state}: {}", start.session.id))
+            }
         }
     }
 
@@ -594,12 +610,12 @@ impl PluginHost {
     }
 
     /// The ticket of the context; for `pr.*` events the first linked ticket on the project tracker.
-    fn ticket_ref(&self, cx: &ActionCx) -> Result<TicketRef, KeltaError> {
-        let key = cx
-            .vars
-            .get("ticket.key")
-            .and_then(Value::as_str)
-            .map(str::to_owned)
+    /// `key` (a `ticket` template) overrides the context's ticket.
+    fn ticket_ref(&self, cx: &ActionCx, key: Option<String>) -> Result<TicketRef, KeltaError> {
+        let ctx_key = cx.vars.get("ticket.key").and_then(Value::as_str);
+        let key = key
+            .filter(|k| !k.is_empty())
+            .or_else(|| ctx_key.map(str::to_owned))
             .or_else(|| cx.vars.get("payload.linked_tickets.0").and_then(Value::as_str).map(str::to_owned))
             .ok_or_else(|| KeltaError::invalid("no ticket in this context"))?;
         let account = cx
@@ -609,7 +625,13 @@ impl PluginHost {
             .filter(|a| !a.is_empty())
             .or_else(|| cx.vars.get("project.tracker").and_then(Value::as_str))
             .ok_or_else(|| KeltaError::invalid(format!("no tracker account for ticket {key}")))?;
-        let id = cx.vars.get("ticket.id").and_then(Value::as_str).unwrap_or(&key).to_owned();
+        let id = cx
+            .vars
+            .get("ticket.id")
+            .and_then(Value::as_str)
+            .filter(|_| ctx_key == Some(key.as_str()))
+            .unwrap_or(&key)
+            .to_owned();
         Ok(TicketRef { account: AccountId::new(account), key, id })
     }
 
@@ -884,6 +906,7 @@ fn action_name(a: &ActionDef) -> &'static str {
         ActionDef::Prompt { .. } => "prompt",
         ActionDef::Command { .. } => "command",
         ActionDef::FixChecks => "fix_checks",
+        ActionDef::RunWorkflow { .. } => "run_workflow",
     }
 }
 

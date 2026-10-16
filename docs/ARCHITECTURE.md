@@ -361,6 +361,7 @@ pub trait SecretResolver: Send + Sync {
   async fn work_create_pr(&self, id: &WorkItemId, draft: PrDraft, origin: ShipOrigin /*Ui|Mcp*/) -> Result<WorkItem, KeltaError>;
   async fn work_feedback(&self, id: &WorkItemId) -> Result<Feedback, KeltaError>;  // MCP get_review_feedback
   async fn work_fix_checks(&self, review: &Review) -> Result<String, KeltaError>;  // `fix_checks` trigger action (#252)
+  async fn workflow_start(&self, project: Option<&ProjectId>, workflow: &str, ticket: Option<TicketRef>) -> Result<WorkflowStart, KeltaError>;  // `run_workflow` trigger action (#488): workflow_run on ticket, else workflow_run_on global
   // MCP background-run tools (#235; default: unsupported)
   async fn work_claim(&self, project: &ProjectId, ticket: TicketRef, worktree: Option<PathBuf>, branch: Option<String>, run: RunClaim) -> Result<WorkItem, KeltaError>;
   async fn work_report(&self, key: &str, phase: Option<String>, state: RunState, note: Option<String>, sha: Option<String>) -> Result<WorkItem, KeltaError>;
