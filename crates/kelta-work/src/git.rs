@@ -270,6 +270,17 @@ pub async fn fetch(
     }
 }
 
+/// One lock per repo: concurrent `git worktree add`/`remove` read each other's half-written
+/// `.git/worktrees/*/commondir` and fail. Held only around the git call; other repos stay parallel.
+/// shortcut: entries are never evicted (one tiny mutex per repo ever used), fine for a desktop app.
+async fn worktree_guard(repo: &Path) -> tokio::sync::OwnedMutexGuard<()> {
+    static LOCKS: std::sync::LazyLock<
+        parking_lot::Mutex<BTreeMap<PathBuf, std::sync::Arc<tokio::sync::Mutex<()>>>>,
+    > = std::sync::LazyLock::new(Default::default);
+    let lock = LOCKS.lock().entry(canon(repo)).or_default().clone();
+    lock.lock_owned().await
+}
+
 /// `git worktree add` (new branch from `start`, or existing `branch` when `start` is `None`).
 pub async fn worktree_add(
     repo: &Path,
@@ -282,6 +293,7 @@ pub async fn worktree_add(
             .map_err(|e| KeltaError::internal(format!("cannot create {}: {e}", parent.display())))?;
     }
     let p = path.to_string_lossy().into_owned();
+    let _guard = worktree_guard(repo).await;
     let mut args: Vec<&str> = vec!["worktree", "add"];
     match start {
         Some(s) => {
@@ -303,6 +315,7 @@ pub async fn worktree_remove(repo: &Path, path: &Path, force: bool) -> Result<()
         args.push("--force");
     }
     args.push(&p);
+    let _guard = worktree_guard(repo).await;
     run_ok(repo, &args, LOCAL_TIMEOUT).await.map(|_| ())
 }
 

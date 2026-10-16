@@ -352,14 +352,13 @@ fn flood_keeps_inflight_bounded_and_ends_with_a_snapshot() {
     h.spawn(spec("flood", sim.to_str().unwrap(), &["--flood", "10"], 120, 40, ev.clone())).unwrap();
     let info = h.attach(&id, 120, 40, Box::new(view.clone())).unwrap();
     // The view acknowledges nothing until the child has exited: the child must run to completion
-    // all the same (never paced by the view) while in-flight bytes stay under HIGH.
-    let t0 = Instant::now();
-    while ev.exited().is_none() {
-        assert!(h.stats().sessions[0].inflight <= HIGH_WATERMARK);
-        assert!(t0.elapsed() < Duration::from_secs(240), "flood did not finish");
-        #[allow(clippy::disallowed_methods)] // allowlisted: test pacing
-        std::thread::sleep(Duration::from_millis(2));
-    }
+    // all the same (never paced by the view). In-flight stays under HIGH: `max_unacked` below is the
+    // host's in-flight count, since nothing is acked before the exit.
+    // #514: no `h.stats()` poll while it runs. `stats()` takes the session lock the reader holds for
+    // every chunk, and parking_lot's fair unlock hands it to this parked, descheduled thread: under
+    // load (load avg 40 on 10 cores) each 2 ms poll stalled the reader for scheduler slices: 73 s
+    // with the poll, 0.6-1.6 s without; 3-5 s with 30 more CPU hogs (load 68).
+    ev.wait_exit(Duration::from_secs(240));
     // Exited is emitted once the reader hit EOF/EIO: every byte is read by now. Then the view catches up.
     let mut seen: Vec<Vec<u8>> = Vec::new();
     let mut acked_bytes: u64 = 0;
