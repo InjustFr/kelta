@@ -692,6 +692,12 @@ impl CoreApi for Core {
     fn login_path(&self) -> Option<String> {
         self.login_env.path().map(str::to_owned)
     }
+    fn claude_config_dir(&self, project: Option<&ProjectId>) -> Option<std::path::PathBuf> {
+        // Same layering as `assemble_env`; the per-request env is not stored, so it is not seen here.
+        let s = self.cfg.effective(project);
+        let env = self.login_env.vars.iter().chain(&s.terminal.env).chain(&s.env);
+        spawn_env::claude_config_dir(&env.map(|(k, v)| (k.clone(), v.clone())).collect())
+    }
     async fn session_spawn(&self, req: SpawnRequest) -> Result<SessionInfo, KeltaError> {
         self.rt.capture();
         self.spawn_session(req).await

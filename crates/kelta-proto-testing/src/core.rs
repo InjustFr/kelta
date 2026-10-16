@@ -441,6 +441,11 @@ impl CoreApi for FakeCore {
         self.overridden("login_path").and_then(Result::ok)
     }
 
+    /// Set with `respond("claude_config_dir", json!("/dir"))`.
+    fn claude_config_dir(&self, _project: Option<&ProjectId>) -> Option<std::path::PathBuf> {
+        self.overridden("claude_config_dir").and_then(Result::ok)
+    }
+
     async fn tracker_for(&self, account: &AccountId) -> Result<Arc<dyn Tracker>, KeltaError> {
         self.record("tracker_for", serde_json::json!({ "account": account }));
         self.trackers
