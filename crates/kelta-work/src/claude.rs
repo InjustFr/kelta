@@ -157,15 +157,13 @@ pub enum LaunchMode {
     New { uuid: String, prompt: String },
     /// `--resume <uuid> [-- "<prompt>"]`.
     Resume { uuid: String, prompt: Option<String> },
-    /// `--continue [-- "<prompt>"]` (fallback when resume is refused; keeps the prompt, B8).
-    Continue { prompt: Option<String> },
 }
 
 impl LaunchMode {
     fn prompt(&self) -> Option<&str> {
         match self {
             LaunchMode::New { prompt, .. } => Some(prompt),
-            LaunchMode::Resume { prompt, .. } | LaunchMode::Continue { prompt } => prompt.as_deref(),
+            LaunchMode::Resume { prompt, .. } => prompt.as_deref(),
         }
     }
 }
@@ -196,7 +194,6 @@ pub fn argv(spec: &LaunchSpec) -> Vec<String> {
     match &spec.mode {
         LaunchMode::New { uuid, .. } => a.extend(["--session-id".into(), uuid.clone()]),
         LaunchMode::Resume { uuid, .. } => a.extend(["--resume".into(), uuid.clone()]),
-        LaunchMode::Continue { .. } => a.push("--continue".into()),
     }
     if !spec.name.is_empty() {
         a.extend(["-n".into(), spec.name.clone()]);
@@ -341,7 +338,7 @@ mod tests {
     }
 
     #[test]
-    fn resume_and_continue_carry_the_prompt() {
+    fn resume_carries_the_prompt() {
         let spec = |mode| LaunchSpec {
             mode,
             name: String::new(),
@@ -355,14 +352,9 @@ mod tests {
             extra_args: vec!["--add-dir".into(), "/x".into()],
         };
         let fix = Some("Fix the review".to_owned());
-        let a = argv(&spec(LaunchMode::Resume { uuid: "u".into(), prompt: fix.clone() }));
+        let a = argv(&spec(LaunchMode::Resume { uuid: "u".into(), prompt: fix }));
         assert_eq!(&a[..2], &["--resume", "u"]);
         assert_eq!(&a[a.len() - 2..], &["--", "Fix the review"]);
-        let a = argv(&spec(LaunchMode::Continue { prompt: fix }));
-        assert_eq!(
-            (a[0].as_str(), &a[a.len() - 2..]),
-            ("--continue", &["--".to_owned(), "Fix the review".to_owned()][..])
-        );
         let a = argv(&spec(LaunchMode::Resume { uuid: "u".into(), prompt: None }));
         assert_eq!(a.last().map(String::as_str), Some("/x"));
     }

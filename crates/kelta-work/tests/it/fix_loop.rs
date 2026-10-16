@@ -303,7 +303,7 @@ async fn send_resumes_a_dead_claude_with_the_prompt_and_the_fallback_keeps_it() 
     assert_eq!(spawns[1][..2], ["--resume".to_owned(), item.claude_uuid.clone().unwrap()]);
     assert_eq!(spawns[1][spawns[1].len() - 2..], ["--".to_owned(), "-Fix the review".to_owned()]);
 
-    // `--resume` refused: the `--continue` fallback carries the same prompt, with the §6 toast.
+    // `--resume` refused: the fresh-Claude fallback carries the same prompt, with the §6 toast.
     fx.core.exit_session(&claude(&fx), 1);
     for _ in 0..300 {
         if claude_args(&fx).len() == 3 {
@@ -312,14 +312,9 @@ async fn send_resumes_a_dead_claude_with_the_prompt_and_the_fallback_keeps_it() 
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
     let spawns = claude_args(&fx);
-    assert_eq!(spawns[2][0], "--continue");
+    assert_eq!(spawns[2][0], "--session-id");
     assert_eq!(spawns[2].last().map(String::as_str), Some("-Fix the review"));
-    assert!(
-        fx.core
-            .toasts()
-            .iter()
-            .any(|t| t.text.contains("continued the latest one in this worktree with your prompt"))
-    );
+    assert!(fx.core.toasts().iter().any(|t| t.text.contains("started a new Claude")));
 }
 
 // ---- feedback, re-request, resolve -----------------------------------------------------------
