@@ -11,6 +11,12 @@ async function paneWidths(page: Page): Promise<number[]> {
   );
 }
 
+/** Boots and waits for the work tab's Story panel: its lazy chunk lands after boot and narrows the pane area (#483). */
+async function bootSettled(page: Page): Promise<void> {
+  await boot(page);
+  await expect(page.getByTestId('story-panel')).toBeVisible();
+}
+
 test.describe('layout', () => {
   test('split right spawns a shell and adds a pane; the new pane is focused', async ({ page }) => {
     await boot(page);
@@ -50,9 +56,11 @@ test.describe('layout', () => {
   });
 
   test('dragging a gutter resizes panes; ratios stay above 5 %', async ({ page }) => {
-    await boot(page);
-    const [w0, w1] = await paneWidths(page);
+    await bootSettled(page);
     const gutter = page.getByTestId('gutter').first();
+    // Actionability waits for a stable box over two frames: the area's bound width (px to ratio in Gutter) has caught up.
+    await gutter.hover();
+    const [w0, w1] = await paneWidths(page);
     const box = (await gutter.boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
@@ -81,11 +89,11 @@ test.describe('layout', () => {
   });
 
   test('keyboard resize on the focused gutter', async ({ page }) => {
-    await boot(page);
+    await bootSettled(page);
     const [w0] = await paneWidths(page);
-    await page.getByTestId('gutter').first().focus();
-    await page.keyboard.press('ArrowRight');
-    await page.keyboard.press('ArrowRight');
+    const gutter = page.getByTestId('gutter').first();
+    await gutter.press('ArrowRight');
+    await gutter.press('ArrowRight');
     await expect.poll(async () => (await paneWidths(page))[0]).toBeGreaterThan(w0!);
   });
 
