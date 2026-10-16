@@ -79,8 +79,10 @@ fn flood(h: &PtyTerminalHost, dir: &Path) {
     assert!(flood_bytes <= 4 * 1024 * 1024 + 128 * 1024, "flood log {flood_bytes} B");
     assert!(dir_size(dir) <= 16 * 1024 * 1024 + 128 * 1024);
     let id = SessionId::new("flood");
-    // `head -c` cuts the last line short.
-    assert!(h.history_tail(&id, 1).unwrap().ends_with(" FLOOD-END"));
+    // `head -c` cuts the last line short. Under load the writer can lag the exit by more than the
+    // 2 s a tail waits for it, so wait for the line instead of racing it.
+    let last = || h.history_tail(&id, 1).ok().filter(|t| t.ends_with(" FLOOD-END"));
+    wait_until(T, last).expect("FLOOD-END never reached the log");
     assert_eq!(h.history_tail(&id, 3).unwrap().lines().filter(|l| *l == line).count(), 2);
     let hits = h.history_search(&[id], "flood-end", 10).unwrap();
     assert_eq!(hits.len(), 1, "{hits:?}");

@@ -50,27 +50,45 @@ pub fn recordings() -> Vec<Recording> {
 
 /// Path to the `tui-sim` fixture binary, building it into a private target dir if needed
 /// (a nested `cargo build` on the main target dir would wait on the running `cargo test`).
+///
+/// nextest runs every test in its own process, so several of them build here at once, and cargo
+/// re-links `debug/tui-sim` on every build (remove, then hard link): a child exec'ing it in that
+/// window finds no file. So the build runs under a lock and the tests run an immutable copy
+/// named after its content.
 pub fn tui_sim() -> PathBuf {
     static PATH: OnceLock<PathBuf> = OnceLock::new();
     PATH.get_or_init(|| {
         let target = std::env::var_os("CARGO_TARGET_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|| workspace_root().join("target"));
-        for profile in ["debug", "release"] {
-            let p = target.join(profile).join("tui-sim");
-            if p.is_file() {
-                return p;
-            }
-        }
+        let found = ["debug", "release"].iter().map(|p| target.join(p).join("tui-sim")).find(|p| p.is_file());
         let dir = target.join("kelta-term-fixtures");
-        let status = Command::new(env!("CARGO"))
-            .args(["build", "-p", "tui-sim", "--locked", "--target-dir"])
-            .arg(&dir)
-            .current_dir(workspace_root())
-            .status()
-            .expect("cargo build -p tui-sim");
-        assert!(status.success(), "building tui-sim failed");
-        dir.join("debug/tui-sim")
+        std::fs::create_dir_all(&dir).unwrap();
+        let lock = std::fs::File::create(dir.join("build.lock")).unwrap();
+        lock.lock().unwrap(); // released when `lock` drops
+        let src = found.unwrap_or_else(|| {
+            let status = Command::new(env!("CARGO"))
+                .args(["build", "-p", "tui-sim", "--locked", "--target-dir"])
+                .arg(&dir)
+                .current_dir(workspace_root())
+                .status()
+                .expect("cargo build -p tui-sim");
+            assert!(status.success(), "building tui-sim failed");
+            dir.join("debug/tui-sim")
+        });
+        // A concurrent `cargo build` may be re-linking `src` right now: retry until it is back.
+        let bytes =
+            wait_until(Duration::from_secs(30), || std::fs::read(&src).ok()).expect("tui-sim unreadable");
+        let mut hasher = std::hash::DefaultHasher::new();
+        std::hash::Hash::hash(&bytes, &mut hasher);
+        let copy = dir.join(format!("tui-sim-{:016x}", std::hash::Hasher::finish(&hasher)));
+        if !copy.exists() {
+            let tmp = dir.join(format!("tui-sim-{}.tmp", std::process::id()));
+            std::fs::write(&tmp, &bytes).unwrap();
+            std::fs::set_permissions(&tmp, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+            std::fs::rename(&tmp, &copy).unwrap();
+        }
+        copy
     })
     .clone()
 }
