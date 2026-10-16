@@ -356,7 +356,7 @@ pub(crate) fn tool_defs() -> Value {
                 "type": "object",
                 "properties": {
                     "key": key, "account": account,
-                    "adopt": { "type": "boolean", "description": "Default true: a run Kelta started gives its Claude to the item it claims first. false keeps this conversation out of the item (an orchestrator claiming many tickets)." },
+                    "adopt": { "type": "boolean", "description": "Default true: a Kelta Claude session that is in no live work item becomes the Claude of the item it claims (a re-claim of a ticket it holds never adopts). false keeps this conversation out of the item (an orchestrator claiming many tickets)." },
                     "project": { "type": "string", "description": "Kelta project id (default: the ticket's)" },
                     "worktree": { "type": "string", "description": "Absolute path of a git worktree of one of the project's repos (default: the primary repo)" },
                     "branch": { "type": "string", "description": "Default: the worktree's checked-out branch" },

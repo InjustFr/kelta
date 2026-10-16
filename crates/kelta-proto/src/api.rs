@@ -453,7 +453,8 @@ pub trait CoreApi: Send + Sync {
     }
     /// MCP `claim_ticket` (#235): a work item for `ticket` adopting `worktree` (default: the project's
     /// primary repo) and `branch`, claimed by `run`. `Conflict` naming the holder when it is taken.
-    /// `adopt` false: the caller's Claude is never given to the item (a multi-ticket orchestrator, #497).
+    /// The caller's live Claude, when in no unfinished item, becomes the item's Claude (#494), unless
+    /// `adopt` is false (a multi-ticket orchestrator, #497) or it re-claims a ticket it holds.
     async fn work_claim(
         &self,
         _project: &ProjectId,
