@@ -44,9 +44,18 @@ function mountReviews() {
 
 describe('ReviewsPane linked tickets', () => {
   it('only an exact key opens: a key no tracker knows says so', async () => {
-    mountReviews();
+    // Preloaded, and the link found by attribute: a role query over the whole pane times out under load.
+    await Promise.all(
+      (['review_requested', 'authored'] as const).map((k) => reviews.load({ kind: 'all' }, k)),
+    );
+    const { container } = mountReviews();
     // SHOP-150 is linked by a review but no ticket has that key (SHOP-15x do not count).
-    await fireEvent.click(await screen.findByRole('button', { name: 'Open SHOP-150' }));
+    const link = await waitFor(() => {
+      const el = container.querySelector<HTMLElement>('[aria-label="Open SHOP-150"]');
+      if (!el) throw new Error('no link yet');
+      return el;
+    });
+    await fireEvent.click(link);
     await waitFor(() => expect(toasts.list.at(-1)?.toast.text).toMatch(/SHOP-150 is not in any/));
     const l = layout.get('shop');
     expect(l && findContent(l, (c) => c.kind === 'ticket_detail')).toBeFalsy();

@@ -9,7 +9,7 @@ use kelta_core::notifier::should_notify;
 use kelta_core::status::{Heuristic, NotifyKind, SessState, apply_heuristic, apply_hook, mark_seen};
 use kelta_proto::api::CoreApi;
 use kelta_proto::ctl::CtlCommand;
-use kelta_proto::events::UiEvent;
+use kelta_proto::events::{Toast, ToastAction, UiEvent};
 use kelta_proto::ids::ProjectId;
 use kelta_proto::ipc::WindowState;
 use kelta_proto::model::{
@@ -705,4 +705,68 @@ async fn focus_mode_holds_notifications_but_blocked_ones() {
     assert_eq!(h.core.notify_focus(false), ["SHOP-1 ready to review", "SHOP-3: Claude replied"]);
     h.core.notify(n("SHOP-4 ready to review", Urgency::Normal)).await.unwrap();
     assert_eq!(h.ui.notifications().len(), 2);
+}
+
+fn first_toast(h: &H) -> Toast {
+    h.ui.events()
+        .into_iter()
+        .find_map(|e| match e {
+            UiEvent::Toast { toast } => Some(toast),
+            _ => None,
+        })
+        .expect("a toast")
+}
+
+/// Ticket #482: the fallback toast links Settings as `secondary`, so it never takes `run_last`
+/// and the UI holds it in focus mode like any other plain toast.
+#[tokio::test]
+async fn notification_fallback_toast_links_settings_as_secondary() {
+    use kelta_proto::events::Notification;
+    use kelta_proto::ext::Urgency;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut settings = Settings::defaults();
+    settings.notifications.quiet_hours = String::new();
+    settings.notifications.only_when_unfocused = false;
+    let h = start(tmp.path(), settings, vec![project("shop", tmp.path())]);
+    h.ui.fail_notifications();
+    let n = Notification {
+        title: "SHOP-1 ready to review".into(),
+        body: None,
+        urgency: Urgency::Normal,
+        project_id: None,
+        session_id: None,
+    };
+    h.core.notify(n).await.unwrap();
+    let toast = first_toast(&h);
+    assert!(toast.action.is_none());
+    assert_eq!(
+        toast.secondary,
+        Some(ToastAction {
+            label: "Notification settings".into(),
+            command: "settings.open".into(),
+            args: Some(serde_json::json!({ "section": "notifications" })),
+        })
+    );
+}
+
+/// Ticket #482: the memory-cap toast opens its setting.
+#[tokio::test]
+async fn memory_cap_toast_opens_its_setting() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let s = h
+        .core
+        .session_spawn(SpawnRequest { kind: SessionKind::Shell, program: None, ..claude_req() })
+        .await
+        .unwrap();
+    h.term.emit(&s.id, TerminalEvent::MemoryCapReached { cap_mb: 160 });
+    settle().await;
+    assert_eq!(
+        first_toast(&h).action,
+        Some(ToastAction {
+            label: "Open setting".into(),
+            command: "settings.open".into(),
+            args: Some(serde_json::json!({ "key": "terminal.memory_cap_mb" })),
+        })
+    );
 }

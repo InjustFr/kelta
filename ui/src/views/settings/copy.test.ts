@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import type { Component } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { SettingsSectionId } from '$app/registry';
+import { settingsSections, type SettingsSectionId, type SettingsSectionProps } from '$app/registry';
+import * as ipc from '$lib/ipc/commands';
 import { createMockTransport } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { dispatch } from '$lib/actions';
@@ -11,11 +13,13 @@ import schemaJson from '../../../../schema/settings.schema.json';
 import { COPY, COPY_DONE, SECTION_COPY } from './copy';
 import { joinPath, splitPath } from './lib/paths';
 import { enumOptions, fieldKind, leafFields, nodeAt, type SchemaNode } from './lib/schema';
-import { SECTION_ROOTS } from './lib/sections';
+import { SECTION_ROOTS, SECTION_ROWS } from './lib/sections';
 import { takeSourceRequest } from './actions';
 import SectionForm from './SectionForm.svelte';
 import Claude from './sections/Claude.svelte';
+import Keys from './sections/Keys.svelte';
 import Notifications from './sections/Notifications.svelte';
+import Terminal from './sections/Terminal.svelte';
 import Worktree from './sections/Worktree.svelte';
 
 const schema = schemaJson as unknown as SchemaNode;
@@ -140,9 +144,11 @@ describe('Settings → Notifications (#472)', () => {
     'notifications.pr_changes_requested',
     'notifications.ci_failed_mine',
   ];
-  const mount = async () => {
+  const mount = async (seed: Record<string, boolean> = {}) => {
     const { transport, controls } = createMockTransport();
     setTransport(transport);
+    for (const [k, value] of Object.entries(seed))
+      await ipc.settingsSet({ layer: 'global', path: `notifications.${k}`, value });
     await settings.load();
     const r = render(Notifications, { layer: 'global', projectId: null, repoId: null });
     await waitFor(() => expect(r.container.querySelector('[data-path]')).toBeTruthy());
@@ -175,18 +181,52 @@ describe('Settings → Notifications (#472)', () => {
   });
 
   it('the events are disabled, still shown, while notifications are off', async () => {
-    const { container, unmount } = await mount();
+    const { container, unmount } = await mount({ claude_done: true });
+    const reset = () => row(container, 'notifications.claude_done').querySelector('[data-testid="reset"]');
     const sw = (p: string) =>
       within(row(container, p) as HTMLElement).getByRole('switch') as HTMLInputElement;
     const master = () => screen.getByRole('switch', { name: 'Desktop notifications' }) as HTMLInputElement;
     await fireEvent.click(master());
     await waitFor(() => expect(sw('notifications.claude_blocked').disabled).toBe(true));
     for (const p of EVENTS) expect(sw(p).disabled).toBe(true);
+    expect(reset()).toBeNull(); // no Reset on a row another setting disabled (#482)
     for (const i of row(container, 'notifications.quiet_hours').querySelectorAll('input[type="time"]'))
       expect((i as HTMLInputElement).disabled).toBe(true);
     await waitFor(() => expect(master().disabled).toBe(false)); // never disabled by its own dependents
     await fireEvent.click(master());
     await waitFor(() => expect(sw('notifications.claude_blocked').disabled).toBe(false));
+    await waitFor(() => expect(reset()).toBeTruthy());
+    unmount();
+  });
+});
+
+describe('Settings → Terminal (#482)', () => {
+  it('the disk caps are disabled, still shown, while history is off', async () => {
+    const { transport } = createMockTransport();
+    setTransport(transport);
+    await ipc.settingsSet({ layer: 'global', path: 'terminal.history_log', value: false });
+    await settings.load();
+    const { container, unmount } = render(Terminal, { layer: 'global', projectId: null, repoId: null });
+    for (const p of ['terminal.history_log_mb', 'terminal.history_log_total_mb']) {
+      await waitFor(() => expect(container.querySelector(`[data-path="${p}"]`), p).toBeTruthy());
+      expect(container.querySelector<HTMLInputElement>(`[data-path="${p}"] input`)!.disabled, p).toBe(true);
+    }
+    unmount();
+  });
+});
+
+describe('SECTION_ROWS anchors (#482)', () => {
+  const anchors = Object.entries(SECTION_ROWS).flatMap(([id, rows]) =>
+    (rows ?? []).flatMap((r) => (r.anchor ? [[id, r.anchor] as const] : [])),
+  );
+  it.each(anchors)('%s draws its %s row', async (id, anchor) => {
+    const { transport } = createMockTransport();
+    setTransport(transport);
+    await settings.load();
+    const C = (await settingsSections.find((s) => s.id === id)!.load())
+      .default as unknown as Component<SettingsSectionProps>;
+    const { container, unmount } = render(C, { layer: 'global', projectId: null, repoId: null });
+    await waitFor(() => expect(container.querySelector(`[data-testid="${anchor}"]`)).toBeTruthy());
     unmount();
   });
 });
@@ -257,6 +297,68 @@ describe('Settings → Work items', () => {
   });
 });
 
+describe('Settings → Work items (#482)', () => {
+  it('Edit steps opens the board feeding the project, and hides with no boards', async () => {
+    const { transport } = createMockTransport();
+    setTransport(transport);
+    await settings.load();
+    await import('./actions');
+    const first = render(Worktree, { layer: 'global', projectId: 'billing', repoId: null });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Edit steps in Sources' }));
+    expect(takeSourceRequest()).toEqual({ id: 'billing', steps: true });
+    ui.settings = null;
+    first.unmount();
+
+    await ipc.settingsSet({ layer: 'global', path: 'sources', value: [] });
+    await settings.load();
+    const { container, unmount } = render(Worktree, { layer: 'global', projectId: 'billing', repoId: null });
+    await waitFor(() => expect(container.querySelector('[data-testid="steps-note"]')).toBeTruthy());
+    expect(screen.queryByRole('button', { name: 'Edit steps in Sources' })).toBeNull();
+    unmount();
+  });
+});
+
+describe('Settings → Keys (#482)', () => {
+  const mount = async (props: SettingsSectionProps) => {
+    onOs('MacIntel');
+    const created = createMockTransport();
+    setTransport(created.transport);
+    await settings.load();
+    return { ...render(Keys, props), controls: created.controls };
+  };
+
+  it('at the repo layer the bindings say why they are read-only', async () => {
+    const { container, unmount } = await mount({ layer: 'repo', projectId: 'shop', repoId: 'api' });
+    const section = await waitFor(() => {
+      const el = container.querySelector<HTMLElement>('[data-testid="keys-section"]');
+      if (!el) throw new Error('no keys section yet');
+      return el;
+    });
+    expect(section.textContent).toContain('Not allowed in a repo-local config');
+    expect(section.textContent).not.toContain('The same for every project.');
+    unmount();
+  });
+
+  it('Use it here writes the new shortcut before freeing the other action', async () => {
+    const { container, controls, unmount } = await mount({ layer: 'global', projectId: null, repoId: null });
+    const detach = await waitFor(() => {
+      const el = container.querySelector<HTMLElement>('tr[data-action="pane.detach"]');
+      if (!el) throw new Error('no detach row yet');
+      return el;
+    });
+    await waitFor(() => expect(controls.calls.some((c) => c.cmd === 'settings_layer_get')).toBe(true));
+    await fireEvent.click(detach.querySelector('[data-testid="record"]')!);
+    await fireEvent.keyDown(screen.getByTestId('recorder'), { code: 'KeyD', key: 'd', metaKey: true });
+    controls.failNext('settings_set', { code: 'internal' });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Use it here' }));
+    await waitFor(() => expect(controls.calls.filter((c) => c.cmd === 'settings_set').length).toBe(1));
+    const sets = controls.calls.filter((c) => c.cmd === 'settings_set');
+    expect(JSON.stringify(sets[0]!.args)).toContain('pane.detach');
+    expect(JSON.stringify(sets)).not.toContain('pane.split_right');
+    unmount();
+  });
+});
+
 describe('Settings → General', () => {
   it('Window keys sit under Appearance and Startup & quit; settings.open { section: "window" } lands on General', async () => {
     const { container, unmount } = await renderForm('general');
@@ -300,6 +402,19 @@ describe('Settings → Claude', () => {
     const advanced = container.querySelector('[data-testid="advanced"]')!;
     for (const p of ['binary', 'extra_args', 'extra_hooks', 'terminal_command'])
       expect(advanced.querySelector(`[data-path="claude.${p}"]`), p).toBeTruthy();
+    unmount();
+  });
+
+  it('at the repo layer its own rows stay hidden: they change Claude Code for every project (#482)', async () => {
+    const { transport } = createMockTransport();
+    setTransport(transport);
+    const { container, unmount } = render(Claude, { layer: 'repo', projectId: 'shop', repoId: 'api' });
+    await waitFor(() =>
+      expect(container.querySelector('[data-path="claude.append_system_prompt"]')).toBeTruthy(),
+    );
+    expect(container.querySelector('[data-testid="copy-group"]')).toBeNull();
+    for (const id of ['claude-mcp', 'claude-hooks', 'claude-permission-mode'])
+      expect(container.querySelector(`[data-testid="${id}"]`), id).toBeNull();
     unmount();
   });
 });

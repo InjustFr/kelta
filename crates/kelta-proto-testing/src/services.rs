@@ -164,6 +164,7 @@ pub struct FakeUiBridge {
     badge: Mutex<u32>,
     attention_requests: Mutex<u32>,
     notifications: Mutex<Vec<Notification>>,
+    notify_fails: Mutex<bool>,
     window: Mutex<WindowState>,
     reloads: Mutex<Vec<bool>>,
 }
@@ -176,9 +177,15 @@ impl FakeUiBridge {
             badge: Mutex::new(0),
             attention_requests: Mutex::new(0),
             notifications: Mutex::new(Vec::new()),
+            notify_fails: Mutex::new(false),
             window: Mutex::new(WindowState { exists: true, visible: true, focused: true }),
             reloads: Mutex::new(Vec::new()),
         })
+    }
+
+    /// Make every later `notify` fail (no notification daemon).
+    pub fn fail_notifications(&self) {
+        *self.notify_fails.lock() = true;
     }
 
     pub fn set_window_state(&self, w: WindowState) {
@@ -229,6 +236,9 @@ impl UiBridge for FakeUiBridge {
     }
 
     fn notify(&self, n: Notification) -> Result<(), KeltaError> {
+        if *self.notify_fails.lock() {
+            return Err(KeltaError::unsupported("no notification daemon"));
+        }
         self.notifications.lock().push(n);
         Ok(())
     }

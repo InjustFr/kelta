@@ -246,7 +246,10 @@ test.describe('settings pane', () => {
     ).toBeChecked();
 
     await page.getByRole('switch', { name: 'Save scrolled-off lines to disk' }).click();
-    await expect(page.locator('[data-testid="field"][data-path="terminal.history_log_mb"]')).toHaveCount(0);
+    // shown disabled, not hidden, so a search hit still lands (#482)
+    await expect(
+      page.locator('[data-testid="field"][data-path="terminal.history_log_mb"] input'),
+    ).toBeDisabled();
     expect(errors).toEqual([]);
   });
 

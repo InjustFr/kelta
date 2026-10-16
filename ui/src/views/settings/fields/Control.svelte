@@ -140,7 +140,11 @@
   function rangeError(s: string): string | null {
     if (s === '') return null;
     const m = RANGE.exec(s);
-    if (!m) return t('Enter both times, or clear both.');
+    if (!m)
+      // one side empty ("22:00-", "-08:00"): the user cleared one box; anything else is a bad stored value
+      return /^\s*-|-\s*$/.test(s)
+        ? t('Enter both times, or clear both.')
+        : t('Not a valid time range, pick two times.');
     return m[1] === m[2] ? t('Pick two different times.') : null; // Rust: same start and end = never quiet
   }
 

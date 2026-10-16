@@ -596,6 +596,29 @@ describe('ToastsStore', () => {
     vi.useRealTimers();
   });
 
+  it('a toast with only a secondary link auto-dismisses, is held in focus mode and is not the run-last one (#482)', () => {
+    vi.useFakeTimers();
+    const store = new ToastsStore();
+    const link = {
+      label: 'Notification settings',
+      command: 'settings.open',
+      args: { section: 'notifications' },
+    };
+    const ev = {
+      type: 'toast',
+      toast: { level: 'info', text: 'ready', action: null, secondary: link },
+    } as const;
+    store.apply(ev);
+    expect(store.lastActionable).toBeNull();
+    vi.advanceTimersByTime(5001);
+    expect(store.list).toHaveLength(0);
+    store.held = [];
+    store.apply(ev);
+    expect(store.held).toEqual(['ready']);
+    expect(store.list).toHaveLength(0);
+    vi.useRealTimers();
+  });
+
   it('an error naming a setting offers to open it (#477)', () => {
     const store = new ToastsStore();
     store.error(

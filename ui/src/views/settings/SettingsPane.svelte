@@ -154,7 +154,8 @@
     pendingKey = null;
     const entry = index.find((e) => e.kind === 'key' && e.path === key);
     untrack(() => {
-      if (entry) open(entry);
+      // a key this repository file does not show would wait forever for its row: the search says so (#482)
+      if (entry && (editor.layer !== 'repo' || repoRelevant(key))) open(entry);
       else {
         query = key; // a key the forms do not show: the search says so
         active = 0;
@@ -341,10 +342,20 @@
   {#if editor.layer !== 'global'}
     <p class="layer-help" data-testid="layer-help">
       {tn(
-        'Changes here apply to {where} only. {n} setting differs from All projects.',
-        'Changes here apply to {where} only. {n} settings differ from All projects.',
+        'Changes here apply to {where} only. {n} setting set here.',
+        'Changes here apply to {where} only. {n} settings set here.',
         perFile[fileKey(editor)] ?? 0,
-        { where: editor.files.find((f) => fileKey(f) === fileKey(editor))?.where ?? '' },
+        {
+          // before readLayerFiles resolves (or when that file failed to read): the project's name (#482)
+          where:
+            editor.files.find((f) => fileKey(f) === fileKey(editor))?.where ??
+            [
+              projects.list.find((p) => p.id === editor.projectId)?.name,
+              editor.layer === 'repo' ? editor.repoId : null,
+            ]
+              .filter(Boolean)
+              .join(' › '),
+        },
       )}
     </p>
   {/if}

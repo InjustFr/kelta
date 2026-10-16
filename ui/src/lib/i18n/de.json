@@ -705,9 +705,9 @@
     "one": "{n} Änderung",
     "other": "{n} Änderungen"
   },
-  "Changes here apply to {where} only. {n} settings differ from All projects.": {
-    "one": "Änderungen hier gelten nur für {where}. {n} Einstellung weicht von Alle Projekte ab.",
-    "other": "Änderungen hier gelten nur für {where}. {n} Einstellungen weichen von Alle Projekte ab."
+  "Changes here apply to {where} only. {n} settings set here.": {
+    "one": "Änderungen hier gelten nur für {where}. {n} Einstellung hier gesetzt.",
+    "other": "Änderungen hier gelten nur für {where}. {n} Einstellungen hier gesetzt."
   },
   "{where} uses {value} →": "{where} nutzt {value} →",
   "Inherited from All projects": "Geerbt von Alle Projekte",
@@ -3033,6 +3033,7 @@
   "Until": "Bis",
   "to": "bis",
   "Enter both times, or clear both.": "Beide Zeiten eingeben oder beide leeren.",
+  "Not a valid time range, pick two times.": "Kein gültiger Zeitraum, zwei Zeiten wählen.",
   "Pick two different times.": "Zwei verschiedene Zeiten wählen.",
   "Nothing shows? Allow Kelta in your system’s notification settings.": "Nichts erscheint? Erlauben Sie Kelta in den Mitteilungseinstellungen des Systems.",
   "Changed by you": "Von Ihnen geändert",
