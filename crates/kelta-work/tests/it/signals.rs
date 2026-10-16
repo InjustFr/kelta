@@ -117,6 +117,22 @@ async fn hooks_set_and_clear_signals() {
 }
 
 #[tokio::test]
+async fn looking_at_the_tab_clears_claude_replied() {
+    need_git!();
+    let fx = Fx::new();
+    let (w, item, claude) = started(&fx).await;
+
+    fx.core.publish(hook(&claude, "Stop", json!({ "last_assistant_message": "Pushed, PR opened." })));
+    wait_item(&fx, &item, |w| w.claude_replied).await;
+
+    let out = w.seen(&item.id).await.unwrap();
+    assert!(!out.claude_replied && !out.review_due);
+    assert!(!fx.store.get_item(&item.id).await.unwrap().unwrap().claude_replied);
+    // Already read: a no-op.
+    assert!(!w.seen(&item.id).await.unwrap().claude_replied);
+}
+
+#[tokio::test]
 async fn claude_at_stamps_when_claude_asks_or_stops() {
     need_git!();
     let fx = Fx::new();

@@ -44,6 +44,14 @@ describe('return strip', () => {
     await waitFor(() => expect(screen.queryByTestId('return-brief')).toBeNull());
   });
 
+  it('clears claude_replied while the tab is shown (#489)', async () => {
+    const w = { ...item(3), claude_replied: true };
+    work.upsert(w);
+    mountHeader(w);
+    await waitFor(() => expect(mock.calls.some((c) => c.cmd === 'work_seen')).toBe(true));
+    await waitFor(() => expect(work.get(w.id)?.claude_replied).toBe(false));
+  });
+
   it('not before the threshold, and never while Claude is working', async () => {
     const recent = { ...item(3), left_at: ago(5) };
     work.upsert(recent);

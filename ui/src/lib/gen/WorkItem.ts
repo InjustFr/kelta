@@ -28,7 +28,7 @@ pr_title_needs_key: boolean,
  */
 review_due: boolean, 
 /**
- * Claude stopped without changes (ended its turn in prose). Cleared by `UserPromptSubmit`, Finish.
+ * Claude stopped without changes (ended its turn in prose). Cleared by `UserPromptSubmit`, Finish and `work_seen` (its tab shown, #489).
  */
 claude_replied: boolean, 
 /**

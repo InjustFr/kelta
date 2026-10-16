@@ -5,8 +5,8 @@
   import { untrack } from 'svelte';
 
   import type { TabHeaderProps } from '$app/registry';
-  import { workLeft } from '$lib/ipc/commands';
-  import { settings, work } from '$lib/stores';
+  import { workLeft, workSeen } from '$lib/ipc/commands';
+  import { settings, ui, work } from '$lib/stores';
   import { terminalPool } from '$lib/terminal';
   import { Button, relativeTime } from '$lib/ui';
 
@@ -37,6 +37,15 @@
     return () =>
       void workLeft({ id }).then(
         (w) => work.upsert(w),
+        () => {},
+      );
+  });
+  // Shown in the focused window = Claude's reply is read (#489): Go to Claude and its pane land on this tab.
+  $effect(() => {
+    const w = item;
+    if (w?.claude_replied && ui.focused)
+      void workSeen({ id: w.id }).then(
+        (x) => work.upsert(x),
         () => {},
       );
   });

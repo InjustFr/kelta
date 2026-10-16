@@ -135,6 +135,25 @@ describe('phaseOf: the 18 rows of FLOW §2.2', () => {
       'go_claude',
     );
     check(
+      '9 replied, PR at the local HEAD (#489)',
+      phaseOf(item({ ...withPr, claude_replied: true }), claude('done'), pr(), git()),
+      'in_review',
+      'in_flight',
+      'open_pr',
+    );
+    check(
+      '9 replied, unpushed on a PR',
+      phaseOf(
+        item({ ...withPr, claude_replied: true }),
+        claude('done'),
+        pr(),
+        git({ unpushed: true, ahead: 1 }),
+      ),
+      'replied',
+      'needs_you',
+      'go_claude',
+    );
+    check(
       '10 remote new',
       phaseOf(item(withPr), null, pr({ decision: 'changes_requested' }), git({ remote_new: 2 })),
       'remote_new',

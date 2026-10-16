@@ -93,7 +93,7 @@ The first matching row wins. "Claude" below means the item's Claude session `sta
 | 6 | `state = merged` | Merged (#n, ticket moved to Done, or "choose Done status") | none | Finish… | Ship and clean up |
 | 7 | PR closed unmerged | PR closed (#n) | none | Finish… | Ship and clean up |
 | 8 | `review_due` | To review (the delta chip) | done | Review changes | Ready for review |
-| 9 | `claude_replied` | Claude replied (`ClaudeMeta.preview`) | needs input | Go to Claude | Claude needs you |
+| 9 | `claude_replied`, unless an open PR is at the local HEAD (Claude pushed or opened it: the PR rows place the item, #489) | Claude replied (`ClaudeMeta.preview`) | needs input | Go to Claude | Claude needs you |
 | 10 | PR exists, `git.remote_new > 0` | Remote has new commits (n) | error | Rebase onto {remote}/{branch} | Fix |
 | 11 | PR `decision = changes_requested` or `ci = failure` on the PR head, **and** the local HEAD is the PR head (`unpushed = 0`, not dirty) | Changes requested (#n) / Checks failed (#n and the failed check names: the first 3, then `+n`). CI and review are separate axes (#369): the label names the other one too, `Checks failed · review required` (or `· approved`), `Changes requested · checks failed` | error | Fix with Claude / Send failures to Claude (`fix_checks`) | Fix |
 | 11a | PR `last_comment_at` newer than the item's `feedback_at` (or `feedback_at` unset): an unresolved thread whose last comment is not mine. No local-HEAD condition: unpushed work does not hide it | New comments (n unresolved threads) | error | Fix with Claude | Fix |
@@ -125,7 +125,7 @@ Two flags on `WorkItem`, owned by kelta-work, both set only from a real `Stop` h
 Clearing:
 - Both are cleared by a `UserPromptSubmit` in that session (Louis answered Claude, so he looked).
 - `review_due` is also cleared by a **UI** Ship or Push, Finish, and Mark reviewed (`R`, which also stamps `reviewed`). A Ship or push Claude does itself through MCP leaves it set: LLM work is not reviewed until Louis looks. Opening the diff does not clear it: Louis may stop halfway.
-- `claude_replied` is also cleared by Finish.
+- `claude_replied` is also cleared by Finish and by looking: the item's work tab shown in the focused window (`work_seen`, #489; Go to Claude and focusing its Claude pane land there).
 
 Heuristic sessions (hooks inactive) never set either: a 3 s quiet guess would flood the queue. The Claude pane shows the existing "Live status off · Fix" instead. A Claude adopted after Kelta quit with sessions left running keeps its hook status (#360): its hooks still arrive, only its `SessionStart` is past, so adoption sets the flag.
 

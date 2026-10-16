@@ -731,7 +731,7 @@ pub struct WorkItem {
     /// hook; cleared by `UserPromptSubmit`, UI Ship/Push, Finish and `work_mark_reviewed`.
     #[serde(default)]
     pub review_due: bool,
-    /// Claude stopped without changes (ended its turn in prose). Cleared by `UserPromptSubmit`, Finish.
+    /// Claude stopped without changes (ended its turn in prose). Cleared by `UserPromptSubmit`, Finish and `work_seen` (its tab shown, #489).
     #[serde(default)]
     pub claude_replied: bool,
     /// When Claude last stopped or asked for input (RFC 3339), from hooks only; orders Now's rows.

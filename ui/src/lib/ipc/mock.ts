@@ -1961,6 +1961,12 @@ export function createMockTransport(options: MockOptions = {}): {
       emit({ type: 'work.updated', work: clone(w) });
       return clone(w);
     },
+    work_seen: ({ id }) => {
+      const w = work(id);
+      w.claude_replied = false;
+      emit({ type: 'work.updated', work: clone(w) });
+      return clone(w);
+    },
     work_start_now: ({ id }) => {
       const w = work(id);
       if (w.state.kind !== 'queued') throw err('conflict', 'work item is not queued');
