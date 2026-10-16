@@ -256,6 +256,8 @@ pub mod bus {
     pub const WORK_FINISHED: &str = "work.finished";
     /// Work item or saga step changed (`{work}`); core relays it as `UiEvent::WorkUpdated`.
     pub const WORK_UPDATED: &str = "work.updated";
+    /// A claimed run's state edge (`{work, ticket, state, previous, phase, note}`, #501).
+    pub const RUN_STATE_CHANGED: &str = "run.state_changed";
     pub const PR_BEFORE_CREATE: &str = "pr.before_create";
     pub const PR_CREATED: &str = "pr.created";
     pub const PR_REVIEW_REQUESTED: &str = "pr.review_requested";
@@ -302,6 +304,7 @@ pub mod bus {
         WORK_BEFORE_FINISH,
         WORK_FINISHED,
         WORK_UPDATED,
+        RUN_STATE_CHANGED,
         PR_BEFORE_CREATE,
         PR_CREATED,
         PR_REVIEW_REQUESTED,
