@@ -699,6 +699,50 @@ async fn resume_respawns_exited_claude_fresh_when_the_conversation_is_gone() {
 }
 
 #[tokio::test]
+async fn a_fast_failing_resume_keeps_an_existing_conversation() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let item = w.start(w.plan(&project(), ticket("SHOP-141")).await.unwrap()).await.unwrap();
+    let first = fx.spawned_of(|k| *k == SessionKind::Claude)[0].id.clone();
+    let uuid = item.claude_uuid.clone().unwrap();
+    // Claude's transcript for the item's conversation is on disk.
+    let cfg = fx.tmp.path().join("claude-config");
+    let transcript = cfg.join("projects/-some-cwd").join(format!("{uuid}.jsonl"));
+    std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
+    std::fs::write(&transcript, "{}\n").unwrap();
+    fx.core.respond("claude_config_dir", serde_json::json!(cfg));
+    fx.core.exit_session(&first, 0);
+
+    w.resume(&item.id).await.unwrap();
+    let second = fx.spawned_of(|k| *k == SessionKind::Claude).into_iter().find(|s| s.id != first).unwrap().id;
+    fx.core.exit_session(&second, 1);
+    let kept = |fx: &Fx| fx.core.toasts().iter().any(|t| t.text.contains("exited with code 1"));
+    for _ in 0..300 {
+        if kept(&fx) {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    assert!(kept(&fx), "error toast with the exit code");
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    let spawns = fx
+        .core
+        .calls()
+        .iter()
+        .filter(|c| c.method == "session_spawn" && c.args["kind"]["type"] == "claude")
+        .count();
+    assert_eq!(spawns, 2, "no fresh Claude");
+    assert_eq!(fx.store_items().await[0].claude_uuid.as_deref(), Some(uuid.as_str()));
+    assert!(!fx.core.toasts().iter().any(|t| t.text.contains("not found")));
+
+    // The restore path asks the same question; once the transcript is gone the conversation is gone.
+    assert!(w.refused_resume_kept(&second, Some(1)).await);
+    std::fs::remove_file(&transcript).unwrap();
+    assert!(!w.refused_resume_kept(&second, Some(1)).await);
+}
+
+#[tokio::test]
 async fn resume_with_a_prompt_respawns_a_dormant_claude_with_resume() {
     need_git!();
     let fx = Fx::new();

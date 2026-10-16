@@ -692,6 +692,9 @@ impl CoreApi for Core {
     fn login_path(&self) -> Option<String> {
         self.login_env.path().map(str::to_owned)
     }
+    fn claude_config_dir(&self) -> Option<std::path::PathBuf> {
+        spawn_env::claude_config_dir(&self.login_env.vars)
+    }
     async fn session_spawn(&self, req: SpawnRequest) -> Result<SessionInfo, KeltaError> {
         self.rt.capture();
         self.spawn_session(req).await

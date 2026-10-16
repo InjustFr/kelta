@@ -264,8 +264,40 @@ impl WorkService {
         self.spawn_leaf(env, item, j, kind, name).await
     }
 
-    /// `--resume` refused (fast non-zero exit) → a fresh Claude (`--session-id <new uuid>`) in the same pane;
-    /// never `--continue`, which would pick whatever conversation last ran in the cwd (#498).
+    /// Claude still has the conversation `uuid` (its transcript is under `<config dir>/projects/<slug>/`).
+    /// Unknown config dir = not found, as before #506.
+    fn conversation_exists(&self, uuid: &str) -> bool {
+        let Some(dir) = self.api().ok().and_then(|c| c.claude_config_dir()) else { return false };
+        let file = format!("{uuid}.jsonl");
+        // shortcut: scans every project dir instead of computing Claude's cwd slug; slow only with thousands of projects.
+        std::fs::read_dir(dir.join("projects"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .any(|d| d.path().join(&file).exists())
+    }
+
+    /// A `--resume` of `uuid` failed fast but its conversation exists: keep the link, start no fresh
+    /// Claude, tell the user (#506). `false` = the conversation is gone, replace it.
+    fn resume_kept(&self, uuid: &str, code: Option<i32>) -> bool {
+        if !self.conversation_exists(uuid) {
+            return false;
+        }
+        let how = code.map_or_else(|| "was killed".to_owned(), |c| format!("exited with code {c}"));
+        if let Ok(core) = self.api() {
+            core.toast(Toast::error(format!("Claude {how} while resuming; the conversation is kept.")));
+        }
+        true
+    }
+
+    /// `resume_kept` for the work item owning `session` (restore path); `false` for other sessions.
+    pub async fn refused_resume_kept(&self, session: &SessionId, code: Option<i32>) -> bool {
+        let Some(item) = self.for_session(session).await else { return false };
+        item.claude_uuid.as_deref().is_some_and(|u| self.resume_kept(u, code))
+    }
+
+    /// `--resume` refused (fast non-zero exit, conversation gone) → a fresh Claude (`--session-id <new uuid>`)
+    /// in the same pane; never `--continue`, which would pick whatever conversation last ran in the cwd (#498).
     fn watch_resume(
         &self,
         mut rx: tokio::sync::broadcast::Receiver<kelta_proto::events::BusEvent>,
@@ -282,6 +314,10 @@ impl WorkService {
             if code == 0 {
                 return;
             }
+            let Ok(old) = svc.load(&id).await.map(|it| it.claude_uuid) else { return };
+            if old.as_deref().is_some_and(|u| svc.resume_kept(u, Some(code))) {
+                return;
+            }
             let uuid = uuid::Uuid::new_v4().to_string();
             // `update`, not `save`: save keeps the stored uuid.
             let Ok(mut item) = svc
@@ -295,7 +331,7 @@ impl WorkService {
             };
             let Ok(env) = svc.env(&item.project_id, &item.repo_id) else { return };
             let mut j = svc.load_journal(&id);
-            tracing::info!(work_item = %id, "claude --resume refused; starting a new Claude");
+            tracing::info!(work_item = %id, old_uuid = ?old, new_uuid = %uuid, "claude --resume refused; starting a new Claude");
             let mode = LaunchMode::New { uuid, prompt: prompt.unwrap_or_default() };
             match svc.spawn_claude(&env, &mut item, &mut j, mode).await {
                 Ok(new) => {
@@ -343,7 +379,9 @@ impl WorkService {
         let Some(mut item) = self.for_session(session).await else { return Ok(None) };
         let Some(uuid) = item.claude_uuid.clone() else { return Ok(None) };
         let mode = if fallback {
+            let old = uuid;
             let uuid = uuid::Uuid::new_v4().to_string();
+            tracing::info!(work_item = %item.id, old_uuid = %old, new_uuid = %uuid, "claude --resume refused; starting a new Claude");
             item = self
                 .update(&item.id, |it| {
                     it.claude_uuid = Some(uuid.clone());
