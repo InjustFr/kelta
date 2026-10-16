@@ -8,8 +8,8 @@ use std::sync::Arc;
 use crate::common::*;
 use kelta_proto::ErrorCode;
 use kelta_proto::api::{CodeHost, CoreApi, Tracker};
-use kelta_proto::error::KeltaError;
 use kelta_proto::ctl::CtlCommand;
+use kelta_proto::error::KeltaError;
 use kelta_proto::ext::{ActionDef, TriggerDef, WorkflowDef, WorkflowOn};
 use kelta_proto::ids::{AccountId, ProjectId, SessionId};
 use kelta_proto::model::{
@@ -409,6 +409,8 @@ async fn emit_with_project_starts_a_global_run_through_a_trigger() {
         payload: serde_json::json!({}),
         project: Some(ProjectId::new(p)),
     };
+    // Core's startup task subscribes the trigger engine to the bus; an event published first is missed.
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     let err = h.core.ctl(emit("nope")).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::NotFound);
     h.core.ctl(emit("shop")).await.unwrap();

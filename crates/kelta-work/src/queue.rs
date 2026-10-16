@@ -29,7 +29,11 @@ pub(crate) fn may_start(
 /// Claude slots in use (#141, #500): live Claude sessions plus the `starting` items (a saga holds its
 /// slot before its Claude spawns; that Claude is not counted twice). `own` (a step retry on an Active
 /// item) does not compete for its slot.
-pub fn live_claudes(sessions: &[SessionInfo], starting: &HashSet<WorkItemId>, own: Option<&WorkItemId>) -> usize {
+pub fn live_claudes(
+    sessions: &[SessionInfo],
+    starting: &HashSet<WorkItemId>,
+    own: Option<&WorkItemId>,
+) -> usize {
     sessions
         .iter()
         .filter(|s| s.kind == SessionKind::Claude && s.lifecycle == Lifecycle::Live)

@@ -794,7 +794,8 @@ async fn run_workflow(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &V
         core.workflow_start(Some(&project), workflow, None).await
     }
     .map_err(coded)?;
-    Ok(json!({ "session_id": start.session.id, "name": start.session.name, "running": start.running }).to_string())
+    Ok(json!({ "session_id": start.session.id, "name": start.session.name, "running": start.running })
+        .to_string())
 }
 
 async fn link_pr(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &Value) -> ToolResult {

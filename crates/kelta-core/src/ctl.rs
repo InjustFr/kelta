@@ -371,7 +371,11 @@ impl Core {
                 // bridge only when KELTA_BENCH_MARKS is set).
                 if name.starts_with("custom.bench.") {
                     self.emit(UiEvent::CtlCommand {
-                        cmd: CtlCommand::Emit { name: name.clone(), payload: payload.clone(), project: project.clone() },
+                        cmd: CtlCommand::Emit {
+                            name: name.clone(),
+                            payload: payload.clone(),
+                            project: project.clone(),
+                        },
                     });
                 }
                 let ev = BusEvent::new(name, payload);

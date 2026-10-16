@@ -930,7 +930,8 @@ async fn run_workflow_tool_starts_a_ticket_run_once() {
     let c = starts().pop().unwrap();
     assert_eq!(c.args["project"], json!(session.project_id));
     assert!(c.args["ticket"].is_null());
-    let (_, err) = global_call(port, "run_workflow", json!({ "workflow": "daily", "project": "other" })).await;
+    let (_, err) =
+        global_call(port, "run_workflow", json!({ "workflow": "daily", "project": "other" })).await;
     assert!(!err);
     assert_eq!(starts().pop().unwrap().args["project"], "other");
     let (text, err) = global_call(port, "run_workflow", json!({ "workflow": "daily" })).await;
