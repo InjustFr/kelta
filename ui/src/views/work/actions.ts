@@ -84,9 +84,12 @@ async function step(c: Ctx, step: string): Promise<void> {
 
 async function goClaude({ item }: Ctx): Promise<void> {
   const claude = askerOf(item) ?? claudeOf(item);
-  // A run's Claude moves into the item's tab when that tab first opens (#491): open it, not the run's tab.
+  // An adopted run's Claude moves into the item's tab when that tab first opens (#491): open it, not the
+  // run's tab. An MCP claim from another session does not adopt: its asker stays where it is.
   const tabless =
-    item.run !== null && !layout.get(item.project_id)?.tabs.some((t) => t.work_item_id === item.id);
+    !!claude &&
+    item.session_ids.includes(claude.id) &&
+    !layout.get(item.project_id)?.tabs.some((t) => t.work_item_id === item.id);
   // A live or dormant Claude is shown (attaching resumes a dormant one); a dead one is respawned.
   if (claude && claude.lifecycle !== 'exited' && !tabless && (await revealSession(claude.id))) return;
   await goToWork(item);

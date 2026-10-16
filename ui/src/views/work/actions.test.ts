@@ -13,7 +13,7 @@ import './actions';
 import { gitStatus, sessionInfo, workItem } from '$lib/gen/fixtures';
 
 import { listScope } from '../../shell/scope.svelte';
-import { blockedReason, workMenu } from './actions';
+import { blockedReason, runWorkAction, workMenu } from './actions';
 import { phaseNow } from './live';
 import { globalContent } from './nav';
 import { batch } from './batch.svelte';
@@ -393,5 +393,51 @@ describe('⌘. opens the menu of what has the keys (#404)', () => {
     await dispatch('work.menu', { id });
     expect(log).toEqual([]);
     expect(workUi.menu).toBe(id);
+  });
+});
+
+describe('Go to Claude on a run-claimed item (#491)', () => {
+  const asking = (id: string) =>
+    sessions.upsert({
+      ...sessionInfo,
+      id,
+      project_id: 'shop',
+      lifecycle: 'live',
+      claude: {
+        ...sessionInfo.claude!,
+        question: { question: 'Proceed?', options: ['yes'], body_html: null },
+      },
+    });
+  const claimed = (session_ids: string[]): WorkItem => ({
+    ...workItem,
+    id: 'claimed',
+    project_id: 'shop',
+    session_ids,
+    run: {
+      name: 'pass',
+      run_id: 'r',
+      session_id: 'orch',
+      phase: null,
+      state: 'running',
+      note: null,
+      sha: null,
+    },
+  });
+
+  it("an MCP claim from another session reveals the asking session, not the item's tab", async () => {
+    asking('orch');
+    const item = claimed([]);
+    work.upsert(item);
+    await runWorkAction('go_claude', item);
+    expect(mock.calls.some((c) => c.cmd === 'work_resume')).toBe(false);
+    expect(layout.get('shop')?.tabs.some((t) => JSON.stringify(t).includes('orch'))).toBe(true);
+  });
+
+  it("an adopted run's Claude opens the item's tab (work_resume), not the run's", async () => {
+    asking('orch');
+    const item = claimed(['orch']);
+    work.upsert(item);
+    await runWorkAction('go_claude', item);
+    expect(mock.calls.some((c) => c.cmd === 'work_resume')).toBe(true);
   });
 });
