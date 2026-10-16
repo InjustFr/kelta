@@ -195,6 +195,8 @@ impl Core {
         else {
             return item;
         };
+        // shortcut: one lock for all sessions, adoptions are rare; shard per sid if it ever contends.
+        let _guard = self.adopt_lock.lock().await;
         if self.work.for_session(&info.id).await.is_some_and(|w| w.state != WorkState::Finished) {
             return item;
         }

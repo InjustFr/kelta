@@ -294,6 +294,47 @@ async fn a_global_run_that_claims_with_adopt_false_keeps_its_claude_out() {
     assert_eq!(second.session_ids, vec![sid]);
 }
 
+/// #494: the adoption decision reads the store (so it holds after a restart): a session whose previous item
+/// is Finished is adopted by its next claim; the same session re-claiming a ticket gets its item back.
+#[tokio::test]
+async fn a_session_is_adopted_again_once_its_item_is_finished_and_reclaims_without_conflict() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, repo) = env(tmp.path());
+    let shop = ProjectId::new("shop");
+    let sid = h.core.workflow_run_on(shop.clone(), "daily", None).await.unwrap().session.id;
+    let wt = tmp.path().join("runs/ticket-142");
+    git(&repo, &["worktree", "add", "-q", "-b", "feat/ticket-142", wt.to_str().unwrap()]);
+    let core: &dyn CoreApi = h.core.as_ref();
+    let claim = RunClaim { name: Some("daily".into()), session_id: Some(sid.clone()), ..RunClaim::default() };
+    let a = core.work_claim(&shop, samples::ticket_ref(), Some(wt), None, claim.clone(), true).await.unwrap();
+    assert_eq!(a.session_ids, vec![sid.clone()]);
+    let again = core.work_claim(&shop, samples::ticket_ref(), None, None, claim.clone(), true).await.unwrap();
+    assert_eq!(again.id, a.id, "same session, same ticket: the same item, no Conflict");
+    core.work_release("SHOP-142", None, Some(&sid)).await.unwrap();
+    let next = TicketRef { key: "SHOP-143".into(), id: "SHOP-143".into(), ..samples::ticket_ref() };
+    let b = core.work_claim(&shop, next, None, None, claim, true).await.unwrap();
+    assert_eq!(b.session_ids, vec![sid.clone()], "adopted: its previous item is Finished");
+    assert_eq!(h.core.session_get(&sid).unwrap().work_item_id, Some(b.id));
+}
+
+/// #494: lanes sharing one `/mcp/<sid>` claim at once; the session still lands in one live item.
+#[tokio::test]
+async fn concurrent_claims_from_one_session_adopt_it_once() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, _) = env(tmp.path());
+    let shop = ProjectId::new("shop");
+    let sid = h.core.workflow_run_on(shop.clone(), "daily", None).await.unwrap().session.id;
+    let core: &dyn CoreApi = h.core.as_ref();
+    let claim = RunClaim { name: Some("daily".into()), session_id: Some(sid.clone()), ..RunClaim::default() };
+    let t = |k: &str| TicketRef { key: k.into(), id: k.into(), ..samples::ticket_ref() };
+    let (x, y) = tokio::join!(
+        core.work_claim(&shop, t("SHOP-1"), None, None, claim.clone(), true),
+        core.work_claim(&shop, t("SHOP-2"), None, None, claim.clone(), true),
+    );
+    let adopted = [x.unwrap(), y.unwrap()].iter().filter(|w| w.session_ids.contains(&sid)).count();
+    assert_eq!(adopted, 1, "one session, at most one live item");
+}
+
 /// #494: a plain Claude tab that claims through MCP becomes the item's Claude, with no run list.
 #[tokio::test]
 async fn a_plain_claude_that_claims_becomes_the_items_claude() {

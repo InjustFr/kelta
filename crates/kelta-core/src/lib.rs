@@ -206,6 +206,8 @@ pub struct Core {
     /// registration, ticket #234); locked for a whole install / remove so concurrent ones take one reference
     /// and one token (#294).
     pub(crate) claude_mcp_ref: tokio::sync::Mutex<Option<claude_mcp::Registration>>,
+    /// Held across `adopt_claiming_session`'s check and adoption: lanes sharing one `/mcp/<sid>` claim at once (#494).
+    pub(crate) adopt_lock: tokio::sync::Mutex<()>,
     /// Re-checks a registration just written, in case a concurrent Claude Code save dropped it (#322).
     pub(crate) claude_mcp_recheck: rt::OneShot,
     /// The last Claude permission mode a session switched to (#277), persisted in `ui_state`.
@@ -373,6 +375,7 @@ impl Core {
                 refines: Mutex::default(),
                 pr_runs: Mutex::default(),
                 claude_mcp_ref: tokio::sync::Mutex::new(None),
+                adopt_lock: tokio::sync::Mutex::new(()),
                 claude_mcp_recheck: rt::OneShot::default(),
                 claude_mode: Mutex::new(None),
                 outside: Mutex::default(),
