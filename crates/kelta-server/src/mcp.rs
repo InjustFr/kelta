@@ -789,26 +789,56 @@ async fn claim_ticket(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &V
     Ok(format!("Claimed {key}: work item {} on {} ({}).", w.id, w.branch, w.worktree.display()))
 }
 
+/// Held across the live-run lookup, the slot count and the start: parallel calls see each other's Claude (#511).
+static RUN_WORKFLOW: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 async fn run_workflow(core: &Arc<dyn CoreApi>, sid: Option<&SessionId>, args: &Value) -> ToolResult {
     let workflow = str_arg(args, "workflow")?;
+    let _slot = RUN_WORKFLOW.lock().await;
+    let ticket = match opt_arg(args, "key") {
+        Some(_) => Some(ref_by_key(core, args).await?.0),
+        None => None,
+    };
+    let project = match ticket {
+        Some(_) => None,
+        None => Some(
+            opt_arg(args, "project")
+                .map(ProjectId::new)
+                .or_else(|| sid.and_then(|s| core.session_get(s)).map(|s| s.project_id))
+                .ok_or_else(|| {
+                    "InvalidArgument: pass `project` or `key` outside a Kelta session".to_owned()
+                })?,
+        ),
+    };
+    let sessions = core.session_list(None);
+    // A live run on the ticket comes back even at the cap (#511), found as core's `ticket_run` finds it.
+    if let Some(t) = &ticket {
+        let items = core.work_list(None).await.unwrap_or_default();
+        let live = items
+            .iter()
+            .filter(|w| w.state != WorkState::Finished)
+            .filter(|w| w.ticket.as_ref().is_some_and(|x| x.account == t.account && x.key == t.key))
+            .filter_map(|w| {
+                w.run
+                    .as_ref()
+                    .filter(|r| matches!(r.state, RunState::Running | RunState::Blocked))?
+                    .session_id
+                    .as_ref()
+            })
+            .find_map(|id| sessions.iter().find(|s| &s.id == id && s.lifecycle == Lifecycle::Live));
+        if let Some(s) = live {
+            return Ok(json!({ "session_id": s.id, "name": s.name, "running": true }).to_string());
+        }
+    }
     let max = core.settings(None).claude.max_live;
-    // shortcut: start-work sagas between their slot and their Claude spawn (WorkService::starting) are not
-    // counted, CoreApi does not expose them; expose them if MCP runs overbook during batch starts.
-    let live = kelta_work::live_claudes(&core.session_list(None), &Default::default(), None);
+    // shortcut: the lock serializes MCP calls only; start-work sagas between their slot and their Claude spawn
+    // (WorkService::starting) are not counted and `w`/trigger starts are not serialized, CoreApi does not expose
+    // them; expose them if MCP runs overbook during batch starts.
+    let live = kelta_work::live_claudes(&sessions, &Default::default(), None);
     if max > 0 && live >= max as usize {
         return Err(format!("Busy: {live} of {max} Claude slots in use"));
     }
-    let start = if opt_arg(args, "key").is_some() {
-        let (ticket, _) = ref_by_key(core, args).await?;
-        core.workflow_start(None, workflow, Some(ticket)).await
-    } else {
-        let project = opt_arg(args, "project")
-            .map(ProjectId::new)
-            .or_else(|| sid.and_then(|s| core.session_get(s)).map(|s| s.project_id))
-            .ok_or_else(|| "InvalidArgument: pass `project` or `key` outside a Kelta session".to_owned())?;
-        core.workflow_start(Some(&project), workflow, None).await
-    }
-    .map_err(coded)?;
+    let start = core.workflow_start(project.as_ref(), workflow, ticket).await.map_err(coded)?;
     Ok(json!({ "session_id": start.session.id, "name": start.session.name, "running": start.running })
         .to_string())
 }

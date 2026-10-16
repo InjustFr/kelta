@@ -1007,3 +1007,62 @@ async fn run_workflow_tool_refuses_over_max_live() {
     assert!(err);
     e.server.release_http();
 }
+
+#[tokio::test]
+async fn run_workflow_returns_a_live_run_at_the_cap() {
+    let e = common::env();
+    let session = samples::session_info(); // the run's live Claude fills the only slot
+    e.fake.insert_session(session.clone());
+    let run = kelta_proto::model::RunClaim { session_id: Some(session.id.clone()), ..Default::default() }; // state Running
+    e.fake.add_work_item(kelta_proto::model::WorkItem { run: Some(run), ..samples::work_item() }); // holds SHOP-142
+    e.server.set_install_token(Some("it"));
+    let port = e.server.ensure_http().await.unwrap();
+    let mut s = kelta_proto::settings::Settings::defaults();
+    s.claude.max_live = 1;
+    e.fake.set_settings(s);
+    let account = samples::ticket_ref().account;
+    let (text, err) = global_call(
+        port,
+        "run_workflow",
+        json!({ "workflow": "kelta-ticket-pass", "key": "SHOP-142", "account": account }),
+    )
+    .await;
+    assert!(!err, "{text}");
+    let v: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!((&v["session_id"], &v["running"]), (&json!(session.id), &json!(true)));
+    assert!(!e.fake.call_names().contains(&"workflow_start"), "nothing started");
+    // Another ticket still meets the cap.
+    let (text, err) = global_call(
+        port,
+        "run_workflow",
+        json!({ "workflow": "kelta-ticket-pass", "key": "SHOP-999", "account": account }),
+    )
+    .await;
+    assert!(err && text == "Busy: 1 of 1 Claude slots in use", "{text}");
+    e.server.release_http();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn parallel_run_workflow_calls_respect_max_live() {
+    let e = common::env();
+    // One live Claude whose id differs from the one the fake's start inserts (samples::session_info()).
+    e.fake.insert_session(kelta_proto::model::SessionInfo {
+        id: SessionId::new("other"),
+        ..samples::session_info()
+    });
+    e.server.set_install_token(Some("it"));
+    let port = e.server.ensure_http().await.unwrap();
+    let mut s = kelta_proto::settings::Settings::defaults();
+    s.claude.max_live = 2; // one slot left
+    e.fake.set_settings(s);
+    let args = json!({ "workflow": "daily", "project": "shop" });
+    let (a, b) = tokio::join!(
+        global_call(port, "run_workflow", args.clone()),
+        global_call(port, "run_workflow", args)
+    );
+    let mut errs: Vec<_> = [a, b].into_iter().filter(|(_, err)| *err).map(|(t, _)| t).collect();
+    assert_eq!(errs.pop().as_deref(), Some("Busy: 2 of 2 Claude slots in use"));
+    assert!(errs.is_empty(), "one run starts");
+    assert_eq!(e.fake.call_names().iter().filter(|m| **m == "workflow_start").count(), 1);
+    e.server.release_http();
+}

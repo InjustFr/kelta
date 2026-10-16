@@ -680,12 +680,18 @@ impl CoreApi for FakeCore {
             "workflow_start",
             serde_json::json!({ "project": project, "workflow": workflow, "ticket": ticket }),
         );
-        self.overridden("workflow_start").unwrap_or_else(|| {
+        // A real start awaits Claude's spawn: parallel calls interleave there, then the run's Claude is live.
+        tokio::task::yield_now().await;
+        let r = self.overridden("workflow_start").unwrap_or_else(|| {
             Ok(kelta_proto::model::WorkflowStart {
                 session: kelta_proto::samples::session_info(),
                 running: false,
             })
-        })
+        });
+        if let Ok(s) = &r {
+            self.insert_session(s.session.clone());
+        }
+        r
     }
 
     async fn editor_open(
