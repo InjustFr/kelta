@@ -427,6 +427,16 @@ pub enum ActionDef {
     },
     /// The failed checks of the event's PR (`pr.ci_changed`) to its work item's Claude (#252).
     FixChecks,
+    /// Starts a workflow run as `w` on a ticket and the palette's "Run <label>" do (#488): with `ticket`,
+    /// `workflow_run` on it (claims it; a run live on it is returned instead), else the `on = "global"`
+    /// `[[workflows]]` entry in the event's project.
+    RunWorkflow {
+        /// Id of a saved or `[[workflows]]` workflow.
+        workflow: String,
+        /// Template naming the ticket, e.g. `"{ticket.key}"`.
+        #[serde(default)]
+        ticket: Option<String>,
+    },
 }
 
 /// Value of a `secret_headers` entry (PLUGINS §3.1). In a plugin, a string names one of the

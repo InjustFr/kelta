@@ -20,4 +20,12 @@ session: string, text: string, bracketed: boolean | null, } | { "action": "open_
 /**
  * `"me"` | `"none"`.
  */
-to: string, } | { "action": "http", url: string, method: string | null, headers: { [key in string]: string }, body: string | null, secret_headers: { [key in string]: SecretHeader }, timeout_ms: number | null, } | { "action": "focus", project: string | null, session: string | null, } | { "action": "set_attention", session: string, level: Attention, } | { "action": "prompt", text: string, yes: Array<ActionDef>, no: Array<ActionDef>, } | { "action": "command", id: string, } | { "action": "fix_checks" };
+to: string, } | { "action": "http", url: string, method: string | null, headers: { [key in string]: string }, body: string | null, secret_headers: { [key in string]: SecretHeader }, timeout_ms: number | null, } | { "action": "focus", project: string | null, session: string | null, } | { "action": "set_attention", session: string, level: Attention, } | { "action": "prompt", text: string, yes: Array<ActionDef>, no: Array<ActionDef>, } | { "action": "command", id: string, } | { "action": "fix_checks" } | { "action": "run_workflow", 
+/**
+ * Id of a saved or `[[workflows]]` workflow.
+ */
+workflow: string, 
+/**
+ * Template naming the ticket, e.g. `"{ticket.key}"`.
+ */
+ticket: string | null, };

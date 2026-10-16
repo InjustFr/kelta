@@ -615,3 +615,69 @@ async fn fix_checks_sends_a_failed_ci_run_to_the_owning_claude() {
     let run = env.host.trigger_test("bad", json!({})).await.unwrap();
     assert!(!run.ok && run.detail.unwrap_or_default().contains("fix_checks needs"));
 }
+
+#[tokio::test]
+async fn run_workflow_starts_a_ticket_or_global_run_and_logs_it() {
+    use kelta_proto::samples;
+    let step = [("payload.step_id", s("pr"))];
+    let env = common::Env::new().with_settings(|st| {
+        st.triggers = vec![
+            trigger(
+                "global",
+                bus::TICKET_STEP,
+                &step,
+                vec![ActionDef::RunWorkflow { workflow: "next-ticket".into(), ticket: None }],
+            ),
+            trigger(
+                "on-ticket",
+                bus::TICKET_STEP,
+                &step,
+                vec![ActionDef::RunWorkflow {
+                    workflow: "review".into(),
+                    ticket: Some("{ticket.key}".into()),
+                }],
+            ),
+        ];
+    });
+    let payload = json!({
+        "ticket": samples::ticket_ref(), "step_id": "pr", "source_id": null, "entered_at": "", "by": "manual",
+    });
+    env.host.on_event(&ev(bus::TICKET_STEP, payload.clone())).await;
+    env.host.settle().await;
+    let calls: Vec<_> = env.core.calls().into_iter().filter(|c| c.method == "workflow_start").collect();
+    assert_eq!(calls.len(), 2);
+    let global = calls.iter().find(|c| c.args["workflow"] == "next-ticket").unwrap();
+    assert_eq!(global.args["project"], "shop");
+    assert!(global.args["ticket"].is_null());
+    let on_ticket = calls.iter().find(|c| c.args["workflow"] == "review").unwrap();
+    assert_eq!(on_ticket.args["ticket"], json!(samples::ticket_ref()));
+    let log = env.host.trigger_log(10).await.unwrap();
+    let started = format!("started: {}", samples::session_info().id);
+    assert!(log.len() == 2 && log.iter().all(|r| r.ok && r.detail.as_deref().unwrap().contains(&started)));
+
+    // A run already live on the ticket is surfaced, not started again.
+    env.core.respond("workflow_start", json!({ "session": samples::session_info(), "running": true }));
+    env.host.on_event(&ev(bus::TICKET_STEP, payload)).await;
+    env.host.settle().await;
+    let log = env.host.trigger_log(10).await.unwrap();
+    assert!(log[0].detail.as_deref().unwrap().contains("already running"), "{:?}", log[0]);
+
+    // A plugin needs `sessions.spawn` for it.
+    let m = common::manifest(
+        "wfrun",
+        &["events:ticket.*"],
+        "\n[[contributes.triggers]]\nid = \"w\"\non = \"ticket.step\"\ndo = [{ action = \"run_workflow\", workflow = \"next-ticket\" }]\n",
+    );
+    env.write_plugin("wfrun", &m, &[]);
+    env.host.grant(&PluginId::new("wfrun"), vec!["events:ticket.*".into()]).await.unwrap();
+    let before = env.core.calls().len();
+    env.host
+        .on_event(&ev(bus::TICKET_STEP, json!({ "ticket": samples::ticket_ref(), "step_id": "pr" })))
+        .await;
+    env.host.settle().await;
+    let r = env.host.trigger_log(10).await.unwrap().into_iter().find(|r| r.trigger_id == "wfrun/w").unwrap();
+    assert!(!r.ok && r.detail.as_deref().unwrap().contains("missing permission: sessions.spawn"), "{r:?}");
+    let after: Vec<_> =
+        env.core.calls().into_iter().skip(before).filter(|c| c.method == "workflow_start").collect();
+    assert_eq!(after.len(), 2, "only the two config triggers started a run");
+}

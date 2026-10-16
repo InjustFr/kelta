@@ -648,6 +648,24 @@ impl CoreApi for FakeCore {
         self.overridden("work_fix_checks").unwrap_or_else(|| Ok("sent 1 failed check".into()))
     }
 
+    async fn workflow_start(
+        &self,
+        project: Option<&ProjectId>,
+        workflow: &str,
+        ticket: Option<TicketRef>,
+    ) -> Result<kelta_proto::model::WorkflowStart, KeltaError> {
+        self.record(
+            "workflow_start",
+            serde_json::json!({ "project": project, "workflow": workflow, "ticket": ticket }),
+        );
+        self.overridden("workflow_start").unwrap_or_else(|| {
+            Ok(kelta_proto::model::WorkflowStart {
+                session: kelta_proto::samples::session_info(),
+                running: false,
+            })
+        })
+    }
+
     async fn editor_open(
         &self,
         target: EditorTarget,

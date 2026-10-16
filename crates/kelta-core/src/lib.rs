@@ -868,6 +868,20 @@ impl CoreApi for Core {
     async fn work_fix_checks(&self, review: &kelta_proto::codehost::Review) -> Result<String, KeltaError> {
         self.work.fix_checks(review).await
     }
+    async fn workflow_start(
+        &self,
+        project: Option<&ProjectId>,
+        workflow: &str,
+        ticket: Option<TicketRef>,
+    ) -> Result<kelta_proto::model::WorkflowStart, KeltaError> {
+        match (ticket, project) {
+            (Some(t), _) => self.workflow_run(t, workflow).await,
+            (None, Some(p)) => self.workflow_run_on(p.clone(), workflow, None).await,
+            (None, None) => {
+                Err(KeltaError::invalid("run_workflow without `ticket` needs an event with a project"))
+            }
+        }
+    }
     async fn work_claim(
         &self,
         project: &ProjectId,
