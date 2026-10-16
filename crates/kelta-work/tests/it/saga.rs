@@ -639,7 +639,7 @@ async fn same_branch_name_in_two_repos_gets_two_items() {
 }
 
 #[tokio::test]
-async fn resume_respawns_exited_claude_with_continue_fallback() {
+async fn resume_respawns_exited_claude_fresh_when_the_conversation_is_gone() {
     need_git!();
     let fx = Fx::new();
     let w = fx.service();
@@ -676,7 +676,7 @@ async fn resume_respawns_exited_claude_with_continue_fallback() {
     let new_tabs = fx.core.opened().iter().filter(|(_, r)| r.placement == Placement::NewTab).count();
     assert_eq!(new_tabs, 2, "tab recreated");
 
-    // `--resume` refused: fast non-zero exit → `--continue` in the same pane.
+    // `--resume` refused: fast non-zero exit → a fresh Claude with a new uuid in the same pane.
     fx.core.exit_session(&second, 1);
     for _ in 0..300 {
         if claude_args(&fx).len() == 3 {
@@ -685,8 +685,15 @@ async fn resume_respawns_exited_claude_with_continue_fallback() {
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
     let spawns = claude_args(&fx);
-    assert_eq!(spawns.len(), 3, "continue fallback spawned");
-    assert_eq!(spawns[2][0], "--continue");
+    assert_eq!(spawns.len(), 3, "fresh fallback spawned");
+    let old = item.claude_uuid.clone().unwrap();
+    assert_eq!(spawns[2][0], "--session-id");
+    assert_ne!(spawns[2][1], old, "a new uuid");
+    assert!(!spawns[2].iter().any(|a| a == "--continue"));
+    assert_eq!(fx.store_items().await[0].claude_uuid.as_deref(), Some(spawns[2][1].as_str()));
+    assert!(
+        fx.core.toasts().iter().any(|t| t.text == "Previous conversation not found; started a new Claude.")
+    );
     let last = fx.core.opened().last().cloned().unwrap().1;
     assert_eq!(last.placement, Placement::ReplaceFocused);
 }
@@ -738,13 +745,33 @@ async fn claude_restore_request_regenerates_files() {
     assert_eq!(req.cwd.as_ref(), Some(&item.worktree));
     let settings = req.args.windows(2).find(|a| a[0] == "--settings").map(|a| a[1].clone()).unwrap();
     assert!(std::path::Path::new(&settings).exists(), "files regenerated");
-    let req = w.claude_restore_request(&sid, true, None).await.unwrap().unwrap();
-    assert_eq!(req.args[0], "--continue");
     assert!(
         w.claude_restore_request(&kelta_proto::ids::SessionId::new("nope"), false, None)
             .await
             .unwrap()
             .is_none()
+    );
+}
+
+#[tokio::test]
+async fn a_refused_restore_starts_a_fresh_claude() {
+    need_git!();
+    let fx = Fx::new();
+    let w = fx.service();
+    let item = w.start(w.plan(&project(), ticket("SHOP-141")).await.unwrap()).await.unwrap();
+    let sid = fx.spawned_of(|k| *k == SessionKind::Claude)[0].id.clone();
+    let old = item.claude_uuid.clone().unwrap();
+    let req = w.claude_restore_request(&sid, true, None).await.unwrap().unwrap();
+    assert_eq!(req.args[0], "--session-id");
+    let new = req.args[1].clone();
+    assert_ne!(new, old);
+    assert!(!req.args.iter().any(|a| a == "--continue" || a == "--resume"), "{:?}", req.args);
+    assert!(
+        matches!(&req.restore, kelta_proto::model::RestorePolicy::ClaudeResume { uuid, .. } if *uuid == new)
+    );
+    assert_eq!(fx.store_items().await[0].claude_uuid.as_deref(), Some(new.as_str()));
+    assert!(
+        fx.core.toasts().iter().any(|t| t.text == "Previous conversation not found; started a new Claude.")
     );
 }
 
