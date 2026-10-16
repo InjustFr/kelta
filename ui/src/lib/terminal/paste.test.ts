@@ -14,20 +14,12 @@ describe('sanitizePaste', () => {
   });
 
   it('strips deeply nested markers in linear time', () => {
-    // No absolute limit (load breaks those): 8x the input must cost ~8x (linear), not ~64x (quadratic).
-    // The best of several runs drops load spikes; 24 sits between 8 and 64.
-    const nested = (depth: number) => 'a' + '\x1b[2'.repeat(depth) + '00~'.repeat(depth) + 'b';
-    const best = (input: string) => {
-      let min = Infinity;
-      for (let i = 0; i < 5; i++) {
-        const start = performance.now();
-        expect(sanitizePaste(input)).toBe('ab');
-        min = Math.min(min, performance.now() - start);
-      }
-      return min;
-    };
-    best(nested(1_000)); // warm up the JIT
-    expect(best(nested(80_000)) / best(nested(10_000))).toBeLessThan(24);
+    // Sized so a quadratic version needs minutes: the generous bound only trips on that, not on load spikes.
+    const depth = 100_000;
+    const nested = '\x1b[2'.repeat(depth) + '00~'.repeat(depth);
+    const start = performance.now();
+    expect(sanitizePaste('a' + nested + 'b')).toBe('ab');
+    expect(performance.now() - start).toBeLessThan(10_000);
   });
 });
 
