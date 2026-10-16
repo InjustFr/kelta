@@ -89,6 +89,10 @@ fn web_tool(id: &str, args_env: &[(&str, &str)], ready: Ready, timeout_ms: u64) 
     }
 }
 
+/// Ready timeout for tools that must come up: only bounds a real failure, so a loaded machine
+/// (macOS assesses each freshly written executable on its first run) cannot flake the tests.
+const READY_MS: u64 = 30_000;
+
 fn sh_tool(id: &str, script: &str, timeout_ms: u64) -> ToolDef {
     ToolDef {
         id: id.into(),
@@ -227,6 +231,8 @@ check = ["./bin/link"]
         &[("bin/x", "#!/bin/sh\necho own\n")],
     );
     std::fs::set_permissions(dir.join("bin/x"), std::fs::Permissions::from_mode(0o755)).unwrap();
+    // The check has a fixed 5 s cap: take macOS's first-run assessment of the new script here.
+    assert!(std::process::Command::new(dir.join("bin/x")).output().unwrap().status.success());
     let marker = env.tmp.path().join("escaped");
     let escape = env.tmp.path().join("escape.sh");
     std::fs::write(&escape, format!("#!/bin/sh\n: > {}\n", marker.display())).unwrap();
@@ -465,7 +471,7 @@ async fn web_tool_port_open_readiness_and_process_group_kill() {
 async fn web_tool_readiness_timeout_and_early_exit() {
     let env = common::Env::new().with_settings(|s| {
         s.tools.push(sh_tool("slow", "echo starting; exec sleep 30", 300));
-        s.tools.push(sh_tool("crash", "echo boom >&2; exit 3", 5_000));
+        s.tools.push(sh_tool("crash", "echo boom >&2; exit 3", READY_MS));
     });
     let e = env
         .host
@@ -488,7 +494,11 @@ async fn web_tool_readiness_timeout_and_early_exit() {
 #[tokio::test]
 async fn web_tool_exit_after_ready_publishes_tool_exited() {
     let env = common::Env::new().with_settings(|s| {
-        s.tools.push(sh_tool("short", r#"echo '{"url":"http://127.0.0.1:9/"}'; sleep 0.2; exit 4"#, 5_000));
+        s.tools.push(sh_tool(
+            "short",
+            r#"echo '{"url":"http://127.0.0.1:9/"}'; sleep 0.2; exit 4"#,
+            READY_MS,
+        ));
     });
     let h = env
         .host
@@ -510,7 +520,7 @@ async fn web_tool_exit_after_ready_publishes_tool_exited() {
 #[tokio::test]
 async fn project_close_stops_project_web_tools() {
     let env = common::Env::new().with_settings(|s| {
-        s.tools.push(sh_tool("srv", r#"echo '{"url":"http://127.0.0.1:9/"}'; exec sleep 30"#, 5_000));
+        s.tools.push(sh_tool("srv", r#"echo '{"url":"http://127.0.0.1:9/"}'; exec sleep 30"#, READY_MS));
     });
     env.host
         .tool_open(&shop(), &ToolId::new("srv"), TemplateCtx::default(), Placement::NewTab)
@@ -692,7 +702,7 @@ async fn gate_w1_sapling_isl_embeds_via_iframe_and_proxy() {
 async fn web_tool_found_and_launched_through_login_path_with_project_env() {
     use std::os::unix::fs::PermissionsExt;
     let env = common::Env::new().with_settings(|s| {
-        let mut t = sh_tool("fake", "", 5_000);
+        let mut t = sh_tool("fake", "", READY_MS);
         let start = t.start.as_mut().unwrap();
         start.command = "kelta-fake-tool".into();
         start.args.clear();
@@ -792,7 +802,7 @@ async fn web_tool_server_is_stopped_per_spec_when_the_pane_cannot_open() {
     let stopped = pid_file.path().join("stopped");
     let script =
         format!(r#"echo $$ > {}; echo '{{"url":"http://127.0.0.1:9/"}}'; exec sleep 30"#, pid_path.display());
-    let mut tool = sh_tool("srv", &script, 5_000);
+    let mut tool = sh_tool("srv", &script, READY_MS);
     tool.start.as_mut().unwrap().stop = StopSpec::Command {
         command: vec![
             "sh".into(),
