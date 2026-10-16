@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use kelta_proto::codehost::Review;
 use kelta_proto::error::KeltaError;
+use kelta_proto::events::{BusEvent, bus};
 use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{
     FinishOpts, Lifecycle, RunClaim, RunState, SessionInfo, WorkItem, WorkKind, WorkSource, WorkState,
@@ -77,23 +78,26 @@ impl WorkService {
             ..WorkItem::default()
         };
         // `start_lock`: no interactive start of the same ticket between the check and the insert.
-        let claimed = {
+        let (claimed, previous) = {
             let _s = self.start_lock.lock().await;
             let _w = self.write_lock.lock().await;
             // Liveness is computed, not swept: a holder whose owner is gone is stored orphaned here,
             // so `claim_over` takes it over in the claim right below.
             let held = kelta_proto::api::claim_holder(&self.store.list_items(None).await?, &item);
+            let mut previous = held.as_ref().and_then(|h| h.run.as_ref()).map(|r| r.state);
             if let Some(mut h) = held.filter(|h| h.run.as_ref().is_some_and(|r| self.orphaned(r))) {
                 if let Some(r) = h.run.as_mut() {
                     r.state = RunState::Orphaned;
                 }
+                previous = Some(RunState::Orphaned);
                 self.store.put_item(&h).await?;
             }
-            self.store.claim_item(&item).await?
+            (self.store.claim_item(&item).await?, previous)
         };
         match claimed {
             Ok(w) => {
                 self.publish_updated(&w);
+                self.publish_run_state(&w, previous);
                 Ok(w)
             }
             Err(holder) => {
@@ -220,19 +224,24 @@ impl WorkService {
         caller: Option<&SessionId>,
     ) -> Result<WorkItem, KeltaError> {
         let id = self.claimed(key, caller).await?.id;
-        self.update(&id, |w| {
-            let Some(r) = w.run.as_mut() else { return false };
-            // An orphaned claim driven by another caller becomes its own, never the dead owner's again.
-            if r.session_id.is_some() && r.session_id.as_ref() != caller {
-                r.session_id = caller.cloned();
-            }
-            r.state = state;
-            r.phase = phase.or(r.phase.take());
-            r.note = note.or(r.note.take());
-            r.sha = sha.or(r.sha.take());
-            true
-        })
-        .await
+        let mut previous = None;
+        let w = self
+            .update(&id, |w| {
+                let Some(r) = w.run.as_mut() else { return false };
+                previous = Some(r.state);
+                // An orphaned claim driven by another caller becomes its own, never the dead owner's again.
+                if r.session_id.is_some() && r.session_id.as_ref() != caller {
+                    r.session_id = caller.cloned();
+                }
+                r.state = state;
+                r.phase = phase.or(r.phase.take());
+                r.note = note.or(r.note.take());
+                r.sha = sha.or(r.sha.take());
+                true
+            })
+            .await?;
+        self.publish_run_state(&w, previous);
+        Ok(w)
     }
 
     /// `release_ticket` (merged or abandoned): Finish, which leaves an adopted worktree and branch alone.
@@ -242,8 +251,10 @@ impl WorkService {
         sha: Option<String>,
         caller: Option<&SessionId>,
     ) -> Result<WorkItem, KeltaError> {
-        let id = self.claimed(key, caller).await?.id;
-        self.end_claim(&id, sha).await
+        let held = self.claimed(key, caller).await?;
+        let w = self.end_claim(&held.id, sha).await?;
+        self.publish_run_state(&w, held.run.map(|r| r.state));
+        Ok(w)
     }
 
     async fn end_claim(&self, id: &WorkItemId, sha: Option<String>) -> Result<WorkItem, KeltaError> {
@@ -297,6 +308,25 @@ impl WorkService {
                     self.api()
                         .is_ok_and(|c| c.session_get(sid).is_none_or(|s| s.lifecycle != Lifecycle::Live))
                 })
+    }
+
+    /// #501: `run.state_changed` unless the run's state is still `previous` (a repeat or a phase-only
+    /// report). `end_claim` does not publish, so cleaning stale claims never fires `done`.
+    fn publish_run_state(&self, w: &WorkItem, previous: Option<RunState>) {
+        let Some(r) = w.run.as_ref().filter(|r| Some(r.state) != previous) else { return };
+        if let Ok(core) = self.api() {
+            core.publish(
+                BusEvent::new(
+                    bus::RUN_STATE_CHANGED,
+                    serde_json::json!({
+                        "work": w, "ticket": w.ticket, "state": r.state, "previous": previous,
+                        "phase": r.phase, "note": r.note,
+                    }),
+                )
+                .with_project(w.project_id.clone())
+                .with_work_item(w.id.clone()),
+            );
+        }
     }
 
     /// `w` as shown: a running claim whose owner is gone reads `orphaned`.
