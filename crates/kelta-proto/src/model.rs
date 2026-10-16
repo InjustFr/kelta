@@ -1390,7 +1390,7 @@ mod tests {
         let held = |sid, run_id| item("held", sid, run_id, "/old");
         let new = |sid, run_id| item("new", sid, run_id, "/new");
         // The holder's own re-claim: same run id, or either one missing.
-        for (h, n) in [(Some("a"), Some("r1")), (Some("a"), None), (None, Some("r1"))] {
+        for (h, n) in [(Some("r1"), Some("r1")), (Some("r1"), None), (None, Some("r1"))] {
             let got = new(Some("a"), n).claim_over(Some(held(Some("a"), h))).unwrap();
             assert_eq!((got.id, got.worktree), (WorkItemId::new("held"), "/new".into()));
         }

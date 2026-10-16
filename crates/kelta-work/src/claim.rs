@@ -62,8 +62,8 @@ impl WorkService {
             .or_else(|| kept.as_ref().map(|h| h.branch.clone()))
             .or(wt.branch)
             .ok_or_else(|| {
-            KeltaError::invalid(format!("{} has no branch checked out; pass `branch`", path.display()))
-        })?;
+                KeltaError::invalid(format!("{} has no branch checked out; pass `branch`", path.display()))
+            })?;
         // Later pushed and shown verbatim: refuse anything git would not take as a branch name.
         let branch = git::check_branch_name(&wt.path, &branch).await?;
         let item = WorkItem {

@@ -238,7 +238,10 @@ async fn a_global_run_that_claims_through_mcp_gives_its_claude_to_the_item_once(
         session_id: Some(session.clone()),
         ..RunClaim::default()
     };
-    let w = core.work_claim(&shop, samples::ticket_ref(), Some(wt.clone()), None, claim(&sid), true).await.unwrap();
+    let w = core
+        .work_claim(&shop, samples::ticket_ref(), Some(wt.clone()), None, claim(&sid), true)
+        .await
+        .unwrap();
     assert_eq!(w.run.as_ref().unwrap().session_id.as_ref(), Some(&sid));
     assert_eq!(w.session_ids, vec![sid.clone()]);
     assert_eq!(w.claude_uuid.as_deref(), start.session.claude.as_ref().map(|c| c.session_uuid.as_str()));
@@ -299,7 +302,8 @@ async fn a_global_run_that_claims_with_adopt_false_keeps_its_claude_out() {
     git(&repo, &["worktree", "add", "-q", "-b", "feat/ticket-142", wt.to_str().unwrap()]);
     let core: &dyn CoreApi = h.core.as_ref();
     let claim = RunClaim { name: Some("daily".into()), session_id: Some(sid.clone()), ..RunClaim::default() };
-    let w = core.work_claim(&shop, samples::ticket_ref(), Some(wt), None, claim.clone(), false).await.unwrap();
+    let w =
+        core.work_claim(&shop, samples::ticket_ref(), Some(wt), None, claim.clone(), false).await.unwrap();
     assert_eq!(w.run.as_ref().unwrap().session_id.as_ref(), Some(&sid));
     assert!(w.session_ids.is_empty() && w.claude_uuid.is_none());
     // The run is still unadopted: a claim with `adopt` gives its Claude to that item.

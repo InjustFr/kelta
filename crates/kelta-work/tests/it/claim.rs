@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use crate::common::{Fx, git, has_git, project};
 use crate::signals::{hook, wait_item};
-use kelta_proto::api::{Tracker, WorkStore};
+use kelta_proto::api::{CoreApi, Tracker, WorkStore};
 use kelta_proto::error::ErrorCode;
 use kelta_proto::ids::{SessionId, WorkItemId};
 use kelta_proto::model::{
@@ -517,7 +517,8 @@ async fn an_items_own_claude_claims_its_ticket() {
 
     let own = RunClaim { run_id: None, session_id: Some(claude.clone()), ..run("x") };
     let got = w.claim(&project(), t.clone(), None, None, own).await.unwrap();
-    assert_eq!((&got.id, &got.worktree, &got.branch), (&item.id, &item.worktree, &item.branch));
+    assert_eq!(got.worktree.canonicalize().unwrap(), item.worktree.canonicalize().unwrap());
+    assert_eq!((&got.id, &got.branch), (&item.id, &item.branch));
     assert_eq!(got.run.unwrap().session_id, Some(claude));
     assert_eq!(fx.store.list_items(None).await.unwrap().len(), 1);
     // Another session still gets the Conflict.
