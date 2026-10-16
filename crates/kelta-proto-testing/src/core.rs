@@ -442,7 +442,7 @@ impl CoreApi for FakeCore {
     }
 
     /// Set with `respond("claude_config_dir", json!("/dir"))`.
-    fn claude_config_dir(&self) -> Option<std::path::PathBuf> {
+    fn claude_config_dir(&self, _project: Option<&ProjectId>) -> Option<std::path::PathBuf> {
         self.overridden("claude_config_dir").and_then(Result::ok)
     }
 

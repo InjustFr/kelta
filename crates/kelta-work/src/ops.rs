@@ -9,7 +9,7 @@ use kelta_proto::api::CoreApi;
 use kelta_proto::codehost::{PrCreate, PrDraft, Review};
 use kelta_proto::error::{ErrorCode, KeltaError};
 use kelta_proto::events::{BusEvent, Toast, bus};
-use kelta_proto::ids::{SessionId, WorkItemId};
+use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{
     CloseOnExit, EditorTarget, FinishMergedReport, FinishOpts, GitStatus, Lifecycle, OpenPaneRequest,
     PaneContent, Placement, RestorePolicy, SessionInfo, SessionKind, ShipOrigin, SkippedItem, SpawnRequest,
@@ -266,8 +266,10 @@ impl WorkService {
 
     /// Claude still has the conversation `uuid` (its transcript is under `<config dir>/projects/<slug>/`).
     /// Unknown config dir = not found, as before #506.
-    fn conversation_exists(&self, uuid: &str) -> bool {
-        let Some(dir) = self.api().ok().and_then(|c| c.claude_config_dir()) else { return false };
+    fn conversation_exists(&self, uuid: &str, project: &ProjectId) -> bool {
+        let Some(dir) = self.api().ok().and_then(|c| c.claude_config_dir(Some(project))) else {
+            return false;
+        };
         let file = format!("{uuid}.jsonl");
         // shortcut: scans every project dir instead of computing Claude's cwd slug; slow only with thousands of projects.
         std::fs::read_dir(dir.join("projects"))
@@ -279,8 +281,8 @@ impl WorkService {
 
     /// A `--resume` of `uuid` failed fast but its conversation exists: keep the link, start no fresh
     /// Claude, tell the user (#506). `false` = the conversation is gone, replace it.
-    fn resume_kept(&self, uuid: &str, code: Option<i32>) -> bool {
-        if !self.conversation_exists(uuid) {
+    fn resume_kept(&self, uuid: &str, project: &ProjectId, code: Option<i32>) -> bool {
+        if !self.conversation_exists(uuid, project) {
             return false;
         }
         let how = code.map_or_else(|| "was killed".to_owned(), |c| format!("exited with code {c}"));
@@ -293,7 +295,7 @@ impl WorkService {
     /// `resume_kept` for the work item owning `session` (restore path); `false` for other sessions.
     pub async fn refused_resume_kept(&self, session: &SessionId, code: Option<i32>) -> bool {
         let Some(item) = self.for_session(session).await else { return false };
-        item.claude_uuid.as_deref().is_some_and(|u| self.resume_kept(u, code))
+        item.claude_uuid.as_deref().is_some_and(|u| self.resume_kept(u, &item.project_id, code))
     }
 
     /// `--resume` refused (fast non-zero exit, conversation gone) → a fresh Claude (`--session-id <new uuid>`)
@@ -314,8 +316,9 @@ impl WorkService {
             if code == 0 {
                 return;
             }
-            let Ok(old) = svc.load(&id).await.map(|it| it.claude_uuid) else { return };
-            if old.as_deref().is_some_and(|u| svc.resume_kept(u, Some(code))) {
+            let Ok(cur) = svc.load(&id).await else { return };
+            let old = cur.claude_uuid;
+            if old.as_deref().is_some_and(|u| svc.resume_kept(u, &cur.project_id, Some(code))) {
                 return;
             }
             let uuid = uuid::Uuid::new_v4().to_string();
