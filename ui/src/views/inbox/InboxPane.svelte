@@ -265,7 +265,7 @@
           : phase.section === 'needs_you' && phase.detail
             ? phase.detail
             : phase.label;
-        // Waiting to deploy: its tracker status is the news; Claude asking: its question. A bare `#309`
+        // Waiting to deploy or In flight on a status (#492): its tracker status is the news; Claude asking: its question. A bare `#309`
         // (Merged, Reviewed) only repeats the id: the state says more.
         const hint = row.status || !more || /^#\d+$/.test(more) ? reason : more;
         const changes =
@@ -280,7 +280,7 @@
           reason,
           hint,
           why: phase.detail && reason !== phase.detail ? `${reason}, ${phase.detail}` : reason,
-          stage: workStage(item, phase, pr, yours, !!row.status, stepNow(item)),
+          stage: workStage(item, phase, pr, yours, section === 'waiting', stepNow(item)),
           facts: [
             ...fact(t('Project'), p.name),
             ...fact(

@@ -44,6 +44,7 @@ type SourceList = {
   status_colors: Record<string, string>;
   fields?: { id: string; label: string }[];
   waiting_statuses?: string[];
+  in_flight_statuses?: string[];
 }[];
 /** The last `sources` list written to the global settings. */
 const lastSources = () => lastSettingsValue<SourceList>(mock);
@@ -215,6 +216,18 @@ describe('Board block of a source', () => {
     await waitFor(() => expect(shop()?.waiting_statuses).toEqual(['Code Review']));
     await fireEvent.click(review);
     await waitFor(() => expect(shop()?.waiting_statuses).toEqual([]));
+  });
+
+  it('marks a status as in flight, picked from the tracker statuses (#492)', async () => {
+    await shopColumns();
+    render(TrackerSources, { sourceId: 'shop' });
+    const group = await screen.findByTestId('in-flight-statuses');
+    const review = await within(group).findByRole('switch', { name: 'Code Review' });
+    await fireEvent.click(review);
+    await waitFor(() => expect(shop()?.in_flight_statuses).toEqual(['Code Review']));
+    expect(shop()?.waiting_statuses ?? []).toEqual([]);
+    await fireEvent.click(review);
+    await waitFor(() => expect(shop()?.in_flight_statuses).toEqual([]));
   });
 });
 

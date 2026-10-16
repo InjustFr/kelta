@@ -43,6 +43,11 @@ export const waitingStatuses = (): Waiting =>
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- rebuilt per call, not state
   new Map((settings.value()?.sources ?? []).map((s) => [s.id, s.waiting_statuses ?? []]));
 
+/** Source id → its `in_flight_statuses` (#492). */
+export const inFlightStatuses = (): Waiting =>
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- rebuilt per call, not state
+  new Map((settings.value()?.sources ?? []).map((s) => [s.id, s.in_flight_statuses ?? []]));
+
 /**
  * The grooming pass: open tickets not started, not in Next up and not snoozed; New ones first, then
  * the pool's order (mine before unassigned).

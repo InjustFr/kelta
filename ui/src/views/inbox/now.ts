@@ -17,7 +17,7 @@ import { phaseNow, unfinishedWork } from '../work/live';
 import { goToWork, openFromNow, openReview } from '../work/nav';
 import { reviewLocally, startWorkOnTicket } from '../work/startWork';
 import { jumpQueue, nowSections, rowKey, waitingCount, zoneCount, type NowRow, type Section } from './groups';
-import { loadPool, nextUp, ticketPool, waitingStatuses } from './nextUp.svelte';
+import { inFlightStatuses, loadPool, nextUp, ticketPool, waitingStatuses } from './nextUp.svelte';
 
 const ALL = { kind: 'all' } as const;
 /** Up next is my tickets across every source, whatever each view's own `who` says. */
@@ -41,6 +41,7 @@ export function currentSections(): Section[] {
     parked: keys((ref) => nextUp.parked(ref, now)),
     fresh: keys((ref) => nextUp.isNew(ref)),
     waiting: waitingStatuses(),
+    inFlight: inFlightStatuses(),
   });
 }
 

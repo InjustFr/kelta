@@ -37,4 +37,10 @@ fields?: Array<SourceField>,
  * ticket waits on something else (a deployment). Left out of Up next, Next up and New for you;
  * Tickets still lists them.
  */
-waiting_statuses?: Array<string>, };
+waiting_statuses?: Array<string>, 
+/**
+ * Status names (as the tracker spells them) where the ticket waits on someone else's review (QA,
+ * UAT): the Queue lists it, and its work item, under In flight. A status also in
+ * `waiting_statuses` waits to deploy.
+ */
+in_flight_statuses?: Array<string>, };

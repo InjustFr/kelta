@@ -1,7 +1,7 @@
 <script lang="ts">
   // Settings → Sources → Board: the account and the views of one source (`[sources.tracker]`).
   // Whose tickets, current iteration, a Jira view's board and statuses, removal, the status colours, the
-  // waiting statuses and the ticket fields save at once to the global `[[sources]]`.
+  // waiting and in-flight statuses and the ticket fields save at once to the global `[[sources]]`.
   import { msg, t } from '$lib/i18n/index.svelte';
   import { untrack } from 'svelte';
 
@@ -102,14 +102,33 @@
       return { ...s, status_colors: color ? { ...rest, [name]: color } : rest };
     });
 
-  // Waiting statuses (#391): the board's statuses, plus the listed ones it no longer has (so they can be cleared).
-  const waitingNames = $derived([
-    ...new Set([...columns.flatMap((c) => c.match_names), ...(source?.waiting_statuses ?? [])]),
-  ]);
-  const toggleWaiting = (name: string, on: boolean) =>
+  // Waiting (#391) and in-flight (#492) statuses: the board's statuses, plus the listed ones it no longer has (so they can be cleared).
+  const STATUS_LISTS = [
+    {
+      key: 'waiting_statuses',
+      heading: msg('Waiting to deploy'),
+      testid: 'waiting-statuses',
+      hint: msg(
+        'Tickets in these statuses leave Up next and wait in the Waiting to deploy section of the Queue.',
+      ),
+    },
+    {
+      key: 'in_flight_statuses',
+      heading: msg('In flight'),
+      testid: 'in-flight-statuses',
+      hint: msg(
+        "Tickets in these statuses wait on someone else's review (QA, UAT): they leave Up next for the In flight section of the Queue.",
+      ),
+    },
+  ] as const;
+  type StatusList = (typeof STATUS_LISTS)[number]['key'];
+  const listed = (key: StatusList): string[] => [
+    ...new Set([...columns.flatMap((c) => c.match_names), ...(source?.[key] ?? [])]),
+  ];
+  const toggleListed = (key: StatusList, name: string, on: boolean) =>
     editSource(sourceId, (s) => {
-      const rest = (s.waiting_statuses ?? []).filter((n) => n !== name);
-      return { ...s, waiting_statuses: on ? [...rest, name] : rest };
+      const rest = (s[key] ?? []).filter((n) => n !== name);
+      return { ...s, [key]: on ? [...rest, name] : rest };
     });
 
   // Ticket fields (#351): the tracker's own list where it has one (`null`: it has none, an id is typed).
@@ -259,23 +278,24 @@
       </ul>
     </SettingsGroup>
   {/if}
-  {#if waitingNames.length > 0}
-    <SettingsGroup heading={t('Waiting to deploy')} data-testid="waiting-statuses">
-      <p class="empty">
-        {t('Tickets in these statuses leave Up next and wait in the Waiting to deploy section of the Queue.')}
-      </p>
-      <fieldset>
-        <legend class="k-visually-hidden">{t('Waiting to deploy')}</legend>
-        {#each waitingNames as name (name)}
-          <Toggle
-            label={name}
-            checked={source.waiting_statuses?.includes(name) ?? false}
-            onchange={(on) => void toggleWaiting(name, on)}
-          />
-        {/each}
-      </fieldset>
-    </SettingsGroup>
-  {/if}
+  {#each STATUS_LISTS as list (list.key)}
+    {@const names = listed(list.key)}
+    {#if names.length > 0}
+      <SettingsGroup heading={t(list.heading)} data-testid={list.testid}>
+        <p class="empty">{t(list.hint)}</p>
+        <fieldset>
+          <legend class="k-visually-hidden">{t(list.heading)}</legend>
+          {#each names as name (name)}
+            <Toggle
+              label={name}
+              checked={source[list.key]?.includes(name) ?? false}
+              onchange={(on) => void toggleListed(list.key, name, on)}
+            />
+          {/each}
+        </fieldset>
+      </SettingsGroup>
+    {/if}
+  {/each}
   <SettingsGroup heading={t('Ticket fields')} data-testid="source-fields">
     <p class="empty">{t('Each field with a value shows on the ticket rows as label: value.')}</p>
     {#if chosen.length > 0}
