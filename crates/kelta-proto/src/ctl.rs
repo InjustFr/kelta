@@ -76,6 +76,9 @@ pub enum CtlCommand {
     Emit {
         name: String,
         payload: serde_json::Value,
+        /// The event's project (`kelta-ctl emit --project`): triggers resolve and run in it (#500).
+        #[serde(default)]
+        project: Option<ProjectId>,
     },
     /// Trust `<repo>/.kelta/config.toml` if it still hashes to `sha256` (the content kelta-ctl showed).
     Trust {

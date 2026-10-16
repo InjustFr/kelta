@@ -3,12 +3,13 @@
 //! start) runs the rest of the saga for the lowest `pos`. Event-armed, plus one one-shot wake at the
 //! reset of a 5h window that holds the queue (§13).
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use kelta_proto::api::CoreApi;
 use kelta_proto::error::KeltaError;
 use kelta_proto::ids::WorkItemId;
-use kelta_proto::model::{Lifecycle, SessionKind, WorkItem, WorkState};
+use kelta_proto::model::{Lifecycle, SessionInfo, SessionKind, WorkItem, WorkState};
 
 use crate::WorkService;
 
@@ -23,6 +24,22 @@ pub(crate) fn may_start(
     let slot = max_live == 0 || live < max_live as usize;
     let held = matches!((five_hour_pct, hold_pct), (Some(u), Some(h)) if u >= h);
     slot && !held
+}
+
+/// Claude slots in use (#141, #500): live Claude sessions plus the `starting` items (a saga holds its
+/// slot before its Claude spawns; that Claude is not counted twice). `own` (a step retry on an Active
+/// item) does not compete for its slot.
+pub fn live_claudes(
+    sessions: &[SessionInfo],
+    starting: &HashSet<WorkItemId>,
+    own: Option<&WorkItemId>,
+) -> usize {
+    sessions
+        .iter()
+        .filter(|s| s.kind == SessionKind::Claude && s.lifecycle == Lifecycle::Live)
+        .filter(|s| s.work_item_id.as_ref().is_none_or(|w| Some(w) != own && !starting.contains(w)))
+        .count()
+        + starting.len()
 }
 
 /// Queued items in start order (lowest `pos` first, then the oldest).
@@ -48,13 +65,7 @@ impl WorkService {
         if starting.contains(id) {
             return true;
         }
-        let live = sessions
-            .iter()
-            .filter(|s| s.kind == SessionKind::Claude && s.lifecycle == Lifecycle::Live)
-            // The item's own Claude (a step retry on an Active item) does not compete for its slot.
-            .filter(|s| s.work_item_id.as_ref().is_none_or(|w| w != id && !starting.contains(w)))
-            .count()
-            + starting.len();
+        let live = live_claudes(&sessions, &starting, Some(id));
         // Windows already reset are stale (same rule as the UI's `latestWindow`).
         let now = time::OffsetDateTime::now_utc().unix_timestamp();
         let windows: Vec<_> = sessions
@@ -203,6 +214,24 @@ mod tests {
         assert!(!may_start(0, 2, Some(80.0), Some(80.0)), "held at the threshold");
         assert!(may_start(0, 2, Some(99.0), None), "no hold configured");
         assert!(may_start(0, 2, None, Some(80.0)), "no usage known");
+    }
+
+    #[test]
+    fn live_claudes_counts_each_slot_once() {
+        let (w, x) = (WorkItemId::new("w"), WorkItemId::new("x"));
+        let mut live = kelta_proto::samples::session_info();
+        live.kind = SessionKind::Claude;
+        live.lifecycle = Lifecycle::Live;
+        live.work_item_id = Some(w.clone());
+        let mut exited = live.clone();
+        exited.lifecycle = Lifecycle::Exited;
+        let mut shell = live.clone();
+        shell.kind = SessionKind::Shell;
+        let s = [live, exited, shell];
+        assert_eq!(live_claudes(&s, &HashSet::new(), None), 1);
+        assert_eq!(live_claudes(&s, &HashSet::from([w.clone()]), None), 1, "W's Claude is not counted twice");
+        assert_eq!(live_claudes(&s, &HashSet::from([w.clone(), x]), None), 2);
+        assert_eq!(live_claudes(&s, &HashSet::new(), Some(&w)), 0, "own Claude does not compete");
     }
 
     #[test]

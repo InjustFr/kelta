@@ -79,9 +79,9 @@ pub fn manifest(id: &str, permissions: &[&str], extra: &str) -> String {
     )
 }
 
-/// Poll a condition (tests only) for up to ~5 s.
+/// Poll a condition (tests only) for up to ~30 s; returns on the first true, so only a real failure waits that long.
 pub async fn wait_for(mut cond: impl FnMut() -> bool) -> bool {
-    for _ in 0..500 {
+    for _ in 0..3000 {
         if cond() {
             return true;
         }

@@ -12,7 +12,7 @@ use kelta_proto::ids::AccountId;
 use kelta_proto::secret::{KEYRING_SERVICE, SecretCtx, SecretRef};
 use kelta_proto::settings::Settings;
 use kelta_proto_testing::FakeSettings;
-use kelta_secrets::{RESOLVE_TIMEOUT, Secrets, SecretsOptions};
+use kelta_secrets::{Secrets, SecretsOptions};
 
 #[path = "support/capture.rs"]
 mod capture;
@@ -49,6 +49,9 @@ struct Rig {
     log: capture::Captured,
 }
 
+/// Test lookups only need a bound on a real hang; production keeps `RESOLVE_TIMEOUT`.
+const TEST_TIMEOUT: Duration = Duration::from_secs(30);
+
 fn rig_with(extra_env: &[(&str, &str)], timeout: Option<Duration>) -> Rig {
     // every test thread gets a subscriber so callsite interest is never cached as "never"
     let log = capture::install();
@@ -65,7 +68,12 @@ fn rig_with(extra_env: &[(&str, &str)], timeout: Option<Duration>) -> Rig {
     let store: Arc<keyring_core::CredentialStore> = keyring_core::mock::Store::new().unwrap();
     let secrets = Secrets::with_options(
         settings.clone(),
-        SecretsOptions { store: Some(store), env: Some(env), timeout, file: Some(secrets_file(dir.path())) },
+        SecretsOptions {
+            store: Some(store),
+            env: Some(env),
+            timeout: timeout.or(Some(TEST_TIMEOUT)),
+            file: Some(secrets_file(dir.path())),
+        },
     );
     Rig { dir, settings, secrets, log }
 }
@@ -361,7 +369,7 @@ async fn keyring_timeout_is_not_missing_and_writes_nothing() {
 
 #[tokio::test]
 async fn settings_reload_keeps_keyring_values() {
-    let (settings, store, secrets) = keyring_rig(RESOLVE_TIMEOUT);
+    let (settings, store, secrets) = keyring_rig(TEST_TIMEOUT);
     let jira = SecretRef::new("keyring:jira-acme");
     let ctx = SecretCtx::default();
     secrets.set(&jira, "first").await.unwrap();

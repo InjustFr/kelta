@@ -8,8 +8,9 @@ use std::sync::Arc;
 use crate::common::*;
 use kelta_proto::ErrorCode;
 use kelta_proto::api::{CodeHost, CoreApi, Tracker};
+use kelta_proto::ctl::CtlCommand;
 use kelta_proto::error::KeltaError;
-use kelta_proto::ext::{WorkflowDef, WorkflowOn};
+use kelta_proto::ext::{ActionDef, TriggerDef, WorkflowDef, WorkflowOn};
 use kelta_proto::ids::{AccountId, ProjectId, SessionId};
 use kelta_proto::model::{
     OpenPaneRequest, PaneContent, Placement, RunClaim, RunState, SessionKind, SpawnRequest, StartWorkPlan,
@@ -52,6 +53,12 @@ fn env(root: &Path) -> (H, PathBuf) {
         def("daily", WorkflowOn::Global, "Write the daily report"),
         WorkflowDef { enabled: false, ..def("off", WorkflowOn::Ticket, "x") },
     ];
+    s.triggers = vec![TriggerDef {
+        id: "morning-prepare".into(),
+        on: "custom.morning".into(),
+        r#do: vec![ActionDef::RunWorkflow { workflow: "daily".into(), ticket: None }],
+        ..TriggerDef::default()
+    }];
     let mut shop = project("shop", root);
     shop.tracker = Some(samples::tracker_binding());
     shop.repos[0].code_host =
@@ -162,6 +169,7 @@ async fn run_claims_then_starts_claude_in_a_background_tab() {
     assert_eq!((run.state, run.phase.as_deref()), (RunState::Running, Some("Starting")));
     assert_eq!((run.name.as_deref(), run.session_id.as_ref()), (Some("kelta-ticket-pass"), Some(&info.id)));
     assert_eq!(items[0].worktree.canonicalize().unwrap(), repo.canonicalize().unwrap());
+    assert_eq!(h.core.session_get(&info.id).unwrap().work_item_id, Some(items[0].id.clone()));
     let core: &dyn CoreApi = h.core.as_ref();
     assert_eq!(core.ticket_for_session(&info.id).await, Some(t.clone()), "MCP `get_ticket` resolves");
 
@@ -212,10 +220,10 @@ async fn run_claims_then_starts_claude_in_a_background_tab() {
     assert!(kelta_core::layout::sessions_in(&tab.root).contains(&info.id));
 }
 
-/// #493: a run has its own `mcp.json` (its MCP calls carry the session); its first MCP claim gives its
-/// Claude to the item, a second one and a plain Claude's claims do not.
+/// #493/#494: a run has its own `mcp.json` (its MCP calls carry the session); its first MCP claim gives
+/// its Claude to the item and links the session back, a second claim only records it.
 #[tokio::test]
-async fn a_global_run_that_claims_through_mcp_gives_its_claude_to_the_item_once() {
+async fn a_run_that_claims_through_mcp_gives_its_claude_to_the_item_once() {
     let tmp = tempfile::tempdir().unwrap();
     let (h, repo) = env(tmp.path());
     let shop = ProjectId::new("shop");
@@ -244,6 +252,8 @@ async fn a_global_run_that_claims_through_mcp_gives_its_claude_to_the_item_once(
         .unwrap();
     assert_eq!(w.run.as_ref().unwrap().session_id.as_ref(), Some(&sid));
     assert_eq!(w.session_ids, vec![sid.clone()]);
+    assert_eq!(h.core.session_get(&sid).unwrap().work_item_id, Some(w.id.clone()), "linked back (#494)");
+    assert_eq!(core.ticket_for_session(&sid).await.map(|t| t.key), Some("SHOP-142".into()));
     assert_eq!(w.claude_uuid.as_deref(), start.session.claude.as_ref().map(|c| c.session_uuid.as_str()));
     assert_eq!(
         w.worktree.canonicalize().unwrap(),
@@ -264,8 +274,80 @@ async fn a_global_run_that_claims_through_mcp_gives_its_claude_to_the_item_once(
     assert!(second.session_ids.is_empty());
     let first = h.core.work_list(None).await.unwrap().into_iter().find(|i| i.id == w.id).unwrap();
     assert!(first.session_ids.contains(&sid), "still the run's");
+}
 
-    // A plain Kelta Claude (a board orchestrator) is never adopted.
+/// #497: `adopt: false` keeps the run's Claude out of the item; a later claim with `adopt` adopts it.
+#[tokio::test]
+async fn a_global_run_that_claims_with_adopt_false_keeps_its_claude_out() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, repo) = env(tmp.path());
+    let shop = ProjectId::new("shop");
+    let sid = h.core.workflow_run_on(shop.clone(), "daily", None).await.unwrap().session.id;
+    let wt = tmp.path().join("runs/ticket-142");
+    git(&repo, &["worktree", "add", "-q", "-b", "feat/ticket-142", wt.to_str().unwrap()]);
+    let core: &dyn CoreApi = h.core.as_ref();
+    let claim = RunClaim { name: Some("daily".into()), session_id: Some(sid.clone()), ..RunClaim::default() };
+    let w =
+        core.work_claim(&shop, samples::ticket_ref(), Some(wt), None, claim.clone(), false).await.unwrap();
+    assert_eq!(w.run.as_ref().unwrap().session_id.as_ref(), Some(&sid));
+    assert!(w.session_ids.is_empty() && w.claude_uuid.is_none());
+    // A holder's re-claim never adopts (#494), so the lanes of an `adopt: false` orchestrator keep out.
+    let again = core.work_claim(&shop, samples::ticket_ref(), None, None, claim.clone(), true).await.unwrap();
+    assert_eq!(again.id, w.id);
+    assert!(again.session_ids.is_empty(), "a holder's re-claim never adopts");
+    // Another ticket's claim with `adopt` gives the run's Claude to that item.
+    let next = TicketRef { key: "SHOP-143".into(), id: "SHOP-143".into(), ..samples::ticket_ref() };
+    let second = core.work_claim(&shop, next, None, None, claim, true).await.unwrap();
+    assert_eq!(second.session_ids, vec![sid]);
+}
+
+/// #494: the adoption decision reads the store (so it holds after a restart): a session whose previous item
+/// is Finished is adopted by its next claim; the same session re-claiming a ticket gets its item back.
+#[tokio::test]
+async fn a_session_is_adopted_again_once_its_item_is_finished_and_reclaims_without_conflict() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, repo) = env(tmp.path());
+    let shop = ProjectId::new("shop");
+    let sid = h.core.workflow_run_on(shop.clone(), "daily", None).await.unwrap().session.id;
+    let wt = tmp.path().join("runs/ticket-142");
+    git(&repo, &["worktree", "add", "-q", "-b", "feat/ticket-142", wt.to_str().unwrap()]);
+    let core: &dyn CoreApi = h.core.as_ref();
+    let claim = RunClaim { name: Some("daily".into()), session_id: Some(sid.clone()), ..RunClaim::default() };
+    let a = core.work_claim(&shop, samples::ticket_ref(), Some(wt), None, claim.clone(), true).await.unwrap();
+    assert_eq!(a.session_ids, vec![sid.clone()]);
+    let again = core.work_claim(&shop, samples::ticket_ref(), None, None, claim.clone(), true).await.unwrap();
+    assert_eq!(again.id, a.id, "same session, same ticket: the same item, no Conflict");
+    core.work_release("SHOP-142", None, Some(&sid)).await.unwrap();
+    let next = TicketRef { key: "SHOP-143".into(), id: "SHOP-143".into(), ..samples::ticket_ref() };
+    let b = core.work_claim(&shop, next, None, None, claim, true).await.unwrap();
+    assert_eq!(b.session_ids, vec![sid.clone()], "adopted: its previous item is Finished");
+    assert_eq!(h.core.session_get(&sid).unwrap().work_item_id, Some(b.id));
+}
+
+/// #494: lanes sharing one `/mcp/<sid>` claim at once; the session still lands in one live item.
+#[tokio::test]
+async fn concurrent_claims_from_one_session_adopt_it_once() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, _) = env(tmp.path());
+    let shop = ProjectId::new("shop");
+    let sid = h.core.workflow_run_on(shop.clone(), "daily", None).await.unwrap().session.id;
+    let core: &dyn CoreApi = h.core.as_ref();
+    let claim = RunClaim { name: Some("daily".into()), session_id: Some(sid.clone()), ..RunClaim::default() };
+    let t = |k: &str| TicketRef { key: k.into(), id: k.into(), ..samples::ticket_ref() };
+    let (x, y) = tokio::join!(
+        core.work_claim(&shop, t("SHOP-1"), None, None, claim.clone(), true),
+        core.work_claim(&shop, t("SHOP-2"), None, None, claim.clone(), true),
+    );
+    let adopted = [x.unwrap(), y.unwrap()].iter().filter(|w| w.session_ids.contains(&sid)).count();
+    assert_eq!(adopted, 1, "one session, at most one live item");
+}
+
+/// #494: a plain Claude tab that claims through MCP becomes the item's Claude, with no run list.
+#[tokio::test]
+async fn a_plain_claude_that_claims_becomes_the_items_claude() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, repo) = env(tmp.path());
+    let shop = ProjectId::new("shop");
     let plain = h
         .core
         .session_spawn(SpawnRequest {
@@ -286,30 +368,32 @@ async fn a_global_run_that_claims_through_mcp_gives_its_claude_to_the_item_once(
         })
         .await
         .unwrap();
-    let third = core.work_claim(&shop, next("SHOP-144"), None, None, claim(&plain.id), true).await.unwrap();
-    assert_eq!(third.run.unwrap().session_id, Some(plain.id));
-    assert!(third.session_ids.is_empty());
-}
-
-/// #497: `adopt: false` keeps the run's Claude out of the item; a later claim with `adopt` adopts it.
-#[tokio::test]
-async fn a_global_run_that_claims_with_adopt_false_keeps_its_claude_out() {
-    let tmp = tempfile::tempdir().unwrap();
-    let (h, repo) = env(tmp.path());
-    let shop = ProjectId::new("shop");
-    let sid = h.core.workflow_run_on(shop.clone(), "daily", None).await.unwrap().session.id;
+    h.core
+        .layout_open(
+            &shop,
+            OpenPaneRequest {
+                content: PaneContent::Terminal { session_id: plain.id.clone() },
+                placement: Placement::NewTab,
+                focus: true,
+                tab_title: None,
+                work_item_id: None,
+            },
+        )
+        .await
+        .unwrap();
     let wt = tmp.path().join("runs/ticket-142");
     git(&repo, &["worktree", "add", "-q", "-b", "feat/ticket-142", wt.to_str().unwrap()]);
     let core: &dyn CoreApi = h.core.as_ref();
-    let claim = RunClaim { name: Some("daily".into()), session_id: Some(sid.clone()), ..RunClaim::default() };
-    let w =
-        core.work_claim(&shop, samples::ticket_ref(), Some(wt), None, claim.clone(), false).await.unwrap();
-    assert_eq!(w.run.as_ref().unwrap().session_id.as_ref(), Some(&sid));
-    assert!(w.session_ids.is_empty() && w.claude_uuid.is_none());
-    // The run is still unadopted: a claim with `adopt` gives its Claude to that item.
-    let next = TicketRef { key: "SHOP-143".into(), id: "SHOP-143".into(), ..samples::ticket_ref() };
-    let second = core.work_claim(&shop, next, None, None, claim, true).await.unwrap();
-    assert_eq!(second.session_ids, vec![sid]);
+    let claim =
+        RunClaim { name: Some("orch".into()), session_id: Some(plain.id.clone()), ..RunClaim::default() };
+    let w = core.work_claim(&shop, samples::ticket_ref(), Some(wt), None, claim, true).await.unwrap();
+    assert_eq!(w.run.as_ref().unwrap().session_id.as_ref(), Some(&plain.id));
+    assert_eq!(w.session_ids, vec![plain.id.clone()]);
+    assert_eq!(h.core.session_get(&plain.id).unwrap().work_item_id, Some(w.id.clone()));
+    h.core.work().resume(&w.id).await.unwrap();
+    let l = h.core.layout_get(&shop).unwrap();
+    let tab = l.tabs.iter().find(|t| t.work_item_id.as_ref() == Some(&w.id)).unwrap();
+    assert!(kelta_core::layout::sessions_in(&tab.root).contains(&plain.id), "the pane moved into the item");
 }
 
 #[tokio::test]
@@ -391,6 +475,33 @@ async fn a_global_workflow_runs_with_no_ticket() {
     assert!(h.core.work_list(None).await.unwrap().is_empty());
     let err = h.core.workflow_run_on(ProjectId::new("shop"), "describe", None).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::NotFound, "a PR workflow needs its PR");
+}
+
+#[tokio::test]
+async fn emit_with_project_starts_a_global_run_through_a_trigger() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, repo) = env(tmp.path());
+    let emit = |p: &str| CtlCommand::Emit {
+        name: "custom.morning".into(),
+        payload: serde_json::json!({}),
+        project: Some(ProjectId::new(p)),
+    };
+    // Core's startup task subscribes the trigger engine to the bus; an event published first is missed.
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    let err = h.core.ctl(emit("nope")).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound);
+    h.core.ctl(emit("shop")).await.unwrap();
+    let mut run = None;
+    for _ in 0..300 {
+        run = h.core.session_list(None).into_iter().find(|s| s.kind == SessionKind::Claude);
+        if run.is_some() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    let run = run.expect("the trigger's run_workflow started the global run");
+    assert_eq!(spawned(&h, &run), ("Write the daily report".to_owned(), repo));
+    assert!(h.core.work_list(None).await.unwrap().is_empty(), "a global run claims nothing");
 }
 
 #[tokio::test]

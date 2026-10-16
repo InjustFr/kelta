@@ -441,7 +441,7 @@ pub trait CoreApi: Send + Sync {
     async fn work_fix_checks(&self, _review: &Review) -> Result<String, KeltaError> {
         Err(KeltaError::unsupported("work_fix_checks"))
     }
-    /// The `run_workflow` trigger action (#488): `workflow_run` on `ticket` (claims it; a live run on it
+    /// The `run_workflow` trigger action (#488) and MCP tool (#500): `workflow_run` on `ticket` (claims it; a live run on it
     /// comes back `running`), else `workflow_run_on` of the `on = "global"` entry in `project`.
     async fn workflow_start(
         &self,
@@ -453,7 +453,8 @@ pub trait CoreApi: Send + Sync {
     }
     /// MCP `claim_ticket` (#235): a work item for `ticket` adopting `worktree` (default: the project's
     /// primary repo) and `branch`, claimed by `run`. `Conflict` naming the holder when it is taken.
-    /// `adopt` false: the caller's Claude is never given to the item (a multi-ticket orchestrator, #497).
+    /// The caller's live Claude, when in no unfinished item, becomes the item's Claude (#494), unless
+    /// `adopt` is false (a multi-ticket orchestrator, #497) or it re-claims a ticket it holds.
     async fn work_claim(
         &self,
         _project: &ProjectId,
