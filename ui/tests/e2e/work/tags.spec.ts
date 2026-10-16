@@ -22,7 +22,14 @@ test('a tag made in Settings goes on a ticket and a PR and filters the list', as
   await page.keyboard.press('t');
   await page.getByRole('menu', { name: 'Tags' }).getByRole('menuitem', { name: 'retest' }).click();
   await expect(row.locator('[data-tag="retest"]')).toBeVisible();
-  expect((await callLog(page)).slice(before).map((c) => c.cmd)).toEqual(['tags_get', 'tags_set']);
+  // Only the tag calls count: the List click's tracker load and its layout save (debounced 500 ms,
+  // layout.svelte.ts:14) land in this window under load (#485).
+  expect(
+    (await callLog(page))
+      .slice(before)
+      .map((c) => c.cmd)
+      .filter((cmd) => cmd.startsWith('tags_')),
+  ).toEqual(['tags_get', 'tags_set']);
 
   const tickets = page.getByTestId('tickets-pane');
   await expect(tickets.locator('.k-row.tk')).not.toHaveCount(1);
