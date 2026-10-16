@@ -664,18 +664,18 @@ async fn run_workflow_starts_a_ticket_or_global_run_and_logs_it() {
 
     // A plugin needs `sessions.spawn` for it.
     let m = common::manifest(
-        "wf",
+        "wfrun",
         &["events:ticket.*"],
         "\n[[contributes.triggers]]\nid = \"w\"\non = \"ticket.step\"\ndo = [{ action = \"run_workflow\", workflow = \"next-ticket\" }]\n",
     );
-    env.write_plugin("wf", &m, &[]);
-    env.host.grant(&PluginId::new("wf"), vec!["events:ticket.*".into()]).await.unwrap();
+    env.write_plugin("wfrun", &m, &[]);
+    env.host.grant(&PluginId::new("wfrun"), vec!["events:ticket.*".into()]).await.unwrap();
     let before = env.core.calls().len();
     env.host
         .on_event(&ev(bus::TICKET_STEP, json!({ "ticket": samples::ticket_ref(), "step_id": "pr" })))
         .await;
     env.host.settle().await;
-    let r = env.host.trigger_log(10).await.unwrap().into_iter().find(|r| r.trigger_id == "wf/w").unwrap();
+    let r = env.host.trigger_log(10).await.unwrap().into_iter().find(|r| r.trigger_id == "wfrun/w").unwrap();
     assert!(!r.ok && r.detail.as_deref().unwrap().contains("missing permission: sessions.spawn"), "{r:?}");
     let after: Vec<_> =
         env.core.calls().into_iter().skip(before).filter(|c| c.method == "workflow_start").collect();
