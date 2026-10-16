@@ -441,3 +441,28 @@ describe('Go to Claude on a run-claimed item (#491)', () => {
     expect(mock.calls.some((c) => c.cmd === 'work_resume')).toBe(true);
   });
 });
+
+describe('session.make_work (#502)', () => {
+  const plain = { ...sessionInfo, id: 'plain-claude', work_item_id: null, lifecycle: 'live' as const };
+
+  it('opens the sheet on a live Claude in no work item', async () => {
+    sessions.upsert(plain);
+    await dispatch('session.make_work', { session_id: plain.id });
+    expect(ui.sheet?.key).toBe('make_work');
+    expect(ui.sheet?.props).toMatchObject({ sessionId: plain.id });
+  });
+
+  it('opens nothing on a shell, or on a Claude in an unfinished item', async () => {
+    const shell = { ...plain, id: 'plain-shell', kind: { type: 'shell' } as const, claude: null };
+    const inItem = { ...workItem, id: 'w-1', state: { kind: 'active' as const }, session_ids: ['in-item'] };
+    work.upsert(inItem);
+    sessions.upsert(shell);
+    sessions.upsert({ ...plain, id: 'in-item' });
+    for (const id of [shell.id, 'in-item']) {
+      toasts.clear();
+      await dispatch('session.make_work', { session_id: id });
+      expect(ui.sheet).toBeNull();
+      expect(toasts.list.at(-1)?.toast.text).toBe('Focus a Claude session that is in no work item');
+    }
+  });
+});

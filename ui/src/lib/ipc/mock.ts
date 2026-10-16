@@ -27,6 +27,7 @@ import type {
   ReviewItem,
   ReviewNote,
   ReviewNotes,
+  RunClaim,
   Scope,
   ScreenInstanceId,
   SessionInfo,
@@ -685,6 +686,39 @@ export function createMockTransport(options: MockOptions = {}): {
   };
   const configDefs = (on: WorkflowOn): WorkflowDef[] =>
     (state.settings.value as unknown as Settings).workflows.filter((d) => d.enabled && d.on === on);
+  // An item around the live Claude `s` (Core: WorkService::claim / scratch_on, then adopt_run, #491/#502).
+  const adoptedItem = (
+    s: SessionInfo,
+    ticket: TicketRef | null,
+    worktree: string,
+    run: RunClaim | null,
+  ): WorkItem => ({
+    id: uuid(),
+    project_id: s.project_id,
+    kind: ticket ? 'ticket' : 'branch',
+    ticket: ticket ? { ...ticket } : null, // a plain copy: the arg can be a UI state proxy
+    review: null,
+    repo_id: project(s.project_id).repos[0]?.id ?? 'main',
+    worktree,
+    branch: 'main',
+    base: 'main',
+    claude_uuid: s.claude?.session_uuid ?? null,
+    nvim_socket: null,
+    session_ids: [s.id],
+    tab_id: null,
+    pr_url: null,
+    state: { kind: 'active' },
+    steps: [],
+    created_at: new Date().toISOString(),
+    title: null,
+    pr_title_needs_key: false,
+    cost_usd: 0,
+    review_due: false,
+    claude_replied: false,
+    auto_finish: false,
+    nvim_kept: 0,
+    run,
+  });
   const liveSession = (id: string): SessionInfo | null =>
     state.sessions.find((x) => x.id === id && x.lifecycle === 'live') ?? null;
   const spawn = (
@@ -1117,6 +1151,27 @@ export function createMockTransport(options: MockOptions = {}): {
     },
     session_link: ({ id, work_item_id }) =>
       updateSession(session(id), { work_item_id: work_item_id ?? null }),
+    // Like `Core::session_claim` (#502).
+    session_claim: ({ id, ticket, worktree }) => {
+      const s = session(id);
+      if (s.kind.type !== 'claude' || s.lifecycle !== 'live')
+        throw err('invalid_argument', `session ${id} is not a live Claude session`);
+      const held = state.work.find(
+        (w) =>
+          w.state.kind !== 'finished' &&
+          (w.session_ids.includes(id) || (!!ticket && !!w.ticket && sameRef(w.ticket, ticket))),
+      );
+      if (held) throw err('conflict', `${ticket?.key ?? `session ${id}`} is held by work item ${held.id}`);
+      if (ticket) ticketItem(ticket);
+      const run: RunClaim | null = ticket
+        ? { name: null, run_id: null, session_id: id, phase: null, state: 'running', note: null, sha: null }
+        : null;
+      const item = adoptedItem(s, ticket, worktree, run);
+      state.work.push(item);
+      emit({ type: 'work.updated', work: clone(item) });
+      updateSession(s, { work_item_id: item.id });
+      return clone(item);
+    },
     session_text_tail: ({ id, max_lines }) => {
       const s = session(id);
       return Array.from({ length: Math.min(max_lines, 5) }, (_, i) => `${s.name} line ${i + 1}`).join('\n');
@@ -1321,42 +1376,16 @@ export function createMockTransport(options: MockOptions = {}): {
       const projectId = t.project_ids[0] ?? state.projects.find((p) => p.active)?.id ?? 'shop';
       const title = `${workflow} · ${ticket.key}`;
       const s = spawn(projectId, { type: 'claude' }, title, null);
-      const item: WorkItem = {
-        id: uuid(),
-        project_id: projectId,
-        kind: 'ticket',
-        ticket: { ...ticket }, // a plain copy: the arg can be a UI state proxy
-        review: null,
-        repo_id: project(projectId).repos[0]?.id ?? 'main',
-        worktree: s.cwd,
-        branch: 'main',
-        base: 'main',
-        // #491: the item adopts the run's Claude (Core: WorkService::adopt_run).
-        claude_uuid: s.claude?.session_uuid ?? null,
-        nvim_socket: null,
-        session_ids: [s.id],
-        tab_id: null,
-        pr_url: null,
-        state: { kind: 'active' },
-        steps: [],
-        created_at: new Date().toISOString(),
-        title: null,
-        pr_title_needs_key: false,
-        cost_usd: 0,
-        review_due: false,
-        claude_replied: false,
-        auto_finish: false,
-        nvim_kept: 0,
-        run: {
-          name: workflow,
-          run_id: `${workflow}-${s.id.slice(0, 8)}`,
-          session_id: s.id,
-          phase: 'Starting',
-          state: 'running',
-          note: null,
-          sha: null,
-        },
-      };
+      // #491: the item adopts the run's Claude (Core: WorkService::adopt_run).
+      const item = adoptedItem(s, ticket, s.cwd, {
+        name: workflow,
+        run_id: `${workflow}-${s.id.slice(0, 8)}`,
+        session_id: s.id,
+        phase: 'Starting',
+        state: 'running',
+        note: null,
+        sha: null,
+      });
       state.work.push(item);
       emit({ type: 'work.updated', work: clone(item) });
       // What the hooks then report: the run, its first agent spawned (#272).

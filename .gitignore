@@ -18,3 +18,4 @@ graft/
 /.ignore
 /.mcp.json
 /.claude/
+/ui/node_modules

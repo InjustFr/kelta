@@ -226,6 +226,8 @@ export interface Commands {
     args: { id: SessionId; work_item_id?: WorkItemId | null; ticket?: TicketRef | null };
     result: SessionInfo;
   };
+  /** #502 Make this a work item: a live Claude in no work item becomes a ticket item (as its MCP claim) or a scratch item. */
+  session_claim: { args: { id: SessionId; ticket: TicketRef | null; worktree: string }; result: WorkItem };
   session_text_tail: { args: { id: SessionId; max_lines: number }; result: string };
   session_history_search: {
     args: { project_id: ProjectId; session_id?: SessionId | null; query: string; limit: number };
@@ -491,6 +493,7 @@ export const COMMAND_NAMES = [
   'session_list',
   'session_mark_seen',
   'session_link',
+  'session_claim',
   'session_text_tail',
   'session_history_search',
   'claude_runs_list',
@@ -706,6 +709,7 @@ export const sessionRename = wrap('session_rename');
 export const sessionList = wrap('session_list');
 export const sessionMarkSeen = wrap('session_mark_seen');
 export const sessionLink = wrap('session_link');
+export const sessionClaim = wrap('session_claim');
 export const sessionTextTail = wrap('session_text_tail');
 export const sessionHistorySearch = wrap('session_history_search');
 export const claudeRunsList = wrap('claude_runs_list');

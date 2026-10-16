@@ -326,6 +326,7 @@ describe('mock transport', () => {
       'session_attach',
       'session_write',
       'work_start',
+      'session_claim',
       'work_link',
       'work_create_ticket',
       'layout_save',
@@ -348,6 +349,16 @@ describe('mock transport', () => {
     });
     const started = await call('work_start', { plan });
     expect(started.session_ids.length).toBeGreaterThan(0);
+    const plain = await call('session_spawn', {
+      req: { ...(args.session_spawn!.req as object), project_id: 'shop', kind: { type: 'claude' } } as never,
+    });
+    const made = await call('session_claim', { id: plain.id, ticket: null, worktree: plain.cwd });
+    expect(made).toMatchObject({ kind: 'branch', session_ids: [plain.id], run: null });
+    await expect(
+      call('session_claim', { id: plain.id, ticket: null, worktree: plain.cwd }),
+    ).rejects.toMatchObject({
+      code: 'conflict',
+    });
     // Scratch item: wip/ branch from the task, title, no adoption, then linked to a ticket.
     const task = { kind: 'branch' as const, name: '', task: 'Speed up search\nKeep ranking', repo: null };
     const scratch = await call('work_plan', { project_id: 'shop', source: task });

@@ -13,8 +13,8 @@ use kelta_proto::error::KeltaError;
 use kelta_proto::ext::{ActionDef, TriggerDef, WorkflowDef, WorkflowOn};
 use kelta_proto::ids::{AccountId, ProjectId, SessionId};
 use kelta_proto::model::{
-    OpenPaneRequest, PaneContent, Placement, RunClaim, RunState, SessionKind, SpawnRequest, StartWorkPlan,
-    WorkSource, WorkflowSource,
+    Lifecycle, OpenPaneRequest, PaneContent, Placement, RunClaim, RunState, SessionKind, SpawnRequest,
+    StartWorkPlan, WorkKind, WorkSource, WorkflowSource,
 };
 use kelta_proto::samples;
 use kelta_proto::settings::{AccountKind, CodeHostBinding, Settings};
@@ -342,22 +342,20 @@ async fn concurrent_claims_from_one_session_adopt_it_once() {
     assert_eq!(adopted, 1, "one session, at most one live item");
 }
 
-/// #494: a plain Claude tab that claims through MCP becomes the item's Claude, with no run list.
-#[tokio::test]
-async fn a_plain_claude_that_claims_becomes_the_items_claude() {
-    let tmp = tempfile::tempdir().unwrap();
-    let (h, repo) = env(tmp.path());
+/// A live session in a tab of its own, as `⌘T` makes: a plain Claude when `kind` is, else a shell.
+async fn plain_tab(h: &H, kind: SessionKind, cwd: Option<PathBuf>) -> SessionId {
     let shop = ProjectId::new("shop");
-    let plain = h
+    let program = (kind == SessionKind::Claude).then(|| "claude".to_owned());
+    let info = h
         .core
         .session_spawn(SpawnRequest {
             id: None,
             project_id: shop.clone(),
-            kind: SessionKind::Claude,
+            kind,
             name: None,
-            program: Some("claude".into()),
+            program,
             args: vec![],
-            cwd: None,
+            cwd,
             env: Default::default(),
             cols: 80,
             rows: 24,
@@ -372,7 +370,7 @@ async fn a_plain_claude_that_claims_becomes_the_items_claude() {
         .layout_open(
             &shop,
             OpenPaneRequest {
-                content: PaneContent::Terminal { session_id: plain.id.clone() },
+                content: PaneContent::Terminal { session_id: info.id.clone() },
                 placement: Placement::NewTab,
                 focus: true,
                 tab_title: None,
@@ -381,19 +379,109 @@ async fn a_plain_claude_that_claims_becomes_the_items_claude() {
         )
         .await
         .unwrap();
+    info.id
+}
+
+/// #494: a plain Claude tab that claims through MCP becomes the item's Claude, with no run list.
+#[tokio::test]
+async fn a_plain_claude_that_claims_becomes_the_items_claude() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, repo) = env(tmp.path());
+    let shop = ProjectId::new("shop");
+    let plain = plain_tab(&h, SessionKind::Claude, None).await;
     let wt = tmp.path().join("runs/ticket-142");
     git(&repo, &["worktree", "add", "-q", "-b", "feat/ticket-142", wt.to_str().unwrap()]);
     let core: &dyn CoreApi = h.core.as_ref();
     let claim =
-        RunClaim { name: Some("orch".into()), session_id: Some(plain.id.clone()), ..RunClaim::default() };
+        RunClaim { name: Some("orch".into()), session_id: Some(plain.clone()), ..RunClaim::default() };
     let w = core.work_claim(&shop, samples::ticket_ref(), Some(wt), None, claim, true).await.unwrap();
-    assert_eq!(w.run.as_ref().unwrap().session_id.as_ref(), Some(&plain.id));
-    assert_eq!(w.session_ids, vec![plain.id.clone()]);
-    assert_eq!(h.core.session_get(&plain.id).unwrap().work_item_id, Some(w.id.clone()));
+    assert_eq!(w.run.as_ref().unwrap().session_id.as_ref(), Some(&plain));
+    assert_eq!(w.session_ids, vec![plain.clone()]);
+    assert_eq!(h.core.session_get(&plain).unwrap().work_item_id, Some(w.id.clone()));
     h.core.work().resume(&w.id).await.unwrap();
     let l = h.core.layout_get(&shop).unwrap();
     let tab = l.tabs.iter().find(|t| t.work_item_id.as_ref() == Some(&w.id)).unwrap();
-    assert!(kelta_core::layout::sessions_in(&tab.root).contains(&plain.id), "the pane moved into the item");
+    assert!(kelta_core::layout::sessions_in(&tab.root).contains(&plain), "the pane moved into the item");
+}
+
+/// #502: Make this a work item with a ticket gives the item an MCP `claim_ticket` from the session makes.
+#[tokio::test]
+async fn session_claim_gives_the_same_item_state_as_an_mcp_claim() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, repo) = env(tmp.path());
+    let shop = ProjectId::new("shop");
+    let (wt142, wt143) = (tmp.path().join("runs/ticket-142"), tmp.path().join("runs/ticket-143"));
+    git(&repo, &["worktree", "add", "-q", "-b", "feat/ticket-142", wt142.to_str().unwrap()]);
+    git(&repo, &["worktree", "add", "-q", "-b", "feat/ticket-143", wt143.to_str().unwrap()]);
+    let (a, b) = (
+        plain_tab(&h, SessionKind::Claude, Some(wt142.clone())).await,
+        plain_tab(&h, SessionKind::Claude, Some(wt143.clone())).await,
+    );
+    let run = |sid: &SessionId| RunClaim { session_id: Some(sid.clone()), ..RunClaim::default() };
+    let mcp =
+        h.core.work_claim(&shop, samples::ticket_ref(), Some(wt142), None, run(&a), true).await.unwrap();
+    let t143 = TicketRef { key: "SHOP-143".into(), ..samples::ticket_ref() };
+    let made = h.core.session_claim(&b, Some(t143.clone()), wt143).await.unwrap();
+    let state = |w: &kelta_proto::model::WorkItem, sid: &SessionId| {
+        let s = h.core.session_get(sid).unwrap();
+        (
+            w.kind,
+            w.run.as_ref().map(|r| (r.state, r.session_id.as_ref() == Some(sid))),
+            w.session_ids == vec![sid.clone()],
+            w.claude_uuid.is_some() && w.claude_uuid == s.claude.map(|c| c.session_uuid),
+            s.work_item_id == Some(w.id.clone()),
+        )
+    };
+    assert_eq!(state(&made, &b), state(&mcp, &a));
+    assert_eq!(made.run.as_ref().unwrap().state, RunState::Running);
+    let core: &dyn CoreApi = h.core.as_ref();
+    assert_eq!(core.ticket_for_session(&b).await.map(|t| t.key), Some("SHOP-143".into()));
+    // Opening the item: the session beside the editor on the worktree.
+    h.core.work().resume(&made.id).await.unwrap();
+    let l = h.core.layout_get(&shop).unwrap();
+    let tab = l.tabs.iter().find(|t| t.work_item_id.as_ref() == Some(&made.id)).unwrap();
+    let ids = kelta_core::layout::sessions_in(&tab.root);
+    assert!(ids.contains(&b), "the pane moved into the item");
+    let editor = ids
+        .iter()
+        .filter_map(|id| h.core.session_get(id))
+        .find(|s| matches!(s.kind, SessionKind::Editor { .. }) && s.lifecycle == Lifecycle::Live)
+        .expect("a live editor in the item's tab");
+    assert_eq!(editor.cwd.canonicalize().unwrap(), made.worktree.canonicalize().unwrap());
+    // One session, one item; only a live Claude.
+    let again = h.core.session_claim(&b, None, made.worktree.clone()).await.unwrap_err();
+    assert_eq!(again.code, ErrorCode::Conflict);
+    let shell = plain_tab(&h, SessionKind::Shell, None).await;
+    let refused = h.core.session_claim(&shell, None, made.worktree.clone()).await.unwrap_err();
+    assert_eq!(refused.code, ErrorCode::InvalidArgument);
+}
+
+/// #502: without a ticket it is a scratch item on the worktree's branch, never the base.
+#[tokio::test]
+async fn session_claim_without_a_ticket_makes_a_scratch_item_that_adopts_the_session() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, repo) = env(tmp.path());
+    let spike = tmp.path().join("runs/spike");
+    git(&repo, &["worktree", "add", "-q", "-b", "wip/spike", spike.to_str().unwrap()]);
+    let c = plain_tab(&h, SessionKind::Claude, Some(repo.clone())).await;
+    let w = h.core.session_claim(&c, None, spike.clone()).await.unwrap();
+    assert_eq!((w.kind, w.ticket.as_ref(), w.run.as_ref()), (WorkKind::Branch, None, None));
+    assert_eq!((w.branch.as_str(), w.base.as_str()), ("wip/spike", "main"));
+    assert_eq!(w.worktree.canonicalize().unwrap(), spike.canonicalize().unwrap());
+    assert_eq!(w.session_ids, vec![c.clone()]);
+    assert!(w.claude_uuid.is_some());
+    assert_eq!(h.core.session_get(&c).unwrap().work_item_id, Some(w.id.clone()));
+    // Link to ticket works on it as on any scratch item.
+    let linked = h.core.work().link(&w.id, samples::ticket_ref(), false).await.unwrap();
+    assert_eq!((linked.kind, linked.branch.as_str()), (WorkKind::Ticket, "wip/spike"));
+    // The base branch is refused: Ship would push it.
+    let d = plain_tab(&h, SessionKind::Claude, Some(repo.clone())).await;
+    let err = h.core.session_claim(&d, None, repo.clone()).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidArgument);
+    // Same with a ticket: no claim is made on the base.
+    let err = h.core.session_claim(&d, Some(samples::ticket_ref()), repo).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidArgument);
+    assert_eq!(h.core.work_list(None).await.unwrap().len(), 1);
 }
 
 #[tokio::test]

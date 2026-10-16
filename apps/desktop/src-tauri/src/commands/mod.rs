@@ -167,6 +167,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Syn
         session::session_list,
         session::session_mark_seen,
         session::session_link,
+        session::session_claim,
         session::session_text_tail,
         session::session_history_search,
         session::claude_runs_list,

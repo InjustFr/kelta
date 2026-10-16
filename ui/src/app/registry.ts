@@ -62,6 +62,7 @@ export type RegisteredSheetKey =
   | 'start_work'
   | 'start_batch'
   | 'work_new'
+  | 'make_work'
   | 'link_ticket'
   | 'create_ticket'
   | 'onboarding'
@@ -85,6 +86,8 @@ export const sheetRegistry: Record<RegisteredSheetKey, LazyComponent> = {
   start_work: () => import('../views/work/StartWorkSheet.svelte'),
   start_batch: () => import('../views/work/BatchStartSheet.svelte'),
   work_new: () => import('../views/work/NewWorkSheet.svelte'),
+  /** props: { sessionId } (#502) */
+  make_work: () => import('../views/work/MakeWorkSheet.svelte'),
   link_ticket: () => import('../views/work/LinkTicketSheet.svelte'),
   create_ticket: () => import('../views/work/CreateTicketSheet.svelte'),
   onboarding: () => import('../views/onboarding/OnboardingSheet.svelte'),

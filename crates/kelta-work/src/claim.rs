@@ -1,14 +1,15 @@
 //! Background runs claiming tickets (MCP `claim_ticket` / `report_progress` / `release_ticket`, #235).
 //! A claimed item adopts the run's worktree and branch: Kelta never creates, removes or deletes them.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use kelta_proto::codehost::Review;
 use kelta_proto::error::KeltaError;
 use kelta_proto::events::{BusEvent, bus};
 use kelta_proto::ids::{ProjectId, SessionId, WorkItemId};
 use kelta_proto::model::{
-    FinishOpts, Lifecycle, RunClaim, RunState, SessionInfo, WorkItem, WorkKind, WorkSource, WorkState,
+    FinishOpts, Lifecycle, ProjectInfo, RepoInfo, RunClaim, RunState, SessionInfo, WorkItem, WorkKind,
+    WorkSource, WorkState,
 };
 use kelta_proto::tracker::{StatusCategory, TicketRef};
 
@@ -41,19 +42,7 @@ impl WorkService {
                 primary.map(|r| r.path.clone()).ok_or_else(|| KeltaError::invalid("project has no repo"))?
             }
         };
-        let mut found = None;
-        for r in &p.repos {
-            if let Ok(Some(w)) = git::worktree_at(&r.path, &path).await {
-                found = Some((r, w));
-                break;
-            }
-        }
-        let (repo, wt) = found.ok_or_else(|| {
-            KeltaError::invalid(format!(
-                "{} is not a git worktree of a repo of project {project}",
-                path.display()
-            ))
-        })?;
+        let (repo, wt) = worktree_of(&p, &path).await?;
         let branch = branch
             .filter(|b| !b.trim().is_empty())
             .or_else(|| kept.as_ref().map(|h| h.branch.clone()))
@@ -127,6 +116,42 @@ impl WorkService {
         let probe = WorkItem { ticket: Some(ticket.clone()), ..WorkItem::default() };
         Ok(kelta_proto::api::claim_holder(&self.store.list_items(None).await?, &probe)
             .filter(|h| h.claimed_by(sid)))
+    }
+
+    /// #502 Make this a work item without a ticket: a scratch item (`WorkKind::Branch`) on `worktree`, an
+    /// existing worktree of `project`, on its checked-out branch. No Claude and no run: the caller adopts
+    /// the session. Finish never removes the worktree (no journal: `worktree_created` is false).
+    pub async fn scratch_on(&self, project: &ProjectId, worktree: &Path) -> Result<WorkItem, KeltaError> {
+        self.ensure_listener();
+        let core = self.api()?;
+        let p = core.project(project).ok_or_else(|| KeltaError::not_found(format!("project {project}")))?;
+        let (repo, wt) = worktree_of(&p, worktree).await?;
+        let branch = wt.branch.ok_or_else(|| {
+            KeltaError::invalid(format!("{} has no branch checked out", worktree.display()))
+        })?;
+        off_base(repo, &branch, worktree)?;
+        let mut item = WorkItem {
+            id: WorkItemId::generate(),
+            project_id: project.clone(),
+            kind: WorkKind::Branch,
+            repo_id: repo.id.clone(),
+            worktree: wt.path,
+            branch,
+            base: repo.base.clone(),
+            state: WorkState::Active,
+            created_at: kelta_proto::now_rfc3339(),
+            ..WorkItem::default()
+        };
+        self.save(&mut item).await?;
+        Ok(item)
+    }
+
+    /// #502: refuses `worktree` when it has the project's base branch checked out (Ship would push it).
+    pub async fn ensure_off_base(&self, project: &ProjectId, worktree: &Path) -> Result<(), KeltaError> {
+        let core = self.api()?;
+        let p = core.project(project).ok_or_else(|| KeltaError::not_found(format!("project {project}")))?;
+        let (repo, wt) = worktree_of(&p, worktree).await?;
+        wt.branch.map_or(Ok(()), |b| off_base(repo, &b, worktree))
     }
 
     /// #491: a run Kelta started (`workflow_run`) gives its Claude to the item it claimed. Opening the
@@ -384,4 +409,32 @@ impl WorkService {
             None => Err(KeltaError::conflict(format!("{key} is claimed by another session"))),
         }
     }
+}
+
+/// Ship pushes the item's branch: never the base itself.
+fn off_base(repo: &RepoInfo, branch: &str, worktree: &Path) -> Result<(), KeltaError> {
+    if branch == repo.base {
+        return Err(KeltaError::invalid(format!(
+            "{} is on the base branch {branch}: pick a worktree on its own branch",
+            worktree.display()
+        )));
+    }
+    Ok(())
+}
+
+/// The repo of `p` whose `git worktree list` has `path`, with that entry.
+async fn worktree_of<'a>(
+    p: &'a ProjectInfo,
+    path: &Path,
+) -> Result<(&'a RepoInfo, git::Worktree), KeltaError> {
+    for r in &p.repos {
+        if let Ok(Some(w)) = git::worktree_at(&r.path, path).await {
+            return Ok((r, w));
+        }
+    }
+    Err(KeltaError::invalid(format!(
+        "{} is not a git worktree of a repo of project {}",
+        path.display(),
+        p.id
+    )))
 }

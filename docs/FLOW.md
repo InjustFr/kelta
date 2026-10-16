@@ -311,7 +311,7 @@ Gating is the work menu's (§2.5): disabled keys on review items do nothing and 
 
 - Groups, in this order with an empty query: **Recent** (the last places you were, from the jumplist), **Work items** (every unfinished work item, `[lamp] KEY title` with the phase label as meta; matches key, title, branch; `↵` goes to it, `work_resume` recreates a closed tab and resumes Claude), **Sessions** (a work item's are named `KEY claude`, `KEY nvim`), **Projects**, **Actions**, **Tools**, **Commands**, **Tickets** (searched in the trackers), **Pull requests**, **Settings** (every key, opening its section).
 - Prefixes narrow the groups: `#` tickets, `!` pull requests, `>` actions, commands and tools, `,` settings.
-- Work commands: New work item, Work: Review diff / Ship / Push / Fix with Claude / Rebase / Continue rebase / Abort rebase / Mark reviewed / Link to ticket / Create ticket / Finish (focused item), Finish all merged, Run last toast action.
+- Work commands: New work item, Make this a work item (focused Claude session), Work: Review diff / Ship / Push / Fix with Claude / Rebase / Continue rebase / Abort rebase / Mark reviewed / Link to ticket / Create ticket / Finish (focused item), Finish all merged, Run last toast action.
 
 ### 3.6 Freshness
 
@@ -401,7 +401,7 @@ Own PRs in the PR detail pane no longer offer Approve / Request changes; they of
 4. **Link to ticket** later (`⌘.` `l`, or palette): ticket picker over `tracker_search`, then `work_link`. The item becomes ticket-kind; the branch is never renamed. A checkbox (default on) applies `on_start` (assign me, move to In Progress), and if a PR exists, `on_pr` (move to In Review, comment the PR URL) and the ticket key is added to the PR title on the next Ship/Push only if the PR title has no key yet.
 5. **Create ticket** (`⌘.` `⇧T`, or palette), next to Link to ticket when no ticket exists yet: title, body (task and diffstat) prefilled from the item and editable, plus the tracker source to file it in when the project has several; `work_create_ticket` creates it, then links it as in step 4.
 
-`⌘T` (New session) stays the way to open a plain session with no branch. Its sheet gets one line: "Want a branch and a PR? New work item ⇧⌘N". Promoting a running plain session into a work item is not offered (§11.2).
+`⌘T` (New session) stays the way to open a plain session with no branch. Its sheet gets one line: "Want a branch and a PR? New work item ⇧⌘N". **Make this a work item** (palette, or the sidebar row's right-click menu, on a live Claude session in no work item, #502) turns a running one into an item: pick a ticket (the item its MCP `claim_ticket` would make, §6) or none (a scratch item on the worktree's branch, never its base), and a worktree (default: the session's folder; any git worktree of the project's repos). The session keeps its conversation and cwd. The item's editor and git use the worktree, and opening the item moves the session beside the editor. Link to ticket and Create ticket work on the scratch item as on any.
 
 | | Before | After |
 |---|---|---|
@@ -735,7 +735,6 @@ All 28 issues were checked against the code at `316bc1d` (`github.rs:377` draft 
 
 ### 11.2 Not doing (and why)
 
-- Promoting a running plain session into a work item: a live Claude cannot move to a new worktree, and `⇧⌘N` is as fast.
 - Review threads in the PR detail pane: the Fix sheet is where they are acted on; reading them on the host remains one key (`o`).
 - A merge button in Kelta that merges now, snoozing rows, per-project dashboards, priority drag-and-drop: nobody asked, and Now's order already encodes priority. Merge when ready (§4.6) only arms the host's own auto-merge.
 - **Sapling**: work items are git worktrees only and `sl push --force` has no lease. Revisit once there is a Sapling work-item backend with a lease-equivalent check.
