@@ -157,7 +157,7 @@ pub enum Matcher { Str(String) /* exact; "glob:…" ; "re:…" ; "!…" negation
 | `prompt` | `text`, `yes = [ActionDef]`, `no? = [ActionDef]` | in-app confirm toast with buttons | — |
 | `command` | `id` | run a contributed command | (that command's) |
 | `fix_checks` | — | on a `pr.*` event: sends the PR's failed checks to its work item's Claude, as Enter on Checks failed does (held until a busy Claude stops). Once per head SHA and failed-check set; skipped (debug log) without an open work item, a Claude, or its status hooks; over the item's `claude.budget_usd`, a toast instead. Opt-in: nothing is sent without a key press unless a trigger says so | `terminal.write` |
-| `run_workflow` | `workflow`, `ticket?` (template, e.g. `"{ticket.key}"`) | starts a workflow run as `w` / "Run <label>" do: with `ticket`, `workflow_run` on it (claims it, phase on its row, `ask` buttons; a run live on it is returned, not started twice), else the `on = "global"` `[[workflows]]` entry in the event's project. The trigger log records the run's session | `sessions.spawn`, `terminal.write` (+ `tickets.read` with `ticket`) |
+| `run_workflow` | `workflow`, `ticket?` (template, e.g. `"{ticket.key}"`) | starts a workflow run as `w` / "Run <label>" do: with `ticket`, `workflow_run` on it (claims it, phase on its row, `ask` buttons; a run live on it is returned, not started twice), else the `on = "global"` `[[workflows]]` entry in the event's project (`kelta-ctl emit --project` sets it on `custom.*` events). MCP `run_workflow` starts the same runs from a Claude (FLOW §4.8). The trigger log records the run's session | `sessions.spawn`, `terminal.write` (+ `tickets.read` with `ticket`) |
 
 A command's `when` decides where the palette offers it: `terminal` with a focused terminal pane; `ticket` /
 `review` with a ticket / review detail pane focused, run with that ticket / PR; `work` with a focused work
@@ -240,7 +240,15 @@ on = "custom.deploy_finished"
 do = [ { action = "http", url = "https://qa.example.com/run", secret_headers = { Authorization = { setting = "qa_token", format = "Bearer {secret}" } } } ]
 ```
 
-External events: `kelta-ctl emit custom.deploy_finished --json '{"env":"staging"}'` publishes `custom.deploy_finished` (only `custom.*` names accepted from the CLI).
+```toml
+# Global run from cron: `0 8 * * 1-5  kelta-ctl emit custom.morning --project shop`
+[[triggers]]
+id = "morning-prepare"
+on = "custom.morning"
+do = [{ action = "run_workflow", workflow = "next-ticket" }]
+```
+
+External events: `kelta-ctl emit custom.deploy_finished --json '{"env":"staging"}' [--project shop]` publishes `custom.deploy_finished` (only `custom.*` names accepted from the CLI); `--project` (an unknown id is refused) sets the event's project, so project triggers and `run_workflow`'s global run resolve in it.
 
 ---
 
@@ -421,7 +429,7 @@ Every event carries `{name, ts, project_id?, session_id?, work_item_id?, payload
 | `pr.approved` / `pr.changes_requested` / `pr.merged` / `pr.closed` | `{review, linked_tickets}` (`pr.merged` / `pr.closed`: an authored PR left the open list, seen live or by the startup / Queue-open check; `pr.closed` = closed without merge; once per PR) |
 | `tool.opened` / `tool.exited` | `{tool_id, instance_id, code?}` |
 | `settings.changed` | `{paths, layers}` |
-| `custom.*` | arbitrary (from `kelta-ctl emit`) |
+| `custom.*` | arbitrary (from `kelta-ctl emit`, project from `--project`) |
 
 ## 7. Host API for custom screens
 

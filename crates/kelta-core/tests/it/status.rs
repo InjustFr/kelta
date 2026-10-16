@@ -479,12 +479,20 @@ async fn ctl_hook_through_the_server() {
     // only custom.* can be emitted
     assert!(
         h.core
-            .ctl(CtlCommand::Emit { name: "session.spawned".into(), payload: serde_json::json!({}) })
+            .ctl(CtlCommand::Emit {
+                name: "session.spawned".into(),
+                payload: serde_json::json!({}),
+                project: None,
+            })
             .await
             .is_err()
     );
     h.core
-        .ctl(CtlCommand::Emit { name: "custom.deploy".into(), payload: serde_json::json!({"ok": 1}) })
+        .ctl(CtlCommand::Emit {
+            name: "custom.deploy".into(),
+            payload: serde_json::json!({"ok": 1}),
+            project: None,
+        })
         .await
         .unwrap();
     assert_eq!(h.core.ctl(CtlCommand::Version).await.unwrap()["version"], kelta_proto::VERSION);

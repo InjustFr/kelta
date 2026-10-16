@@ -8,8 +8,9 @@ use std::sync::Arc;
 use crate::common::*;
 use kelta_proto::ErrorCode;
 use kelta_proto::api::{CodeHost, CoreApi, Tracker};
+use kelta_proto::ctl::CtlCommand;
 use kelta_proto::error::KeltaError;
-use kelta_proto::ext::{WorkflowDef, WorkflowOn};
+use kelta_proto::ext::{ActionDef, TriggerDef, WorkflowDef, WorkflowOn};
 use kelta_proto::ids::{AccountId, ProjectId, SessionId};
 use kelta_proto::model::{
     OpenPaneRequest, PaneContent, Placement, RunClaim, RunState, SessionKind, SpawnRequest, StartWorkPlan,
@@ -52,6 +53,12 @@ fn env(root: &Path) -> (H, PathBuf) {
         def("daily", WorkflowOn::Global, "Write the daily report"),
         WorkflowDef { enabled: false, ..def("off", WorkflowOn::Ticket, "x") },
     ];
+    s.triggers = vec![TriggerDef {
+        id: "morning-prepare".into(),
+        on: "custom.morning".into(),
+        r#do: vec![ActionDef::RunWorkflow { workflow: "daily".into(), ticket: None }],
+        ..TriggerDef::default()
+    }];
     let mut shop = project("shop", root);
     shop.tracker = Some(samples::tracker_binding());
     shop.repos[0].code_host =
@@ -468,6 +475,33 @@ async fn a_global_workflow_runs_with_no_ticket() {
     assert!(h.core.work_list(None).await.unwrap().is_empty());
     let err = h.core.workflow_run_on(ProjectId::new("shop"), "describe", None).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::NotFound, "a PR workflow needs its PR");
+}
+
+#[tokio::test]
+async fn emit_with_project_starts_a_global_run_through_a_trigger() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, repo) = env(tmp.path());
+    let emit = |p: &str| CtlCommand::Emit {
+        name: "custom.morning".into(),
+        payload: serde_json::json!({}),
+        project: Some(ProjectId::new(p)),
+    };
+    // Core's startup task subscribes the trigger engine to the bus; an event published first is missed.
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    let err = h.core.ctl(emit("nope")).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound);
+    h.core.ctl(emit("shop")).await.unwrap();
+    let mut run = None;
+    for _ in 0..300 {
+        run = h.core.session_list(None).into_iter().find(|s| s.kind == SessionKind::Claude);
+        if run.is_some() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    let run = run.expect("the trigger's run_workflow started the global run");
+    assert_eq!(spawned(&h, &run), ("Write the daily report".to_owned(), repo));
+    assert!(h.core.work_list(None).await.unwrap().is_empty(), "a global run claims nothing");
 }
 
 #[tokio::test]
