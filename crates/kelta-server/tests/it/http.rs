@@ -84,6 +84,23 @@ async fn server_is_lazy_and_stops_after_last_release() {
     e.server.release_http();
 }
 
+/// #499: the server binds the previous run's port again when it is free, else any free port.
+#[tokio::test]
+async fn ensure_rebinds_the_preferred_port_when_free() {
+    let e = common::env();
+    let free = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let port = free.local_addr().unwrap().port();
+    drop(free);
+    assert_eq!(e.server.ensure_http_at(Some(port)).await.unwrap(), port);
+    assert_eq!(raw_status(port, &format!("127.0.0.1:{port}"), "/hook/x", None, "{}").await, 401);
+    e.server.release_http();
+    // Taken: another port.
+    let taken = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let busy = taken.local_addr().unwrap().port();
+    assert_ne!(e.server.ensure_http_at(Some(busy)).await.unwrap(), busy);
+    e.server.release_http();
+}
+
 #[tokio::test]
 async fn host_guard_rejects_foreign_hosts() {
     let e = common::env();

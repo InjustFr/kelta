@@ -399,6 +399,7 @@ impl Core {
         let ids: Vec<SessionId> = self.sessions.lock().keys().cloned().collect();
         let mut adopted = HashSet::new();
         let mut failed = false;
+        let mut held: Vec<(SessionId, u16)> = Vec::new();
         for id in ids {
             let env = match self.terminal.adopt(&id, Arc::new(EventSink { core: self.me.clone() })) {
                 Ok(Some(env)) => env,
@@ -410,7 +411,6 @@ impl Core {
                 }
             };
             let hook = env.get("KELTA_HOOK_TOKEN").cloned().unwrap_or_default();
-            // shortcut: KELTA_MCP_URL keeps the previous run's port, so MCP / http hooks of an adopted Claude fail until it restarts; pin the port to fix.
             let mcp = env.get("KELTA_MCP_TOKEN").cloned();
             if let Some(e) = self.sessions.lock().get_mut(&id) {
                 e.info.lifecycle = Lifecycle::Live;
@@ -423,8 +423,21 @@ impl Core {
                 }
             }
             self.server.register_session(&id, &hook, mcp.as_deref());
+            // It held an HTTP reference in the previous run (as `spawn_with` takes one): keep the server on its port.
+            if let Some(port) = env.get("KELTA_MCP_URL").and_then(|u| crate::claude_mcp::registered_port(u)) {
+                held.push((id.clone(), port));
+            }
             self.persist_session(&id);
             adopted.insert(id);
+        }
+        if !held.is_empty() {
+            let me = self.me.clone();
+            // boot may run outside the runtime: queued ahead of `start_async`, so it binds before any other consumer.
+            self.rt.spawn(async move {
+                if let Some(core) = me.upgrade() {
+                    core.hold_adopted_http(held).await;
+                }
+            });
         }
         // A failed adopt may be a slow reply for a session core keeps: never kill on a guess.
         if failed {
@@ -434,6 +447,39 @@ impl Core {
             if !adopted.contains(&s.id) {
                 let _ = self.terminal.kill(&s.id, KillSignal::Kill);
             }
+        }
+    }
+
+    /// Take back the HTTP consumer each adopted Claude held in the previous run, on its port when free.
+    async fn hold_adopted_http(&self, held: Vec<(SessionId, u16)>) {
+        let mut stale = Vec::new();
+        for (id, port) in held {
+            let got = match self.server.ensure_http_at(Some(port)).await {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!(error = %e, session = %id, "http server unavailable for an adopted Claude");
+                    continue;
+                }
+            };
+            let name = {
+                let mut s = self.sessions.lock();
+                // Exited, or respawned with its own reference, before this ran: give ours back.
+                s.get_mut(&id).filter(|e| e.info.lifecycle == Lifecycle::Live && !e.http_ref).map(|e| {
+                    e.http_ref = true;
+                    e.info.name.clone()
+                })
+            };
+            let Some(name) = name else {
+                self.server.release_http();
+                continue;
+            };
+            self.http_refs.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if got != port {
+                stale.push(format!("{name} ({id})"));
+            }
+        }
+        if !stale.is_empty() {
+            tracing::warn!(sessions = %stale.join(", "), "previous HTTP port taken: MCP and http hooks of these Claudes fail until they restart");
         }
     }
 
@@ -1966,6 +2012,7 @@ impl Core {
                 let sid = id.clone();
                 self.rt.spawn(async move {
                     if let Some(core) = weak.upgrade()
+                        && !core.work.refused_resume_kept(&sid, code).await
                         && let Err(e) = core.restore_session(&sid, cols, rows, true).await
                     {
                         tracing::warn!(error = %e, "claude --continue fallback failed");

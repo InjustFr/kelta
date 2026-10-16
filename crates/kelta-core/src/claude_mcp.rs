@@ -36,8 +36,8 @@ fn install_token(current: Option<&Registration>) -> String {
         .map_or_else(crate::spawn_env::token, str::to_owned)
 }
 
-/// Port of a registered global `/mcp` URL.
-fn registered_port(url: &str) -> Option<u16> {
+/// Port of a Kelta MCP URL (the global `/mcp` or a session's `/mcp/<sid>`).
+pub(crate) fn registered_port(url: &str) -> Option<u16> {
     let rest = url.split("http://127.0.0.1:").nth(1)?;
     let (port, path) = rest.split_once('/')?;
     path.starts_with("mcp").then(|| port.parse().ok()).flatten()
