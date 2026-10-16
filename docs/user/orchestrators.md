@@ -31,6 +31,8 @@ Every tool name and field below is the one Kelta's MCP server lists. Errors star
    - `worktree` must be a worktree of one of the project's repos, `branch` a valid branch name (default: the
      worktree's checkout). Kelta never creates, removes or deletes them.
    - `run.name` is shown on the ticket (`build-ticket · Implement`); `run.id` tells the lanes of one session apart.
+     Equal run ids take a claim over even across sessions, so make the id unique per session (for example
+     `<workflow>-$KELTA_SESSION_ID`).
    - `account` (and `project`) are needed only for a ticket the lists do not show.
    - A ticket with live work answers `Conflict: KEY is held by session … (run)`: pick another. A claim that is
      orphaned (its session is gone), blocked or failed is taken over.
