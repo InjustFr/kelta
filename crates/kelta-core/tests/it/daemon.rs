@@ -364,3 +364,90 @@ async fn adopted_claude_follows_its_hooks() {
     term.close();
     keltad.join().unwrap();
 }
+
+/// #499: an adopted Claude keeps the HTTP server on its previous port, so its MCP and http hooks still reach Kelta.
+#[tokio::test(flavor = "multi_thread")]
+async fn adopted_live_claudes_keep_the_http_server_on_their_port() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let sock = Dirs::under(root).keltad_socket();
+    let l = daemon::bind(&sock).unwrap();
+    let host = PtyTerminalHost::new(TerminalLimits::default());
+    let keltad = std::thread::spawn(move || daemon::serve(l, host, Duration::from_millis(200)));
+
+    // A Claude that stays up and leaves the URL and tokens its MCP and hooks would use.
+    let (stub, env_file) = (root.join("claude-stub"), root.join("env"));
+    let script = format!(
+        "#!/bin/sh\nprintf '%s %s %s' \"$KELTA_MCP_URL\" \"$KELTA_MCP_TOKEN\" \"$KELTA_HOOK_TOKEN\" > '{}'\nexec sleep 60\n",
+        env_file.display()
+    );
+    let wrote = std::process::Command::new("sh")
+        .args(["-c", "printf '%s' \"$2\" > \"$1\"; chmod +x \"$1\"", "sh"])
+        .arg(&stub)
+        .arg(&script)
+        .status()
+        .unwrap();
+    assert!(wrote.success());
+    let term = DaemonTerminalHost::connect(&sock).unwrap();
+    let core = app(root, term.clone());
+    let claude = core
+        .session_spawn(SpawnRequest {
+            program: Some(stub.display().to_string()),
+            restore: RestorePolicy::Relaunch,
+            ..req(SessionKind::Claude)
+        })
+        .await
+        .unwrap();
+    let read = || std::fs::read_to_string(&env_file).unwrap_or_default();
+    assert!(eventually(|| !read().is_empty()).await, "the stub never started");
+    let env = read();
+    let mut parts = env.split_whitespace();
+    let (url, mcp_token, hook_token) = (parts.next().unwrap(), parts.next().unwrap(), parts.next().unwrap());
+    let port: u16 = url.split("127.0.0.1:").nth(1).unwrap().split('/').next().unwrap().parse().unwrap();
+    assert_eq!(core.server().http_port(), Some(port));
+    core.shutdown().await.unwrap();
+    term.close();
+    // The process exit of a real restart: free the port whatever still holds the first core.
+    while core.server().http_port().is_some() {
+        core.server().release_http();
+    }
+    drop(core);
+    assert!(
+        eventually(|| std::net::TcpStream::connect(("127.0.0.1", port)).is_err()).await,
+        "first run's server still listens"
+    );
+
+    // Second run: adopted Live, the server is back on the same port.
+    let term = DaemonTerminalHost::connect(&sock).unwrap();
+    let core = app(root, term.clone());
+    assert_eq!(core.session_get(&claude.id).unwrap().lifecycle, Lifecycle::Live);
+    assert!(eventually(|| core.server().http_port() == Some(port)).await, "server not back on {port}");
+    let c = kelta_http::client_builder().no_proxy().build().unwrap();
+    let ping = c
+        .post(url)
+        .bearer_auth(mcp_token)
+        .json(&serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": "ping" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(ping.status(), 200);
+    let hook = c
+        .post(format!("http://127.0.0.1:{port}/hook/{}", claude.id))
+        .bearer_auth(hook_token)
+        .json(&serde_json::json!({ "hook_event_name": "UserPromptSubmit" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(hook.status(), 200);
+    assert_eq!(core.session_get(&claude.id).unwrap().status, SessionStatus::Working);
+
+    // The reference is the Claude's: its exit stops the server (nothing else holds it).
+    core.session_kill(&claude.id, false).await.unwrap();
+    assert!(
+        eventually(|| core.server().http_port().is_none()).await,
+        "adopted Claude's reference not released"
+    );
+    core.shutdown().await.unwrap();
+    term.close();
+    keltad.join().unwrap();
+}
