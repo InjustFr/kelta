@@ -104,6 +104,13 @@ impl WorkService {
         sig: Signal,
         review: Option<&Review>,
     ) -> Option<String> {
+        // The tracker reached these steps' status itself: a failed transition there has nothing left to retry,
+        // even when the ticket already stands at the step (a failed manual move stores it, #481).
+        if matches!(sig, Signal::Status(_)) {
+            for s in steps.iter().filter(|s| s.enter.iter().any(|x| fires(x, &sig))) {
+                self.clear_failed(t, &s.id).await;
+            }
+        }
         let next = advance(steps, self.standing(env, item, t, steps, &sig).await, &sig)?;
         let step = &steps[next];
         let by = step
@@ -112,10 +119,6 @@ impl WorkService {
             .find(|x| fires(x, &sig))
             .and_then(|x| serde_json::to_string(x).ok())
             .unwrap_or_default();
-        // The tracker reached this step's status itself: a failed transition there has nothing left to retry (#481).
-        if matches!(sig, Signal::Status(_)) {
-            self.clear_failed(t, &step.id).await;
-        }
         // The Start saga ran the plan's copy of the start effects, which the sheet lets the user edit.
         let why = if sig == Signal::Event(PipelineEvent::WorkStarted) {
             None

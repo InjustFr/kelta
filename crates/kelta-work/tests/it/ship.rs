@@ -886,7 +886,6 @@ async fn a_step_entered_by_its_status_clears_its_failed_transition() {
     let t = item.ticket.clone().unwrap();
     fx.tracker.require_fields("t10");
     assert!(w.move_step(&t, Some("po")).await.is_err());
-    w.move_step(&t, Some("implementing")).await.unwrap();
     let mut tk = fx.tracker.ticket("SHOP-141").unwrap().ticket;
     tk.status = samples::status("12", "PO Review", StatusCategory::InReview);
     w.ticket_statuses(std::slice::from_ref(&tk)).await;
