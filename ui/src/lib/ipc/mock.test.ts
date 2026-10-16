@@ -354,7 +354,9 @@ describe('mock transport', () => {
     });
     const made = await call('session_claim', { id: plain.id, ticket: null, worktree: plain.cwd });
     expect(made).toMatchObject({ kind: 'branch', session_ids: [plain.id], run: null });
-    await expect(call('session_claim', { id: plain.id, ticket: null, worktree: plain.cwd })).rejects.toMatchObject({
+    await expect(
+      call('session_claim', { id: plain.id, ticket: null, worktree: plain.cwd }),
+    ).rejects.toMatchObject({
       code: 'conflict',
     });
     // Scratch item: wip/ branch from the task, title, no adoption, then linked to a ticket.

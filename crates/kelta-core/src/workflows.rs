@@ -228,9 +228,9 @@ impl Core {
             }
             None => self.work.scratch_on(&info.project_id, &worktree).await?,
         };
-        self.adopt_session(&item, &info).await.ok_or_else(|| {
-            KeltaError::internal(format!("work item {} did not adopt session {sid}", item.id))
-        })
+        self.adopt_session(&item, &info)
+            .await
+            .ok_or_else(|| KeltaError::internal(format!("work item {} did not adopt session {sid}", item.id)))
     }
 
     /// The live session of a run holding `ticket`.

@@ -418,7 +418,8 @@ async fn session_claim_gives_the_same_item_state_as_an_mcp_claim() {
         plain_tab(&h, SessionKind::Claude, Some(wt143.clone())).await,
     );
     let run = |sid: &SessionId| RunClaim { session_id: Some(sid.clone()), ..RunClaim::default() };
-    let mcp = h.core.work_claim(&shop, samples::ticket_ref(), Some(wt142), None, run(&a), true).await.unwrap();
+    let mcp =
+        h.core.work_claim(&shop, samples::ticket_ref(), Some(wt142), None, run(&a), true).await.unwrap();
     let t143 = TicketRef { key: "SHOP-143".into(), ..samples::ticket_ref() };
     let made = h.core.session_claim(&b, Some(t143.clone()), wt143).await.unwrap();
     let state = |w: &kelta_proto::model::WorkItem, sid: &SessionId| {

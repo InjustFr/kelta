@@ -33,6 +33,7 @@ test('with a ticket, the plain Claude becomes the claimed item’s Claude', asyn
   const sheet = page.getByTestId('make-work');
   await sheet.getByRole('button', { name: 'None. Link one…' }).click();
   await page.getByTestId('ticket-picker-input').fill('SHOP-151');
+  await expect(page.getByTestId('ticket-picker-item').first()).toContainText('SHOP-151');
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('make-work-ticket')).toContainText('SHOP-151');
   await page.getByTestId('make-work-submit').click();
@@ -46,7 +47,9 @@ test('with a ticket, the plain Claude becomes the claimed item’s Claude', asyn
     item?.id,
   );
   await expect(page.getByTestId('work-header-key')).toHaveText('SHOP-151');
-  await expect(page.locator(`[data-testid="pane"][data-focused="true"] [data-session-id="${sid}"]`)).toHaveCount(1);
+  await expect(
+    page.locator(`[data-testid="pane"][data-focused="true"] [data-session-id="${sid}"]`),
+  ).toHaveCount(1);
 });
 
 test('without a ticket, from the sidebar row menu, it makes a scratch item', async ({ page }) => {

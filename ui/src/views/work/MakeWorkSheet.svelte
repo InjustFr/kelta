@@ -20,6 +20,7 @@
   const s = $derived(sessions.get(sessionId));
   let ticket = $state<TicketItem | null>(null);
   let picking = $state(false);
+  // svelte-ignore state_referenced_locally
   let choice = $state(sessions.get(sessionId)?.cwd ?? '');
   let custom = $state('');
   let busy = $state(false);
