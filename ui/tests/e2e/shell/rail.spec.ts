@@ -2,7 +2,7 @@
 // and the rail resizes and collapses by mouse and keyboard, both kept across a restart.
 import { expect, test, type Page } from '@playwright/test';
 
-import { boot, dispatch } from './helpers';
+import { boot, dispatch, waitForAttached } from './helpers';
 
 const railWidth = async (page: Page): Promise<number> =>
   Math.round((await page.getByTestId('rail').boundingBox())!.width);
@@ -92,7 +92,8 @@ test.describe('sidebar', () => {
     await expect(edge).toHaveCount(0);
 
     await page.reload();
-    await page.waitForFunction(() => window.__kelta?.stores.projects.loaded === true);
+    // The terminals focus themselves once attached (TerminalPane.svelte:81): let them, then blur (#485).
+    await waitForAttached(page, 2);
     expect(await railWidth(page)).toBe(64);
 
     // Outside a terminal: a focused terminal keeps Ctrl+B (tmux prefix).

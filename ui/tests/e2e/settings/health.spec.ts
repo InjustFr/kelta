@@ -33,6 +33,8 @@ test('Health lists what is broken and each button fixes it or opens its setting'
     await window.__kelta!.stores.tickets.load({ kind: 'all' }, null, false, null, null).catch(() => {});
   });
   await dispatch(page, 'settings.open', { section: 'health' });
+  // SettingsPane and its Health section are lazy chunks: wait for them before the 5 s assertions (#485).
+  await page.getByTestId('health').waitFor();
 
   const nav = page.getByRole('navigation', { name: 'Settings sections' });
   const row = (id: string) => page.locator(`[data-testid="health-problem"][data-problem="${id}"]`);

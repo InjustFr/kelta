@@ -27,6 +27,7 @@
   import { maxLamp, outsidePhase, workKey } from '../views/work/phase';
   import { stageName, workStage } from '../views/work/stage';
   import { confirms } from './confirm.svelte';
+  import { flushJump } from './jumplist';
   import { chordFor, runLine, sessionTitle, statusLabel } from './labels';
   import {
     activateProject,
@@ -329,7 +330,10 @@
     type="button"
     class="item place"
     class:active={ui.view === view && !ui.settings}
-    onclick={() => openView(view)}
+    onclick={() => {
+      flushJump(); // the place this click leaves is a stop on the way back, settled or not
+      openView(view);
+    }}
     title={`${name}: ${sub}`}
     aria-current={ui.view === view && !ui.settings ? 'page' : undefined}
     data-testid={`rail-${id}`}
