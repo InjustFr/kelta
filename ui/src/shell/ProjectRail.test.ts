@@ -8,6 +8,7 @@ import { allPanes } from '$lib/layout';
 import { layout, projects, sessions, tools, ui, work } from '$lib/stores';
 
 import { confirms } from './confirm.svelte';
+import { jumplist, noteFocus } from './jumplist';
 import { sessionTitle, statusLabel } from './labels';
 import { sidebar } from './sidebar.svelte';
 
@@ -214,6 +215,17 @@ describe('ProjectRail', () => {
       .toMatch(/^Pull requests: \d+ asks? for your review$/);
     expect(r.getByTestId('rail-inbox').title).toMatch(/^Queue: \d+ your move$/);
     expect(r.getByTestId('rail-tickets').title).toMatch(/^Tickets: \d+ assigned to you$/);
+  });
+
+  it('a view click keeps the place it leaves on the jumplist before it settles (#485)', async () => {
+    const r = await setup();
+    jumplist.list = [];
+    jumplist.at = -1;
+    const here = { project: 'shop', tab: 'shop-t1', pane: 'p1' };
+    noteFocus(here); // focus arrived < SETTLE_MS ago
+    await fireEvent.click(r.getByTestId('rail-reviews'));
+    expect(ui.view).toBe('reviews');
+    expect(jumplist.list).toEqual([here]);
   });
 
   it('n more: a folded tab in front marks it selected; its lamp is the highest of the folded tabs', async () => {

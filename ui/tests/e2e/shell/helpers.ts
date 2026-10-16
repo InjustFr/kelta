@@ -12,7 +12,8 @@ export async function boot(page: Page, platform: Platform = 'linux'): Promise<vo
   }, platform);
   await page.goto('/');
   await page.waitForFunction(() => window.__kelta?.stores.projects.loaded === true);
-  await expect(page.getByTestId('workspace')).toBeVisible();
+  // A load, not an assertion: the lazy terminal chunk takes seconds on a loaded machine (#485).
+  await page.getByTestId('workspace').waitFor();
   await waitForAttached(page, 2);
 }
 
@@ -27,7 +28,10 @@ export async function unfold(page: Page, project: string): Promise<void> {
 
 /** Waits until `n` terminal panes in the DOM are attached to their sessions. */
 export async function waitForAttached(page: Page, n: number): Promise<void> {
-  await expect(page.locator('[data-testid="terminal-pane"][data-attached="true"]')).toHaveCount(n);
+  const attached = page.locator('[data-testid="terminal-pane"][data-attached="true"]');
+  // A load, not an assertion: the lazy terminal chunk and xterm take seconds on a loaded machine (#485).
+  if (n > 0) await attached.nth(n - 1).waitFor();
+  await expect(attached).toHaveCount(n);
 }
 
 export interface MockCall {

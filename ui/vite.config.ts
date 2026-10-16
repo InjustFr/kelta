@@ -38,6 +38,9 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     host: '127.0.0.1',
+    // Views are dynamic imports, which Vite never pre-transforms: compile them at start so the first
+    // e2e to open them (scaffold loads all 55) does not pay the cold compile inside its budget (#485).
+    warmup: isVitest ? undefined : { clientFiles: ['./src/views/**/*.svelte'] },
   },
   envPrefix: ['VITE_', 'TAURI_ENV_'],
   build: {
