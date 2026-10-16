@@ -12,7 +12,7 @@ use kelta_proto::codehost::{CiState, PrSource, PrState, Review, ReviewKind, Revi
 use kelta_proto::events::{BusEvent, UiEvent, bus};
 use kelta_proto::ids::{AccountId, ProjectId};
 use kelta_proto::ipc::WindowState;
-use kelta_proto::model::{Scope, WorkItem, WorkKind, WorkState};
+use kelta_proto::model::{RunClaim, Scope, WorkItem, WorkKind, WorkState};
 use kelta_proto::settings::{
     AccountKind, CodeHostBinding, ColumnSpec, PipelineEvent, ProjectConfig, Settings, StepDef, TrackerView,
     TransitionTarget, Trigger,
@@ -660,6 +660,25 @@ async fn a_project_pipeline_reaches_the_status_poll_outside_the_sources() {
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
     panic!("the project pipeline never reached the status poll");
+}
+
+#[tokio::test]
+async fn a_ticket_claimed_by_a_run_carries_its_work_item_id() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = env(tmp.path(), vec![]);
+    let it = WorkItem {
+        kind: WorkKind::Ticket,
+        ticket: Some(TicketRef { account: "jira-acme".into(), key: "SHOP-143".into(), id: "10143".into() }),
+        run: Some(RunClaim::default()),
+        ..work_item("feat/SHOP-143", None)
+    };
+    let id = it.id.clone();
+    e.h.core.store().call(move |c| q::work_put(c, &it)).await.unwrap();
+    let page = e.h.core.tracker_list(Scope::All, None, None, None, None, true).await.unwrap();
+    let held =
+        |key: &str| page.items.iter().find(|i| i.ticket.r#ref.key == key).unwrap().work_item_id.clone();
+    assert_eq!(held("SHOP-143"), Some(id));
+    assert_eq!(held("SHOP-141"), None);
 }
 
 #[tokio::test]
