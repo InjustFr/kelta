@@ -348,17 +348,17 @@ describe('ReviewsPane sections and Team (#241, #401)', () => {
     expect(k(324)).toBeUndefined();
     expect(new Set(keys()).size).toBe(keys().length);
     await fireEvent.click(screen.getByRole('button', { name: /^Team drafts/ }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Settings for Team drafts' }));
+    expect(takeKeyRequest()).toBe('reviews.include_drafts');
+    await fireEvent.click(screen.getByRole('button', { name: 'Settings for Team, needs a reviewer' }));
+    expect(takeKeyRequest()).toBe('reviews.include_team_requests');
+    ui.settings = null;
     await waitFor(() => expect(k(324)).toBeTruthy());
     await press('Home');
     for (let i = 0; i < keys().length + 2; i++) {
       await press('j');
       expect(selectedKey()).toBeTruthy();
     }
-    await fireEvent.click(screen.getByRole('button', { name: 'Settings for Team drafts' }));
-    expect(takeKeyRequest()).toBe('reviews.include_drafts');
-    await fireEvent.click(screen.getByRole('button', { name: 'Settings for Team, needs a reviewer' }));
-    expect(takeKeyRequest()).toBe('reviews.include_team_requests');
-    ui.settings = null;
   });
 
   it('a project no source feeds lists no Team', async () => {

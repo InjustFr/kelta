@@ -72,7 +72,9 @@ export class ToastsStore {
       level: 'error',
       text: context ? `${context}: ${message}` : message,
       action:
-        typeof key === 'string' ? { label: t('Open setting'), command: 'settings.open', args: { key } } : null,
+        typeof key === 'string'
+          ? { label: t('Open setting'), command: 'settings.open', args: { key } }
+          : null,
     });
   }
 

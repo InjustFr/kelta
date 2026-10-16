@@ -170,7 +170,9 @@ describe('settings search results', () => {
       { timeout: 3000 },
     );
     expect((box as HTMLInputElement).value).toBe('');
-    expect(document.querySelector('nav [aria-current="page"]')?.getAttribute('data-section')).toBe('worktree');
+    expect(document.querySelector('nav [aria-current="page"]')?.getAttribute('data-section')).toBe(
+      'worktree',
+    );
     ui.settings = null;
   });
 

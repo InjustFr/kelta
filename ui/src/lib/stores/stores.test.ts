@@ -599,7 +599,12 @@ describe('ToastsStore', () => {
   it('an error naming a setting offers to open it (#477)', () => {
     const store = new ToastsStore();
     store.error(
-      { code: 'invalid_argument', message: 'worktree.root must be absolute: x', detail: { setting: 'worktree.root' }, retry_after_ms: null },
+      {
+        code: 'invalid_argument',
+        message: 'worktree.root must be absolute: x',
+        detail: { setting: 'worktree.root' },
+        retry_after_ms: null,
+      },
       'Start work',
     );
     store.error('plain');
