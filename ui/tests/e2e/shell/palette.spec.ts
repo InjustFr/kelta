@@ -149,9 +149,11 @@ test.describe('palette', () => {
     await page.keyboard.type('u');
     await expect.poll(() => activeProject(page)).toBe('billing');
     await expect(page.getByTestId('jump-hud')).toContainText(/^1\/\d+ · needs input · /);
+    // Showing its tab marks the reply seen (#489): it leaves the queue, so the failed start now leads.
+    await expect.poll(async () => (await callsOf(page, 'work_seen')).length).toBeGreaterThan(0);
     // Then the failed start in billing (error band).
     await dispatch(page, 'attention.next');
-    await expect(page.getByTestId('jump-hud')).toContainText(/^2\/\d+ · error · /);
+    await expect(page.getByTestId('jump-hud')).toContainText(/^1\/\d+ · error · /);
     const focused = page.locator('[data-testid="pane"][data-focused="true"]');
     const billingPane = await focused.getAttribute('data-pane-id');
     // Then SHOP-155 to review: its closed work tab is recreated around its Claude session.
@@ -185,6 +187,8 @@ test.describe('palette', () => {
     await page.keyboard.press('Control+Shift+Space');
     await page.keyboard.type('u');
     await expect.poll(() => activeProject(page)).toBe('billing');
+    // Showing the replied item's tab clears its reply (#489) before the queue is walked again.
+    await expect.poll(async () => (await callsOf(page, 'work_seen')).length).toBeGreaterThan(0);
     await dispatch(page, 'nav.back');
     await backToNvim();
     await dispatch(page, 'nav.forward');
@@ -193,7 +197,7 @@ test.describe('palette', () => {
     await backToNvim();
 
     await ctl({ cmd: 'next' });
-    await expect(page.getByTestId('jump-hud')).toContainText(/^2\//);
+    await expect(page.getByTestId('jump-hud')).toContainText(/^1\//);
     await expect(focused).not.toHaveAttribute('data-session-id', SESSIONS.shopNvim);
     await ctl({ cmd: 'back' });
     await backToNvim();
