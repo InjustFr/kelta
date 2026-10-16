@@ -69,7 +69,7 @@ impl Core {
             close_on_exit: Default::default(),
             template_id: None,
         };
-        let info = self.spawn_claude(self.fresh_session_id(), base, &s, None, Some(PROMPT)).await?;
+        let info = self.spawn_claude(self.fresh_session_id(), base, &s, None, Some(PROMPT), None).await?;
         let req = OpenPaneRequest {
             content: PaneContent::Terminal { session_id: info.id.clone() },
             placement: Placement::NewTab,
