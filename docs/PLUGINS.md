@@ -166,6 +166,8 @@ commands are hidden on list panes and while the Queue or another global view is 
 
 ### 3.2 Examples
 
+Triggers that run and follow orchestrators: [Orchestrators](user/orchestrators.md#trigger-recipes).
+
 ```toml
 # Notify when Claude needs me in a background project
 [[triggers]]
