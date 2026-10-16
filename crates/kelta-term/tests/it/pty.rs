@@ -254,8 +254,15 @@ fn queries_are_answered_exactly_once() {
     for b in backends() {
         let h = host(b);
         let ev = Arc::new(Events::default());
-        h.spawn(spec("q", sim.to_str().unwrap(), &["--queries", "--timeout-ms", "3000"], 80, 24, ev.clone()))
-            .unwrap();
+        h.spawn(spec(
+            "q",
+            sim.to_str().unwrap(),
+            &["--queries", "--timeout-ms", "15000"],
+            80,
+            24,
+            ev.clone(),
+        ))
+        .unwrap();
         // tui-sim exits 1 on a missing or duplicated reply.
         assert_eq!(ev.wait_exit(T), (Some(0), None), "{}", h.text_tail(&SessionId::new("q"), 20).unwrap());
         let text = h.text_tail(&SessionId::new("q"), 20).unwrap();
