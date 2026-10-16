@@ -322,7 +322,7 @@ The tools work on any ticket of your Kelta projects by key:
 
 | Tool | Does |
 |---|---|
-| `list_tickets` | the tickets of every open project (or `project`, `view`), filtered by `status`, `assignee`, `label` or your local `tag`; from Kelta's cache, `refresh` to fetch again. Parallel agents share one fetch |
+| `list_tickets` | the tickets of every open project (or `project`, `view`), filtered by `status`, `assignee`, `label`, your local `tag` or `free` (not blocked, not claimed or started); each row says `blocked` and its `work_item`; from Kelta's cache, `refresh` to fetch again. Parallel agents share one fetch |
 | `get_ticket_by_key` | description, comments, links, status and the description's revision |
 | `transition_ticket_by_key` | move to a status, transition or category (`in_progress`, `done`...) |
 | `comment_ticket_by_key` | add a Markdown comment |

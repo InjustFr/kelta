@@ -611,6 +611,39 @@ async fn list_tickets_filters_by_local_tag() {
 }
 
 #[tokio::test]
+async fn list_tickets_free_hides_claimed_and_blocked() {
+    let e = common::env();
+    e.server.set_install_token(Some("it"));
+    let port = e.server.ensure_http().await.unwrap();
+    let item = |key: &str, blocked: bool, work: Option<&str>| {
+        let mut ticket = samples::ticket();
+        ticket.r#ref.key = key.into();
+        ticket.blocked = blocked;
+        json!({ "ticket": ticket, "project_ids": [], "work_item_id": work })
+    };
+    e.fake.respond(
+        "ticket_list",
+        json!({
+            "items": [item("F-1", false, None), item("F-2", true, None), item("F-3", false, Some("w-3"))],
+            "next": null, "stale": false, "errors": []
+        }),
+    );
+    let rows = |text: String| -> Vec<Value> {
+        serde_json::from_str::<Value>(&text).unwrap()["tickets"].as_array().unwrap().clone()
+    };
+    let (text, err) = global_call(port, "list_tickets", json!({ "free": true })).await;
+    assert!(!err, "{text}");
+    let free = rows(text);
+    assert_eq!(free.len(), 1);
+    assert_eq!((free[0]["key"].as_str(), free[0]["blocked"].as_bool()), (Some("F-1"), Some(false)));
+    assert!(free[0]["work_item"].is_null());
+    let (text, _) = global_call(port, "list_tickets", json!({})).await;
+    let all = rows(text);
+    assert_eq!((all[1]["blocked"].as_bool(), all[2]["work_item"].as_str()), (Some(true), Some("w-3")));
+    e.server.release_http();
+}
+
+#[tokio::test]
 async fn link_pr_resolves_my_pr_and_passes_conflicts_on() {
     let e = common::env();
     e.server.set_install_token(Some("it"));
