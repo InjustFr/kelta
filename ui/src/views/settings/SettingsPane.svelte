@@ -1,7 +1,7 @@
 <script lang="ts">
   // Settings pane (Mod+,): layer selector, section list, search across every owned key, the
   // schema-generated forms and a raw "Edit TOML" mode per layer.
-  import { t } from '$lib/i18n/index.svelte';
+  import { t, tn } from '$lib/i18n/index.svelte';
   import {
     settingsSections,
     type PaneProps,
@@ -18,7 +18,6 @@
   import Icon from '$lib/ui/Icon.svelte';
   import IconButton from '$lib/ui/IconButton.svelte';
   import Kbd from '$lib/ui/Kbd.svelte';
-  import Select from '$lib/ui/Select.svelte';
   import Spinner from '$lib/ui/Spinner.svelte';
   import { currentPlatform } from '$lib/ui/format';
   import { tick, untrack, type Component } from 'svelte';
@@ -29,13 +28,7 @@
   import { takeChangedRequest, takeKeyRequest, takeTomlRequest } from './actions';
   import EditToml from './EditToml.svelte';
   import Field from './fields/Field.svelte';
-  import {
-    provideEditor,
-    readLayerFiles,
-    SettingsEditor,
-    type EditLayer,
-    type LayerFile,
-  } from './lib/editor.svelte';
+  import { fileKey, provideEditor, readLayerFiles, SettingsEditor } from './lib/editor.svelte';
   import { effectiveBindings } from './lib/chords';
   import { isRecord } from './lib/paths';
   import { repoRelevant } from './lib/schema';
@@ -51,6 +44,7 @@
   } from './lib/search';
   import { SECTION_GROUPS, sectionLabel } from './lib/sections';
   import { health } from './lib/health.svelte';
+  import AppliesTo from './AppliesTo.svelte';
   import RepoTrust from './RepoTrust.svelte';
 
   let { projectId, content }: PaneProps<'settings'> = $props();
@@ -82,9 +76,6 @@
   const layerWarnings = $derived(layerIssues.filter((i) => i.severity === 'warning'));
 
   const configurable = $derived(projects.list.filter((p) => !p.builtin));
-  const projectOptions = $derived(configurable.map((p) => ({ value: p.id, label: p.name })));
-  const currentProject = $derived(projects.byId(editor.projectId ?? ''));
-  const repoOptions = $derived((currentProject?.repos ?? []).map((r) => ({ value: r.id, label: r.id })));
 
   $effect(() => {
     // section from the pane content (e.g. "Open Accounts settings"), also when settings.open
@@ -145,27 +136,6 @@
       .catch(() => (layerIssues = []));
   });
 
-  async function chooseLayer(layer: EditLayer): Promise<void> {
-    if (layer === 'global') {
-      await editor.target({ layer, repoId: null });
-      return;
-    }
-    const pid = editor.projectId ?? configurable[0]?.id ?? null;
-    if (layer === 'repo') {
-      const repos = projects.byId(pid ?? '')?.repos ?? [];
-      const repo = repos.find((r) => r.primary) ?? repos[0];
-      await editor.target({ layer, projectId: pid, repoId: repo?.id ?? null });
-    } else {
-      await editor.target({ layer, projectId: pid, repoId: null });
-    }
-  }
-
-  async function chooseProject(id: string): Promise<void> {
-    const repos = projects.byId(id)?.repos ?? [];
-    const repo = repos.find((r) => r.primary) ?? repos[0];
-    await editor.target({ projectId: id, repoId: editor.layer === 'repo' ? (repo?.id ?? null) : null });
-  }
-
   // ---- search (#469) ------------------------------------------------------------------------------
   const SHOWN = 12;
   let listEl = $state<HTMLElement>();
@@ -202,13 +172,21 @@
   const shown = $derived(allFor === query ? hits : hits.slice(0, SHOWN));
   // ---- Changed by you (#474) ----------------------------------------------------------------------
   let changedOn = $state(false);
-  let files = $state<LayerFile[]>([]);
   $effect(() => {
     void settingsStore.lastChange; // any write (form, TOML, ⌘K, another window) re-reads the files
     const list = configurable;
-    void readLayerFiles(list).then((f) => (files = f));
+    void readLayerFiles(list).then((f) => {
+      editor.files = f;
+    });
   });
-  const changedRows = $derived(changedSettings(index, files));
+  const changedRows = $derived(changedSettings(index, editor.files));
+  /** Changed settings per file, for the Applies to picker and the banner (#475). */
+  const perFile = $derived(
+    changedRows.reduce<Record<string, number>>(
+      (m, r) => ((m[fileKey(r.file)] = (m[fileKey(r.file)] ?? 0) + 1), m),
+      {},
+    ),
+  );
   const changedHits = $derived(query.trim() ? searchSettings(changedRows, query) : changedRows);
   const counts = $derived(
     (changedOn ? changedHits : hits).reduce<Record<string, number>>(
@@ -275,6 +253,13 @@
     open(r);
   }
 
+  // An override chip or "Change in All projects" (#475): that file's form, then the row, highlighted.
+  editor.show = (target, path) => {
+    void editor.target(target);
+    const entry = index.find((e) => e.kind === 'key' && e.path === path);
+    if (entry) open(entry);
+  };
+
   /** Removes the row's key from its file through the form's write path (as #478's toggleSetting). */
   async function resetChanged(r: ChangedRow): Promise<void> {
     const ed = new SettingsEditor(r.file);
@@ -283,7 +268,7 @@
       if (!(await ed.reset(p)))
         toasts.error(ed.errors[p] ?? '', t('Could not reset {name}', { name: r.label }));
     await editor.refreshDoc();
-    files = await readLayerFiles(configurable);
+    editor.files = await readLayerFiles(configurable);
   }
 
   /** ↵ on a hit: a simple value focuses its control, anything else opens. */
@@ -311,6 +296,7 @@
 
 <div class="pane" data-testid="settings-pane" data-pane-kind="settings">
   <header class="k-toolbar bar">
+    <AppliesTo {editor} counts={perFile} />
     <label class="search">
       <Icon name="search" size={14} />
       <!-- svelte-ignore a11y_autofocus -->
@@ -342,53 +328,6 @@
         if (changedOn) editor.raw = false;
       }}
     />
-    <div class="layers" role="group" aria-label={t('Layer being edited')}>
-      <button
-        type="button"
-        title={t('Applies everywhere')}
-        class:active={editor.layer === 'global'}
-        aria-pressed={editor.layer === 'global'}
-        onclick={() => chooseLayer('global')}
-      >
-        {t('Global')}
-      </button>
-      <button
-        type="button"
-        class:active={editor.layer === 'project'}
-        aria-pressed={editor.layer === 'project'}
-        disabled={configurable.length === 0}
-        title={t('Overrides Global for one project')}
-        onclick={() => chooseLayer('project')}
-      >
-        {t('Project')}
-      </button>
-      <button
-        type="button"
-        class:active={editor.layer === 'repo'}
-        aria-pressed={editor.layer === 'repo'}
-        disabled={configurable.length === 0}
-        title={t('Overrides the project for one repository')}
-        onclick={() => chooseLayer('repo')}
-      >
-        {t('Repo')}
-      </button>
-    </div>
-    {#if editor.layer !== 'global'}
-      <Select
-        value={editor.projectId ?? ''}
-        options={projectOptions}
-        id="settings-project"
-        onchange={(id) => chooseProject(id)}
-      />
-    {/if}
-    {#if editor.layer === 'repo' && repoOptions.length > 0}
-      <Select
-        value={editor.repoId ?? ''}
-        options={repoOptions}
-        id="settings-repo"
-        onchange={(id) => editor.target({ repoId: id })}
-      />
-    {/if}
     <Button
       size="sm"
       icon="file-code"
@@ -401,9 +340,12 @@
   </header>
   {#if editor.layer !== 'global'}
     <p class="layer-help" data-testid="layer-help">
-      {editor.layer === 'project'
-        ? t('Values set here override Global for this project.')
-        : t('Values set here override Global and the project for this repository.')}
+      {tn(
+        'Changes here apply to {where} only. {n} setting differs from All projects.',
+        'Changes here apply to {where} only. {n} settings differ from All projects.',
+        perFile[fileKey(editor)] ?? 0,
+        { where: editor.files.find((f) => fileKey(f) === fileKey(editor))?.where ?? '' },
+      )}
     </p>
   {/if}
 
@@ -622,32 +564,6 @@
     flex-wrap: wrap;
     height: auto;
     min-height: var(--k-toolbar-height);
-  }
-
-  /* Same grammar as the tab bar: text, active = 600 + accent underline. */
-  .layers {
-    display: inline-flex;
-    align-self: stretch;
-  }
-
-  .layers button {
-    padding: 0 var(--k-space-3);
-    border: none;
-    box-shadow: inset 0 -2px 0 transparent;
-    background: transparent;
-    color: var(--k-fg-chrome);
-    cursor: pointer;
-  }
-
-  .layers button.active {
-    box-shadow: inset 0 -2px 0 var(--k-accent);
-    color: var(--k-fg);
-    font-weight: var(--k-weight-strong);
-  }
-
-  .layers button:disabled {
-    opacity: 0.5;
-    cursor: default;
   }
 
   .search {

@@ -3,17 +3,20 @@
   // exec markers, reset-at-this-layer, inline errors from Rust and the type-specific control, laid out
   // by SettingsRow (a group by SettingsGroup; its advanced children render in the section's block).
   import { t } from '$lib/i18n/index.svelte';
+  import type { JsonValue } from '$lib/gen';
   import { settings as store } from '$lib/stores';
   import Badge from '$lib/ui/Badge.svelte';
+  import Button from '$lib/ui/Button.svelte';
   import IconButton from '$lib/ui/IconButton.svelte';
 
   import { groupRuns } from '../copy';
   import SettingsGroup from '../layout/SettingsGroup.svelte';
   import SettingsRow from '../layout/SettingsRow.svelte';
-  import { useEditor } from '../lib/editor.svelte';
+  import { fileKey, useEditor } from '../lib/editor.svelte';
   import { joinPath, splitPath } from '../lib/paths';
   import {
     childEntries,
+    enumOptions,
     fieldKind,
     helpOf,
     infoAt,
@@ -68,6 +71,22 @@
   const isTemplate = $derived(isTemplatePath(path));
   const nullable = $derived(resolve(node).nullable);
   const visible = $derived(editor.layer !== 'repo' || repoRelevant(path));
+  const globalOnly = $derived(editor.globalOnly(path));
+  const inherited = $derived(editor.inherited(path));
+  // The inherited value greyed in an empty box: numbers and plain text (a toggle, a menu or a list has no placeholder).
+  const hint = $derived(
+    inherited != null && !isTemplate && (kind === 'int' || kind === 'float' || kind === 'string'),
+  );
+  const overrides = $derived(editor.overrides(path));
+
+  /** A value as text: the placeholder, an override chip, a global-only row. */
+  function shown(v: JsonValue | undefined): string {
+    if (v === undefined || v === null) return t('Not set.');
+    const toggle = TOGGLE_VALUES[path];
+    if (kind === 'bool') return (toggle ? v === toggle[0] : v === true) ? t('On') : t('Off');
+    if (kind === 'enum') return enumOptions(node, path).find((o) => o.value === v)?.label ?? String(v);
+    return Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : String(v);
+  }
 </script>
 
 {#if visible}
@@ -89,12 +108,13 @@
     <KeyedListField {path} {node} {label} {description} />
   {:else}
     <SettingsRow
-      label={kind !== 'bool' ? label : undefined}
-      for={id}
-      readonly={!access.editable || disabled}
+      label={kind !== 'bool' || globalOnly ? label : undefined}
+      for={globalOnly ? undefined : id}
+      readonly={(!access.editable && !globalOnly) || disabled}
+      actions={globalOnly}
       data-testid="field"
       data-path={path}
-      data-kind={kind}
+      data-kind={globalOnly ? 'global-only' : kind}
       data-source={source}
     >
       {#snippet markers()}
@@ -109,31 +129,56 @@
         {#if restartPending}<Badge tone="warn" title={t('Changed: restart Kelta to apply')}
             >{t('restart needed')}</Badge
           >{/if}
+        {#each overrides as o (fileKey(o.file))}
+          <Button
+            size="sm"
+            variant="ghost"
+            data-testid="override"
+            title={o.file.path}
+            onclick={() => editor.show(o.file, path)}
+            >{t('{where} uses {value} →', { where: o.file.where, value: shown(o.value) })}</Button
+          >
+        {/each}
         {#if setHere && access.editable}
           <IconButton
             icon="rotate-ccw-clock"
             size="sm"
-            label={t('Reset {name} at this layer', { name: label })}
+            label={editor.layer === 'project'
+              ? t('Use the All projects value again')
+              : t('Reset {name} at this layer', { name: label })}
             data-testid="reset"
             onclick={() => editor.reset(path)}
           />
         {/if}
       {/snippet}
       {#snippet control()}
-        <Control
-          {node}
-          {path}
-          {value}
-          {id}
-          {label}
-          template={isTemplate}
-          browse={path === 'plugins.dev_paths'}
-          readonly={!access.editable || disabled || !!editor.saving[path]}
-          onchange={(v) => void editor.set(path, v)}
-        />
+        {#if globalOnly}
+          <span data-testid="global-value">{shown(value)}</span>
+          <Button
+            size="sm"
+            variant="ghost"
+            onclick={() => editor.show({ layer: 'global', projectId: editor.projectId, repoId: null }, path)}
+            >{t('Change in All projects →')}</Button
+          >
+        {:else}
+          <Control
+            {node}
+            {path}
+            value={hint ? undefined : value}
+            placeholder={hint ? shown(inherited) : undefined}
+            {id}
+            {label}
+            template={isTemplate}
+            browse={path === 'plugins.dev_paths'}
+            readonly={!access.editable || disabled || !!editor.saving[path]}
+            onchange={(v) => void editor.set(path, v)}
+          />
+        {/if}
       {/snippet}
       {#if description}<p>{description}</p>{/if}
-      {#if !access.editable && access.reason}<p>{access.reason}</p>{/if}
+      {#if globalOnly}<p>{t('The same for every project.')}</p>
+      {:else if !access.editable && access.reason}<p>{access.reason}</p>{/if}
+      {#if inherited !== undefined}<p data-testid="inherited">{t('Inherited from All projects')}</p>{/if}
       {#if error}<p class="error" role="alert" data-testid="field-error">{error}</p>{/if}
       {#if nullable && value === undefined}<p>{t('Not set.')}</p>{/if}
     </SettingsRow>
