@@ -17,6 +17,7 @@ use kelta_proto::model::{
 };
 use kelta_proto::samples;
 use kelta_proto::settings::{AccountKind, CodeHostBinding, Settings};
+use kelta_proto::tracker::TicketRef;
 use kelta_proto_testing::{FakeTerminalHost, FakeTracker};
 
 fn workflow(dir: &Path, file: &str, meta: &str) {
@@ -209,6 +210,82 @@ async fn run_claims_then_starts_claude_in_a_background_tab() {
     assert!(l.tabs.iter().all(|t| t.title != "kelta-ticket-pass · SHOP-142"), "the run's tab is gone");
     let tab = l.tabs.iter().find(|t| t.work_item_id.as_ref() == Some(&took.id)).unwrap();
     assert!(kelta_core::layout::sessions_in(&tab.root).contains(&info.id));
+}
+
+/// #493: a run has its own `mcp.json` (its MCP calls carry the session); its first MCP claim gives its
+/// Claude to the item, a second one and a plain Claude's claims do not.
+#[tokio::test]
+async fn a_global_run_that_claims_through_mcp_gives_its_claude_to_the_item_once() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, repo) = env(tmp.path());
+    let shop = ProjectId::new("shop");
+    let start = h.core.workflow_run_on(shop.clone(), "daily", None).await.unwrap();
+    let sid = start.session.id.clone();
+    let (args, env) = h.term.with_session(&sid, |s| (s.spec.args.clone(), s.spec.env.clone())).unwrap();
+    let at = args.iter().position(|a| a == "--mcp-config").expect("--mcp-config");
+    assert!(at < args.iter().position(|a| a == "--").unwrap());
+    assert_eq!(args.last().unwrap(), "Write the daily report");
+    let mcp: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&args[at + 1]).unwrap()).unwrap();
+    assert!(mcp["mcpServers"]["kelta"]["url"].as_str().unwrap().ends_with(&format!("/mcp/{sid}")), "{mcp}");
+    assert!(env.contains_key("KELTA_MCP_TOKEN"));
+
+    let wt = tmp.path().join("runs/ticket-142");
+    git(&repo, &["worktree", "add", "-q", "-b", "feat/ticket-142", wt.to_str().unwrap()]);
+    let core: &dyn CoreApi = h.core.as_ref();
+    let claim = |session: &SessionId| RunClaim {
+        name: Some("daily".into()),
+        session_id: Some(session.clone()),
+        ..RunClaim::default()
+    };
+    let w = core.work_claim(&shop, samples::ticket_ref(), Some(wt.clone()), None, claim(&sid)).await.unwrap();
+    assert_eq!(w.run.as_ref().unwrap().session_id.as_ref(), Some(&sid));
+    assert_eq!(w.session_ids, vec![sid.clone()]);
+    assert_eq!(w.claude_uuid.as_deref(), start.session.claude.as_ref().map(|c| c.session_uuid.as_str()));
+    assert_eq!(
+        w.worktree.canonicalize().unwrap(),
+        wt.canonicalize().unwrap(),
+        "the editor and git use the named worktree"
+    );
+    assert_eq!(start.session.cwd, repo, "the respawn cwd stays the session's");
+    h.core.work().resume(&w.id).await.unwrap();
+    let l = h.core.layout_get(&shop).unwrap();
+    assert!(l.tabs.iter().all(|t| t.title != "daily label"), "the run's tab is gone");
+    let tab = l.tabs.iter().find(|t| t.work_item_id.as_ref() == Some(&w.id)).unwrap();
+    assert!(kelta_core::layout::sessions_in(&tab.root).contains(&sid));
+
+    // At most one item per run: the next claim only records the session.
+    let next = |key: &str| TicketRef { key: key.into(), id: key.into(), ..samples::ticket_ref() };
+    let second = core.work_claim(&shop, next("SHOP-143"), None, None, claim(&sid)).await.unwrap();
+    assert_eq!(second.run.unwrap().session_id, Some(sid.clone()));
+    assert!(second.session_ids.is_empty());
+    let first = h.core.work_list(None).await.unwrap().into_iter().find(|i| i.id == w.id).unwrap();
+    assert!(first.session_ids.contains(&sid), "still the run's");
+
+    // A plain Kelta Claude (a board orchestrator) is never adopted.
+    let plain = h
+        .core
+        .session_spawn(SpawnRequest {
+            id: None,
+            project_id: shop.clone(),
+            kind: SessionKind::Claude,
+            name: None,
+            program: Some("claude".into()),
+            args: vec![],
+            cwd: None,
+            env: Default::default(),
+            cols: 80,
+            rows: 24,
+            work_item_id: None,
+            restore: Default::default(),
+            close_on_exit: Default::default(),
+            template_id: None,
+        })
+        .await
+        .unwrap();
+    let third = core.work_claim(&shop, next("SHOP-144"), None, None, claim(&plain.id)).await.unwrap();
+    assert_eq!(third.run.unwrap().session_id, Some(plain.id));
+    assert!(third.session_ids.is_empty());
 }
 
 #[tokio::test]
