@@ -1,0 +1,46 @@
+# Orchestrator example: merge this into ~/.config/kelta/config.toml ([[workflows]] is a global setting).
+# Slash commands: copy commands/*.md to ~/.claude/commands/. Guide: docs/user/orchestrators.md.
+
+# A ticket run: Kelta claims the ticket for it and starts Claude on it. `{args}` is the path of the run's
+# args.json, whose `run` field is the id the run's claim carries.
+[[workflows]]
+id = "build-ticket"
+label = "Build ticket"
+description = "Worktree, claim, implement, PR, hand off"
+prompt = "/build-ticket {ticket.key} {args}"
+on = "ticket"
+
+# A global run: no ticket. It lists the free tickets and starts one build-ticket run per ticket.
+[[workflows]]
+id = "fan-out"
+label = "Fan out free tickets"
+description = "One build-ticket run per free ticket, up to three"
+prompt = "/fan-out 3"
+on = "global"
+
+# Cron, weekdays at 8:  0 8 * * 1-5  kelta-ctl emit custom.morning --project shop
+[[triggers]]
+id = "morning-fan-out"
+on = "custom.morning"
+do = [{ action = "run_workflow", workflow = "fan-out" }]
+
+# A run is blocked or failed: tell me once (work.updated fires on every later update).
+[[triggers]]
+id = "run-needs-me"
+on = "run.state_changed"
+match = { "payload.state" = ["blocked", "failed"] }
+do = [{ action = "notify", title = "{ticket.key}: run {payload.state}", body = "{payload.note}", urgency = "critical" }]
+
+# A run handed its item over (`report_progress state=done` or `release_ticket`).
+[[triggers]]
+id = "run-done"
+on = "run.state_changed"
+match = { "payload.state" = "done" }
+do = [{ action = "notify", title = "{ticket.key} handed over", body = "{payload.phase}" }]
+
+# A ticket entered the `review` step of the default pipeline.
+[[triggers]]
+id = "ticket-in-review"
+on = "ticket.step"
+match = { "payload.step_id" = "review" }
+do = [{ action = "notify", title = "{ticket.key} is in review" }]

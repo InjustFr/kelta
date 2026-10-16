@@ -4,6 +4,7 @@
 - [Working with tickets](tickets.md)
 - [Pull requests](reviews.md)
 - [Claude: setup, questions, outside sessions, workflows](claude-code.md)
+- [Orchestrators: Claude picks, claims, builds and hands off tickets](orchestrators.md)
 - [Tools: lazygit, lazydocker, apps like Fork](tools.md)
 - [Colour themes and VS Code import](themes.md)
 - [Compositor bindings and window rules](compositors.md) (Hyprland, Sway, GNOME)
