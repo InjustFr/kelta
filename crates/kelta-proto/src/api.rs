@@ -542,6 +542,11 @@ pub trait CoreApi: Send + Sync {
     fn login_path(&self) -> Option<String> {
         None
     }
+    /// Claude Code's config dir (`CLAUDE_CONFIG_DIR`, else `~/.claude`) as a Claude of `project` sees it
+    /// (project and terminal env override the login env); `None` when unknown.
+    fn claude_config_dir(&self, _project: Option<&ProjectId>) -> Option<std::path::PathBuf> {
+        None
+    }
     /// Dispatch of ctl socket commands.
     async fn ctl(&self, cmd: CtlCommand) -> Result<Value, KeltaError>;
 }

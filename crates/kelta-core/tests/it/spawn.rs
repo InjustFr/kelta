@@ -516,3 +516,14 @@ async fn template_claude_host_wraps_claude_and_keeps_the_host_on_restart() {
     assert_eq!(plain.claude.as_ref().and_then(|c| c.host), None);
     assert_eq!(wrapped(&plain.id), Some(false), "builtin stays a plain claude");
 }
+
+#[tokio::test]
+async fn claude_config_dir_follows_the_project_env() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let home = tmp.path().join("home");
+    assert_eq!(h.core.claude_config_dir(None), Some(home.join(".claude")));
+    h.cfg.env.write().insert(ProjectId::new("shop"), map(&[("CLAUDE_CONFIG_DIR", "~/.claude-work")]));
+    assert_eq!(h.core.claude_config_dir(Some(&ProjectId::new("shop"))), Some(home.join(".claude-work")));
+    assert_eq!(h.core.claude_config_dir(None), Some(home.join(".claude")));
+}
