@@ -221,6 +221,7 @@ impl Core {
         if let Some(w) = self.work.for_session(sid).await.filter(|w| w.state != WorkState::Finished) {
             return Err(KeltaError::conflict(format!("session {sid} is already in work item {}", w.id)));
         }
+        self.work.ensure_off_base(&info.project_id, &worktree).await?;
         let item = match ticket {
             Some(t) => {
                 let run = RunClaim { session_id: Some(sid.clone()), ..RunClaim::default() };

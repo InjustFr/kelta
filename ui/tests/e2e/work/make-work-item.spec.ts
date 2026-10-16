@@ -71,6 +71,10 @@ test('not offered on a Claude in a work item, nor on a shell', async ({ page }) 
   await expect(page.getByRole('menuitem', { name: 'Close' })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Make this a work item' })).toHaveCount(0);
   await page.keyboard.press('Escape');
+  await dispatch(page, 'palette.open');
+  await page.getByTestId('palette-input').fill('make this a work');
+  await expect(page.getByTestId('palette-item').filter({ hasText: 'Make this a work item' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
   for (const id of [SESSIONS.shopClaude, '0199a6b2-0000-7000-8000-000000000003']) {
     await dispatch(page, 'session.make_work', { session_id: id });
     await expect(page.getByTestId('make-work')).toHaveCount(0);

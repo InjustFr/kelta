@@ -129,13 +129,7 @@ impl WorkService {
         let branch = wt.branch.ok_or_else(|| {
             KeltaError::invalid(format!("{} has no branch checked out", worktree.display()))
         })?;
-        // Ship pushes the item's branch: never the base itself.
-        if branch == repo.base {
-            return Err(KeltaError::invalid(format!(
-                "{} is on the base branch {branch}: pick a worktree on its own branch",
-                worktree.display()
-            )));
-        }
+        off_base(repo, &branch, worktree)?;
         let mut item = WorkItem {
             id: WorkItemId::generate(),
             project_id: project.clone(),
@@ -150,6 +144,14 @@ impl WorkService {
         };
         self.save(&mut item).await?;
         Ok(item)
+    }
+
+    /// #502: refuses `worktree` when it has the project's base branch checked out (Ship would push it).
+    pub async fn ensure_off_base(&self, project: &ProjectId, worktree: &Path) -> Result<(), KeltaError> {
+        let core = self.api()?;
+        let p = core.project(project).ok_or_else(|| KeltaError::not_found(format!("project {project}")))?;
+        let (repo, wt) = worktree_of(&p, worktree).await?;
+        wt.branch.map_or(Ok(()), |b| off_base(repo, &b, worktree))
     }
 
     /// #491: a run Kelta started (`workflow_run`) gives its Claude to the item it claimed. Opening the
@@ -407,6 +409,17 @@ impl WorkService {
             None => Err(KeltaError::conflict(format!("{key} is claimed by another session"))),
         }
     }
+}
+
+/// Ship pushes the item's branch: never the base itself.
+fn off_base(repo: &RepoInfo, branch: &str, worktree: &Path) -> Result<(), KeltaError> {
+    if branch == repo.base {
+        return Err(KeltaError::invalid(format!(
+            "{} is on the base branch {branch}: pick a worktree on its own branch",
+            worktree.display()
+        )));
+    }
+    Ok(())
 }
 
 /// The repo of `p` whose `git worktree list` has `path`, with that entry.

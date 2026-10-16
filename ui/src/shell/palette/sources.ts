@@ -29,13 +29,13 @@ import {
 import { SECTION_ROOTS } from '../../views/settings/lib/sections';
 import { configWorkflows, pickWorkflow, runWorkflowOn } from '../../views/tickets/workflow.svelte';
 import { focusedWorkItem } from '../../views/work/actions';
-import { phaseNow, sessionLabel, unfinishedWork, workTitle } from '../../views/work/live';
+import { canMakeWorkItem, phaseNow, sessionLabel, unfinishedWork, workTitle } from '../../views/work/live';
 import { goToWork } from '../../views/work/nav';
 import { startAnotherPr, startWorkOnTicket, ticketWork } from '../../views/work/startWork';
 import { workKey } from '../../views/work/phase';
 import { recentPlaces } from '../jumplist';
 import { sessionIcon, sessionKindName, statusLabel, toolIcon } from '../labels';
-import { activateProject, focusedPane, openContent, railTools, revealSession } from '../nav';
+import { activateProject, focusedPane, focusedSession, openContent, railTools, revealSession } from '../nav';
 
 export type PaletteGroup =
   | 'Recent'
@@ -165,9 +165,12 @@ export function projectItems(): PaletteItem[] {
 export function actionItems(): PaletteItem[] {
   const keys = settings.value()?.keys ?? null;
   const platform = currentPlatform();
+  const focused = focusedSession();
   return ACTIONS.filter(
     (a) =>
       a.context !== 'external' &&
+      // #502: only on a live Claude in no work item, as the sidebar menu.
+      (a.id !== 'session.make_work' || (focused !== null && canMakeWorkItem(focused))) &&
       !a.id.startsWith('project.goto.') &&
       !a.id.startsWith('tool.goto.') &&
       hasAction(a.id),

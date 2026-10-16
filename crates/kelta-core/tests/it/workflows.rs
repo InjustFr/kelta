@@ -476,7 +476,10 @@ async fn session_claim_without_a_ticket_makes_a_scratch_item_that_adopts_the_ses
     assert_eq!((linked.kind, linked.branch.as_str()), (WorkKind::Ticket, "wip/spike"));
     // The base branch is refused: Ship would push it.
     let d = plain_tab(&h, SessionKind::Claude, Some(repo.clone())).await;
-    let err = h.core.session_claim(&d, None, repo).await.unwrap_err();
+    let err = h.core.session_claim(&d, None, repo.clone()).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidArgument);
+    // Same with a ticket: no claim is made on the base.
+    let err = h.core.session_claim(&d, Some(samples::ticket_ref()), repo).await.unwrap_err();
     assert_eq!(err.code, ErrorCode::InvalidArgument);
     assert_eq!(h.core.work_list(None).await.unwrap().len(), 1);
 }
