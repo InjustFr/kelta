@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
-  "crates/*",
+  "crates/kelta-*",
   "apps/desktop/src-tauri",
   "crates/kelta-workspace-hack",
   "xtask",
