@@ -37,6 +37,7 @@ export const BUS_EVENTS = [
   "work.before_finish",
   "work.finished",
   "work.updated",
+  "run.state_changed",
   "pr.before_create",
   "pr.created",
   "pr.review_requested",

@@ -7,6 +7,7 @@ use crate::common::{Fx, git, has_git, project};
 use crate::signals::{hook, wait_item};
 use kelta_proto::api::{CoreApi, Tracker, WorkStore};
 use kelta_proto::error::ErrorCode;
+use kelta_proto::events::bus;
 use kelta_proto::ids::{SessionId, WorkItemId};
 use kelta_proto::model::{
     ClaudeMeta, Lifecycle, PaneContent, RunClaim, RunState, SessionInfo, SessionKind, WorkSource, WorkState,
@@ -547,4 +548,54 @@ async fn hooks_follow_the_unfinished_item_of_a_reused_session() {
 
     fx.core.publish(hook(&s.id, "SessionStart", json!({ "session_id": "after-clear", "source": "clear" })));
     wait_item(&fx, &b, |i| i.claude_uuid.as_deref() == Some("after-clear")).await;
+}
+
+#[tokio::test]
+async fn run_state_changes_publish_once_per_edge() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    session(&fx, "orch-a", "kelta-a6");
+    let w = fx.service();
+    let me = orch_a();
+    let wt = run_worktree(&fx, "feat/ticket-142");
+    let runs =
+        || fx.core.published().into_iter().filter(|e| e.name == bus::RUN_STATE_CHANGED).collect::<Vec<_>>();
+    let edges = || {
+        runs().iter().map(|e| (e.payload["previous"].clone(), e.payload["state"].clone())).collect::<Vec<_>>()
+    };
+    let item =
+        w.claim(&project(), samples::ticket_ref(), Some(wt.clone()), None, run("orch-a")).await.unwrap();
+    // The holder's re-claim of its running claim is no edge.
+    w.claim(&project(), samples::ticket_ref(), None, None, run("orch-a")).await.unwrap();
+    for (phase, state) in [
+        ("Plan", RunState::Running),
+        ("Review", RunState::Blocked),
+        ("Review", RunState::Blocked),
+        ("Fix", RunState::Running),
+        ("Merge", RunState::Done),
+    ] {
+        w.report("SHOP-142", Some(phase.into()), state, Some("n".into()), None, Some(&me)).await.unwrap();
+    }
+    w.release("SHOP-142", None, Some(&me)).await.unwrap(); // already done: nothing
+    let j = |p: Option<&str>, s: &str| (json!(p), json!(s));
+    assert_eq!(
+        edges(),
+        vec![
+            j(None, "running"),
+            j(Some("running"), "blocked"),
+            j(Some("blocked"), "running"),
+            j(Some("running"), "done")
+        ]
+    );
+    let blocked = &runs()[1];
+    assert_eq!(blocked.payload["ticket"]["key"], "SHOP-142");
+    assert_eq!((&blocked.payload["phase"], &blocked.payload["note"]), (&json!("Review"), &json!("n")));
+    assert_eq!(blocked.project_id, Some(project()));
+    assert_eq!(blocked.work_item_id, Some(item.id));
+    // Released while running: one `done`.
+    w.claim(&project(), samples::ticket_ref(), Some(wt), None, run("orch-a")).await.unwrap();
+    w.release("SHOP-142", None, Some(&me)).await.unwrap();
+    assert_eq!(edges()[4..], [j(None, "running"), j(Some("running"), "done")]);
 }

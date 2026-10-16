@@ -223,6 +223,30 @@ do = [
   { action = "run_workflow", workflow = "next-ticket" },
 ]
 
+# A run is blocked or failed: tell me once (work.updated fires on every later update)
+[[triggers]]
+id = "run-needs-me"
+on = "run.state_changed"
+match = { "payload.state" = ["blocked", "failed"] }
+do = [{ action = "notify", title = "{ticket.key}: run {payload.state}", body = "{payload.note}", urgency = "critical" }]
+
+# A run handed its item over (`report_progress state=done`, or `release_ticket`)
+[[triggers]]
+id = "run-done"
+on = "run.state_changed"
+match = { "payload.state" = "done" }
+do = [{ action = "notify", title = "{ticket.key} handed over", body = "{payload.phase}" }]
+
+# Chain the next run when one is done (a guard first, as above)
+[[triggers]]
+id = "next-on-done"
+on = "run.state_changed"
+match = { "payload.state" = "done" }
+do = [
+  { action = "run", command = "/path/to/buffer-not-full" },
+  { action = "run_workflow", workflow = "next-ticket" },
+]
+
 # Merge → done + offer cleanup
 [[triggers]]
 id = "done-on-merge"
@@ -414,6 +438,7 @@ Every event carries `{name, ts, project_id?, session_id?, work_item_id?, payload
 | `worktree.created` / `worktree.removed` | `{path, branch, repo_id}` |
 | `work.before_finish` (blocking) / `work.finished` | `{work_item_id, opts}` |
 | `work.updated` | `{work: WorkItem}` (any item or saga step change; core relays it to the UI) |
+| `run.state_changed` | `{work: WorkItem, ticket, state, previous, phase, note}` (a claimed run changed state, once per change: `claim_ticket` → `running` (`previous: null`, or the state of the claim it takes over), `report_progress` with a new `state`, `release_ticket` of a claim not already `done` → `done`. A report that repeats the state or only changes the phase publishes nothing; published with the item's project, so `run_workflow` without `ticket` runs from it) |
 | `pr.before_create` (blocking) / `pr.created` | `{draft}` / `{review: Review}` |
 | `pr.review_requested` | `{review: Review}` (new key only) |
 | `pr.updated` | `{review, changes: ["ci","decision","head","draft","reviewers"]}` |
