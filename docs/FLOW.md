@@ -482,6 +482,8 @@ A workflow is a prompt Claude runs in a background tab. Two kinds: saved `*.js` 
 - From MCP and cron (#500). MCP `run_workflow{workflow, key?, account?, project?}` (listed only with `claude.mcp_board_writes`) starts the same runs: with `key` a ticket run (claims the ticket; a live run on it comes back `running: true`), else the `global` entry of `project` or of the caller's project; it returns the run's session id and name. It refuses `Busy: N of M Claude slots in use` once live Claude sessions reach `claude.max_live`; `w`, the palette and triggers are not capped. `kelta-ctl emit custom.x --project p` publishes the event in `p`, so a cron line and a trigger's `run_workflow` start a global run (PLUGINS §3).
 - Claims belong to the claiming session (#497). A session re-claiming a ticket it holds, or an item's own Claude claiming its ticket, gets that item back, never `Conflict`. Naming `worktree`/`branch` re-points it; omitting them keeps the item's worktree, branch and base. Lanes of one session with different `run.id`s still conflict. `claim_ticket{adopt: false}` keeps the caller's Claude out of the item. Hooks of a session reused across tickets reach its unfinished item.
 
+The contract, adoption, fan-out, trigger recipes and an example, in one page: [Orchestrators](user/orchestrators.md).
+
 A running workflow can stop and ask: MCP `ask` (§2.2 row 0) shows its question with buttons on the ticket row, in the Queue and in Peek. Every run starts with its own `mcp.json` (`--mcp-config`), so its MCP calls carry its session and it has the session tools (`ask`, `notify`, ...).
 
 ### 4.9 Ticket steps (#461)

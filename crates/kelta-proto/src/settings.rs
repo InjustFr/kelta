@@ -2495,6 +2495,17 @@ view_id = "sprint"
     }
 
     #[test]
+    fn example_orchestrator_config_parses() {
+        let s: Settings = toml::from_str(include_str!("../../../examples/orchestrator/config.toml")).unwrap();
+        assert_eq!(
+            s.workflows.iter().map(|w| w.id.as_str()).collect::<Vec<_>>(),
+            ["build-ticket", "fan-out"]
+        );
+        assert_eq!(s.workflows[1].on, crate::ext::WorkflowOn::Global);
+        assert_eq!(s.triggers.len(), 4);
+    }
+
+    #[test]
     fn example_project_file_parses() {
         let text = r##"
 [project]

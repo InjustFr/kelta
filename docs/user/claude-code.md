@@ -128,5 +128,7 @@ to the pull request's worktree or repository for `pr`, else the project's primar
 workflow with the same name wins over a config one. Set `enabled = false` to hide one. The keys are in
 [Settings](../SETTINGS.md).
 
+A workflow that picks, claims and hands off tickets itself is an orchestrator: see [Orchestrators](orchestrators.md).
+
 When a run starts, a toast offers **Open** (shows the session) and **Peek** (its last lines). `[[workflows]]` is a
 global setting: a project or repository file cannot define one.
