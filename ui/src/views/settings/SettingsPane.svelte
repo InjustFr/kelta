@@ -67,6 +67,8 @@
 
   let sectionId = $state<string>('general');
   let query = $state('');
+  /** settings.open { key } (⌘K #478, a feature's link #477): opened once the search index is built. */
+  let pendingKey = $state<string | null>(null);
   let Active = $state<Component<SettingsSectionProps> | null>(null);
   let sectionLoading = $state(false);
   let layerIssues = $state<ValidationIssue[]>([]);
@@ -81,15 +83,7 @@
     const wanted = content.section;
     if (wanted && sections.some((s) => s.id === wanted)) sectionId = wanted;
     const key = takeKeyRequest();
-    if (key) {
-      // ⌘K (#478): the row itself in its section; the search until the index is built
-      const entry = untrack(() => index.find((e) => e.kind === 'key' && e.path === key));
-      if (entry) open(entry);
-      else {
-        query = key;
-        active = 0;
-      }
-    }
+    if (key) pendingKey = key;
     if (takeChangedRequest()) {
       changedOn = true;
       query = '';
@@ -153,6 +147,20 @@
     return effectiveBindings(isRecord(v) ? (v as Record<string, string[]>) : {}, platform);
   });
   const index = $derived(editor.schema ? buildSearchIndex(editor.schema, sections, bindings) : []);
+  $effect(() => {
+    // A cold open has no schema yet: the row opens once it is loaded (#477).
+    const key = pendingKey;
+    if (!key || index.length === 0) return;
+    pendingKey = null;
+    const entry = index.find((e) => e.kind === 'key' && e.path === key);
+    untrack(() => {
+      if (entry) open(entry);
+      else {
+        query = key; // a key the forms do not show: the search says so
+        active = 0;
+      }
+    });
+  });
   const searching = $derived(query.trim() !== '' && !editor.raw);
   const hits = $derived(
     searching

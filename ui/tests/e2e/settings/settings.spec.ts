@@ -328,6 +328,25 @@ test.describe('settings over the window (#410)', () => {
     await expect(page.getByTestId('settings-pane')).toHaveCount(0);
   });
 
+  test('settings.open { key } and the terminal pane menu land on the highlighted row (#477)', async ({
+    page,
+  }) => {
+    await boot(page);
+    const revealed = page.locator('[data-testid="field"][data-revealed]');
+    const current = page.locator('[data-testid="settings-pane"] nav [aria-current="page"]');
+    await dispatch(page, 'settings.open', { key: 'tickets.wip_limit' });
+    await expect(revealed).toHaveAttribute('data-path', 'tickets.wip_limit');
+    await expect(current).toHaveAttribute('data-section', 'worktree');
+    await expect(page.getByRole('searchbox', { name: 'Search settings' })).toHaveValue('');
+    await dispatch(page, 'settings.open'); // closes it
+    await expect(page.getByTestId('settings-pane')).toHaveCount(0);
+    const term = page.getByTestId('pane').filter({ has: page.getByTestId('terminal-pane') });
+    await term.first().getByRole('button', { name: 'Pane menu' }).click();
+    await page.getByRole('menuitem', { name: 'Lines kept…' }).click();
+    await expect(revealed).toHaveAttribute('data-path', /^terminal\.scrollback\./);
+    await expect(current).toHaveAttribute('data-section', 'terminal');
+  });
+
   test('deep links land on their section from the palette and from a banner action', async ({ page }) => {
     await boot(page);
     await page.keyboard.press('Control+Shift+K');

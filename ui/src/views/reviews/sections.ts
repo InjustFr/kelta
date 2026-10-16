@@ -7,10 +7,16 @@ import { reviewKey } from '$lib/stores/reducers';
 
 export type SectionId = 'asked' | 'team' | 'drafts' | 'mine';
 
-export const SECTIONS: { id: SectionId; label: string; folded?: boolean; quiet?: boolean }[] = [
+export const SECTIONS: {
+  id: SectionId;
+  label: string;
+  folded?: boolean;
+  quiet?: boolean;
+  setting?: string;
+}[] = [
   { id: 'asked', label: msg('Asked of you') },
-  { id: 'team', label: msg('Team, needs a reviewer') },
-  { id: 'drafts', label: msg('Team drafts'), folded: true, quiet: true },
+  { id: 'team', label: msg('Team, needs a reviewer'), setting: 'reviews.include_team_requests' },
+  { id: 'drafts', label: msg('Team drafts'), folded: true, quiet: true, setting: 'reviews.include_drafts' },
   { id: 'mine', label: msg('Yours, as reviewers see them'), quiet: true },
 ];
 

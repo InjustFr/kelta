@@ -209,7 +209,8 @@ pub fn render_env_template(
     let Some(target) = target.filter(|_| rel.components().all(|c| matches!(c, Component::Normal(_)))) else {
         return Err(KeltaError::invalid(format!(
             "worktree.env_template `{tmpl}` must be a relative path ending in .kelta"
-        )));
+        ))
+        .with_detail(serde_json::json!({ "setting": "worktree.env_template" })));
     };
     let Some(src) = [wt, repo].iter().map(|d| d.join(rel)).find(|p| p.is_file()) else {
         return Ok((format!("no {tmpl}"), false));

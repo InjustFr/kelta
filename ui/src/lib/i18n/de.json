@@ -3039,5 +3039,12 @@
   "Everything that differs from Kelta’s defaults, and where it is set.": "Alles, was von Keltas Standardwerten abweicht, und wo es gesetzt ist.",
   "Nothing changed: every setting is at its default.": "Nichts geändert: Jede Einstellung hat ihren Standardwert.",
   "Reset {name} in {file}": "{name} in {file} zurücksetzen",
-  "Could not reset {name}": "{name} konnte nicht zurückgesetzt werden"
+  "Could not reset {name}": "{name} konnte nicht zurückgesetzt werden",
+  "Font size…": "Schriftgröße…",
+  "Lines kept…": "Behaltene Zeilen…",
+  "Terminal settings": "Terminal-Einstellungen",
+  "Change the limit": "Limit ändern",
+  "Settings for {section}": "Einstellungen für {section}",
+  "Open setting": "Einstellung öffnen",
+  "Notification settings": "Benachrichtigungseinstellungen"
 }

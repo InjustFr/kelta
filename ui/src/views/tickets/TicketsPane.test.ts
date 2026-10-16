@@ -17,6 +17,7 @@ import { nextUp } from '../inbox/nextUp.svelte';
 import { batch } from '../work/batch.svelte';
 import { selection } from '../work/selection.svelte';
 import { askFocused, REFRESH_EVENT } from '../work/ui.svelte';
+import { takeKeyRequest } from '../settings/actions';
 import TicketsPane from './TicketsPane.svelte';
 
 vi.mock('../work/actions', async (orig) => ({
@@ -705,6 +706,9 @@ describe('TicketsPane list: group, sort, age, sprint, person', () => {
     await tick();
     expect(doing()?.classList.contains('wip')).toBe(true);
     expect(doing()?.textContent).toContain('Above your limit of 0');
+    await fireEvent.click(screen.getByRole('button', { name: 'Change the limit' }));
+    expect(takeKeyRequest()).toBe('tickets.wip_limit');
+    ui.settings = null;
   });
 
   it('f s keeps the current sprint; row tooltips name the sprint unless grouped by sprint', async () => {
