@@ -203,6 +203,36 @@ impl Core {
         self.adopt_session(&item, &info).await.unwrap_or(item)
     }
 
+    /// #502 Make this a work item: the live Claude `sid`, in no unfinished work item, becomes the Claude of
+    /// a new item on `worktree`. With `ticket` it is the item an MCP `claim_ticket` from that session
+    /// makes (#494); without, a scratch item on the worktree's branch. The session keeps its cwd.
+    pub async fn session_claim(
+        &self,
+        sid: &SessionId,
+        ticket: Option<TicketRef>,
+        worktree: PathBuf,
+    ) -> Result<WorkItem, KeltaError> {
+        let info = self
+            .live_session(sid)
+            .filter(|s| s.kind == SessionKind::Claude)
+            .ok_or_else(|| KeltaError::invalid(format!("session {sid} is not a live Claude session")))?;
+        // Same lock as `adopt_claiming_session`: no MCP claim adopts the session between check and adoption.
+        let _guard = self.adopt_lock.lock().await;
+        if let Some(w) = self.work.for_session(sid).await.filter(|w| w.state != WorkState::Finished) {
+            return Err(KeltaError::conflict(format!("session {sid} is already in work item {}", w.id)));
+        }
+        let item = match ticket {
+            Some(t) => {
+                let run = RunClaim { session_id: Some(sid.clone()), ..RunClaim::default() };
+                self.work.claim(&info.project_id, t, Some(worktree), None, run).await?
+            }
+            None => self.work.scratch_on(&info.project_id, &worktree).await?,
+        };
+        self.adopt_session(&item, &info).await.ok_or_else(|| {
+            KeltaError::internal(format!("work item {} did not adopt session {sid}", item.id))
+        })
+    }
+
     /// The live session of a run holding `ticket`.
     async fn ticket_run(&self, ticket: &TicketRef) -> Result<Option<SessionInfo>, KeltaError> {
         let items = self.work.list(None).await?;

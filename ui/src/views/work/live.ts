@@ -24,6 +24,12 @@ export function claudeOf(item: WorkItem): SessionInfo | null {
   return mine.find((s) => s.lifecycle === 'live') ?? mine[0] ?? null;
 }
 
+/** #502: Make this a work item is offered on a live Claude session in no unfinished work item. */
+export function canMakeWorkItem(s: SessionInfo): boolean {
+  if (s.kind.type !== 'claude' || s.lifecycle !== 'live') return false;
+  return !unfinishedWork().some((w) => w.id === s.work_item_id || w.session_ids.includes(s.id));
+}
+
 /** The item's PR: by `pr_url`, else by branch (a PR Claude opened itself); review checkouts by ref. */
 export function prOf(item: WorkItem): Review | null {
   if (item.review) {

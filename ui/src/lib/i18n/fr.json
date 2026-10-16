@@ -3054,5 +3054,12 @@
   "Workflow": "Workflow",
   "Starts a workflow run as `w` on a ticket and the palette's \"Run <label>\" do (#488): with `ticket`,\n`workflow_run` on it (claims it; a run live on it is returned instead), else the `on = \"global\"`\n`[[workflows]]` entry in the event's project.": "Démarre un run de workflow comme `w` sur un ticket et « Run <label> » de la palette (#488) : avec `ticket`, `workflow_run` dessus (le réclame ; un run déjà actif dessus est renvoyé), sinon l'entrée `[[workflows]]` en `on = \"global\"` dans le projet de l'événement.",
   "Template naming the ticket, e.g. `\"{ticket.key}\"`.": "Modèle désignant le ticket, par ex. `\"{ticket.key}\"`.",
-  "Id of a saved or `[[workflows]]` workflow.": "Id d'un workflow enregistré ou `[[workflows]]`."
+  "Id of a saved or `[[workflows]]` workflow.": "Id d'un workflow enregistré ou `[[workflows]]`.",
+  "Make this a work item": "En faire un élément de travail",
+  "Make work item": "Créer l’élément de travail",
+  "Claude keeps its conversation and its folder. The editor and git of the work item use the worktree below.": "Claude garde sa conversation et son dossier. L’éditeur et git de l’élément de travail utilisent le worktree ci-dessous.",
+  "Session folder: {path}": "Dossier de la session : {path}",
+  "A git worktree of one of the project repos": "Un worktree git d’un des dépôts du projet",
+  "{branch} is now a work item": "{branch} est maintenant un élément de travail",
+  "Focus a Claude session that is in no work item": "Placez le focus sur une session Claude hors de tout élément de travail"
 }

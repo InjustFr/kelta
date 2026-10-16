@@ -23,7 +23,7 @@ import { layout, projects, sessions, tickets, toasts, ui, work } from '$lib/stor
 import { reviewKey } from '$lib/stores/reducers';
 
 import { prompts } from '../../shell/confirm.svelte';
-import { currentTab, revealSession } from '../../shell/nav';
+import { currentTab, focusedSession, revealSession } from '../../shell/nav';
 import {
   askClaudeToResolve,
   fixChecks,
@@ -36,7 +36,7 @@ import {
 } from './fixloop.svelte';
 import { workActionDisabled } from './common';
 import { batch } from './batch.svelte';
-import { askerOf, claudeOf, phaseNow, prOf } from './live';
+import { askerOf, canMakeWorkItem, claudeOf, phaseNow, prOf } from './live';
 import { draftBlocked, draftLabel, toggleDraft } from '../reviews/draft';
 import { goToWork, openReview, showZoomedInWorkTab } from './nav';
 import type { Phase, WorkActionId } from './phase';
@@ -613,3 +613,11 @@ export function newWorkItem(): void {
 }
 
 registerAction('work.new', newWorkItem);
+
+/** Make this a work item (#502): `args.session_id` (sidebar row menu), else the focused session. */
+registerAction('session.make_work', (args) => {
+  const id = args?.session_id as string | undefined;
+  const s = id ? sessions.get(id) : focusedSession();
+  if (!s || !canMakeWorkItem(s)) return void toasts.info(t('Focus a Claude session that is in no work item'));
+  ui.openSheet('make_work', { sessionId: s.id });
+});

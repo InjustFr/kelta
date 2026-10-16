@@ -78,6 +78,7 @@ pub const COMMANDS: &[&str] = &[
     "session_list",
     "session_mark_seen",
     "session_link",
+    "session_claim",
     "session_text_tail",
     "session_history_search",
     "claude_runs_list",

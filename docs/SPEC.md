@@ -178,6 +178,7 @@ Principles: Linux follows the macOS set with Cmd → Ctrl (`Mod` = **Cmd** on ma
 | `work.new` (New work item: task, `wip/` branch, Claude; FLOW §4.3) | Cmd+Shift+N | Ctrl+Shift+N | `w` |
 | `work.link` (Link to ticket… for the focused scratch item; palette only) | — | — | — |
 | `work.create_ticket` (Create ticket… for the focused scratch item: file it in the project tracker, then link it; palette only) | — | — | — |
+| `session.make_work` ("Make this a work item": the focused or right-clicked live Claude session in no work item becomes a ticket or scratch item, FLOW §4.3; palette and the sidebar row menu) | — | — | — |
 | `toast.run_last` (Run last toast action: the primary action of the newest toast still shown, e.g. "Opened PR #13" → Open; the chord is printed on its button) | Cmd+Shift+O | Ctrl+Shift+O | `o` |
 | `claude.setup` ("Set up with Claude": installs Kelta's MCP in Claude Code when needed and opens a Claude session in Home that sets up projects, accounts and sources; also in the onboarding) | unbound | unbound | |
 | `editor.send_selection` (editor pane) | Cmd+Shift+L | Ctrl+Shift+L | `@` |

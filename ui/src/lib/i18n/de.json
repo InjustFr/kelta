@@ -3054,5 +3054,12 @@
   "Workflow": "Workflow",
   "Starts a workflow run as `w` on a ticket and the palette's \"Run <label>\" do (#488): with `ticket`,\n`workflow_run` on it (claims it; a run live on it is returned instead), else the `on = \"global\"`\n`[[workflows]]` entry in the event's project.": "Startet einen Workflow-Run wie `w` auf einem Ticket und „Run <label>“ der Palette (#488): mit `ticket` `workflow_run` darauf (beansprucht es; ein darauf laufender Run wird zurückgegeben), sonst der `[[workflows]]`-Eintrag mit `on = \"global\"` im Projekt des Ereignisses.",
   "Template naming the ticket, e.g. `\"{ticket.key}\"`.": "Vorlage, die das Ticket benennt, z. B. `\"{ticket.key}\"`.",
-  "Id of a saved or `[[workflows]]` workflow.": "Id eines gespeicherten oder `[[workflows]]`-Workflows."
+  "Id of a saved or `[[workflows]]` workflow.": "Id eines gespeicherten oder `[[workflows]]`-Workflows.",
+  "Make this a work item": "Zu einem Arbeitselement machen",
+  "Make work item": "Arbeitselement erstellen",
+  "Claude keeps its conversation and its folder. The editor and git of the work item use the worktree below.": "Claude behält seine Unterhaltung und seinen Ordner. Editor und git des Arbeitselements nutzen den Worktree unten.",
+  "Session folder: {path}": "Ordner der Sitzung: {path}",
+  "A git worktree of one of the project repos": "Ein git-Worktree eines Repos des Projekts",
+  "{branch} is now a work item": "{branch} ist jetzt ein Arbeitselement",
+  "Focus a Claude session that is in no work item": "Fokussiere eine Claude-Sitzung, die zu keinem Arbeitselement gehört"
 }

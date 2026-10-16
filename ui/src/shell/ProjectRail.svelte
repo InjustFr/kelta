@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
 
   import { dispatch } from '$lib/actions';
-  import type { ProjectId, ProjectInfo, Tab, WorkItem } from '$lib/gen';
+  import type { ProjectId, ProjectInfo, SessionInfo, Tab, WorkItem } from '$lib/gen';
   import { allPanes } from '$lib/layout';
   import {
     layout,
@@ -23,7 +23,7 @@
   import { frames } from '$lib/terminal/raf';
 
   import { jumpOutside, nowSummary, refreshNow } from '../views/inbox/now';
-  import { phaseNow, prOf, siblingKey, stepNow, workTitle } from '../views/work/live';
+  import { canMakeWorkItem, phaseNow, prOf, siblingKey, stepNow, workTitle } from '../views/work/live';
   import { maxLamp, outsidePhase, workKey } from '../views/work/phase';
   import { stageName, workStage } from '../views/work/stage';
   import { confirms } from './confirm.svelte';
@@ -94,7 +94,13 @@
   onMount(() => void refreshNow());
 
   let menu = $state<{ project: ProjectInfo; x: number; y: number } | null>(null);
-  let rowMenu = $state<{ project: ProjectId; tab: Tab; x: number; y: number } | null>(null);
+  let rowMenu = $state<{
+    project: ProjectId;
+    tab: Tab;
+    session: SessionInfo | null;
+    x: number;
+    y: number;
+  } | null>(null);
   let dragId = $state<string | null>(null);
   let overId = $state<string | null>(null);
   // A row dragged out of the window moves to its own window; rows keep their order (#430).
@@ -219,17 +225,21 @@
     menu = { project: p, x: e.clientX, y: e.clientY };
   }
 
-  function rowMenuItems(tab: Tab): MenuItem[] {
+  function rowMenuItems(tab: Tab, session: SessionInfo | null): MenuItem[] {
     return [
       { id: 'close', label: t('Close'), icon: 'x' },
       tab.detached
         ? { id: 'attach', label: t('Move back to main window'), icon: 'app-window' }
         : { id: 'detach', label: t('Move to new window'), icon: 'app-window' },
+      ...(session && canMakeWorkItem(session)
+        ? [{ id: 'make_work', label: t('Make this a work item'), icon: 'git-branch' }]
+        : []),
     ];
   }
 
-  function onRowMenu(project: ProjectId, tab: Tab, id: string): void {
-    if (id === 'close') void requestCloseTab(project, tab.id);
+  function onRowMenu(project: ProjectId, tab: Tab, id: string, session: SessionInfo | null): void {
+    if (id === 'make_work' && session) void dispatch('session.make_work', { session_id: session.id });
+    else if (id === 'close') void requestCloseTab(project, tab.id);
     else if (id === 'detach') void detachTab(project, tab.id);
     else if (id === 'attach') void attachTab(project, tab.id);
   }
@@ -437,7 +447,7 @@
       }}
       oncontextmenu={(e) => {
         e.preventDefault();
-        if (tab) rowMenu = { project: p.id, tab, x: e.clientX, y: e.clientY };
+        if (tab) rowMenu = { project: p.id, tab, session: s ?? null, x: e.clientX, y: e.clientY };
       }}
       ondragstart={(e) => {
         if (!tab) return;
@@ -744,11 +754,11 @@
 {#if rowMenu}
   {@const target = rowMenu}
   <Menu
-    items={rowMenuItems(target.tab)}
+    items={rowMenuItems(target.tab, target.session)}
     x={rowMenu.x}
     y={rowMenu.y}
     label={t('Row actions')}
-    onselect={(id) => onRowMenu(target.project, target.tab, id)}
+    onselect={(id) => onRowMenu(target.project, target.tab, id, target.session)}
     onclose={() => (rowMenu = null)}
   />
 {/if}

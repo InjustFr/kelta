@@ -126,6 +126,7 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("tab.next", "Next tab", ["cmd+shift+]"], Some("n"), Global),
     a!("tab.prev", "Previous tab", ["cmd+shift+["], Some("N"), Global),
     a!("session.new", "New session", ["cmd+t"], Some("c"), Global),
+    a!("session.make_work", "Make this a work item", [], None, Global),
     a!("pane.split_right", "Split right", ["cmd+d"], Some("%"), Global),
     a!("pane.split_down", "Split down", ["cmd+shift+d"], Some("\""), Global),
     a!("pane.focus_left", "Focus pane left", ["cmd+alt+left"], Some("h"), Global),

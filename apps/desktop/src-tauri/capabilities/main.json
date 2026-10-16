@@ -83,6 +83,7 @@
     "allow-session-list",
     "allow-session-mark-seen",
     "allow-session-link",
+    "allow-session-claim",
     "allow-session-text-tail",
     "allow-session-history-search",
     "allow-claude-runs-list",

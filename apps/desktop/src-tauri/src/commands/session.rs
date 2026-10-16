@@ -1,5 +1,6 @@
 //! `session` commands — sessions and terminal channel (owner: L3, ARCHITECTURE §6).
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use kelta_core::Core;
@@ -107,6 +108,17 @@ pub async fn session_link(
     ticket: Option<TicketRef>,
 ) -> Res<SessionInfo> {
     core.session_link(&id, work_item_id, ticket)
+}
+
+/// #502 Make this a work item.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn session_claim(
+    core: State<'_, Arc<Core>>,
+    id: SessionId,
+    ticket: Option<TicketRef>,
+    worktree: PathBuf,
+) -> Res<WorkItem> {
+    core.session_claim(&id, ticket, worktree).await
 }
 
 #[tauri::command(rename_all = "snake_case")]
