@@ -334,9 +334,9 @@ async fn history_search_by_project_and_session_and_close_deletes() {
     assert!(term.has_history(&seeded.shell));
 }
 
-/// #496: a restarted Claude's `mcp.json` is rewritten with the current HTTP port (it changes per server start).
+/// #496, #499: a restarted or restored (Dormant) Claude's `mcp.json` names the current HTTP port.
 #[tokio::test]
-async fn a_restarted_claude_gets_a_fresh_mcp_json_port() {
+async fn a_restored_claude_gets_an_mcp_json_for_the_current_port() {
     let tmp = tempfile::tempdir().unwrap();
     let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
     let shop = ProjectId::new("shop");
@@ -359,4 +359,22 @@ async fn a_restarted_claude_gets_a_fresh_mcp_json_port() {
     let got = std::fs::read_to_string(&file).unwrap();
     assert!(!got.contains("127.0.0.1:1/"), "{got}");
     assert!(got.contains(&format!("/mcp/{}", s.id)), "{got}");
+
+    // Dormant restore after an app restart: the stale file is rewritten too.
+    h.core.shutdown().await.unwrap();
+    drop(h);
+    std::fs::write(&file, r#"{"mcpServers":{"kelta":{"url":"http://127.0.0.1:1/mcp/x"}}}"#).unwrap();
+    let h = start_in(
+        tmp.path(),
+        MemConfig::new(mode(RestoreMode::Lazy), vec![project("shop", tmp.path())]),
+        FakeTerminalHost::new(),
+        Arc::new(Factory::default()),
+    );
+    settle().await;
+    assert_eq!(h.core.session_get(&s.id).unwrap().lifecycle, Lifecycle::Dormant);
+    h.core.session_attach(&s.id, 80, 24, Box::new(RecordingSink::new())).await.unwrap();
+    assert!(h.term.with_session(&s.id, |x| x.spec.args.clone()).unwrap().contains(&"--mcp-config".to_owned()));
+    let port = h.core.server().http_port().unwrap();
+    let got = std::fs::read_to_string(&file).unwrap();
+    assert!(got.contains(&format!("127.0.0.1:{port}/mcp/{}", s.id)), "{got}");
 }
