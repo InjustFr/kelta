@@ -855,7 +855,8 @@ impl WorkService {
             env.core.toast(Toast::warn(e.message));
         }
 
-        for sid in &item.session_ids {
+        // The adopted run's Claude is the run's (#491): release_ticket comes from it, Finish never killed it.
+        for sid in item.session_ids.iter().filter(|s| j.run_session.as_ref() != Some(*s)) {
             if env.core.session_get(sid).is_some_and(|s| s.lifecycle != Lifecycle::Exited)
                 && let Err(e) = env.core.session_kill(sid, opts.force).await
             {

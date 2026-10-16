@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { workItem } from '$lib/gen/fixtures';
 import { createMockTransport, type MockControls } from '$lib/ipc/mock';
 import { setTransport } from '$lib/ipc/transport';
 import { activeTab, closeTab } from '$lib/layout';
@@ -228,6 +229,21 @@ describe('projects', () => {
     openRow(bg);
     await expect.poll(() => bandTabs('shop').claude.map((r) => r.session!.id)).toContain('plain-bg');
     expect(backgroundRows().map((r) => r.session!.id)).not.toContain('plain-bg');
+  });
+
+  it("a run's Claude in its work item's tab is that item's row, not a Claude row too (#491)", () => {
+    work.upsert({ ...workItem, id: 'run-item', project_id: 'shop', state: { kind: 'active' } });
+    sessions.upsert({ ...sessions.get(SHOP_CLAUDE)!, id: 'run-s', work_item_id: null, lifecycle: 'live' });
+    layout.open('shop', {
+      content: { kind: 'terminal', session_id: 'run-s' },
+      placement: 'new_tab',
+      focus: false,
+      tab_title: 'SHOP-142',
+      work_item_id: 'run-item',
+    });
+    const band = bandTabs('shop');
+    expect(band.claude.map((r) => r.session!.id)).not.toContain('run-s');
+    expect(band.work.some((r) => r.item!.id === 'run-item')).toBe(true);
   });
 
   it('a live Claude whose work item is finished, tab closed, is a Background row without its item', () => {

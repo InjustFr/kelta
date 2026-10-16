@@ -1331,9 +1331,10 @@ export function createMockTransport(options: MockOptions = {}): {
         worktree: s.cwd,
         branch: 'main',
         base: 'main',
-        claude_uuid: null,
+        // #491: the item adopts the run's Claude (Core: WorkService::adopt_run).
+        claude_uuid: s.claude?.session_uuid ?? null,
         nvim_socket: null,
-        session_ids: [],
+        session_ids: [s.id],
         tab_id: null,
         pr_url: null,
         state: { kind: 'active' },

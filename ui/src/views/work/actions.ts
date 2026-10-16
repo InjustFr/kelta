@@ -19,7 +19,7 @@ import {
   workStartClaude,
   workStartNow,
 } from '$lib/ipc/commands';
-import { projects, sessions, tickets, toasts, ui, work } from '$lib/stores';
+import { layout, projects, sessions, tickets, toasts, ui, work } from '$lib/stores';
 import { reviewKey } from '$lib/stores/reducers';
 
 import { prompts } from '../../shell/confirm.svelte';
@@ -84,8 +84,11 @@ async function step(c: Ctx, step: string): Promise<void> {
 
 async function goClaude({ item }: Ctx): Promise<void> {
   const claude = askerOf(item) ?? claudeOf(item);
+  // A run's Claude moves into the item's tab when that tab first opens (#491): open it, not the run's tab.
+  const tabless =
+    item.run !== null && !layout.get(item.project_id)?.tabs.some((t) => t.work_item_id === item.id);
   // A live or dormant Claude is shown (attaching resumes a dormant one); a dead one is respawned.
-  if (claude && claude.lifecycle !== 'exited' && (await revealSession(claude.id))) return;
+  if (claude && claude.lifecycle !== 'exited' && !tabless && (await revealSession(claude.id))) return;
   await goToWork(item);
 }
 

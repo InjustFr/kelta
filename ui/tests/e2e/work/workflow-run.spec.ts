@@ -92,3 +92,34 @@ test('detail w: the run opens a background tab, the toast opens and peeks its se
   await expect(sheet).toHaveCount(1);
   await expect(page.getByTestId('pane')).toHaveCount(2);
 });
+
+test("the claimed item adopts the run: opening it moves the run into the item's tab (#491)", async ({
+  page,
+}) => {
+  await boot(page);
+  await dispatch(page, 'tickets.open', { project_id: 'shop' });
+  await page.getByRole('tab', { name: 'List' }).click();
+  await page.locator('[data-key="jira-acme:SHOP-151"] .k-row-key').click();
+  await page.keyboard.press('g');
+  await page.evaluate(() => window.__kelta!.stores.layout.flush());
+  await page.getByTestId('ticket-detail').focus();
+  await page.keyboard.press('w');
+  await expect(page.getByTestId('workflow-picker')).toContainText('Implement, review and merge one ticket');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('toasts')).toContainText('kelta-ticket-pass started on SHOP-151');
+
+  const { id, sid } = await page.evaluate(() => {
+    const w = window.__kelta!.stores.work.all.find((x) => x.run?.name === 'kelta-ticket-pass')!;
+    return { id: w.id, sid: w.run!.session_id! };
+  });
+  await dispatch(page, 'work.go_claude', { id });
+  const runRow = page.locator('[data-testid="rail-row"]:not([data-work-id])', {
+    hasText: 'kelta-ticket-pass · SHOP-151',
+  });
+  await expect(runRow).toHaveCount(0);
+  await expect(page.locator(`[data-testid="rail-row"][data-work-id="${id}"]`)).toHaveCount(1);
+  await expect(
+    page.locator(`[data-testid="pane"][data-focused="true"] [data-session-id="${sid}"]`),
+  ).toHaveCount(1);
+  expect((await callsOf(page, 'work_resume')).map((c) => c.args)).toEqual([{ id }]);
+});
