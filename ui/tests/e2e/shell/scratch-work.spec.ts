@@ -17,6 +17,13 @@ async function newWorkItem(page: Page): Promise<void> {
   );
   await page.keyboard.press('Meta+Enter');
   await expect(sheet).toBeHidden();
+  // The new tab's terminal takes the keyboard when it attaches (TerminalPane show().then): wait for it, or
+  // a sheet opened next loses its keys to Claude on a loaded machine (#487). A load, not an assertion.
+  await page
+    .locator(
+      '[data-testid="workspace"] [data-testid="pane"][data-focused="true"] [data-testid="terminal-pane"][data-attached="true"]',
+    )
+    .waitFor();
 }
 
 test.describe('scratch work items', () => {
@@ -51,6 +58,8 @@ test.describe('scratch work items', () => {
   test('the ⌘T sheet points to New work item', async ({ page }) => {
     await boot(page, 'macos');
     await dispatch(page, 'session.new');
+    // NewSessionSheet is a lazy chunk (SheetHost): a load, not an assertion (#485, #487).
+    await page.getByTestId('new-work-hint').waitFor();
     await expect(page.getByTestId('new-work-hint')).toContainText('Want a branch and a PR?');
     await page.getByTestId('new-work-hint').getByRole('button', { name: 'New work item' }).click();
     await expect(page.getByRole('dialog', { name: 'New work item' })).toBeVisible();

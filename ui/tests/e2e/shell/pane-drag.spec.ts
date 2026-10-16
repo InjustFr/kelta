@@ -1,7 +1,7 @@
 // Drag a pane by its header to reorganise the layout (ticket #341).
 import { expect, test, type Page } from '@playwright/test';
 
-import { boot, callsOf, unfold } from './helpers';
+import { boot, bootSettled, callsOf, unfold } from './helpers';
 
 const panes = (page: Page) => page.locator('[data-testid="workspace"] [data-testid="pane"]');
 const header = (page: Page, i: number) => panes(page).nth(i).getByTestId('pane-header');
@@ -44,7 +44,7 @@ async function dragOnto(page: Page, from: number, to: number, fx: number, fy: nu
 
 test.describe('pane drag and drop', () => {
   test('dropping on an edge moves the pane to that side without re-attaching', async ({ page }) => {
-    await boot(page);
+    await bootSettled(page);
     const [a, b] = await paneIds(page);
     const attaches = (await callsOf(page, 'session_attach')).length;
     await dragOnto(page, 1, 0, 0.5, 0.95);
@@ -67,7 +67,7 @@ test.describe('pane drag and drop', () => {
   });
 
   test('dropping on the centre swaps the panes', async ({ page }) => {
-    await boot(page);
+    await bootSettled(page);
     const [a, b] = await paneIds(page);
     await dragOnto(page, 0, 1, 0.5, 0.5);
     // One poll for both boxes: reading b's x before the swap made the bound stale.
@@ -105,7 +105,7 @@ test.describe('pane drag and drop', () => {
   });
 
   test('the drop indicator shows the side; Escape cancels the drag', async ({ page }) => {
-    await boot(page);
+    await bootSettled(page);
     const before = await paneIds(page);
     await dragOver(page, 1, 0, 0.02, 0.5);
     await expect(page.getByTestId('pane-drop-indicator')).toHaveAttribute('data-zone', 'left');

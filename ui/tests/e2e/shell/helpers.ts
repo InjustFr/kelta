@@ -60,3 +60,12 @@ export async function dispatch(page: Page, id: string, args?: Record<string, unk
     args,
   ] as const);
 }
+
+/** Boots and waits for the work tab's header and Story panel: their lazy chunks land after boot and
+ * shrink the pane area (#483), so pane boxes read before them go stale (#487). */
+export async function bootSettled(page: Page): Promise<void> {
+  await boot(page);
+  // Loads, not assertions: lazy chunks take seconds on a loaded machine (#485).
+  await page.getByTestId('work-header').waitFor();
+  await page.getByTestId('story-panel').waitFor();
+}
