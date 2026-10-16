@@ -712,6 +712,14 @@ impl Core {
                     http_ref = true;
                     self.http_refs.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     mcp_url = Some(format!("http://127.0.0.1:{port}/mcp/{id}"));
+                    // The port changes per server start: a restored Claude's `mcp.json` still names the old one.
+                    if let Some(f) = launch.args.windows(2).find(|w| w[0] == "--mcp-config").map(|w| &w[1])
+                        && Path::new(f).is_file()
+                        && let Err(e) =
+                            std::fs::write(f, kelta_work::claude::mcp_json(port, id.as_str()).to_string())
+                    {
+                        tracing::warn!(error = %e, "mcp.json not refreshed");
+                    }
                 }
                 Err(e) => tracing::debug!(error = %e, "http server unavailable"),
             }

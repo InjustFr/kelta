@@ -290,14 +290,7 @@ impl Core {
             close_on_exit: Default::default(),
             template_id: None,
         };
-        // #493: the run's MCP calls carry its session (session tools, claim adoption), as a work item's do.
-        let port = if s.claude.mcp { self.server.ensure_http().await.ok() } else { None };
-        let info = self.spawn_claude(sid, base, s, None, prompt, port).await;
-        if port.is_some() {
-            // The spawned session holds its own reference.
-            self.server.release_http();
-        }
-        info
+        self.spawn_claude(sid, base, s, None, prompt).await
     }
 
     /// The run's session in a new tab that does not take focus.

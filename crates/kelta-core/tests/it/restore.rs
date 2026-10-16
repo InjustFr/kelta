@@ -333,3 +333,30 @@ async fn history_search_by_project_and_session_and_close_deletes() {
     assert!(!term.has_history(&seeded.tool));
     assert!(term.has_history(&seeded.shell));
 }
+
+/// #496: a restarted Claude's `mcp.json` is rewritten with the current HTTP port (it changes per server start).
+#[tokio::test]
+async fn a_restarted_claude_gets_a_fresh_mcp_json_port() {
+    let tmp = tempfile::tempdir().unwrap();
+    let h = start(tmp.path(), Settings::defaults(), vec![project("shop", tmp.path())]);
+    let shop = ProjectId::new("shop");
+    let s = h
+        .core
+        .session_spawn_template(
+            &shop,
+            "claude+editor",
+            kelta_proto::model::TemplateCtx::default(),
+            kelta_proto::model::Placement::NewTab,
+        )
+        .await
+        .unwrap()
+        .remove(0);
+    let file = h.core.dirs().session_runtime(&s.id.sid8()).join("mcp.json");
+    std::fs::write(&file, r#"{"mcpServers":{"kelta":{"url":"http://127.0.0.1:1/mcp/x"}}}"#).unwrap();
+    h.term.emit(&s.id, TerminalEvent::Exited { code: Some(0), signal: None });
+    settle().await;
+    h.core.session_restart(&s.id).await.unwrap();
+    let got = std::fs::read_to_string(&file).unwrap();
+    assert!(!got.contains("127.0.0.1:1/"), "{got}");
+    assert!(got.contains(&format!("/mcp/{}", s.id)), "{got}");
+}
