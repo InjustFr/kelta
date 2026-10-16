@@ -12,4 +12,8 @@ export type CtlCommand = { "cmd": "hook", session: SessionId, token: string, pay
 /**
  * Set by the backend when it asks the app to show the Start sheet: the ticket `ticket` resolved to.
  */
-resolved: TicketRef | null, } | { "cmd": "start_task", task: string, project: ProjectId | null, } | { "cmd": "new", template: string, cwd: string | null, project: ProjectId | null, } | { "cmd": "emit", name: string, payload: JsonValue, } | { "cmd": "trust", repo: string, sha256: string, } | { "cmd": "editor_open", file: string, line: number | null, } | { "cmd": "plugin_install", source: string, } | { "cmd": "note_add", session: SessionId, path: string, line_start: number, line_end: number, body: string, } | { "cmd": "note_list", session: SessionId, } | { "cmd": "note_send", session: SessionId, } | { "cmd": "note_resolve", session: SessionId, note: number, } | { "cmd": "version" };
+resolved: TicketRef | null, } | { "cmd": "start_task", task: string, project: ProjectId | null, } | { "cmd": "new", template: string, cwd: string | null, project: ProjectId | null, } | { "cmd": "emit", name: string, payload: JsonValue, 
+/**
+ * The event's project (`kelta-ctl emit --project`): triggers resolve and run in it (#500).
+ */
+project: ProjectId | null, } | { "cmd": "trust", repo: string, sha256: string, } | { "cmd": "editor_open", file: string, line: number | null, } | { "cmd": "plugin_install", source: string, } | { "cmd": "note_add", session: SessionId, path: string, line_start: number, line_end: number, body: string, } | { "cmd": "note_list", session: SessionId, } | { "cmd": "note_send", session: SessionId, } | { "cmd": "note_resolve", session: SessionId, note: number, } | { "cmd": "version" };

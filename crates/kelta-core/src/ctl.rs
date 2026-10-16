@@ -358,18 +358,27 @@ impl Core {
                 self.emit(UiEvent::CtlCommand { cmd: CtlCommand::FocusProject { id: project } });
                 Ok(serde_json::to_value(sessions)?)
             }
-            CtlCommand::Emit { name, payload } => {
+            CtlCommand::Emit { name, payload, project } => {
                 if !name.starts_with(bus::CUSTOM_PREFIX) || name.len() <= bus::CUSTOM_PREFIX.len() {
                     return Err(KeltaError::invalid("only custom.* events can be emitted"));
+                }
+                if let Some(p) = &project
+                    && self.cfg.project(p).is_none()
+                {
+                    return Err(KeltaError::not_found(format!("project {p}")));
                 }
                 // kelta-bench drives the desktop shell through `custom.bench.*` (honoured by the
                 // bridge only when KELTA_BENCH_MARKS is set).
                 if name.starts_with("custom.bench.") {
                     self.emit(UiEvent::CtlCommand {
-                        cmd: CtlCommand::Emit { name: name.clone(), payload: payload.clone() },
+                        cmd: CtlCommand::Emit { name: name.clone(), payload: payload.clone(), project: project.clone() },
                     });
                 }
-                self.publish_ev(BusEvent::new(name, payload));
+                let ev = BusEvent::new(name, payload);
+                self.publish_ev(match project {
+                    Some(p) => ev.with_project(p),
+                    None => ev,
+                });
                 Ok(Value::Null)
             }
             CtlCommand::Trust { repo, sha256 } => {

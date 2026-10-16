@@ -245,6 +245,7 @@ async fn mcp_initialize_list_and_call() {
             "claim_ticket",
             "report_progress",
             "release_ticket",
+            "run_workflow",
             "link_pr",
             "get_setup",
             "add_project",
@@ -497,6 +498,7 @@ async fn global_mcp_serves_the_board_tools() {
             "claim_ticket",
             "report_progress",
             "release_ticket",
+            "run_workflow",
             "link_pr",
             "get_setup",
             "add_project",
@@ -891,5 +893,74 @@ async fn global_mcp_sets_kelta_up() {
     e.fake.respond("account_test", json!({"ok": true, "user": samples::user(), "error": null}));
     let (text, err) = global_call(port, "test_account", json!({"account": "jira"})).await;
     assert!(!err && text.starts_with("jira: signed in as"), "{text}");
+    e.server.release_http();
+}
+
+#[tokio::test]
+async fn run_workflow_tool_starts_a_ticket_run_once() {
+    let e = common::env();
+    let session = samples::session_info();
+    let sid = session.id.clone();
+    e.fake.insert_session(session.clone());
+    e.server.register_session(&sid, "ht", Some("mt"));
+    e.server.set_install_token(Some("it"));
+    let port = e.server.ensure_http().await.unwrap();
+    let account = samples::ticket_ref().account;
+    let args = json!({ "workflow": "kelta-ticket-pass", "key": "SHOP-141", "account": account });
+    let (text, err) = call(port, sid.as_str(), "mt", "run_workflow", args.clone()).await;
+    assert!(!err, "{text}");
+    let v: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(
+        (&v["session_id"], &v["name"], &v["running"]),
+        (&json!(session.id), &json!(session.name), &json!(false))
+    );
+    let starts = || e.fake.calls().into_iter().filter(|c| c.method == "workflow_start").collect::<Vec<_>>();
+    let c = starts().pop().unwrap();
+    assert_eq!(
+        (c.args["workflow"].as_str(), c.args["ticket"]["key"].as_str()),
+        (Some("kelta-ticket-pass"), Some("SHOP-141"))
+    );
+    // A live run on the ticket comes back (core's workflow_run dedupes; the fake answers as it does).
+    e.fake.respond("workflow_start", json!({ "session": session, "running": true }));
+    let (text, err) = call(port, sid.as_str(), "mt", "run_workflow", args).await;
+    assert!(!err && serde_json::from_str::<Value>(&text).unwrap()["running"] == true, "{text}");
+    // No key: the global entry in the session's project, else in `project`.
+    let (_, err) = call(port, sid.as_str(), "mt", "run_workflow", json!({ "workflow": "daily" })).await;
+    assert!(!err);
+    let c = starts().pop().unwrap();
+    assert_eq!(c.args["project"], json!(session.project_id));
+    assert!(c.args["ticket"].is_null());
+    let (_, err) = global_call(port, "run_workflow", json!({ "workflow": "daily", "project": "other" })).await;
+    assert!(!err);
+    assert_eq!(starts().pop().unwrap().args["project"], "other");
+    let (text, err) = global_call(port, "run_workflow", json!({ "workflow": "daily" })).await;
+    assert!(err && text.starts_with("InvalidArgument:"), "{text}");
+    assert_eq!(starts().len(), 4);
+    e.server.release_http();
+}
+
+#[tokio::test]
+async fn run_workflow_tool_refuses_over_max_live() {
+    let e = common::env();
+    e.fake.insert_session(samples::session_info()); // one live Claude
+    e.server.set_install_token(Some("it"));
+    let port = e.server.ensure_http().await.unwrap();
+    let mut s = kelta_proto::settings::Settings::defaults();
+    s.claude.max_live = 1;
+    e.fake.set_settings(s.clone());
+    let args = json!({ "workflow": "daily", "project": "shop" });
+    let (text, err) = global_call(port, "run_workflow", args.clone()).await;
+    assert!(err && text == "Busy: 1 of 1 Claude slots in use", "{text}");
+    assert!(!e.fake.call_names().contains(&"workflow_start"), "nothing started");
+    s.claude.max_live = 0; // 0 = no cap
+    e.fake.set_settings(s.clone());
+    let (text, err) = global_call(port, "run_workflow", args.clone()).await;
+    assert!(!err, "{text}");
+    // Hidden and refused with board writes off.
+    s.claude.mcp_board_writes = false;
+    e.fake.set_settings(s);
+    assert!(!global_tools(port).await.iter().any(|t| t == "run_workflow"));
+    let (_, err) = global_call(port, "run_workflow", args).await;
+    assert!(err);
     e.server.release_http();
 }
