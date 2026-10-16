@@ -16,6 +16,7 @@ use kelta_proto::ext::Urgency;
 use kelta_proto::ids::{AccountId, ProjectId, SessionId};
 use kelta_proto::model::{
     EditorTarget, Lifecycle, ProjectInfo, RunClaim, RunState, Scope, SessionKind, ShipOrigin, WorkItem,
+    WorkState,
 };
 use kelta_proto::settings::{AccountKind, ClaudeSettings, Layer, Settings, TransitionTarget};
 use kelta_proto::tracker::{Ticket, TicketRef, Transition};
@@ -710,13 +711,27 @@ async fn by_key(core: &Arc<dyn CoreApi>, args: &Value) -> Result<(Arc<dyn Tracke
 async fn ref_by_key(core: &Arc<dyn CoreApi>, args: &Value) -> Result<(TicketRef, Vec<ProjectId>), String> {
     let key = str_arg(args, "key")?;
     let account = args.get("account").and_then(Value::as_str).filter(|a| !a.is_empty()).map(AccountId::new);
-    let listed = core.ticket_by_key(key, account.as_ref()).await.ok().flatten();
-    match (listed, account) {
-        (Some(i), _) => Ok((i.ticket.r#ref, i.project_ids)),
+    if let Some(i) = core.ticket_by_key(key, account.as_ref()).await.ok().flatten() {
+        return Ok((i.ticket.r#ref, i.project_ids));
+    }
+    // A ticket filed after Kelta's last poll is in no list, but its holder's unfinished item has the full ref.
+    let held: Vec<(TicketRef, ProjectId)> = core
+        .work_list(None)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|w| w.state != WorkState::Finished)
+        .filter_map(|w| Some((w.ticket?, w.project_id)))
+        .filter(|(t, _)| t.key == key && account.as_ref().is_none_or(|a| &t.account == a))
+        .collect();
+    match (held.first(), account) {
+        (Some((t, p)), _) if held.iter().all(|(h, _)| h.account == t.account) => {
+            Ok((t.clone(), vec![p.clone()]))
+        }
         (None, Some(account)) => {
             Ok((TicketRef { account, key: key.to_owned(), id: key.to_owned() }, Vec::new()))
         }
-        (None, None) => Err(format!("{key} is not in Kelta's ticket lists; pass its `account`")),
+        _ => Err(format!("{key} is not in Kelta's ticket lists; pass its `account`")),
     }
 }
 
