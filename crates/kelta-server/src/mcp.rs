@@ -275,7 +275,7 @@ pub(crate) fn tool_defs() -> Value {
         },
         {
             "name": "list_tickets",
-            "description": "List the tickets of Kelta's ticket lists (all open projects, or one project / tracker view) as JSON: key, account, title, status, category, assignee, labels, priority, url. Served from Kelta's cache; `refresh` fetches again. Only the first page of each list.",
+            "description": "List the tickets of Kelta's ticket lists (all open projects, or one project / tracker view) as JSON: key, account, title, status, category, assignee, labels, priority, url, `blocked` (the source's blocked marker) and `work_item` (id of the ticket's unfinished work item, claimed or started, else null). `free` keeps only tickets that are not blocked and have no unfinished work item: the ones to pick next. Served from Kelta's cache; `refresh` fetches again. Only the first page of each list.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -285,6 +285,7 @@ pub(crate) fn tool_defs() -> Value {
                     "assignee": { "type": "string", "description": "Assignee name or login; `none` = unassigned" },
                     "label": { "type": "string" },
                     "tag": { "type": "string", "description": "One of my local Kelta tags (kept in Kelta, never on the tracker)" },
+                    "free": { "type": "boolean", "description": "true: only tickets that are not blocked and have no unfinished work item" },
                     "refresh": { "type": "boolean" }
                 },
                 "additionalProperties": false
@@ -859,6 +860,7 @@ async fn list_tickets(core: &Arc<dyn CoreApi>, args: &Value) -> ToolResult {
         None => Scope::All,
     };
     let refresh = args.get("refresh").and_then(Value::as_bool).unwrap_or(false);
+    let free = args.get("free").and_then(Value::as_bool).unwrap_or(false);
     let tagged = match opt("tag") {
         Some(tag) => Some(
             core.local_tags()
@@ -882,25 +884,27 @@ async fn list_tickets(core: &Arc<dyn CoreApi>, args: &Value) -> ToolResult {
     let rows: Vec<Value> = page
         .items
         .iter()
-        .map(|i| &i.ticket)
-        .filter(|t| {
+        .filter(|i| !free || (!i.ticket.blocked && i.work_item_id.is_none()))
+        .map(|i| (&i.ticket, &i.work_item_id))
+        .filter(|(t, _)| {
             opt("status").is_none_or(|s| t.status.name.eq_ignore_ascii_case(s) || category(t) == Some(norm(s)))
         })
-        .filter(|t| {
+        .filter(|(t, _)| {
             opt("assignee").is_none_or(|a| match &t.assignee {
                 None => a.eq_ignore_ascii_case("none"),
                 Some(u) => u.name.eq_ignore_ascii_case(a) || u.login.as_deref().is_some_and(|l| l.eq_ignore_ascii_case(a)),
             })
         })
-        .filter(|t| opt("label").is_none_or(|l| t.labels.iter().any(|x| x.eq_ignore_ascii_case(l))))
-        .filter(|t| {
+        .filter(|(t, _)| opt("label").is_none_or(|l| t.labels.iter().any(|x| x.eq_ignore_ascii_case(l))))
+        .filter(|(t, _)| {
             tagged.as_ref().is_none_or(|k| k.contains(&format!("{}:{}", t.r#ref.account.as_str(), t.r#ref.key)))
         })
-        .map(|t| {
+        .map(|(t, work_item)| {
             json!({
                 "key": t.r#ref.key, "account": t.r#ref.account, "title": t.title, "status": t.status.name,
                 "category": category(t), "assignee": t.assignee.as_ref().map(|u| u.login.clone().unwrap_or_else(|| u.name.clone())),
                 "labels": t.labels, "priority": t.priority, "url": t.url,
+                "blocked": t.blocked, "work_item": work_item,
             })
         })
         .collect();

@@ -1057,7 +1057,7 @@ impl WorkService {
     }
 
     /// (Re)write `claude-settings.json`, `mcp.json`, `context.md` for `sid` / `port`. Every launch
-    /// (start, resume, `--continue`) calls it, so `context.md` holds the item's current state.
+    /// (start, resume, restore, fresh-Claude fallback) calls it, so `context.md` holds the item's current state.
     pub(crate) async fn write_claude_files(
         &self,
         env: &Env,

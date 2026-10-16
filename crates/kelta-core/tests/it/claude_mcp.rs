@@ -225,6 +225,22 @@ async fn setup_registers_the_mcp_then_starts_claude_in_home() {
     assert_eq!(layout.active_tab.as_ref(), Some(&tab.id), "the setup tab takes the focus");
 }
 
+/// #496: the setup session has its own `mcp.json`, so it gets the session tools.
+#[tokio::test]
+async fn the_setup_session_gets_its_own_mcp_json() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let h = start(root, Settings::defaults(), vec![]);
+    fake_claude(root);
+    let info = h.core.claude_setup().await.unwrap();
+    let args = h.term.with_session(&info.id, |s| s.spec.args.clone()).unwrap();
+    let at = args.iter().position(|a| a == "--mcp-config").expect("--mcp-config");
+    let mcp: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&args[at + 1]).unwrap()).unwrap();
+    let url = mcp["mcpServers"]["kelta"]["url"].as_str().unwrap();
+    assert!(url.ends_with(&format!("/mcp/{}", info.id)), "{mcp}");
+}
+
 #[tokio::test]
 async fn outside_hook_relay_offer_install_and_remove() {
     let tmp = tempfile::tempdir().unwrap();

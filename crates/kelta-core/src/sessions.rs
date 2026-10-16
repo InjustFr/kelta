@@ -712,6 +712,14 @@ impl Core {
                     http_ref = true;
                     self.http_refs.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     mcp_url = Some(format!("http://127.0.0.1:{port}/mcp/{id}"));
+                    // The port changes per server start: a restored Claude's `mcp.json` still names the old one.
+                    if let Some(f) = launch.args.windows(2).find(|w| w[0] == "--mcp-config").map(|w| &w[1])
+                        && Path::new(f).is_file()
+                        && let Err(e) =
+                            std::fs::write(f, kelta_work::claude::mcp_json(port, id.as_str()).to_string())
+                    {
+                        tracing::warn!(error = %e, "mcp.json not refreshed");
+                    }
                 }
                 Err(e) => tracing::debug!(error = %e, "http server unavailable"),
             }
@@ -1006,7 +1014,8 @@ impl Core {
         .map(|m| kelta_work::claude::enum_str(&m));
         let mut launch = restore_launch(spec, policy, &claude.binary, use_continue, mode.as_deref());
         // A work item's Claude needs its per-session files regenerated (the runtime dir does not
-        // survive a reboot): kelta-work builds the full argv.
+        // survive a reboot): kelta-work builds the full argv. With `use_continue` (resume refused)
+        // it starts a fresh `--session-id` Claude instead of `--continue` (#498).
         if matches!(policy, RestorePolicy::ClaudeResume { .. }) && spec.work_item_id.is_some() {
             match self.work.claude_restore_request(id, use_continue, None).await {
                 Ok(Some(req)) => {
@@ -1952,7 +1961,7 @@ impl Core {
                 self.emit(UiEvent::SessionUpdated { session: Box::new(info) });
             }
             Next::Continue(cols, rows) => {
-                tracing::info!(session = %id, "claude --resume refused; retrying with --continue");
+                tracing::info!(session = %id, "claude --resume refused; retrying (--continue, or a fresh Claude for a work item)");
                 let weak = self.me.clone();
                 let sid = id.clone();
                 self.rt.spawn(async move {
