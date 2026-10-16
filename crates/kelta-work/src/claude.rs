@@ -331,7 +331,7 @@ mod tests {
             permission_mode: Some(PermissionMode::Plan),
             settings_file: "/s".into(),
             mcp_file: None,
-            allowed_tools: vec![],
+            allowed_tools: vec!["mcp__kelta__*".into()],
             context_file: "/c".into(),
             extra_args: vec![],
         };
@@ -350,7 +350,7 @@ mod tests {
             permission_mode: Some(PermissionMode::Plan),
             settings_file: "/s".into(),
             mcp_file: None,
-            allowed_tools: vec![],
+            allowed_tools: vec!["mcp__kelta__*".into()],
             context_file: "/c".into(),
             extra_args: vec!["--add-dir".into(), "/x".into()],
         };

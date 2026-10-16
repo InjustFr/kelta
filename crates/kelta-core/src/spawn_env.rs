@@ -182,6 +182,10 @@ pub fn claude_restore_args(
     let mut out = Vec::new();
     let mut it = original.iter();
     while let Some(a) = it.next() {
+        // `--` ends the options: what follows is the prompt, dropped on restore.
+        if a == "--" {
+            break;
+        }
         let flag = a.split_once('=').map_or(a.as_str(), |(f, _)| f);
         if matches!(flag, "--continue" | "-c") || a.starts_with("--permission-mode=") {
             continue;
@@ -314,6 +318,10 @@ mod tests {
         let out = claude_restore_args(&orig, "U1", true, None, &exists);
         assert_eq!(out.last().map(String::as_str), Some("--continue"));
         assert_eq!(claude_uuid_from_args(&orig).as_deref(), Some("U1"));
+        // #490: the prompt now sits after `--`; it goes too, and `--resume` stays an option
+        let with_dd = v(&["--session-id", "U1", "--allowedTools", "t", "--", "/probe"]);
+        let out = claude_restore_args(&with_dd, "U1", false, None, &exists);
+        assert_eq!(out, v(&["--allowedTools", "t", "--resume", "U1"]));
     }
 
     #[test]
