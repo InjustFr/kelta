@@ -599,6 +599,48 @@ async fn global_mcp_serves_the_board_tools() {
 }
 
 #[tokio::test]
+async fn a_holder_re_claims_an_unlisted_ticket_by_key() {
+    let e = common::env();
+    e.server.set_install_token(Some("it"));
+    let port = e.server.ensure_http().await.unwrap();
+    let held = |account: &str, state| {
+        let mut w = samples::work_item();
+        w.ticket = Some(kelta_proto::tracker::TicketRef {
+            account: AccountId::new(account),
+            key: "NEW-1".into(),
+            id: "9001".into(),
+        });
+        w.state = state;
+        w
+    };
+    let args = json!({"key":"NEW-1","worktree":"/wt/new-1","branch":"feat/new-1"});
+
+    // No open item: the account is still asked for.
+    e.fake.add_work_item(held("gh", kelta_proto::model::WorkState::Finished));
+    let (text, err) = global_call(port, "claim_ticket", args.clone()).await;
+    assert!(err && text.contains("pass its `account`"), "{text}");
+
+    // The holder's item gives the full ref and its project; the re-claim names the new worktree.
+    e.fake.add_work_item(held("gh", kelta_proto::model::WorkState::Active));
+    e.fake.respond("work_claim", serde_json::to_value(samples::work_item()).unwrap());
+    let (text, err) = global_call(port, "claim_ticket", args.clone()).await;
+    assert!(!err && text.starts_with("Claimed NEW-1"), "{text}");
+    let call = e.fake.calls().into_iter().find(|c| c.method == "work_claim").unwrap();
+    assert_eq!(call.args["ticket"]["id"], "9001");
+    assert_eq!(call.args["ticket"]["account"], "gh");
+    assert_eq!(call.args["project"], "shop");
+    assert_eq!(call.args["worktree"], "/wt/new-1");
+
+    // Open items of two accounts: ask for the account, which then picks one.
+    e.fake.add_work_item(held("other", kelta_proto::model::WorkState::Active));
+    let (text, err) = global_call(port, "claim_ticket", args.clone()).await;
+    assert!(err && text.contains("pass its `account`"), "{text}");
+    let (_, err) = global_call(port, "claim_ticket", json!({"key":"NEW-1","account":"other"})).await;
+    assert!(!err);
+    e.server.release_http();
+}
+
+#[tokio::test]
 async fn list_tickets_filters_by_local_tag() {
     let e = common::env();
     e.server.set_install_token(Some("it"));
