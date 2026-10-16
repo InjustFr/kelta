@@ -382,13 +382,13 @@
     toggled = { ...toggled, [`${groupBy}:${row.group.id}`]: !row.open };
   }
 
-  /** The key column fits the longest key in view, capped so a long key cannot take the title's room. */
   /** The track end in the header (#481): rows on a stored step end at their pipeline's last step. */
   const end = $derived(
     trackEnd(
       shown.map((i) => stepOf(i.ticket.ref, i.source_ids[0] ?? null, i.project_ids[0] ?? null)?.steps),
     ),
   );
+  /** The key column fits the longest key in view, capped so a long key cannot take the title's room. */
   const keyChars = $derived(Math.min(12, Math.max(4, ...shown.map((i) => i.ticket.ref.key.length))));
   const showSource = $derived(groupBy !== 'source' && !source && sources.length > 1);
   const sourceOf = (item: TicketItem): string =>
