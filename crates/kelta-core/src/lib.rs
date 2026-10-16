@@ -202,13 +202,12 @@ pub struct Core {
     pub(crate) refines: Mutex<std::collections::HashMap<SessionId, TicketRef>>,
     /// Config workflow runs on a PR (#355): `account:repo#number` → the run's session.
     pub(crate) pr_runs: Mutex<std::collections::HashMap<String, SessionId>>,
-    /// Runs started with no ticket (`workflow_run_on`) that have not adopted a claimed item yet (#493).
-    // shortcut: in memory, so a run that outlives an app restart claims without adoption; persist when that matters.
-    pub(crate) unadopted_runs: Mutex<std::collections::HashSet<SessionId>>,
     /// The registration Kelta serves while the global `/mcp` holds an HTTP server reference (Claude Code
     /// registration, ticket #234); locked for a whole install / remove so concurrent ones take one reference
     /// and one token (#294).
     pub(crate) claude_mcp_ref: tokio::sync::Mutex<Option<claude_mcp::Registration>>,
+    /// Held across `adopt_claiming_session`'s check and adoption: lanes sharing one `/mcp/<sid>` claim at once (#494).
+    pub(crate) adopt_lock: tokio::sync::Mutex<()>,
     /// Re-checks a registration just written, in case a concurrent Claude Code save dropped it (#322).
     pub(crate) claude_mcp_recheck: rt::OneShot,
     /// The last Claude permission mode a session switched to (#277), persisted in `ui_state`.
@@ -375,8 +374,8 @@ impl Core {
                 oauth_polling: Mutex::default(),
                 refines: Mutex::default(),
                 pr_runs: Mutex::default(),
-                unadopted_runs: Mutex::default(),
                 claude_mcp_ref: tokio::sync::Mutex::new(None),
+                adopt_lock: tokio::sync::Mutex::new(()),
                 claude_mcp_recheck: rt::OneShot::default(),
                 claude_mode: Mutex::new(None),
                 outside: Mutex::default(),
@@ -692,6 +691,12 @@ impl CoreApi for Core {
     fn login_path(&self) -> Option<String> {
         self.login_env.path().map(str::to_owned)
     }
+    fn claude_config_dir(&self, project: Option<&ProjectId>) -> Option<std::path::PathBuf> {
+        // Same layering as `assemble_env`; the per-request env is not stored, so it is not seen here.
+        let s = self.cfg.effective(project);
+        let env = self.login_env.vars.iter().chain(&s.terminal.env).chain(&s.env);
+        spawn_env::claude_config_dir(&env.map(|(k, v)| (k.clone(), v.clone())).collect())
+    }
     async fn session_spawn(&self, req: SpawnRequest) -> Result<SessionInfo, KeltaError> {
         self.rt.capture();
         self.spawn_session(req).await
@@ -895,8 +900,10 @@ impl CoreApi for Core {
         run: kelta_proto::model::RunClaim,
         adopt: bool,
     ) -> Result<WorkItem, KeltaError> {
+        // #494: a holder's re-claim never adopts, so an `adopt: false` orchestrator's lanes keep its Claude out.
+        let reclaim = self.work.held_by(&ticket, run.session_id.as_ref()).await?.is_some();
         let w = self.work.claim(project, ticket, worktree, branch, run).await?;
-        Ok(if adopt { self.adopt_claiming_run(w).await } else { w })
+        Ok(if adopt && !reclaim { self.adopt_claiming_session(w).await } else { w })
     }
     async fn work_report(
         &self,

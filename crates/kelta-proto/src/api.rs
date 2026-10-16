@@ -453,7 +453,8 @@ pub trait CoreApi: Send + Sync {
     }
     /// MCP `claim_ticket` (#235): a work item for `ticket` adopting `worktree` (default: the project's
     /// primary repo) and `branch`, claimed by `run`. `Conflict` naming the holder when it is taken.
-    /// `adopt` false: the caller's Claude is never given to the item (a multi-ticket orchestrator, #497).
+    /// The caller's live Claude, when in no unfinished item, becomes the item's Claude (#494), unless
+    /// `adopt` is false (a multi-ticket orchestrator, #497) or it re-claims a ticket it holds.
     async fn work_claim(
         &self,
         _project: &ProjectId,
@@ -540,6 +541,11 @@ pub trait CoreApi: Send + Sync {
     async fn http_fetch(&self, req: ProxiedRequest) -> Result<ProxiedResponse, KeltaError>;
     /// `PATH` of the user's login shell (what pty sessions search); `None` when unknown.
     fn login_path(&self) -> Option<String> {
+        None
+    }
+    /// Claude Code's config dir (`CLAUDE_CONFIG_DIR`, else `~/.claude`) as a Claude of `project` sees it
+    /// (project and terminal env override the login env); `None` when unknown.
+    fn claude_config_dir(&self, _project: Option<&ProjectId>) -> Option<std::path::PathBuf> {
         None
     }
     /// Dispatch of ctl socket commands.

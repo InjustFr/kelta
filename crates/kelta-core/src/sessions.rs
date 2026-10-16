@@ -2012,6 +2012,7 @@ impl Core {
                 let sid = id.clone();
                 self.rt.spawn(async move {
                     if let Some(core) = weak.upgrade()
+                        && !core.work.refused_resume_kept(&sid, code).await
                         && let Err(e) = core.restore_session(&sid, cols, rows, true).await
                     {
                         tracing::warn!(error = %e, "claude --continue fallback failed");
