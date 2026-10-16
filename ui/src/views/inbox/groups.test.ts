@@ -322,6 +322,45 @@ describe('nowSections', () => {
     expect([zoneCount(sections, 'yours'), zoneCount(sections, 'waiting')]).toEqual([3, 4]);
   });
 
+  it("a source's in-flight statuses (QA, UAT): In flight, nowhere else, not in the badge; waiting wins (#492)", () => {
+    const at = (key: string, name = 'In QA', source = 'mine'): TicketItem => {
+      const t = ticket(key, 'in_progress');
+      return { ...t, ticket: { ...t.ticket, status: { ...t.ticket.status, name } }, source_ids: [source] };
+    };
+    const on = (key: string) => ({ ticket: { account: 'jira', key, id: key } });
+    const approved = entry('approved', 'ship', on('Q-4'));
+    const fixing = entry('checks_failed', 'fix', on('Q-5'));
+    const asking = entry('asking', 'needs_you', on('Q-6'));
+    const sections = nowSections({
+      ...empty,
+      work: [approved, fixing, asking],
+      tickets: [
+        at('Q-1'),
+        at('Q-2', 'UAT'),
+        at('Q-3', 'In QA', 'other'),
+        at('Q-4'),
+        at('Q-5'),
+        at('Q-6'),
+        at('B-1', 'Both'),
+      ],
+      nextUp: [at('N-1')],
+      fresh: new Set(['jira:Q-2']),
+      waiting: new Map([['mine', ['Both']]]),
+      inFlight: new Map([['mine', ['In QA', 'UAT', 'Both']]]),
+    });
+    expect(sections.map((s) => [s.id, s.rows.map((r) => r.id)])).toEqual([
+      ['needs_you', [`w:${asking.item.id}`]],
+      ['fix', [`w:${fixing.item.id}`]],
+      ['in_flight', [`w:${approved.item.id}`, 't:jira:N-1', 't:jira:Q-1', 't:jira:Q-2']],
+      ['up_next', ['t:jira:Q-3']],
+      ['waiting', ['t:jira:B-1']],
+    ]);
+    const row = sections[2]!.rows[0]!;
+    expect(row.type === 'work' && [row.status, row.phase.section]).toEqual(['In QA', 'ship']);
+    // needs_you + fix only: In flight is not in the badge.
+    expect(waitingCount(sections)).toBe(2);
+  });
+
   it('Blocked tickets leave Up next, Next up and New for Blocked, and come back in place once cleared (#390)', () => {
     const input = (b: typeof ticket): NowInput => ({
       ...empty,

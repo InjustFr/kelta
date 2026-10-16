@@ -1958,6 +1958,12 @@ pub struct Source {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[ts(as = "Option<Vec<String>>", optional)]
     pub waiting_statuses: Vec<String>,
+    /// Status names (as the tracker spells them) where the ticket waits on someone else's review (QA,
+    /// UAT): the Queue lists it, and its work item, under In flight. A status also in
+    /// `waiting_statuses` waits to deploy.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<String>>", optional)]
+    pub in_flight_statuses: Vec<String>,
 }
 
 /// A tracker field to show on the tickets.

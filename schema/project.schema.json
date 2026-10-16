@@ -3813,6 +3813,13 @@
             "default": "",
             "type": "string"
           },
+          "in_flight_statuses": {
+            "description": "Status names (as the tracker spells them) where the ticket waits on someone else's review (QA,\nUAT): the Queue lists it, and its work item, under In flight. A status also in\n`waiting_statuses` waits to deploy.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "label": {
             "default": "",
             "type": "string"

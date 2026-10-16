@@ -15,7 +15,7 @@ export interface WorkEntry {
 
 export type NowRow =
   /** `blocked`: its ticket is blocked, so it sits in Blocked whatever its phase (#390).
-   *  `status`: its ticket's waiting status, in Waiting to deploy (#391). */
+   *  `status`: its ticket's status name, in Waiting to deploy (#391) or In flight (#492). */
   | { type: 'work'; id: string; item: WorkItem; phase: Phase; blocked?: boolean; status?: string }
   | { type: 'session'; id: string; session: SessionInfo }
   /** A Claude session Kelta did not start (#345). */
@@ -41,6 +41,8 @@ export interface NowInput {
   fresh?: ReadonlySet<string>;
   /** Source id → its `waiting_statuses`: tickets there go to Waiting to deploy (#378, #391). */
   waiting?: Waiting;
+  /** Source id → its `in_flight_statuses`: tickets there go to In flight (#492); `waiting` wins. */
+  inFlight?: Waiting;
 }
 
 export type Waiting = ReadonlyMap<string, readonly string[]>;
@@ -123,29 +125,36 @@ export function nowSections(input: NowInput): Section[] {
   const add = (section: NowSection, row: NowRow, rank: number, at: string, size = 0) =>
     by.get(section)!.push({ row, rank, at, size });
 
-  // A ticket in its source's waiting status, not done: Waiting to deploy, nowhere else (#391).
-  const deploying = (t: TicketItem | undefined): t is TicketItem =>
-    !!t && t.ticket.status.category !== 'done' && waits(t, input.waiting);
+  // A ticket not done in its source's waiting status: Waiting to deploy (#391); else in one of its
+  // in-flight statuses (QA, UAT): In flight (#492). Nowhere else in the Queue.
+  const away = (t: TicketItem | undefined): 'waiting' | 'in_flight' | null =>
+    !t || t.ticket.status.category === 'done'
+      ? null
+      : waits(t, input.waiting)
+        ? 'waiting'
+        : waits(t, input.inFlight)
+          ? 'in_flight'
+          : null;
   // shortcut: a work item's ticket is found only among mine and Next up; pass the whole pool if one is missed.
   const known = new Map([...(input.nextUp ?? []), ...input.tickets].map((t) => [ticketKey(t), t]));
 
   const itemIds = new Set(input.work.map((w) => w.item.id));
   for (const { item, phase } of input.work) {
     const tk = item.ticket ? known.get(`${item.ticket.account}:${item.ticket.key}`) : undefined;
-    // Claude needs you and Fix keep their place: they still need me. Waiting wins over blocked (my part is done).
-    const waiting = deploying(tk) && phase.section !== 'needs_you' && phase.section !== 'fix';
+    // Claude needs you and Fix keep their place: they still need me. Away wins over blocked (my part is done).
+    const gone = phase.section === 'needs_you' || phase.section === 'fix' ? null : away(tk);
     // A blocked ticket's work waits in Blocked unless it needs me now (a question, red CI, a diff).
-    const held = !waiting && !!tk?.ticket.blocked && !NEEDS_ME.has(phase.section);
+    const held = !gone && !!tk?.ticket.blocked && !NEEDS_ME.has(phase.section);
     // In flight with Claude working (a background run included): Claude working, back in minutes (#413).
     const claude = phase.section === 'in_flight' && phase.lamp === 'working';
     add(
-      waiting ? 'waiting' : held ? 'blocked' : claude ? 'claude' : phase.section,
+      gone ?? (held ? 'blocked' : claude ? 'claude' : phase.section),
       {
         type: 'work',
         id: `w:${item.id}`,
         item,
         phase,
-        ...(waiting ? { status: tk.ticket.status.name } : held ? { blocked: true } : {}),
+        ...(gone && tk ? { status: tk.ticket.status.name } : held ? { blocked: true } : {}),
       },
       PHASE_ORDER[phase.id] ?? 0,
       item.claude_at ?? item.created_at,
@@ -226,7 +235,7 @@ export function nowSections(input: NowInput): Section[] {
     input.work.flatMap(({ item }) => (item.ticket ? [`${item.ticket.account}:${item.ticket.key}`] : [])),
   );
   const todo = (t: TicketItem): boolean =>
-    t.ticket.status.category !== 'done' && !waits(t, input.waiting) && !started.has(ticketKey(t));
+    t.ticket.status.category !== 'done' && !away(t) && !started.has(ticketKey(t));
   // Blocked tickets leave Next up, New for you and Up next; Next up keeps their place for when they clear.
   const open = (t: TicketItem): boolean => todo(t) && !t.ticket.blocked;
   const held = new Map<string, TicketItem>();
@@ -251,12 +260,14 @@ export function nowSections(input: NowInput): Section[] {
         String(i).padStart(6, '0'),
       ),
     );
-  // After the work items (rank 9 is past every PHASE_ORDER), in Next up then tracker order.
+  // After the work items (rank 9 is past every PHASE_ORDER), in Next up then tracker order: one shared `at`,
+  // so the stable sort keeps this order even in In flight, which sorts newest first.
   [...known.values()]
-    .filter((t) => deploying(t) && !started.has(ticketKey(t)))
-    .forEach((t, i) =>
-      add('waiting', { type: 'ticket', id: `t:${ticketKey(t)}`, ticket: t }, 9, String(i).padStart(6, '0')),
-    );
+    .filter((t) => !started.has(ticketKey(t)))
+    .forEach((t) => {
+      const s = away(t);
+      if (s) add(s, { type: 'ticket', id: `t:${ticketKey(t)}`, ticket: t }, 9, '');
+    });
 
   // Oldest first, except Claude working and In flight (latest activity first). Ticket sections keep their order (`at` = index).
   // Work items are aged by when Claude last asked or stopped (`claude_at`), else when they started.
