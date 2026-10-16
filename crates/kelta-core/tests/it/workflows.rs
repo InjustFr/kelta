@@ -198,7 +198,7 @@ async fn run_claims_then_starts_claude_in_a_background_tab() {
         note: None,
         sha: None,
     };
-    let took = core.work_claim(&shop, t, Some(wt.clone()), None, lane).await.unwrap();
+    let took = core.work_claim(&shop, t, Some(wt.clone()), None, lane, true).await.unwrap();
     assert_eq!(took.id, items[0].id);
     assert_eq!(took.branch, "feat/ticket-142");
     assert_eq!(took.worktree.canonicalize().unwrap(), wt.canonicalize().unwrap());
@@ -238,7 +238,7 @@ async fn a_global_run_that_claims_through_mcp_gives_its_claude_to_the_item_once(
         session_id: Some(session.clone()),
         ..RunClaim::default()
     };
-    let w = core.work_claim(&shop, samples::ticket_ref(), Some(wt.clone()), None, claim(&sid)).await.unwrap();
+    let w = core.work_claim(&shop, samples::ticket_ref(), Some(wt.clone()), None, claim(&sid), true).await.unwrap();
     assert_eq!(w.run.as_ref().unwrap().session_id.as_ref(), Some(&sid));
     assert_eq!(w.session_ids, vec![sid.clone()]);
     assert_eq!(w.claude_uuid.as_deref(), start.session.claude.as_ref().map(|c| c.session_uuid.as_str()));
@@ -256,7 +256,7 @@ async fn a_global_run_that_claims_through_mcp_gives_its_claude_to_the_item_once(
 
     // At most one item per run: the next claim only records the session.
     let next = |key: &str| TicketRef { key: key.into(), id: key.into(), ..samples::ticket_ref() };
-    let second = core.work_claim(&shop, next("SHOP-143"), None, None, claim(&sid)).await.unwrap();
+    let second = core.work_claim(&shop, next("SHOP-143"), None, None, claim(&sid), true).await.unwrap();
     assert_eq!(second.run.unwrap().session_id, Some(sid.clone()));
     assert!(second.session_ids.is_empty());
     let first = h.core.work_list(None).await.unwrap().into_iter().find(|i| i.id == w.id).unwrap();
@@ -283,9 +283,29 @@ async fn a_global_run_that_claims_through_mcp_gives_its_claude_to_the_item_once(
         })
         .await
         .unwrap();
-    let third = core.work_claim(&shop, next("SHOP-144"), None, None, claim(&plain.id)).await.unwrap();
+    let third = core.work_claim(&shop, next("SHOP-144"), None, None, claim(&plain.id), true).await.unwrap();
     assert_eq!(third.run.unwrap().session_id, Some(plain.id));
     assert!(third.session_ids.is_empty());
+}
+
+/// #497: `adopt: false` keeps the run's Claude out of the item; a later claim with `adopt` adopts it.
+#[tokio::test]
+async fn a_global_run_that_claims_with_adopt_false_keeps_its_claude_out() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (h, repo) = env(tmp.path());
+    let shop = ProjectId::new("shop");
+    let sid = h.core.workflow_run_on(shop.clone(), "daily", None).await.unwrap().session.id;
+    let wt = tmp.path().join("runs/ticket-142");
+    git(&repo, &["worktree", "add", "-q", "-b", "feat/ticket-142", wt.to_str().unwrap()]);
+    let core: &dyn CoreApi = h.core.as_ref();
+    let claim = RunClaim { name: Some("daily".into()), session_id: Some(sid.clone()), ..RunClaim::default() };
+    let w = core.work_claim(&shop, samples::ticket_ref(), Some(wt), None, claim.clone(), false).await.unwrap();
+    assert_eq!(w.run.as_ref().unwrap().session_id.as_ref(), Some(&sid));
+    assert!(w.session_ids.is_empty() && w.claude_uuid.is_none());
+    // The run is still unadopted: a claim with `adopt` gives its Claude to that item.
+    let next = TicketRef { key: "SHOP-143".into(), id: "SHOP-143".into(), ..samples::ticket_ref() };
+    let second = core.work_claim(&shop, next, None, None, claim, true).await.unwrap();
+    assert_eq!(second.session_ids, vec![sid]);
 }
 
 #[tokio::test]

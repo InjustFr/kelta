@@ -14,7 +14,8 @@ use kelta_proto::tracker::{StatusCategory, TicketRef};
 use crate::{WorkService, git, plan};
 
 impl WorkService {
-    /// `claim_ticket`: `worktree` defaults to the project's primary repo, `branch` to its checkout.
+    /// `claim_ticket`: `worktree` defaults to the held item's on the holder's re-claim (#497), else to
+    /// the project's primary repo; `branch` to its checkout.
     pub async fn claim(
         &self,
         project: &ProjectId,
@@ -27,9 +28,19 @@ impl WorkService {
         let core = self.api()?;
         let p = core.project(project).ok_or_else(|| KeltaError::not_found(format!("project {project}")))?;
         let primary = p.repos.iter().find(|r| r.primary).or(p.repos.first());
-        let path = match worktree {
-            Some(w) => w,
-            None => {
+        // #497: the holder's re-claim without `worktree` keeps the item's worktree, branch and base.
+        let kept = match &worktree {
+            Some(_) => None,
+            None => kelta_proto::api::claim_holder(
+                &self.store.list_items(None).await?,
+                &WorkItem { ticket: Some(ticket.clone()), ..WorkItem::default() },
+            )
+            .filter(|h| h.claimed_by(run.session_id.as_ref())),
+        };
+        let path = match (worktree, &kept) {
+            (Some(w), _) => w,
+            (None, Some(h)) => h.worktree.clone(),
+            (None, None) => {
                 primary.map(|r| r.path.clone()).ok_or_else(|| KeltaError::invalid("project has no repo"))?
             }
         };
@@ -46,7 +57,11 @@ impl WorkService {
                 path.display()
             ))
         })?;
-        let branch = branch.filter(|b| !b.trim().is_empty()).or(wt.branch).ok_or_else(|| {
+        let branch = branch
+            .filter(|b| !b.trim().is_empty())
+            .or_else(|| kept.as_ref().map(|h| h.branch.clone()))
+            .or(wt.branch)
+            .ok_or_else(|| {
             KeltaError::invalid(format!("{} has no branch checked out; pass `branch`", path.display()))
         })?;
         // Later pushed and shown verbatim: refuse anything git would not take as a branch name.
@@ -59,7 +74,7 @@ impl WorkService {
             repo_id: repo.id.clone(),
             worktree: wt.path,
             branch,
-            base: repo.base.clone(),
+            base: kept.map_or_else(|| repo.base.clone(), |h| h.base),
             state: WorkState::Active,
             created_at: kelta_proto::now_rfc3339(),
             run: Some(RunClaim { state: RunState::Running, ..run }),

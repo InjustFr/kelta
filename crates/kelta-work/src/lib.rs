@@ -456,10 +456,13 @@ impl WorkService {
         Some(item)
     }
 
-    /// Work item owning a session (for `CoreApi::work_for_session`).
+    /// Work item owning a session (for `CoreApi::work_for_session`); an unfinished one first (#497).
     pub async fn for_session(&self, id: &SessionId) -> Option<WorkItem> {
         let items = self.store.list_items(None).await.ok()?;
-        let mut item = items.into_iter().find(|w| w.session_ids.contains(id))?;
+        let mut item = items
+            .into_iter()
+            .filter(|w| w.session_ids.contains(id))
+            .min_by_key(|w| w.state == kelta_proto::model::WorkState::Finished)?;
         if let Ok(steps) = self.merged_steps(&item.id, &item.steps).await {
             item.steps = steps;
         }
