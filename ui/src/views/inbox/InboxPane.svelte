@@ -86,7 +86,18 @@
   import StateBanner from '../work/shared/StateBanner.svelte';
   import { selectTicket } from '../work/selection.svelte';
   import { onActions, onRefresh } from '../work/ui.svelte';
-  import { CLAUDE, DEPLOY, PR, REVIEW, STAGES, TICKET, stage, trackEnd, workStage, type Stage } from '../work/stage';
+  import {
+    CLAUDE,
+    DEPLOY,
+    PR,
+    REVIEW,
+    STAGES,
+    TICKET,
+    stage,
+    trackEnd,
+    workStage,
+    type Stage,
+  } from '../work/stage';
   import RowButton from '../tickets/RowButton.svelte';
   import {
     isNextUp,

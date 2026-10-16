@@ -105,7 +105,11 @@ export function standingNow(item: TicketItem, mine: boolean): Standing {
   const w = lagging ?? (item.work_item_id ? work.get(item.work_item_id) : null);
   const live = w && w.state.kind !== 'finished' ? w : null;
   // The stored step (#462) places the ticket; its least advanced item and PR only say whose move.
-  const step = stepOf(item.ticket.ref, item.source_ids[0] ?? null, live?.project_id ?? item.project_ids[0] ?? null);
+  const step = stepOf(
+    item.ticket.ref,
+    item.source_ids[0] ?? null,
+    live?.project_id ?? item.project_ids[0] ?? null,
+  );
   const key = ticketKey(item.ticket.ref);
   const outside = live ? null : sessions.elsewhere.find((o) => o.ticket && ticketKey(o.ticket) === key);
   if (outside && item.ticket.status.category !== 'done') {

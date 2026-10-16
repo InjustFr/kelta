@@ -3,7 +3,18 @@ import { describe, expect, it } from 'vitest';
 import * as samples from '$lib/gen/fixtures';
 
 import { phaseOf, type PhaseGit, type PhaseItem, type PhasePr } from './phase';
-import { CLAUDE, DEPLOY, MERGE, PR, REVIEW, stageName, trackEnd, workHeader, workStage, type Mark } from './stage';
+import {
+  CLAUDE,
+  DEPLOY,
+  MERGE,
+  PR,
+  REVIEW,
+  stageName,
+  trackEnd,
+  workHeader,
+  workStage,
+  type Mark,
+} from './stage';
 
 const item = { pr_url: null, review: null, feedback_at: null };
 
@@ -186,7 +197,12 @@ describe('on a stored ticket step (#462)', () => {
 describe('trackEnd (#481)', () => {
   it('is the last stage every track ends at, blank when they differ', () => {
     expect(trackEnd([null, undefined])).toBe('Deploy');
-    expect(trackEnd([['Ticket', 'Impl', 'Done'], ['Ticket', 'Done']])).toBe('Done');
+    expect(
+      trackEnd([
+        ['Ticket', 'Impl', 'Done'],
+        ['Ticket', 'Done'],
+      ]),
+    ).toBe('Done');
     expect(trackEnd([null, ['Ticket', 'Done']])).toBe('');
   });
 });
