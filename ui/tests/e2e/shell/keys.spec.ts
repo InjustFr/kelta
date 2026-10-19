@@ -83,6 +83,13 @@ test.describe('keys', () => {
     expect((await written(page, SESSIONS.shopClaude)).join('')).not.toContain('\x0b');
   });
 
+  test('Ctrl+Shift+F in a terminal opens the search bar on Linux (#525)', async ({ page }) => {
+    await boot(page);
+    await page.locator('[data-testid="pane"][data-focused="true"] .xterm-helper-textarea').focus();
+    await page.keyboard.press('Control+Shift+F');
+    await expect(page.getByTestId('terminal-search')).toBeVisible();
+  });
+
   test('app prefix: prefix then key, unknown keys are swallowed, Esc disarms', async ({ page }) => {
     await boot(page);
     await page.locator('[data-testid="pane"][data-focused="true"] .xterm-helper-textarea').focus();
