@@ -106,6 +106,37 @@ test.describe('terminal pane', () => {
       .toBe(true);
   });
 
+  test('writes go out one at a time per view, in order, and a failed one does not block the next', async ({
+    page,
+  }) => {
+    await boot(page);
+    const writes = async () =>
+      (await callsOf(page, 'session_write')).map((c) =>
+        String.fromCharCode(...Object.values(c.args?.data as Record<string, number>)),
+      );
+    const before = (await writes()).length;
+    await page.locator('[data-testid="pane"][data-focused="true"] .xterm-helper-textarea').focus();
+    await page.evaluate(() => {
+      const w = window as unknown as { releaseWrite: () => void };
+      w.releaseWrite = window.__keltaMock!.holdNext('session_write') as () => void;
+    });
+    await page.keyboard.type('ab');
+    await expect.poll(async () => (await writes()).length).toBe(before + 1);
+    await page.waitForTimeout(100); // the second keystroke must stay queued behind the held call
+    expect((await writes()).slice(before)).toEqual(['a']);
+    await page.evaluate(() => (window as unknown as { releaseWrite: () => void }).releaseWrite());
+    await expect.poll(async () => (await writes()).slice(before)).toEqual(['a', 'b']);
+
+    // A failed write is reported and the next one still goes out.
+    await page.evaluate(() =>
+      window.__keltaMock!.failNext('session_write', { code: 'network', message: 'daemon went away' }),
+    );
+    await page.keyboard.type('c');
+    await expect(page.getByText('Writing to the terminal').first()).toBeVisible();
+    await page.keyboard.type('d');
+    await expect.poll(async () => (await writes()).slice(before)).toEqual(['a', 'b', 'c', 'd']);
+  });
+
   test('multi-line paste into a prompt without bracketed paste asks first', async ({ page }) => {
     await boot(page);
     const done = page.evaluate(async (id) => {
