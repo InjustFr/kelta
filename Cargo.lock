@@ -3018,6 +3018,7 @@ dependencies = [
 name = "kelta-desktop"
 version = "1.7.0"
 dependencies = [
+ "gtk",
  "kelta-config",
  "kelta-core",
  "kelta-plugins",

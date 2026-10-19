@@ -519,7 +519,13 @@ async fn osc52_policy() {
     assert!(h.term.written(&s.id).is_empty());
     h.cfg.update(|s| s.terminal.osc52 = Osc52::ReadWrite);
     h.term.emit(&s.id, TerminalEvent::ClipboardLoad { kind: ClipboardKind::Clipboard });
-    settle().await;
+    // The reply goes through the blocking pool (#523).
+    for _ in 0..200 {
+        if !h.term.written(&s.id).is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
     assert_eq!(h.term.written(&s.id), b"\x1b]52;c;Y29waWVk\x07".to_vec());
     h.cfg.update(|s| s.terminal.osc52 = Osc52::Off);
     h.term.emit(&s.id, TerminalEvent::ClipboardStore { kind: ClipboardKind::Clipboard, text: "nope".into() });

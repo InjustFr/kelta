@@ -1845,12 +1845,13 @@ impl Core {
             }
             TerminalEvent::ClipboardLoad { kind: ck } => {
                 if self.cfg.effective(Some(&project)).terminal.osc52 == Osc52::ReadWrite {
-                    let clip = self.clip.clone();
-                    let term = self.terminal.clone();
+                    let me = self.me.clone();
                     let sid = id.clone();
                     self.rt.spawn(async move {
-                        let text = clip.read(ck).unwrap_or_default();
-                        if let Err(e) = term.write(&sid, &osc52_reply(ck, &text)) {
+                        let Some(core) = me.upgrade() else { return };
+                        // A GTK read waits on the main thread (up to 2 s): `clipboard_read` keeps it off the async workers.
+                        let text = core.clipboard_read(ck).await.unwrap_or_default();
+                        if let Err(e) = core.terminal.write(&sid, &osc52_reply(ck, &text)) {
                             tracing::debug!(error = %e, "osc52 reply failed");
                         }
                     });
