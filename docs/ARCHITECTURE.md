@@ -23,7 +23,7 @@ Kelta is an open-source (MIT) desktop workbench for macOS 13+ and Ubuntu 24.04+ 
 | D10 | Plugin grants and repo trust live in **SQLite app state**, never in user/repo-editable TOML | A repo or a hand edit must not be able to grant permissions. | — |
 | D11 | One **deadline-heap scheduler** in core is the only owner of periodic work; nothing polls when nothing is visible/subscribed | Idle CPU ≈ 0, ≤ 1 wakeup/s. Lint-enforced. | — |
 | D12 | Markdown (ticket/PR bodies) rendered in Rust (`pulldown-cmark` + `ammonia`) to sanitized HTML | No markdown/sanitizer libs in the JS bundle. | — |
-| D13 | Clipboard via `arboard` in Rust (CLIPBOARD + Linux PRIMARY), never `navigator.clipboard` | Avoids the WKWebView paste callout; enables middle-click paste. | — |
+| D13 | Clipboard in Rust (CLIPBOARD + Linux PRIMARY), never `navigator.clipboard`: GTK's clipboard on Linux (desktop `platform/clipboard.rs`, calls run on the GTK main loop), `arboard` on macOS / headless | Avoids the WKWebView paste callout; enables middle-click paste. GTK is the focused Wayland client, so GNOME (no wlr/ext data-control, mutter#524) pastes reliably; arboard there falls back to XWayland. | — |
 | D14 | Web tools embed `auto` = iframe → (HEAD probe finds X-Frame-Options/frame-ancestors) → local header-stripping proxy → external browser. Child webview (Tauri `unstable`) is v0.2 | Works on native Wayland in-window. | — |
 
 ---
@@ -66,7 +66,7 @@ All versions exact (`=x.y.z` in Cargo, no `^`/`~` in package.json). The pins are
 | apple-native-keyring-store | 1.0.2 | feature `keychain` (macOS only target dep) | kelta-secrets |
 | zbus-secret-service-keyring-store | 1.0.1 | feature `rt-tokio-crypto-rust` (Linux only) | kelta-secrets |
 | zbus | 5.19.0 | `default-features = false`, feature `tokio`; Linux: notification daemon / Secret Service probes | kelta-secrets, desktop |
-| arboard | 3.6.1 | `default-features = false`, feature `wayland-data-control` (no image data); CLIPBOARD + PRIMARY | kelta-core |
+| arboard | 3.6.1 | `default-features = false`, feature `wayland-data-control` (no image data); CLIPBOARD (+ in-process PRIMARY) on macOS; kelta-core's default backend (tests, headless). The Linux desktop injects the GTK backend | kelta-core |
 | pulldown-cmark / ammonia | 0.13.4 / 4.2.1 | markdown → sanitized HTML | kelta-providers-common (in kelta-http crate `markdown` module) |
 | uuid | 1.27.0 | v4, v7, serde | proto |
 | regex / globset | 1.13.1 / 0.4.20 | | many |
@@ -78,6 +78,7 @@ All versions exact (`=x.y.z` in Cargo, no `^`/`~` in package.json). The pins are
 | base64 / sha2 / time / bytes / parking_lot / futures / semver / mime_guess | 0.23.1 / 0.11.0 / 0.3.55 / 1.12.1 / 0.12.5 / 0.3.34 / 1.0.28 / 2.0.5 | `semver`: plugins, config, work | various |
 | objc2 / objc2-foundation | 0.6.5 / 0.3.2 | macOS only: WebContent-terminated delegate, bench WebContent pid, dock badge, preferred language | desktop (L10) |
 | webkit2gtk | 2.0.2 (the version wry 0.57.0 resolves; Linux target dep) | Linux only: `CacheModel::DocumentViewer`, `web-process-terminated` via `with_webview` | desktop (L10) |
+| gtk | 0.18.2 (already in the graph via wry/webkit2gtk; Linux target dep) | Linux only: CLIPBOARD + PRIMARY through the GTK main loop (D13) | desktop (L10) |
 | dev: insta / wiremock / proptest / tempfile / criterion | 1.49.0 / 0.6.5 / 1.11.0 / 3.27.0 / 0.8.2 | | tests |
 
 `toml`/`toml_edit` are published as `1.1.8+spec-1.1.0` / `0.25.17+spec-1.1.0`; `=x.y.z` matches them. License policy (`deny.toml`): MIT, MIT-0, Apache-2.0 (± LLVM exception), BSD-2/3-Clause, 0BSD, ISC, MPL-2.0, Zlib, Unicode-3.0, plus a single exception for `notify` (CC0-1.0); the graph is restricted to macOS/Linux targets.

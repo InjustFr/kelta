@@ -1,5 +1,5 @@
-//! Clipboard via `arboard` (ARCHITECTURE D13): CLIPBOARD everywhere, PRIMARY on Linux (emulated
-//! in-process on macOS, which has no primary selection).
+//! Clipboard backends (ARCHITECTURE D13). `SystemClipboard` (arboard) serves macOS, tests and headless runs; the
+//! Linux desktop injects its GTK backend through `CoreDeps::clipboard`. PRIMARY is emulated in-process on macOS.
 
 use kelta_proto::error::KeltaError;
 use kelta_proto::term::ClipboardKind;

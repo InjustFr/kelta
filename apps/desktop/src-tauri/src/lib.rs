@@ -9,7 +9,7 @@ pub mod window;
 
 use std::process::ExitCode;
 
-use kelta_core::{Core, CoreConfig};
+use kelta_core::{Core, CoreDeps};
 use kelta_proto::dirs::{CliArgs, Dirs, DirsOverrides};
 use tauri::Manager;
 
@@ -114,7 +114,11 @@ pub fn run() -> ExitCode {
         })
         .setup(move |app| {
             let bridge = TauriBridge::new(app.handle().clone());
-            let core = Core::start(CoreConfig { dirs, cli, bridge: bridge.clone() })?;
+            let deps = CoreDeps::new(dirs, cli, bridge.clone());
+            #[cfg(target_os = "linux")]
+            let deps =
+                CoreDeps { clipboard: Some(std::sync::Arc::new(platform::clipboard::GtkClipboard)), ..deps };
+            let core = Core::start_with(deps)?;
             app.manage(bridge);
             app.manage(core.clone());
             window::setup(app, core)?;

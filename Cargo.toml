@@ -83,6 +83,7 @@ arboard = { version = "=3.6.1", default-features = false, features = ["wayland-d
 objc2 = { version = "=0.6.5" }
 objc2-foundation = { version = "=0.3.2" }
 webkit2gtk = { version = "=2.0.2" }
+gtk = { version = "=0.18.2" }
 
 # ---- text / markdown -------------------------------------------------------
 pulldown-cmark = { version = "=0.13.4" }
