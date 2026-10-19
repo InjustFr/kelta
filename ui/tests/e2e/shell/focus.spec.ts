@@ -1,4 +1,4 @@
-// Focus mode (#421, #442): ⇧⌘F / Ctrl+Shift+F hides the rail, the scope and + New, Esc Esc or Leave focus
+// Focus mode (#421, #442): ⇧⌘F / Ctrl+Alt+Shift+F hides the rail, the scope and + New, Esc Esc or Leave focus
 // brings back the exact layout, and the background toasts held meanwhile (counted by a pill) come back as
 // one summary.
 import { expect, test } from '@playwright/test';
@@ -14,7 +14,7 @@ test('hides the rail, holds background toasts and restores the layout with one s
   await expect.poll(async () => Math.round((await rail.boundingBox())!.width)).toBe(64);
 
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-  await page.keyboard.press('Control+Shift+F');
+  await page.keyboard.press('Control+Alt+Shift+F');
   await expect(rail).toHaveCount(0);
   const bar = page.getByTestId('contextbar');
   await expect(bar.getByTestId('context-search')).toBeVisible();
@@ -49,7 +49,7 @@ test('Leave focus shows the focus chord and that chord leaves from a focused pan
   await expect(leave.locator('kbd')).toHaveCount(1);
   await expect(leave.locator('kbd')).toHaveAttribute('aria-label', /shift\+f$/);
   await expect(leave).toHaveAttribute('title', /Esc Esc outside a terminal/);
-  await page.keyboard.press('Control+Shift+F');
+  await page.keyboard.press('Control+Alt+Shift+F');
   await expect(page.getByTestId('work-leave-focus')).toHaveCount(0);
   await expect(page.getByTestId('rail')).toBeVisible();
 });
