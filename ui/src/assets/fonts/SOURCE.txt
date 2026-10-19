@@ -2,3 +2,4 @@ Symbols Nerd Font Mono (SymbolsNerdFontMono-Regular), Nerd Fonts v3.5.1
 Source: https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/NerdFontsSymbolsOnly.zip
 Converted ttf -> woff2 with fonttools (ttLib.woff2 compress), glyphs unchanged.
 Licence: LICENSE (MIT). Served as the CSS family "Kelta Symbols" (ui/src/styles/base.css).
+Third-party glyph sets and their licences (CC BY 4.0 attribution, OFL, Apache 2.0): NOTICE.md.
