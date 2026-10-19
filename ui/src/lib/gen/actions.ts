@@ -166,7 +166,7 @@ export const ACTIONS: readonly ActionMeta[] = [
   { id: "work.new", label: "New work item", mac: ["cmd+shift+n"], linux: ["ctrl+shift+n"], prefix: "w", context: "global" },
   { id: "editor.send_selection", label: "Send selection to Claude", mac: ["cmd+shift+l"], linux: ["ctrl+shift+l"], prefix: "@", context: "editor" },
   { id: "editor.quickfix_claude", label: "Quickfix: files Claude touched", mac: [], linux: [], prefix: null, context: "global" },
-  { id: "terminal.search", label: "Search terminal", mac: ["cmd+f"], linux: ["ctrl+f","ctrl+shift+f"], prefix: "/", context: "terminal" },
+  { id: "terminal.search", label: "Search terminal", mac: ["cmd+f"], linux: ["ctrl+shift+f","ctrl+f"], prefix: "/", context: "terminal" },
   { id: "terminal.copy", label: "Copy", mac: ["cmd+c"], linux: ["ctrl+shift+c"], prefix: "[", context: "terminal" },
   { id: "terminal.paste", label: "Paste", mac: ["cmd+v"], linux: ["ctrl+shift+v"], prefix: "]", context: "terminal" },
   { id: "settings.open", label: "Open settings", mac: ["cmd+,"], linux: ["ctrl+,"], prefix: ",", context: "global" },
