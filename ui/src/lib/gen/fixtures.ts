@@ -2437,6 +2437,7 @@ export const settingsDefault: Settings = {
     },
     "session_host": "daemon",
     "shell": "",
+    "shell_integration": "auto",
     "shift_enter": {
       "claude": "esc-cr",
       "default": "passthrough"

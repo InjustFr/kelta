@@ -7,6 +7,7 @@ import type { Osc52 } from "./Osc52";
 import type { Renderer } from "./Renderer";
 import type { ScrollbackSettings } from "./ScrollbackSettings";
 import type { SessionHost } from "./SessionHost";
+import type { ShellIntegration } from "./ShellIntegration";
 import type { ShiftEnter } from "./ShiftEnter";
 
 export type TerminalSettings = { 
@@ -53,7 +54,11 @@ shift_enter: { [key in string]: ShiftEnter }, keyboard_protocol: KeyboardProtoco
 /**
  * Empty = `$SHELL`.
  */
-shell: string, env: { [key in string]: string }, minimum_contrast_ratio: number, 
+shell: string, 
+/**
+ * zsh, bash, fish: report the folder (OSC 7) and command marks (OSC 133) via Kelta's scripts.
+ */
+shell_integration: ShellIntegration, env: { [key in string]: string }, minimum_contrast_ratio: number, 
 /**
  * `daemon` = sessions survive quit (keltad).
  */

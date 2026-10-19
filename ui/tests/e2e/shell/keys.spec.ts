@@ -75,7 +75,8 @@ test.describe('keys', () => {
     await boot(page);
     await page.locator('[data-testid="pane"][data-focused="true"] .xterm-helper-textarea').focus();
     await page.keyboard.press('Control+Shift+K');
-    await expect(page.getByTestId('palette')).toBeVisible();
+    // A load, not an assertion: the palette chunk is lazy and takes seconds on a loaded machine (#485).
+    await page.getByTestId('palette').waitFor();
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('palette')).toHaveCount(0);
     // Consumed: nothing leaked into the PTY (Ctrl+Shift+K would otherwise be Ctrl+K = 0x0b).

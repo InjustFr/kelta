@@ -7,7 +7,8 @@ test.describe('palette', () => {
   test('jumps to a session of another project and focuses its pane', async ({ page }) => {
     await boot(page);
     await page.keyboard.press('Control+Shift+K');
-    await expect(page.getByTestId('palette')).toBeVisible();
+    // A load, not an assertion: the palette chunk is lazy and takes seconds on a loaded machine (#485).
+    await page.getByTestId('palette').waitFor();
     await page.getByTestId('palette-input').fill('billing claude');
     const first = page.getByTestId('palette-item').first();
     await expect(first).toContainText('claude');
@@ -134,7 +135,8 @@ test.describe('palette', () => {
   test('project switcher opens and activates a project', async ({ page }) => {
     await boot(page);
     await page.keyboard.press('Control+Shift+P');
-    await expect(page.getByTestId('switcher')).toBeVisible();
+    // A load, not an assertion: the switcher chunk is lazy and takes seconds on a loaded machine (#485).
+    await page.getByTestId('switcher').waitFor();
     await page.getByTestId('switcher-input').fill('kelta');
     await page.keyboard.press('Enter');
     await expect.poll(() => activeProject(page)).toBe('kelta-tools');
