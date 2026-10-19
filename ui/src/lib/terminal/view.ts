@@ -185,6 +185,17 @@ export class TerminalView implements PoolView {
 
     this.#listen(this.host, 'mouseup', (e) => this.#onMouseUp(e as MouseEvent), true);
     this.#listen(this.host, 'mousedown', (e) => this.#onMouseDown(e as MouseEvent), true);
+    // Native pastes (Shift+Insert, Edit › Paste, input methods) skip xterm's own handler: one filtered path.
+    this.#listen(
+      this.host,
+      'paste',
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void this.pasteText((e as ClipboardEvent).clipboardData?.getData('text/plain') ?? '');
+      },
+      true,
+    );
     this.#listen(this.host, 'focusin', () => this.#setFocusState(true));
     this.#listen(this.host, 'focusout', () => this.#setFocusState(false));
   }
@@ -509,6 +520,21 @@ export class TerminalView implements PoolView {
         this.onRequest?.('close');
         return false;
       }
+    }
+
+    // Shift+Insert pastes PRIMARY like other Linux terminals; not an action (a Linux-only chord has no macOS twin).
+    if (
+      this.#deps.platform === 'linux' &&
+      event.key === 'Insert' &&
+      event.shiftKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.metaKey
+    ) {
+      event.preventDefault();
+      this.#consumed.add(event.code);
+      void this.paste(this.#cfg.primarySelection ? 'primary' : 'clipboard');
+      return false;
     }
 
     if (this.#sendKitty(event)) {
