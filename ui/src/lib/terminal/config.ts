@@ -23,8 +23,11 @@ export interface TerminalConfig {
   theme: ThemeMode | Colors;
 }
 
+/** Bundled symbols font (`@font-face` in styles/base.css): last, so it only fills prompt icons the user's font lacks. */
+const SYMBOLS_FONT = 'Kelta Symbols';
+
 export const DEFAULT_CONFIG: TerminalConfig = {
-  fontFamily: 'JetBrains Mono, Menlo, DejaVu Sans Mono, monospace',
+  fontFamily: `JetBrains Mono, Menlo, DejaVu Sans Mono, monospace, ${SYMBOLS_FONT}`,
   fontSize: 13,
   lineHeight: 1.15,
   letterSpacing: 0,
@@ -47,7 +50,7 @@ export function configFromSettings(
 ): TerminalConfig {
   if (!t) return { ...DEFAULT_CONFIG, theme };
   return {
-    fontFamily: t.font_family,
+    fontFamily: `${t.font_family}, ${SYMBOLS_FONT}`,
     fontSize: t.font_size,
     lineHeight: t.line_height,
     letterSpacing: t.letter_spacing,
