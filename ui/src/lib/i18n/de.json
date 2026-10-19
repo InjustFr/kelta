@@ -3061,5 +3061,12 @@
   "Session folder: {path}": "Ordner der Sitzung: {path}",
   "A git worktree of one of the project repos": "Ein git-Worktree eines Repos des Projekts",
   "{branch} is now a work item": "{branch} ist jetzt ein Arbeitselement",
-  "Focus a Claude session that is in no work item": "Fokussiere eine Claude-Sitzung, die zu keinem Arbeitselement gehört"
+  "Focus a Claude session that is in no work item": "Fokussiere eine Claude-Sitzung, die zu keinem Arbeitselement gehört",
+  "Shell integration": "Shell-Integration",
+  "zsh, bash and fish tell Kelta their folder and where each command starts and ends, so new splits and restored sessions open where you were. Off starts shells untouched.": "zsh, bash und fish melden Kelta ihren Ordner und wo jeder Befehl beginnt und endet, damit neue Splits und wiederhergestellte Sitzungen dort öffnen, wo du warst. Aus startet Shells unverändert.",
+  "folder": "Ordner",
+  "cwd": "cwd",
+  "zsh, bash, fish: report the folder (OSC 7) and command marks (OSC 133) via Kelta's scripts.": "zsh, bash, fish: melden den Ordner (OSC 7) und Befehlsmarken (OSC 133) über Keltas Skripte.",
+  "zsh, bash and fish load Kelta's scripts: folder (OSC 7) and command marks (OSC 133).": "zsh, bash und fish laden Keltas Skripte: Ordner (OSC 7) und Befehlsmarken (OSC 133).",
+  "Shells spawn untouched.": "Shells starten unverändert."
 }
