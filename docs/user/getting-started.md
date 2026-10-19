@@ -38,15 +38,15 @@ Settings > Diagnostics checks the things Kelta depends on: graphics, WebKitGTK, 
 
 ### Accounts
 
-| Provider | Tracker | Code host | Token |
-|---|---|---|---|
-| Jira (Cloud, Data Center) | yes | no | Cloud: e-mail and API token. Data Center: personal access token |
-| Redmine | yes | no | API key |
-| GitHub (also Enterprise Server) | issues, Projects v2 | yes | `gh` login, a token, or browser sign-in |
-| GitLab (also self-managed) | yes | yes | `glab` login, a token, or browser sign-in |
-| Linear | yes | no | personal API key ([Linear](linear.md)) |
-| Gitea, Forgejo, Codeberg | issues | yes | access token ([Gitea](gitea.md)) |
-| Bitbucket Cloud | no | yes | Atlassian API token ([Bitbucket](bitbucket.md)) |
+| Provider                        | Tracker             | Code host | Token                                                           |
+| ------------------------------- | ------------------- | --------- | --------------------------------------------------------------- |
+| Jira (Cloud, Data Center)       | yes                 | no        | Cloud: e-mail and API token. Data Center: personal access token |
+| Redmine                         | yes                 | no        | API key                                                         |
+| GitHub (also Enterprise Server) | issues, Projects v2 | yes       | `gh` login, a token, or browser sign-in                         |
+| GitLab (also self-managed)      | yes                 | yes       | `glab` login, a token, or browser sign-in                       |
+| Linear                          | yes                 | no        | personal API key ([Linear](linear.md))                          |
+| Gitea, Forgejo, Codeberg        | issues              | yes       | access token ([Gitea](gitea.md))                                |
+| Bitbucket Cloud                 | no                  | yes       | Atlassian API token ([Bitbucket](bitbucket.md))                 |
 
 ## The loop
 
@@ -78,13 +78,13 @@ locally in a worktree with Claude ([pull requests](reviews.md)).
 
 ### Five keys
 
-| Key | What it does |
-|---|---|
-| `Enter` | the next step of what is selected, in every list; on the desk, `Cmd+.` `Enter` |
-| `Cmd+.` | the actions of whatever is selected (a row, a detail, the work item on the desk), what can run now first |
+| Key     | What it does                                                                                                                                                                   |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Enter` | the next step of what is selected, in every list; on the desk, `Cmd+.` `Enter`                                                                                                 |
+| `Cmd+.` | the actions of whatever is selected (a row, a detail, the work item on the desk), what can run now first                                                                       |
 | `Cmd+K` | find anything: recent places, work items, sessions, tickets, pull requests, actions, settings. `#`, `!`, `>` and `,` narrow it to tickets, pull requests, commands or settings |
-| `Cmd+J` | the next thing that needs you (`Shift+Cmd+J` back) |
-| `Cmd+0` | the Queue, and from the Queue back where you were |
+| `Cmd+J` | the next thing that needs you (`Shift+Cmd+J` back)                                                                                                                             |
+| `Cmd+0` | the Queue, and from the Queue back where you were                                                                                                                              |
 
 On Linux, `Ctrl` replaces `Cmd`. The prefix key (`Ctrl+Shift+Space`, then one key) reaches every action; pause after
 it and a panel lists the keys that follow (`Esc` closes it, `?` opens the full list).
@@ -171,7 +171,8 @@ the shell (`Ctrl+D` still ends it, `Ctrl+W` deletes a word), so the same actions
 Pause after the prefix and a panel lists the keys that follow (`Esc` closes it, `?` opens the full list);
 `keys.prefix_hint_ms` sets the pause, `0` turns the panel off.
 Copy and paste in a terminal are `Ctrl+Shift+C` / `Ctrl+Shift+V`. If you never use those shell keys, set
-`keys.linux_terminal = "kelta_first"` (Settings > Keys) and Kelta's `Ctrl+letter` wins in terminals too. Your
+`keys.linux_terminal = "kelta_first"` (Settings > Keys) and Kelta's `Ctrl+letter` wins in terminals too.
+Dropping files from the file manager onto a terminal pastes their paths, shell-escaped. Your
 desktop may already take `Ctrl+Alt+arrows` for workspaces: rebind either side in Settings > Keys.
 
 ## Language
@@ -183,11 +184,11 @@ are.
 
 ## Where things live
 
-| What | Linux | macOS |
-|---|---|---|
-| Settings (`config.toml`, `projects/`) | `~/.config/kelta/` (`$XDG_CONFIG_HOME`) | `~/.config/kelta/` (`$XDG_CONFIG_HOME`) |
-| Data (state, `secrets.enc`, `bin/current`) | `~/.local/share/kelta/` | `~/Library/Application Support/dev.kelta.Kelta/` |
-| Logs (`kelta.log`, `keltad.log`) | `~/.local/state/kelta/logs/` | `~/Library/Logs/Kelta/` |
+| What                                       | Linux                                   | macOS                                            |
+| ------------------------------------------ | --------------------------------------- | ------------------------------------------------ |
+| Settings (`config.toml`, `projects/`)      | `~/.config/kelta/` (`$XDG_CONFIG_HOME`) | `~/.config/kelta/` (`$XDG_CONFIG_HOME`)          |
+| Data (state, `secrets.enc`, `bin/current`) | `~/.local/share/kelta/`                 | `~/Library/Application Support/dev.kelta.Kelta/` |
+| Logs (`kelta.log`, `keltad.log`)           | `~/.local/state/kelta/logs/`            | `~/Library/Logs/Kelta/`                          |
 
 Settings > Edit TOML edits the file of the layer you are on. `KELTA_LOG=debug` raises the log level for one run.
 To report a bug, see [reporting bugs](../../CONTRIBUTING.md#reporting-bugs-and-requesting-features).
