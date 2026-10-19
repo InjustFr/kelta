@@ -72,6 +72,8 @@ mod tests {
     #[allow(clippy::disallowed_methods)] // allowlisted: test, a caller off the GTK thread
     fn gtk_round_trip() {
         gtk::init().unwrap();
+        // Own the context so off-thread `invoke`s queue instead of running inline on the caller thread.
+        let _owner = glib::MainContext::default().acquire().unwrap();
         let caller = std::thread::spawn(|| {
             let r = [ClipboardKind::Clipboard, ClipboardKind::Primary].map(|k| {
                 GtkClipboard.write(k, &format!("kelta-523 {k:?}")).and_then(|()| GtkClipboard.read(k))
