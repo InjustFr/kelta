@@ -171,7 +171,8 @@ the shell (`Ctrl+D` still ends it, `Ctrl+W` deletes a word), so the same actions
 Pause after the prefix and a panel lists the keys that follow (`Esc` closes it, `?` opens the full list);
 `keys.prefix_hint_ms` sets the pause, `0` turns the panel off.
 Copy and paste in a terminal are `Ctrl+Shift+C` / `Ctrl+Shift+V`. If you never use those shell keys, set
-`keys.linux_terminal = "kelta_first"` (Settings > Keys) and Kelta's `Ctrl+letter` wins in terminals too. Your
+`keys.linux_terminal = "kelta_first"` (Settings > Keys) and Kelta's `Ctrl+letter` wins in terminals too.
+Dropping files from the file manager onto a terminal pastes their paths, shell-escaped. Your
 desktop may already take `Ctrl+Alt+arrows` for workspaces: rebind either side in Settings > Keys.
 
 ## Language

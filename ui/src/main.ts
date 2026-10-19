@@ -13,6 +13,8 @@ import { createTauriTransport } from '$lib/ipc/tauri';
 import { setTransport } from '$lib/ipc/transport';
 import * as stores from '$lib/stores';
 import { setLocale } from '$lib/i18n/index.svelte';
+import { terminalPool, type TerminalView } from '$lib/terminal';
+import { shellEscape } from '$lib/terminal/drop';
 import { injectSprite } from '$lib/ui/icons';
 
 import * as registry from './app/registry';
@@ -44,11 +46,24 @@ async function start(): Promise<void> {
         else await appClose().catch(() => getCurrentWindow().destroy()); // never leave an unclosable window
       }),
     );
+    // Linux only: macOS keeps the native drop handler off (#480), so this never fires there.
+    // Dropped files paste their escaped paths into the terminal under the cursor (#524).
+    void import('@tauri-apps/api/webview').then(({ getCurrentWebview }) =>
+      getCurrentWebview().onDragDropEvent(({ payload: p }) => {
+        if (p.type !== 'drop') return;
+        // wry's GTK handler passes the widget's logical x,y through unscaled (typed as physical), so no / devicePixelRatio.
+        const host = document
+          .elementFromPoint(p.position.x, p.position.y)
+          ?.closest<HTMLElement>('[data-terminal]');
+        const id = host?.dataset.session;
+        if (id) void terminalPool.get<TerminalView>(id)?.pasteText(p.paths.map(shellEscape).join(' ') + ' ');
+      }),
+    );
   }
   // shortcut: best effort on reload / Cmd+Q (app.exit does not wait for the page), upgrade by routing quit through the UI.
   window.addEventListener('beforeunload', () => void stores.layout.flush());
 
-  // The webview gets Finder files and dragged links since #480 (no native drag-drop handler): one that
+  // On macOS the webview gets Finder files and dragged links (no native drag-drop handler, #480): one that
   // no target takes would navigate the page away. In-app drags carry only text/plain and stay untouched.
   const external = (e: DragEvent): void => {
     if (e.dataTransfer?.types.some((t) => t === 'Files' || t === 'text/uri-list')) e.preventDefault();
