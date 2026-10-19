@@ -27,7 +27,13 @@ import { fontStack, type TerminalConfig } from './config';
 import { fileLinkProvider } from './filelinks';
 import { AckBatcher, FrameHandler } from './frames';
 import { encodeKittyKey } from './kitty';
-import { baseCharacter, macOptionIsMeta, optionMetaSequence, shiftEnterFor } from './keymap';
+import {
+  baseCharacter,
+  macOptionIsMeta,
+  macTextEditSequence,
+  optionMetaSequence,
+  shiftEnterFor,
+} from './keymap';
 import { needsPasteConfirmation, sanitizePaste } from './paste';
 import { installQueryHandlers } from './queries';
 import { frames } from './raf';
@@ -522,6 +528,13 @@ export class TerminalView implements PoolView {
       if (meta !== null) {
         event.preventDefault();
         this.#write(meta);
+        return false;
+      }
+      // After #sendKitty, so kitty programs keep CSI 1;3D for Option+arrows.
+      const edit = macTextEditSequence(event);
+      if (edit !== null) {
+        event.preventDefault();
+        this.#write(edit);
         return false;
       }
     }

@@ -6,6 +6,7 @@ import {
   baseCharacter,
   isShiftEnter,
   macOptionIsMeta,
+  macTextEditSequence,
   optionMetaSequence,
   resolveShiftEnter,
   shiftEnterFor,
@@ -101,5 +102,36 @@ describe('Option as Meta', () => {
     expect(baseCharacter('Digit0', true)).toBeNull();
     expect(baseCharacter('Space', false)).toBe(' ');
     expect(baseCharacter('F1', false)).toBeNull();
+  });
+});
+
+describe('macOS text editing keys', () => {
+  const edit = (key: string, init: Partial<KeyboardEvent> = {}) => ({
+    key,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    ...init,
+  });
+
+  it('maps Option/Cmd arrows and Cmd+Backspace like Ghostty', () => {
+    expect(macTextEditSequence(edit('ArrowLeft', { altKey: true }))).toBe('\x1bb');
+    expect(macTextEditSequence(edit('ArrowRight', { altKey: true }))).toBe('\x1bf');
+    expect(macTextEditSequence(edit('ArrowLeft', { metaKey: true }))).toBe('\x01');
+    expect(macTextEditSequence(edit('ArrowRight', { metaKey: true }))).toBe('\x05');
+    expect(macTextEditSequence(edit('Backspace', { metaKey: true }))).toBe('\x15');
+  });
+
+  it('is null for other keys and extra modifiers', () => {
+    expect(macTextEditSequence(edit('ArrowLeft'))).toBeNull();
+    expect(macTextEditSequence(edit('Backspace', { altKey: true }))).toBeNull();
+    expect(macTextEditSequence(edit('ArrowUp', { metaKey: true }))).toBeNull();
+    expect(macTextEditSequence(edit('ArrowLeft', { altKey: true, metaKey: true }))).toBeNull();
+    for (const mod of ['shiftKey', 'ctrlKey'] as const) {
+      expect(macTextEditSequence(edit('ArrowLeft', { altKey: true, [mod]: true }))).toBeNull();
+      expect(macTextEditSequence(edit('ArrowRight', { metaKey: true, [mod]: true }))).toBeNull();
+      expect(macTextEditSequence(edit('Backspace', { metaKey: true, [mod]: true }))).toBeNull();
+    }
   });
 });
