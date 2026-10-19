@@ -2,6 +2,8 @@
 //! `--safe-graphics`, early `[linux.graphics]` read, NVIDIA detection, WebKit env vars, launch crash
 //! guard, `mallopt(M_ARENA_MAX, 2)` on glibc.
 
+#[cfg(target_os = "linux")]
+pub mod clipboard;
 pub mod decorations;
 #[cfg(target_os = "macos")]
 pub mod dock;

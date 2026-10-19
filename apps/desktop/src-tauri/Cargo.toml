@@ -46,6 +46,7 @@ objc2 = { workspace = true }
 objc2-foundation = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+gtk = { workspace = true }
 webkit2gtk = { workspace = true }
 zbus = { workspace = true }
 
