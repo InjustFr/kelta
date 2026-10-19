@@ -1,6 +1,7 @@
 //! Byte-level pre-scan of PTY output, run before the alacritty model sees a chunk:
 //!
-//! - [`OscScanner`]: OSC 7 (cwd), OSC 9 and OSC 777 (notifications), which alacritty ignores.
+//! - [`OscScanner`]: OSC 7 (cwd), OSC 9 and OSC 777 (notifications), OSC 133 C/D (shell command
+//!   start/end), which alacritty ignores.
 //!   Streaming: sequences split across reads are reassembled.
 //! - [`Tail`]: the incomplete escape sequence / UTF-8 character at the end of the stream, appended
 //!   to snapshots so a view that receives a Snapshot followed by raw Data frames ends up in the same
@@ -26,6 +27,7 @@ enum Capture {
     Cwd,
     Notify9,
     Notify777,
+    Prompt,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,7 +42,7 @@ enum State {
     OscEsc(Option<Capture>),
 }
 
-/// Streaming OSC 7/9/777 scanner.
+/// Streaming OSC 7/9/777/133 scanner.
 #[derive(Debug, Clone)]
 pub struct OscScanner {
     state: State,
@@ -67,7 +69,7 @@ impl OscScanner {
         self.cwd_uri.as_deref()
     }
 
-    /// Scan a chunk, pushing events for completed OSC 7/9/777 sequences. Returns the offset where
+    /// Scan a chunk, pushing events for completed OSC 7/9/777/133 sequences. Returns the offset where
     /// an OSC passed [`MAX_OSC_TOTAL`] (bytes after it are not scanned): the caller must reset its
     /// parser there and scan the rest again.
     pub fn scan(&mut self, bytes: &[u8], out: &mut Vec<TerminalEvent>) -> Option<usize> {
@@ -100,6 +102,7 @@ impl OscScanner {
                                 7 => State::Capture(Capture::Cwd),
                                 9 => State::Capture(Capture::Notify9),
                                 777 => State::Capture(Capture::Notify777),
+                                133 => State::Capture(Capture::Prompt),
                                 _ => State::Skip,
                             };
                         }
@@ -203,6 +206,17 @@ impl OscScanner {
                     return;
                 }
                 out.push(TerminalEvent::Notify { title: None, body });
+            }
+            Capture::Prompt => {
+                // A (prompt) and B (input) mean nothing to core; a D extra like `;aid=..` is ignored.
+                let mut parts = body.split(';');
+                match parts.next() {
+                    Some("C") => out.push(TerminalEvent::CommandStarted),
+                    Some("D") => out.push(TerminalEvent::CommandFinished {
+                        code: parts.next().and_then(|c| c.parse().ok()),
+                    }),
+                    _ => {}
+                }
             }
             Capture::Notify777 => {
                 let mut parts = body.splitn(3, ';');
@@ -402,6 +416,25 @@ mod tests {
                 vec![
                     TerminalEvent::Notify { title: Some("Build".into()), body: "done ok".into() },
                     TerminalEvent::Notify { title: None, body: "hello there".into() },
+                ],
+                "cut at {cut}"
+            );
+        }
+    }
+
+    #[test]
+    fn osc133_command_marks_split_at_every_offset() {
+        let seq: &[u8] = b"\x1b]133;A\x07$ \x1b]133;B\x07\x1b]133;C\x07out\x1b]133;D;2\x1b\\\x1b]133;D\x07\x1b]133;D;0;aid=7\x07\x1b]133;D;x\x07";
+        for cut in 0..seq.len() {
+            let ev = scan_all(&[&seq[..cut], &seq[cut..]]);
+            assert_eq!(
+                ev,
+                vec![
+                    TerminalEvent::CommandStarted,
+                    TerminalEvent::CommandFinished { code: Some(2) },
+                    TerminalEvent::CommandFinished { code: None },
+                    TerminalEvent::CommandFinished { code: Some(0) },
+                    TerminalEvent::CommandFinished { code: None },
                 ],
                 "cut at {cut}"
             );

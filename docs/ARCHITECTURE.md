@@ -282,6 +282,7 @@ pub trait TerminalHost: Send + Sync {
 pub trait FrameSink: Send { fn send(&mut self, frame: Vec<u8>) -> bool; }  // false = channel closed → auto-detach
 pub trait TerminalEvents: Send + Sync { fn on_event(&self, id: &SessionId, ev: TerminalEvent); }
 pub enum TerminalEvent { Title(String), Cwd(PathBuf) /*OSC 7*/, Bell, Notify{title: Option<String>, body: String} /*OSC 9/777*/,
+  CommandStarted /*OSC 133 C*/, CommandFinished{code: Option<i32>} /*OSC 133 D; core notifies when it ran ≥ 10 s (#527)*/,
   ClipboardStore{kind: ClipboardKind, text: String}, ClipboardLoad{kind: ClipboardKind}, Activity /*first output since mark_seen*/,
   Exited{code: Option<i32>, signal: Option<i32>}, AckTimeout{generation: u32},
   MemoryCapReached{cap_mb: u32} /*§9.5, once per host; core raises a toast*/ }
@@ -759,7 +760,7 @@ loop:
   n = read(master, buf[64 KiB])  (EIO/0 → exit path)
   lock(term); processor.advance(&mut term, &buf[..n]); collect Term events; unlock
   Term events: PtyWrite(reply) → master.write (query responses), ColorRequest → palette reply,
-               Title/ResetTitle, Bell, ClipboardStore/Load, (OSC 7 cwd and OSC 9/777 via a pre-scan of the chunk)
+               Title/ResetTitle, Bell, ClipboardStore/Load, (OSC 7 cwd, OSC 9/777 and OSC 133 C/D via a pre-scan of the chunk)
   if attached view and !paused: if inflight < HIGH(256 KiB) send Data frame, inflight += n
                                  else paused = true (keep parsing, drop bytes for view)
   scrollback accounting → memory budget (§9.5)
