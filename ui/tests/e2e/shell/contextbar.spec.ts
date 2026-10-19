@@ -28,6 +28,8 @@ test('the search field opens the palette; the rail has no search row', async ({ 
   await boot(page);
   await expect(page.getByTestId('rail-search')).toHaveCount(0);
   await bar(page).getByTestId('context-search').click();
+  // A load, not an assertion: the palette chunk is lazy and takes seconds on a loaded machine (#485).
+  await page.getByTestId('palette-input').waitFor();
   await expect(page.getByTestId('palette-input')).toBeFocused();
 });
 
