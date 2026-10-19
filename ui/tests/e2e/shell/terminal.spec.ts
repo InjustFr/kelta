@@ -145,6 +145,42 @@ test.describe('terminal pane', () => {
     expect(sent).not.toContain('rm -rf');
   });
 
+  test('a native paste event goes through the paste filter once', async ({ page }) => {
+    await boot(page);
+    const textarea = `[data-session-id="${SESSIONS.shopClaude}"] .xterm-helper-textarea`;
+    const before = (await callsOf(page, 'session_write')).length;
+    const paste = (sel: string, text: string) =>
+      page.evaluate(
+        ([s, t]) => {
+          const data = new DataTransfer();
+          data.setData('text/plain', t!);
+          document
+            .querySelector(s!)!
+            .dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+        },
+        [sel, text] as const,
+      );
+    await paste(textarea, 'a\x1b[201~b\x03');
+    await expect
+      .poll(async () =>
+        (await callsOf(page, 'session_write'))
+          .slice(before)
+          .map((c) => String.fromCharCode(...Object.values(c.args?.data as Record<string, number>))),
+      )
+      .toEqual(['ab ']);
+    // Multi-line without bracketed paste still asks first.
+    await paste(textarea, 'echo one\necho two');
+    await expect(page.getByTestId('confirm-dialog')).toContainText('2 lines');
+  });
+
+  test('Shift+Insert on Linux pastes the primary selection', async ({ page }) => {
+    await boot(page);
+    await page.locator('[data-testid="pane"][data-focused="true"] .xterm-helper-textarea').focus();
+    await page.keyboard.press('Shift+Insert');
+    await expect.poll(async () => (await callsOf(page, 'clipboard_read')).length).toBe(1);
+    expect((await callsOf(page, 'clipboard_read'))[0]!.args).toMatchObject({ kind: 'primary' });
+  });
+
   test('search bar loads the addon lazily and flags misses', async ({ page }) => {
     await boot(page);
     const requested: string[] = [];

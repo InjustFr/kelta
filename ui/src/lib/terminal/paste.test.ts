@@ -13,6 +13,12 @@ describe('sanitizePaste', () => {
     expect(sanitizePaste('\x1b[20\x1b[20\x1b[200~1~0~x')).toBe('x');
   });
 
+  it('turns control bytes into spaces and keeps tab, CR and LF', () => {
+    expect(sanitizePaste('a\x1bb\x03c\x00d\x7fe')).toBe('a b c d e');
+    expect(sanitizePaste('a\tb\r\nc\n')).toBe('a\tb\r\nc\n');
+    expect(sanitizePaste('a\x1b[201~b\x03')).toBe('ab ');
+  });
+
   it('strips deeply nested markers in linear time', () => {
     // Sized so a quadratic version needs minutes: the generous bound only trips on that, not on load spikes.
     const depth = 100_000;

@@ -91,7 +91,7 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | `history_log_total_mb` | int (16..65536) | `512` | cap of all session logs; oldest files deleted first |
 | `option_as_meta` | enum(none\|left\|right\|both) | `both` | macOS |
 | `copy_on_select` | bool | `false` | CLIPBOARD; Linux PRIMARY is always set on select when `primary_selection` |
-| `primary_selection` | bool | `true` | Linux: select → PRIMARY, middle-click paste |
+| `primary_selection` | bool | `true` | Linux: select → PRIMARY, middle-click and Shift+Insert paste it |
 | `confirm_multiline_paste` | bool | `true` | only when bracketed paste is off |
 | `osc52` | enum(off\|write\|read-write) | `write` | |
 | `bell` | enum(attention\|visual\|none) | `attention` | |
