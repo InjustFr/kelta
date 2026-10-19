@@ -44,7 +44,12 @@ describe('icons', () => {
     expect(ensureIcon('x')).toBeUndefined();
     expect(ensureIcon('not-an-icon')).toBeUndefined();
     expect(document.querySelector('#i-a-arrow-down')).toBeNull();
-    await Promise.all([ensureIcon('a-arrow-down'), ensureIcon('a-arrow-down')]);
+    // The first import of ./lucide transforms ~1700 SVG loaders: 8-11 s on a loaded machine (#540). Pay it here,
+    // where a real failure throws, so ensureIcon (which swallows failures) only sees a cached module.
+    await import('./lucide');
+    const load = ensureIcon('a-arrow-down');
+    expect(ensureIcon('a-arrow-down')).toBe(load);
+    await load;
     expect(document.querySelectorAll('#kelta-sprite svg > #i-a-arrow-down path').length).toBeGreaterThan(0);
     expect(ensureIcon('a-arrow-down')).toBeUndefined();
   });
