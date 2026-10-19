@@ -1,5 +1,5 @@
 // Vitest setup (jsdom). Every test starts with the in-memory mock transport installed.
-import { cleanup } from '@testing-library/svelte';
+import { cleanup, configure } from '@testing-library/svelte';
 import { afterEach, beforeEach } from 'vitest';
 
 import { createMockTransport } from '$lib/ipc/mock';
@@ -16,6 +16,10 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 
 // jsdom has no Web Animations: Svelte's animate: directive asks a leaving row for its animations.
 Element.prototype.getAnimations ??= () => [];
+
+// Every waitFor/findBy defaults to 1 s: one slow render under load (other lanes building) fails a test
+// (#529, #534). Kept below vite.config.ts's 30 s testTimeout, so a real hang still fails.
+configure({ asyncUtilTimeout: 8000 });
 
 beforeEach(() => {
   setTransport(createMockTransport().transport);
