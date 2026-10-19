@@ -51,8 +51,9 @@ async function start(): Promise<void> {
     void import('@tauri-apps/api/webview').then(({ getCurrentWebview }) =>
       getCurrentWebview().onDragDropEvent(({ payload: p }) => {
         if (p.type !== 'drop') return;
+        // wry's GTK handler passes the widget's logical x,y through unscaled (typed as physical), so no / devicePixelRatio.
         const host = document
-          .elementFromPoint(p.position.x / devicePixelRatio, p.position.y / devicePixelRatio)
+          .elementFromPoint(p.position.x, p.position.y)
           ?.closest<HTMLElement>('[data-terminal]');
         const id = host?.dataset.session;
         if (id) void terminalPool.get<TerminalView>(id)?.pasteText(p.paths.map(shellEscape).join(' ') + ' ');
