@@ -159,6 +159,12 @@ pub enum TerminalEvent {
         title: Option<String>,
         body: String,
     },
+    /// OSC 133 `C`: the shell starts running a command (#527).
+    CommandStarted,
+    /// OSC 133 `D[;exit]`: that command ended. `code` is None when it is missing or not a number.
+    CommandFinished {
+        code: Option<i32>,
+    },
     ClipboardStore {
         kind: ClipboardKind,
         text: String,
