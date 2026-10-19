@@ -557,7 +557,8 @@ export class TerminalView implements PoolView {
         return false;
       }
       // After #sendKitty, so kitty programs keep CSI 1;3D for Option+arrows.
-      const edit = macTextEditSequence(event);
+      // Not during input-method composition: the keys belong to the IME (same guard as #sendKitty).
+      const edit = event.isComposing || event.keyCode === 229 ? null : macTextEditSequence(event);
       if (edit !== null) {
         event.preventDefault();
         this.#write(edit);

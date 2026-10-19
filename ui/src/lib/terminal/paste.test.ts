@@ -19,6 +19,13 @@ describe('sanitizePaste', () => {
     expect(sanitizePaste('a\x1b[201~b\x03')).toBe('ab ');
   });
 
+  it('turns C1 controls into spaces and leaves other non-ASCII text alone', () => {
+    expect(sanitizePaste('a\u009bb')).toBe('a b');
+    expect(sanitizePaste('\u0080\u009f')).toBe('  ');
+    const text = 'café ñ 😀 日本語 \u00a0\u00a1';
+    expect(sanitizePaste(text)).toBe(text);
+  });
+
   it('strips deeply nested markers in linear time', () => {
     // Sized so a quadratic version needs minutes: the generous bound only trips on that, not on load spikes.
     const depth = 100_000;
