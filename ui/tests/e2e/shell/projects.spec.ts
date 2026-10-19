@@ -257,7 +257,8 @@ test.describe('project switching', () => {
       .getByTestId('palette-item')
       .filter({ has: page.locator('.label', { hasText: /^Open project$/ }) })
       .click();
-    await expect(page.getByTestId('switcher')).toBeVisible();
+    // A load, not an assertion: the switcher chunk is lazy and takes seconds on a loaded machine (#485).
+    await page.getByTestId('switcher').waitFor();
     await expect(items).toHaveCount(1);
     await page.keyboard.press('Enter');
     await expect(tools).toHaveCount(1);
