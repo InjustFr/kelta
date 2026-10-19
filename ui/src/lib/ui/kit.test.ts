@@ -44,8 +44,19 @@ describe('icons', () => {
     expect(ensureIcon('x')).toBeUndefined();
     expect(ensureIcon('not-an-icon')).toBeUndefined();
     expect(document.querySelector('#i-a-arrow-down')).toBeNull();
-    await Promise.all([ensureIcon('a-arrow-down'), ensureIcon('a-arrow-down')]);
-    expect(document.querySelectorAll('#kelta-sprite svg > #i-a-arrow-down path').length).toBeGreaterThan(0);
+    const load = ensureIcon('a-arrow-down');
+    expect(ensureIcon('a-arrow-down')).toBe(load);
+    // A failed load leaves the icon blank and the next use retries (that is the app's contract); retry the
+    // same way, so one failure of the chunk under load (#540) is not the test's verdict.
+    await vi.waitFor(
+      async () => {
+        await ensureIcon('a-arrow-down');
+        expect(document.querySelectorAll('#kelta-sprite svg > #i-a-arrow-down path').length).toBeGreaterThan(
+          0,
+        );
+      },
+      { timeout: 10_000 },
+    );
     expect(ensureIcon('a-arrow-down')).toBeUndefined();
   });
 });

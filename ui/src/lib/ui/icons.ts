@@ -151,7 +151,10 @@ export function ensureIcon(name: string, doc: Document = document): Promise<void
         if (!doc.getElementById(`i-${name}`)) sprite.insertAdjacentHTML('beforeend', toSymbol(name, svg));
       })
       // A chunk that failed to load leaves the icon blank; the next use tries again.
-      .catch(() => void loading.delete(name));
+      .catch((error: unknown) => {
+        console.warn(`icon ${name} failed to load`, error);
+        loading.delete(name);
+      });
     loading.set(name, pending);
   }
   return pending;
