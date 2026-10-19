@@ -156,7 +156,9 @@ test.describe('terminal pane', () => {
           data.setData('text/plain', t!);
           document
             .querySelector(s!)!
-            .dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+            .dispatchEvent(
+              new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }),
+            );
         },
         [sel, text] as const,
       );

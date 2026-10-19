@@ -11,6 +11,7 @@ export function sanitizePaste(text: string): string {
     if (tail === '\x1b[200~' || tail === '\x1b[201~') out.length -= 6;
   }
   // C0 controls (except tab, LF, CR) and DEL become spaces so a pasted ESC or ^C cannot drive the program (CVE-2026-26982).
+  // eslint-disable-next-line no-control-regex -- matching control bytes is the point
   return out.join('').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, ' ');
 }
 
