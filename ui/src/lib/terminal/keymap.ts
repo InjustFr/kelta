@@ -87,3 +87,22 @@ export function optionMetaSequence(
   const ch = baseCharacter(e.code, e.shiftKey);
   return ch === null ? null : `\x1b${ch}`;
 }
+
+/**
+ * macOS text-editing keys as Ghostty/Terminal.app send them: Option+←/→ word moves (`ESC b/f`),
+ * Cmd+←/→ line start/end (`^A`/`^E`), Cmd+⌫ kill line (`^U`). Null for anything else, including
+ * extra modifiers. The caller applies it on macOS only.
+ */
+export function macTextEditSequence(
+  e: Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>,
+): string | null {
+  if (e.ctrlKey || e.shiftKey || e.altKey === e.metaKey) return null;
+  if (e.altKey) return e.key === 'ArrowLeft' ? '\x1bb' : e.key === 'ArrowRight' ? '\x1bf' : null;
+  return e.key === 'ArrowLeft'
+    ? '\x01'
+    : e.key === 'ArrowRight'
+      ? '\x05'
+      : e.key === 'Backspace'
+        ? '\x15'
+        : null;
+}
