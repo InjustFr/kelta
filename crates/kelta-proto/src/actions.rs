@@ -155,7 +155,7 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("editor.send_selection", "Send selection to Claude", ["cmd+shift+l"], Some("@"), Editor),
     a!("editor.quickfix_claude", "Quickfix: files Claude touched", [], None, Global),
     // Linux: `ctrl+f` stays the shell's (`terminal_first`); `ctrl+shift+f` is the GNOME Terminal / Konsole / Ghostty search chord (#525).
-    a!("terminal.search", "Search terminal", ["cmd+f"], linux["ctrl+f", "ctrl+shift+f"], Some("/"), Terminal),
+    a!("terminal.search", "Search terminal", ["cmd+f"], linux["ctrl+shift+f", "ctrl+f"], Some("/"), Terminal),
     // The Linux terminal convention: `ctrl+c` / `ctrl+v` stay SIGINT / literal-next even with `kelta_first`.
     a!("terminal.copy", "Copy", ["cmd+c"], linux["ctrl+shift+c"], Some("["), Terminal),
     a!("terminal.paste", "Paste", ["cmd+v"], linux["ctrl+shift+v"], Some("]"), Terminal),
@@ -246,7 +246,7 @@ mod tests {
         // `ctrl+shift+d` is split down, so split right has no alias.
         assert_eq!(linux("pane.split_right"), ["ctrl+d"]);
         assert_eq!(linux("terminal.copy"), ["ctrl+shift+c"]);
-        assert_eq!(linux("terminal.search"), ["ctrl+f", "ctrl+shift+f"]);
+        assert_eq!(linux("terminal.search"), ["ctrl+shift+f", "ctrl+f"]);
         assert_eq!(linux("view.focus"), ["ctrl+alt+shift+f"]);
         assert_eq!(find("view.focus").unwrap().mac, ["cmd+shift+f"]);
         assert_eq!(find("terminal.search").unwrap().mac, ["cmd+f"]);
