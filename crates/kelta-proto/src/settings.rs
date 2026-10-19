@@ -469,6 +469,17 @@ pub enum KeyboardProtocol {
     Legacy,
 }
 
+/// `terminal.shell_integration`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ShellIntegration {
+    /// zsh, bash and fish load Kelta's scripts: folder (OSC 7) and command marks (OSC 133).
+    #[default]
+    Auto,
+    /// Shells spawn untouched.
+    Off,
+}
+
 /// Rust-model scrollback lines per session kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
@@ -556,6 +567,8 @@ pub struct TerminalSettings {
     pub keyboard_protocol: KeyboardProtocol,
     /// Empty = `$SHELL`.
     pub shell: String,
+    /// zsh, bash, fish: report the folder (OSC 7) and command marks (OSC 133) via Kelta's scripts.
+    pub shell_integration: ShellIntegration,
     #[schemars(extend("x-kelta-exec" = true))]
     pub env: BTreeMap<String, String>,
     pub minimum_contrast_ratio: f64,
@@ -593,6 +606,7 @@ impl Default for TerminalSettings {
             ]),
             keyboard_protocol: KeyboardProtocol::Kitty,
             shell: String::new(),
+            shell_integration: ShellIntegration::Auto,
             env: BTreeMap::new(),
             minimum_contrast_ratio: 1.0,
             session_host: SessionHost::Daemon,

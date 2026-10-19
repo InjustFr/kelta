@@ -3,13 +3,17 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::Arc;
 
 use crate::common::*;
-use kelta_core::spawn_env::{EnvInputs, assemble_env};
+use crate::daemon::{app_with, eventually};
+use kelta_core::spawn_env::{self, EnvInputs, assemble_env};
 use kelta_proto::api::CoreApi;
 use kelta_proto::ids::ProjectId;
 use kelta_proto::model::{Placement, SessionKind, SpawnRequest, TemplateCtx};
-use kelta_proto::settings::Settings;
+use kelta_proto::settings::{Settings, ShellIntegration};
+use kelta_proto::term::TerminalLimits;
+use kelta_term::PtyTerminalHost;
 
 fn map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
     pairs.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect()
@@ -526,4 +530,68 @@ async fn claude_config_dir_follows_the_project_env() {
     h.cfg.env.write().insert(ProjectId::new("shop"), map(&[("CLAUDE_CONFIG_DIR", "~/.claude-work")]));
     assert_eq!(h.core.claude_config_dir(Some(&ProjectId::new("shop"))), Some(home.join(".claude-work")));
     assert_eq!(h.core.claude_config_dir(None), Some(home.join(".claude")));
+}
+
+#[tokio::test]
+async fn shell_integration_follows_the_setting() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut settings = Settings::defaults();
+    settings.terminal.shell = "/bin/zsh".into(); // the fake host never executes it
+    let h = start(tmp.path(), settings, vec![project("shop", tmp.path())]);
+    let spec = |id| h.term.with_session(id, |s| (s.spec.args.clone(), s.spec.env.clone())).unwrap();
+
+    let shell = h.core.session_spawn(req(SessionKind::Shell, None, &[])).await.unwrap();
+    let (args, env) = spec(&shell.id);
+    let dir = kelta_proto::dirs::Dirs::under(tmp.path()).data.join("shell");
+    assert_eq!(env["ZDOTDIR"], dir.join("zsh").to_string_lossy());
+    assert_eq!(args, vec!["-l".to_owned()]);
+    assert!(dir.join("zsh/.zshenv").exists());
+
+    let nvim = SessionKind::Editor { adapter: "nvim".into() };
+    let editor = h.core.session_spawn(req(nvim, Some("nvim"), &["."])).await.unwrap();
+    assert!(!spec(&editor.id).1.contains_key("ZDOTDIR"));
+
+    h.cfg.update(|s| s.terminal.shell_integration = ShellIntegration::Off);
+    let shell = h.core.session_spawn(req(SessionKind::Shell, None, &[])).await.unwrap();
+    let (args, env) = spec(&shell.id);
+    assert!(!env.contains_key("ZDOTDIR"));
+    assert_eq!(args, vec!["-l".to_owned()]);
+}
+
+/// A real shell with rc files that echo a marker: the rc still loads, and a `cd` reaches
+/// `SessionInfo.cwd` through OSC 7 (the dir name checks the percent-encoding round trip).
+async fn reports_its_folder(name: &str, rc: &[(&str, &str)]) {
+    let Ok(shell) = which::which(name) else {
+        eprintln!("skip: no {name}");
+        return;
+    };
+    if !spawn_env::shell_integration(&shell, Path::new("/x"), &mut BTreeMap::new(), &mut vec!["-l".into()]) {
+        eprintln!("skip: {name} is not integrated here");
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut settings = Settings::defaults();
+    settings.terminal.shell = shell.to_string_lossy().into_owned();
+    let core = app_with(root, Arc::new(PtyTerminalHost::new(TerminalLimits::default())), settings);
+    for (file, body) in rc {
+        std::fs::write(root.join("home").join(file), body).unwrap();
+    }
+    std::fs::create_dir_all(root.join("repos/shop/sub é%x")).unwrap();
+    let info = core.session_spawn(req(SessionKind::Shell, None, &[])).await.unwrap();
+    assert!(eventually(|| core.session_text_tail(&info.id, 50).unwrap().contains("rc-1-loaded")).await);
+    core.session_write(&info.id, "cd 'sub é%x'\n".as_bytes()).await.unwrap();
+    assert!(eventually(|| core.session_get(&info.id).unwrap().cwd.ends_with("sub é%x")).await);
+    core.shutdown().await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn zsh_reports_its_folder() {
+    reports_its_folder("zsh", &[(".zshenv", "KELTA_T=1\n"), (".zshrc", "echo rc-$KELTA_T-loaded\n")]).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn bash_reports_its_folder() {
+    let rc = [(".bash_profile", "KELTA_T=1; . ~/.bashrc\n"), (".bashrc", "echo rc-${KELTA_T:-1}-loaded\n")];
+    reports_its_folder("bash", &rc).await;
 }

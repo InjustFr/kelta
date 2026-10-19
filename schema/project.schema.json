@@ -4550,6 +4550,7 @@
         },
         "session_host": "daemon",
         "shell": "",
+        "shell_integration": "auto",
         "shift_enter": {
           "claude": "esc-cr",
           "default": "passthrough"
@@ -4779,6 +4780,22 @@
           "default": "",
           "description": "Empty = `$SHELL`.",
           "type": "string"
+        },
+        "shell_integration": {
+          "default": "auto",
+          "description": "zsh, bash, fish: report the folder (OSC 7) and command marks (OSC 133) via Kelta's scripts.",
+          "oneOf": [
+            {
+              "const": "auto",
+              "description": "zsh, bash and fish load Kelta's scripts: folder (OSC 7) and command marks (OSC 133).",
+              "type": "string"
+            },
+            {
+              "const": "off",
+              "description": "Shells spawn untouched.",
+              "type": "string"
+            }
+          ]
         },
         "shift_enter": {
           "additionalProperties": {
