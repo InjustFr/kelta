@@ -186,9 +186,13 @@ test.describe('keys', () => {
 
   test('macOS chords: Cmd+K opens the palette, Ctrl+Shift+K does not', async ({ page }) => {
     await boot(page, 'macos');
+    // A load, not an assertion: the palette chunk is lazy and takes seconds on a loaded machine (#485).
+    await page.keyboard.press('Meta+k');
+    await page.getByTestId('palette').waitFor();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('palette')).toHaveCount(0);
+    // The chunk is loaded now: a Ctrl+Shift+K that opened the palette would show at once.
     await page.keyboard.press('Control+Shift+K');
     await expect(page.getByTestId('palette')).toHaveCount(0);
-    await page.keyboard.press('Meta+k');
-    await expect(page.getByTestId('palette')).toBeVisible();
   });
 });

@@ -549,7 +549,8 @@ export class TerminalView implements PoolView {
       return false;
     }
 
-    if (this.#deps.platform === 'macos') {
+    // Not during input-method composition: Option+letter and the text-edit keys belong to the IME (same guard as #sendKitty).
+    if (this.#deps.platform === 'macos' && !event.isComposing && event.keyCode !== 229) {
       const meta = optionMetaSequence(event, this.#cfg.optionAsMeta, this.#leftOption, this.#rightOption);
       if (meta !== null) {
         event.preventDefault();
