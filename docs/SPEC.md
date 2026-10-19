@@ -183,7 +183,7 @@ Principles: Linux follows the macOS set with Cmd → Ctrl (`Mod` = **Cmd** on ma
 | `claude.setup` ("Set up with Claude": installs Kelta's MCP in Claude Code when needed and opens a Claude session in Home that sets up projects, accounts and sources; also in the onboarding) | unbound | unbound | |
 | `editor.send_selection` (editor pane) | Cmd+Shift+L | Ctrl+Shift+L | `@` |
 | `editor.quickfix_claude` (palette "Quickfix: files Claude touched": the focused tab's Claude `files_touched` become its nvim's quickfix list, `]q` / `[q`) | unbound | unbound | |
-| `terminal.search` | Cmd+F | Ctrl+F, Ctrl+Shift+F | `/` |
+| `terminal.search` | Cmd+F | Ctrl+Shift+F, Ctrl+F | `/` |
 | `terminal.copy` / `terminal.paste` | Cmd+C / Cmd+V | Ctrl+Shift+C / Ctrl+Shift+V | `[` / `]` |
 | `settings.open` | Cmd+, | Ctrl+, | `,` |
 | `rail.toggle` ("Toggle sidebar": the rail between full width and the icon column) | Cmd+B | Ctrl+B | `b` |
