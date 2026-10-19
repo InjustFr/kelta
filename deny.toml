@@ -52,4 +52,7 @@ yanked = "warn"
 ignore = [
   # Unmaintained (no vulnerability): pulled by glib-macros 0.18 via gtk-rs 0.18, pinned by tauri/wry on Linux.
   { id = "RUSTSEC-2024-0370", reason = "transitive via tauri -> gtk 0.18 -> glib-macros; goes when tauri moves off gtk-rs 0.18" },
+  { id = "RUSTSEC-2026-0370", reason = "unmaintained, no vulnerability: zvariant merged into zbus 6; via zbus 5 (notify-rust, secret-service, tauri-plugin-single-instance); goes when they move to zbus 6" },
+  { id = "RUSTSEC-2026-0371", reason = "unmaintained, no vulnerability: zbus_names merged into zbus 6; via zbus 5 (notify-rust, secret-service, tauri-plugin-single-instance); goes when they move to zbus 6" },
+  { id = "RUSTSEC-2026-0372", reason = "unmaintained, no vulnerability: zvariant_derive merged into zbus 6; via zbus 5 (notify-rust, secret-service, tauri-plugin-single-instance); goes when they move to zbus 6" },
 ]
