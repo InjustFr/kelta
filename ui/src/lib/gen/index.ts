@@ -221,6 +221,7 @@ export type * from './Settings';
 export type * from './SettingsContribution';
 export type * from './SettingsDiff';
 export type * from './Severity';
+export type * from './ShellIntegration';
 export type * from './ShiftEnter';
 export type * from './ShipOrigin';
 export type * from './SideEffects';
