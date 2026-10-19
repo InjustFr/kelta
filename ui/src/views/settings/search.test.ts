@@ -160,14 +160,12 @@ describe('settings search results', () => {
     settings.schema = idle();
     await dispatch('settings.open', { key: 'tickets.wip_limit' });
     const box = await pane();
-    await waitFor(
-      () =>
-        expect(
-          document
-            .querySelector('[data-testid="field"][data-path="tickets.wip_limit"]')
-            ?.hasAttribute('data-revealed'),
-        ).toBe(true),
-      { timeout: 3000 },
+    await waitFor(() =>
+      expect(
+        document
+          .querySelector('[data-testid="field"][data-path="tickets.wip_limit"]')
+          ?.hasAttribute('data-revealed'),
+      ).toBe(true),
     );
     expect((box as HTMLInputElement).value).toBe('');
     expect(document.querySelector('nav [aria-current="page"]')?.getAttribute('data-section')).toBe(

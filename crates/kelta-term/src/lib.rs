@@ -7,7 +7,7 @@
 //! - `reader`: one thread per PTY (256 KiB stack): `poll` with the DEC 2026 sync deadline and the
 //!   ack watchdog, 64 KiB reads, EAGAIN input queue.
 //! - [`model`]: headless `alacritty_terminal::Term` answering terminal queries (kitty keyboard per
-//!   `terminal.keyboard_protocol`), events for core, OSC 7/9/777 pre-scan ([`prescan`]).
+//!   `terminal.keyboard_protocol`), events for core, OSC 7/9/777/133 pre-scan ([`prescan`]).
 //! - [`snapshot`]: ANSI repaint for (re-)attaching views; [`flow`]: HIGH/LOW watermarks.
 //! - [`login_env`]: login environment resolution (`resolve_login_env`).
 //! - [`daemon`]: keltad (this host in its own process) and the `DaemonTerminalHost` client.

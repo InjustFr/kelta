@@ -26,7 +26,7 @@ pub use client::DaemonTerminalHost;
 pub use server::{bind, serve};
 
 /// Bumped on any incompatible change of [`Req`] / [`Out`].
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 /// Largest accepted message (a full snapshot with 10k history lines fits easily).
 const MAX_MSG: usize = 64 << 20;
 
@@ -258,6 +258,8 @@ mod tests {
             TerminalEvent::Bell,
             TerminalEvent::Exited { code: Some(1), signal: None },
             TerminalEvent::Notify { title: None, body: "b".into() },
+            TerminalEvent::CommandStarted,
+            TerminalEvent::CommandFinished { code: Some(2) },
         ] {
             round_trip(Out::Event { id: id.clone(), ev }, b"");
         }

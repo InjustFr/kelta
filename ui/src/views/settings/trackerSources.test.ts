@@ -1,6 +1,6 @@
 // Settings → Sources (each source's Board block, label, projects, routes), Settings → Projects'
 // "Fed by", and the hand-offs of settings.open.
-import { configure, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,11 +22,6 @@ import Projects from './sections/Projects.svelte';
 import Sources from './sections/Sources.svelte';
 import StatusChip from '../tickets/StatusChip.svelte';
 import TrackerSources from './TrackerSources.svelte';
-
-// The edit test chains ~20 waits and the columns field renders from the lazily loaded tracker schema:
-// one slow render under load (other lanes building) blew testing-library's 1 s default (#529).
-// Per-file: vitest isolates modules. Below the 30 s testTimeout, so a real hang still fails.
-configure({ asyncUtilTimeout: 8000 });
 
 let mock: MockControls;
 

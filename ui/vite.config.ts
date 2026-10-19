@@ -71,7 +71,8 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'tests/unit/**/*.test.ts'],
     setupFiles: ['./tests/setup.ts'],
     // The first test of a file pays the cold transform of its components (seconds when the machine
-    // is loaded); 5 s flaked. Real hangs still fail, only later.
+    // is loaded); 5 s flaked. Real hangs still fail, only later. waitFor/findBy get the same
+    // treatment in tests/setup.ts (asyncUtilTimeout).
     testTimeout: 30_000,
     restoreMocks: true,
     css: false,

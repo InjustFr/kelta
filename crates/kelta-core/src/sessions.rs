@@ -70,8 +70,16 @@ impl SessionTimers {
     }
 }
 
-/// Minimum gap between two OSC 9/777 notifications of one session.
+/// Minimum gap between two OSC 9/777 or long-command notifications of one session.
 const PROGRAM_NOTIFY_INTERVAL: Duration = Duration::from_secs(5);
+
+/// A shell command at least this long notifies when it ends (#527).
+// shortcut: fixed threshold; make it a setting (Ghostty's notify-on-command-finish-after) if users ask.
+const LONG_COMMAND: Duration = Duration::from_secs(10);
+
+fn long_command(started: Instant, now: Instant) -> bool {
+    now.saturating_duration_since(started) >= LONG_COMMAND
+}
 
 pub struct SessionEntry {
     pub info: SessionInfo,
@@ -97,6 +105,8 @@ pub struct SessionEntry {
     pub heuristic: bool,
     /// Last delivered OSC 9/777 notification (rate limit).
     pub last_program_notify: Option<Instant>,
+    /// When the shell's current command started (OSC 133 C, #527).
+    pub command_started: Option<Instant>,
     pub timers: Arc<SessionTimers>,
     /// Claude `Workflow` runs seen in its hooks (#272).
     pub claude_runs: crate::claude_runs::Runs,
@@ -375,6 +385,7 @@ impl Core {
                 http_ref: false,
                 heuristic: false,
                 last_program_notify: None,
+                command_started: None,
                 timers: Arc::new(SessionTimers::default()),
                 claude_runs: Default::default(),
             };
@@ -950,6 +961,7 @@ impl Core {
                 http_ref,
                 heuristic: false,
                 last_program_notify: None,
+                command_started: None,
                 timers: Arc::new(SessionTimers::default()),
                 claude_runs: Default::default(),
                 permission_mode: crate::permission_mode::launched_with(&launch.args),
@@ -1803,45 +1815,22 @@ impl Core {
                     self.heuristic(id, Heuristic::Alert);
                     return;
                 }
-                let visible = self.is_visible(id);
-                let Some((state, source, info)) = self
-                    .sessions
-                    .lock()
-                    .get(id)
-                    .map(|e| (e.state(visible), e.info.status_source, e.info.clone()))
-                else {
-                    return;
-                };
-                let mut d = status::apply_bell(&state);
-                d.notify = None;
-                self.apply_decision(id, d, source, None);
-                let settings = self.cfg.effective(Some(&project));
-                // A log full of OSC 9 must not flood Notification Center: status above still updates.
-                let recent = self
-                    .sessions
-                    .lock()
-                    .get(id)
-                    .and_then(|e| e.last_program_notify)
-                    .is_some_and(|t| t.elapsed() < PROGRAM_NOTIFY_INTERVAL);
-                if !recent
-                    && crate::notifier::should_notify(
-                        NotifyKind::Program,
-                        &settings.notifications,
-                        self.bridge.window_state(),
-                        visible,
-                        crate::notifier::local_minute_of_day(),
-                    )
-                {
-                    if let Some(e) = self.sessions.lock().get_mut(id) {
-                        e.last_program_notify = Some(Instant::now());
-                    }
-                    self.deliver(Notification {
-                        title: title.unwrap_or_else(|| info.name.clone()),
-                        body: Some(body),
-                        urgency: Urgency::Normal,
-                        project_id: Some(project),
-                        session_id: Some(id.clone()),
-                    });
+                self.program_notify(id, title, body);
+            }
+            TerminalEvent::CommandStarted => {
+                if let Some(e) = self.sessions.lock().get_mut(id) {
+                    e.command_started = Some(Instant::now());
+                }
+            }
+            TerminalEvent::CommandFinished { code } => {
+                // Own statement: the sessions lock must be released before program_notify locks it.
+                let started = self.sessions.lock().get_mut(id).and_then(|e| e.command_started.take());
+                if started.is_some_and(|t| long_command(t, Instant::now())) {
+                    let body = match code {
+                        Some(c) if c != 0 => format!("Command failed (exit {c})"),
+                        _ => "Command finished".to_owned(),
+                    };
+                    self.program_notify(id, None, body);
                 }
             }
             TerminalEvent::ClipboardStore { kind: ck, text } => {
@@ -1897,6 +1886,48 @@ impl Core {
                     ))
                 },
             }),
+        }
+    }
+
+    /// OSC 9/777 or a long shell command: attention like a bell, and a notification unless the pane
+    /// is visible (`should_notify`) or one went out less than PROGRAM_NOTIFY_INTERVAL ago.
+    fn program_notify(&self, id: &SessionId, title: Option<String>, body: String) {
+        let visible = self.is_visible(id);
+        let Some((state, source, info)) =
+            self.sessions.lock().get(id).map(|e| (e.state(visible), e.info.status_source, e.info.clone()))
+        else {
+            return;
+        };
+        let mut d = status::apply_bell(&state);
+        d.notify = None;
+        self.apply_decision(id, d, source, None);
+        let settings = self.cfg.effective(Some(&info.project_id));
+        // A log full of OSC 9 must not flood Notification Center: status above still updates.
+        let recent = self
+            .sessions
+            .lock()
+            .get(id)
+            .and_then(|e| e.last_program_notify)
+            .is_some_and(|t| t.elapsed() < PROGRAM_NOTIFY_INTERVAL);
+        if !recent
+            && crate::notifier::should_notify(
+                NotifyKind::Program,
+                &settings.notifications,
+                self.bridge.window_state(),
+                visible,
+                crate::notifier::local_minute_of_day(),
+            )
+        {
+            if let Some(e) = self.sessions.lock().get_mut(id) {
+                e.last_program_notify = Some(Instant::now());
+            }
+            self.deliver(Notification {
+                title: title.unwrap_or_else(|| info.name.clone()),
+                body: Some(body),
+                urgency: Urgency::Normal,
+                project_id: Some(info.project_id.clone()),
+                session_id: Some(id.clone()),
+            });
         }
     }
 
@@ -2139,5 +2170,13 @@ mod tests {
     #[test]
     fn osc52_reply_is_base64() {
         assert_eq!(osc52_reply(ClipboardKind::Clipboard, "hi"), b"\x1b]52;c;aGk=\x07".to_vec());
+    }
+
+    #[test]
+    fn long_command_threshold() {
+        let t = Instant::now();
+        assert!(!long_command(t, t + Duration::from_secs(9)));
+        assert!(long_command(t, t + LONG_COMMAND));
+        assert!(!long_command(t + Duration::from_secs(1), t));
     }
 }

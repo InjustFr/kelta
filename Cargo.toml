@@ -87,7 +87,7 @@ gtk = { version = "=0.18.2" }
 
 # ---- text / markdown -------------------------------------------------------
 pulldown-cmark = { version = "=0.13.4" }
-ammonia = { version = "=4.2.3" }
+ammonia = { version = "=4.2.4" }
 regex = { version = "=1.13.1" }
 globset = { version = "=0.4.20" }
 
