@@ -1,5 +1,6 @@
 //! SpawnRequest → PtySpawnSpec pieces (ARCHITECTURE §7.2): environment assembly, program
-//! resolution, default shell, and argv rewriting for restore policies (§7.5). Pure functions.
+//! resolution, default shell, shell integration (#526), and argv rewriting for restore policies
+//! (§7.5). Pure functions, bar the one script writer.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -98,6 +99,79 @@ pub fn default_shell(terminal_shell: &str, login: &BTreeMap<String, String>) -> 
         return PathBuf::from(s);
     }
     if cfg!(target_os = "macos") { PathBuf::from("/bin/zsh") } else { PathBuf::from("/bin/bash") }
+}
+
+/// Shell integration scripts (#526), by path under `<data>/shell`.
+const SHELL_SCRIPTS: &[(&str, &str)] = &[
+    ("zsh/.zshenv", include_str!("../shell/zsh/.zshenv")),
+    ("bash/kelta.bash", include_str!("../shell/bash/kelta.bash")),
+    ("fish/vendor_conf.d/kelta.fish", include_str!("../shell/fish/vendor_conf.d/kelta.fish")),
+];
+
+/// Write the shell integration scripts into `dir`, leaving files already up to date untouched.
+pub fn write_shell_scripts(dir: &Path) -> std::io::Result<()> {
+    for (rel, body) in SHELL_SCRIPTS {
+        let path = dir.join(rel);
+        if std::fs::read(&path).ok().as_deref() != Some(body.as_bytes()) {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            // shortcut: plain write, not atomic; concurrent first spawns write the same bytes. Upgrade if a shell ever reads a torn file.
+            std::fs::write(&path, body)?;
+        }
+    }
+    Ok(())
+}
+
+/// Make zsh, bash and fish load Kelta's scripts in `dir` (`<data>/shell`, see
+/// [`write_shell_scripts`]): they report the folder (OSC 7) and command marks (OSC 133).
+/// Keyed on the shell's file name; false (nothing changed) for any other shell.
+pub fn shell_integration(
+    shell: &Path,
+    dir: &Path,
+    env: &mut BTreeMap<String, String>,
+    args: &mut Vec<String>,
+) -> bool {
+    let s = |p: PathBuf| p.to_string_lossy().into_owned();
+    match shell.file_name().and_then(|n| n.to_str()) {
+        Some("zsh") => {
+            // Absent KELTA_ZSH_ZDOTDIR = ZDOTDIR was unset (the script unsets it again).
+            if let Some(old) = env.get("ZDOTDIR").cloned() {
+                env.insert("KELTA_ZSH_ZDOTDIR".into(), old);
+            }
+            env.insert("ZDOTDIR".into(), s(dir.join("zsh")));
+        }
+        // macOS /bin/bash is 3.2 (no PS0); Ghostty skips it too.
+        Some("bash") if !(cfg!(target_os = "macos") && shell == Path::new("/bin/bash")) => {
+            // Only plain (login) shells: `--posix` + ENV replaces the startup files the script reads back.
+            if !args.iter().all(|a| a == "-l" || a == "--login") {
+                return false;
+            }
+            let inject = if args.is_empty() { "1" } else { "1 --login" };
+            env.insert("KELTA_BASH_INJECT".into(), inject.into());
+            env.insert("ENV".into(), s(dir.join("bash/kelta.bash")));
+            // POSIX mode defaults HISTFILE to ~/.sh_history.
+            if !env.contains_key("HISTFILE")
+                && let Some(home) = env.get("HOME").cloned()
+            {
+                env.insert("HISTFILE".into(), format!("{home}/.bash_history"));
+                env.insert("KELTA_BASH_UNEXPORT_HISTFILE".into(), "1".into());
+            }
+            *args = vec!["--posix".into()];
+        }
+        Some("fish") => {
+            let d = s(dir.to_path_buf());
+            let old = env
+                .get("XDG_DATA_DIRS")
+                .filter(|v| !v.is_empty())
+                .cloned()
+                .unwrap_or_else(|| "/usr/local/share:/usr/share".into());
+            env.insert("XDG_DATA_DIRS".into(), format!("{d}:{old}"));
+            env.insert("KELTA_FISH_XDG_DATA_DIR".into(), d);
+        }
+        _ => return false,
+    }
+    true
 }
 
 /// `~` / `~/x` expansion.
@@ -358,6 +432,70 @@ mod tests {
         std::fs::write(cwd.join(".claude/settings.local.json"), line("echo local")).unwrap();
         std::fs::write(cwd.join(".claude/settings.json"), "{not json").unwrap();
         assert_eq!(user_statusline(&e, &cwd).as_deref(), Some("echo local"));
+    }
+
+    #[test]
+    fn shell_integration_rewrites_each_shell() {
+        let d = Path::new("/d");
+        let run = |sh: &str, kv: &[(&str, &str)], a: &[&str]| {
+            let mut env: BTreeMap<String, String> =
+                kv.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect();
+            let mut args = v(a);
+            let done = shell_integration(Path::new(sh), d, &mut env, &mut args);
+            (done, env, args)
+        };
+        let (done, env, args) = run("/usr/bin/zsh", &[], &["-l"]);
+        assert!(done);
+        assert_eq!(env["ZDOTDIR"], "/d/zsh");
+        assert!(!env.contains_key("KELTA_ZSH_ZDOTDIR"));
+        assert_eq!(args, v(&["-l"]));
+        let (_, env, _) = run("/usr/bin/zsh", &[("ZDOTDIR", "/z")], &["-l"]);
+        assert_eq!(env["KELTA_ZSH_ZDOTDIR"], "/z");
+
+        let (done, env, args) = run("/usr/local/bin/bash", &[("HOME", "/h")], &["-l"]);
+        assert!(done);
+        assert_eq!(args, v(&["--posix"]));
+        assert_eq!(env["KELTA_BASH_INJECT"], "1 --login");
+        assert_eq!(env["ENV"], "/d/bash/kelta.bash");
+        assert_eq!(env["HISTFILE"], "/h/.bash_history");
+        assert_eq!(env["KELTA_BASH_UNEXPORT_HISTFILE"], "1");
+        let (_, env, _) = run("/usr/local/bin/bash", &[("HISTFILE", "/x")], &[]);
+        assert_eq!(env["KELTA_BASH_INJECT"], "1");
+        assert_eq!(env["HISTFILE"], "/x");
+        assert!(!env.contains_key("KELTA_BASH_UNEXPORT_HISTFILE"));
+
+        let (done, env, _) = run("/usr/bin/fish", &[], &[]);
+        assert!(done);
+        assert_eq!(env["XDG_DATA_DIRS"], "/d:/usr/local/share:/usr/share");
+        assert_eq!(env["KELTA_FISH_XDG_DATA_DIR"], "/d");
+        let (_, env, _) = run("/usr/bin/fish", &[("XDG_DATA_DIRS", "/a")], &[]);
+        assert_eq!(env["XDG_DATA_DIRS"], "/d:/a");
+    }
+
+    #[test]
+    fn shell_integration_leaves_other_shells_alone() {
+        let mut cases = vec![("/bin/sh", v(&["-l"])), ("/usr/local/bin/bash", v(&["-l", "-c", "x"]))];
+        if cfg!(target_os = "macos") {
+            cases.push(("/bin/bash", v(&["-l"])));
+        }
+        for (sh, a) in cases {
+            let (mut env, mut args) = (BTreeMap::new(), a.clone());
+            assert!(!shell_integration(Path::new(sh), Path::new("/d"), &mut env, &mut args), "{sh}");
+            assert!(env.is_empty());
+            assert_eq!(args, a);
+        }
+    }
+
+    #[test]
+    fn write_shell_scripts_restores_changed_files() {
+        let d = tempfile::tempdir().unwrap();
+        write_shell_scripts(d.path()).unwrap();
+        for (rel, body) in SHELL_SCRIPTS {
+            assert_eq!(std::fs::read_to_string(d.path().join(rel)).unwrap(), *body);
+        }
+        std::fs::write(d.path().join("zsh/.zshenv"), "junk").unwrap();
+        write_shell_scripts(d.path()).unwrap();
+        assert_eq!(std::fs::read_to_string(d.path().join("zsh/.zshenv")).unwrap(), SHELL_SCRIPTS[0].1);
     }
 
     #[test]

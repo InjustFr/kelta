@@ -19,7 +19,7 @@ use kelta_proto::model::{
     WorkItem,
 };
 use kelta_proto::settings::{
-    BellMode, ClaudeHost, HookTransport, Osc52, QuitSessions, RestoreMode, SessionHost,
+    BellMode, ClaudeHost, HookTransport, Osc52, QuitSessions, RestoreMode, SessionHost, ShellIntegration,
 };
 use kelta_proto::store::SessionRow;
 use kelta_proto::term::{ClipboardKind, HistoryHit, KillSignal, PtySpawnSpec, TerminalEvent};
@@ -822,6 +822,16 @@ impl Core {
                 return Err(e);
             }
         };
+        // #526: zsh/bash/fish report their folder (OSC 7) and command marks (OSC 133).
+        if launch.program.is_none() && settings.terminal.shell_integration == ShellIntegration::Auto {
+            let dir = self.dirs.data.join("shell");
+            match spawn_env::write_shell_scripts(&dir) {
+                Ok(()) => {
+                    spawn_env::shell_integration(&program, &dir, &mut env, &mut args);
+                }
+                Err(e) => tracing::warn!(error = %e, "shell integration scripts not written"),
+            }
+        }
         let host = if is_claude {
             crate::claude_host::host_of(&settings.session_templates, spec.template_id.as_deref())
         } else {

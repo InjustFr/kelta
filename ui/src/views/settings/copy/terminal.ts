@@ -146,6 +146,15 @@ export default {
     group: SHELL,
     order: 51,
   },
+  'terminal.shell_integration': {
+    label: msg('Shell integration'),
+    help: msg(
+      'zsh, bash and fish tell Kelta their folder and where each command starts and ends, so new splits and restored sessions open where you were. Off starts shells untouched.',
+    ),
+    keywords: [msg('folder'), msg('cwd')],
+    group: SHELL,
+    order: 52,
+  },
   'terminal.bell': {
     label: msg('Bell'),
     help: msg('What a terminal bell does.'),

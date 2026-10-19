@@ -98,6 +98,7 @@ Every sheet and dialog follows the same keys, which are not rebindable: `Tab` / 
 | `shift_enter` | map<SessionKindName, enum(passthrough\|esc-cr\|newline)> | `{claude = "esc-cr", default = "passthrough"}` | |
 | `keyboard_protocol` | enum(kitty\|legacy) | `kitty` | kitty keyboard protocol for programs that enable it (`CSI > u`); `legacy` = model ignores it. Applied live (switching to `legacy` clears the mode) |
 | `shell` | str | `""` | empty = `$SHELL` |
+| `shell_integration` | enum(auto\|off) | `auto` | zsh, bash (not macOS `/bin/bash` 3.2) and fish load Kelta's scripts from `<data>/shell/`: folder (OSC 7) and command marks (OSC 133 A/C/D). Explicit programs are never touched; `off` = shells spawn as before |
 | `env` | map<str,str> | `{}` | added to every session |
 | `minimum_contrast_ratio` | float | `1` | xterm option |
 | `session_host` | enum(inprocess\|daemon) | `daemon` | restart; global. `daemon` = PTYs live in `keltad`: sessions survive quit and re-attach on the next start (falls back to `inprocess` when keltad cannot start) |

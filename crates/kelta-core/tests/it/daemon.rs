@@ -25,7 +25,7 @@ fn app(root: &Path, term: Arc<dyn TerminalHost>) -> Arc<Core> {
     app_with(root, term, Settings::defaults())
 }
 
-fn app_with(root: &Path, term: Arc<dyn TerminalHost>, settings: Settings) -> Arc<Core> {
+pub(crate) fn app_with(root: &Path, term: Arc<dyn TerminalHost>, settings: Settings) -> Arc<Core> {
     let mut deps = CoreDeps::new(Dirs::under(root), CliArgs::default(), FakeUiBridge::new());
     deps.config = Some(MemConfig::new(settings, vec![project("shop", root)]));
     deps.terminal = Some(term);
@@ -57,7 +57,7 @@ fn req(kind: SessionKind) -> SpawnRequest {
     }
 }
 
-async fn eventually(mut f: impl FnMut() -> bool) -> bool {
+pub(crate) async fn eventually(mut f: impl FnMut() -> bool) -> bool {
     for _ in 0..400 {
         if f() {
             return true;
