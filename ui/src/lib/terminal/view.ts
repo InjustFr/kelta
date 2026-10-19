@@ -449,6 +449,8 @@ export class TerminalView implements PoolView {
       });
       this.term.loadAddon(addon);
       this.#webgl = addon;
+      // Kelta Symbols loads lazily (unicode-range): redraw the glyphs the atlas cached blank meanwhile.
+      this.#listen(document.fonts, 'loadingdone', () => this.term.clearTextureAtlas());
     } catch {
       releaseWebglContext();
     }

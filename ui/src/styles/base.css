@@ -1,5 +1,13 @@
 /* Base element styles. Component styles live in the components (scoped). */
 
+/* Nerd Font / Powerline prompt icons for the terminal (#528). Private-use areas only, so a user font
+   that has the glyphs still wins and the file loads only when a terminal shows one. */
+@font-face {
+  font-family: 'Kelta Symbols';
+  src: url('../assets/fonts/SymbolsNerdFontMono-Regular.woff2') format('woff2');
+  unicode-range: U+E000-F8FF, U+F0000-FFFFD;
+}
+
 *,
 *::before,
 *::after {
