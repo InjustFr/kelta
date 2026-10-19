@@ -549,7 +549,8 @@ export class TerminalView implements PoolView {
       return false;
     }
 
-    if (this.#deps.platform === 'macos') {
+    // Not during input-method composition: Option+letter and the text-edit keys belong to the IME (same guard as #sendKitty).
+    if (this.#deps.platform === 'macos' && !event.isComposing && event.keyCode !== 229) {
       const meta = optionMetaSequence(event, this.#cfg.optionAsMeta, this.#leftOption, this.#rightOption);
       if (meta !== null) {
         event.preventDefault();
@@ -557,8 +558,7 @@ export class TerminalView implements PoolView {
         return false;
       }
       // After #sendKitty, so kitty programs keep CSI 1;3D for Option+arrows.
-      // Not during input-method composition: the keys belong to the IME (same guard as #sendKitty).
-      const edit = event.isComposing || event.keyCode === 229 ? null : macTextEditSequence(event);
+      const edit = macTextEditSequence(event);
       if (edit !== null) {
         event.preventDefault();
         this.#write(edit);
