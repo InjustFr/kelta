@@ -11,8 +11,20 @@ use kelta_proto::term::ClipboardKind;
 
 const READ_TIMEOUT: Duration = Duration::from_secs(2);
 
-/// Runs every GTK call on the thread that owns the default main context (tao's GTK loop).
-pub struct GtkClipboard;
+type Job = Box<dyn FnOnce() + Send>;
+type Dispatch = Box<dyn Fn(Job) -> Result<(), KeltaError> + Send + Sync>;
+
+/// Runs every GTK call on tao's main thread. `invoke` would not do: GLib runs it inline on any thread that can
+/// take the default context, and tao releases it between loop iterations. `run_on_main_thread` always queues.
+pub struct GtkClipboard(Dispatch);
+
+impl GtkClipboard {
+    pub fn new(app: tauri::AppHandle) -> Self {
+        Self(Box::new(move |job| {
+            app.run_on_main_thread(job).map_err(|e| KeltaError::internal(format!("clipboard dispatch: {e}")))
+        }))
+    }
+}
 
 fn selection(kind: ClipboardKind) -> gdk::Atom {
     match kind {
@@ -23,17 +35,16 @@ fn selection(kind: ClipboardKind) -> gdk::Atom {
 
 impl ClipboardBackend for GtkClipboard {
     fn read(&self, kind: ClipboardKind) -> Result<String, KeltaError> {
-        let ctx = glib::MainContext::default();
         // The reply is delivered on the GTK thread: waiting for it there would deadlock.
-        if ctx.is_owner() {
+        if glib::MainContext::default().is_owner() {
             return Err(KeltaError::internal("clipboard read on the GTK main thread"));
         }
         let (tx, rx) = sync_channel(1);
-        ctx.invoke(move || {
+        (self.0)(Box::new(move || {
             gtk::Clipboard::get(&selection(kind)).request_text(move |_, t| {
                 let _ = tx.send(t.map(str::to_owned));
             });
-        });
+        }))?;
         match rx.recv_timeout(READ_TIMEOUT) {
             Ok(Some(t)) => Ok(t),
             Ok(None) => Err(KeltaError::not_found("clipboard is empty")),
@@ -43,15 +54,21 @@ impl ClipboardBackend for GtkClipboard {
 
     fn write(&self, kind: ClipboardKind, text: &str) -> Result<(), KeltaError> {
         let text = text.to_owned();
-        // From the GTK thread `invoke` runs inline; elsewhere it queues in call order.
-        glib::MainContext::default().invoke(move || gtk::Clipboard::get(&selection(kind)).set_text(&text));
-        Ok(())
+        (self.0)(Box::new(move || gtk::Clipboard::get(&selection(kind)).set_text(&text)))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Test dispatcher: queues on the GLib context, which the test owns so the jobs never run on the caller.
+    fn inline() -> Dispatch {
+        Box::new(|job| {
+            glib::MainContext::default().invoke(job);
+            Ok(())
+        })
+    }
 
     #[test]
     fn kinds_map_to_gdk_selections() {
@@ -63,7 +80,7 @@ mod tests {
     fn read_on_the_gtk_thread_is_refused() {
         let ctx = glib::MainContext::default();
         let _owner = ctx.acquire().unwrap();
-        let e = GtkClipboard.read(ClipboardKind::Clipboard).unwrap_err();
+        let e = GtkClipboard(inline()).read(ClipboardKind::Clipboard).unwrap_err();
         assert!(e.is(kelta_proto::error::ErrorCode::Internal), "{e:?}");
     }
 
@@ -73,12 +90,12 @@ mod tests {
     fn gtk_round_trip() {
         gtk::init().unwrap();
         // Own the context so off-thread `invoke`s queue instead of running inline on the caller thread.
+        let clip = GtkClipboard(inline());
         let ctx = glib::MainContext::default();
         let _owner = ctx.acquire().unwrap();
-        let caller = std::thread::spawn(|| {
-            let r = [ClipboardKind::Clipboard, ClipboardKind::Primary].map(|k| {
-                GtkClipboard.write(k, &format!("kelta-523 {k:?}")).and_then(|()| GtkClipboard.read(k))
-            });
+        let caller = std::thread::spawn(move || {
+            let r = [ClipboardKind::Clipboard, ClipboardKind::Primary]
+                .map(|k| clip.write(k, &format!("kelta-523 {k:?}")).and_then(|()| clip.read(k)));
             glib::MainContext::default().invoke(gtk::main_quit);
             r
         });

@@ -116,8 +116,12 @@ pub fn run() -> ExitCode {
             let bridge = TauriBridge::new(app.handle().clone());
             let deps = CoreDeps::new(dirs, cli, bridge.clone());
             #[cfg(target_os = "linux")]
-            let deps =
-                CoreDeps { clipboard: Some(std::sync::Arc::new(platform::clipboard::GtkClipboard)), ..deps };
+            let deps = CoreDeps {
+                clipboard: Some(std::sync::Arc::new(platform::clipboard::GtkClipboard::new(
+                    app.handle().clone(),
+                ))),
+                ..deps
+            };
             let core = Core::start_with(deps)?;
             app.manage(bridge);
             app.manage(core.clone());
