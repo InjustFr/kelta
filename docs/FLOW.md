@@ -575,7 +575,7 @@ The other window-level chords:
 | `work.new` | `⇧⌘N` | `Ctrl+Shift+N` | `w` | global |
 | `work.story` ("Work: Story panel") | `⌘I` | `Ctrl+I`, `Ctrl+Shift+I` | | global, on the Desk: shows or hides the Story panel |
 | `work.start` ("Start or continue work") | `⌘↵` | `Ctrl+Enter` | `s` | anywhere but text fields, terminals included: submits the open work sheet or dialog, starts the marked or selected tickets, else on a work tab runs the next step (§2.4) |
-| `view.focus` ("Focus mode") | `⇧⌘F` | `Ctrl+Shift+F` | `f` | global (below) |
+| `view.focus` ("Focus mode") | `⇧⌘F` | `Ctrl+Alt+Shift+F` | `f` | global (below) |
 | `rail.toggle` ("Toggle sidebar") | `⌘B` | `Ctrl+B` | `b` | global |
 | `project.goto.N` | `⌘1`–`⌘9` | `Ctrl+1`–`Ctrl+9` | `1`–`9` | global, the nth work row of the sidebar |
 | `tool.goto.N` | `⌥⌘1`–`⌥⌘9` | `Ctrl+Alt+1`–`9` | | global, a tool zoomed in the current tab |

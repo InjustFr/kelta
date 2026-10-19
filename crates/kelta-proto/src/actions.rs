@@ -41,22 +41,23 @@ pub struct ActionMeta {
 }
 
 macro_rules! a {
-    ($id:literal, $label:literal, [$($m:literal),*], $p:expr, $ctx:ident) => {
-        ActionMeta {
-            id: $id,
-            label: $label,
-            mac: &[$($m),*],
-            linux_override: None,
-            prefix: $p,
-            context: ActionContext::$ctx,
-        }
-    };
+    // The `linux [..]` arm comes first: `$p:expr` would parse `linux[..]` as an index and fail hard on a second chord.
     ($id:literal, $label:literal, [$($m:literal),*], linux [$($l:literal),*], $p:expr, $ctx:ident) => {
         ActionMeta {
             id: $id,
             label: $label,
             mac: &[$($m),*],
             linux_override: Some(&[$($l),*]),
+            prefix: $p,
+            context: ActionContext::$ctx,
+        }
+    };
+    ($id:literal, $label:literal, [$($m:literal),*], $p:expr, $ctx:ident) => {
+        ActionMeta {
+            id: $id,
+            label: $label,
+            mac: &[$($m),*],
+            linux_override: None,
             prefix: $p,
             context: ActionContext::$ctx,
         }
@@ -153,14 +154,15 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("work.new", "New work item", ["cmd+shift+n"], Some("w"), Global),
     a!("editor.send_selection", "Send selection to Claude", ["cmd+shift+l"], Some("@"), Editor),
     a!("editor.quickfix_claude", "Quickfix: files Claude touched", [], None, Global),
-    a!("terminal.search", "Search terminal", ["cmd+f"], Some("/"), Terminal),
+    // Linux: `ctrl+f` stays the shell's (`terminal_first`); `ctrl+shift+f` is the GNOME Terminal / Konsole / Ghostty search chord (#525).
+    a!("terminal.search", "Search terminal", ["cmd+f"], linux["ctrl+f", "ctrl+shift+f"], Some("/"), Terminal),
     // The Linux terminal convention: `ctrl+c` / `ctrl+v` stay SIGINT / literal-next even with `kelta_first`.
     a!("terminal.copy", "Copy", ["cmd+c"], linux["ctrl+shift+c"], Some("["), Terminal),
     a!("terminal.paste", "Paste", ["cmd+v"], linux["ctrl+shift+v"], Some("]"), Terminal),
     a!("settings.open", "Open settings", ["cmd+,"], Some(","), Global),
     a!("rail.toggle", "Toggle sidebar", ["cmd+b"], Some("b"), Global),
     // Hides the rail and the docked Story panel, holds notifications about other work (#421).
-    a!("view.focus", "Focus mode", ["cmd+shift+f"], Some("f"), Global),
+    a!("view.focus", "Focus mode", ["cmd+shift+f"], linux["ctrl+alt+shift+f"], Some("f"), Global),
     a!("app.restart", "Restart Kelta", [], None, Global),
     a!("claude.setup", "Set up with Claude", [], None, Global),
     // Work menu and its entries for the focused tab's work item (FLOW §2.5, §3.5).
@@ -244,6 +246,10 @@ mod tests {
         // `ctrl+shift+d` is split down, so split right has no alias.
         assert_eq!(linux("pane.split_right"), ["ctrl+d"]);
         assert_eq!(linux("terminal.copy"), ["ctrl+shift+c"]);
+        assert_eq!(linux("terminal.search"), ["ctrl+f", "ctrl+shift+f"]);
+        assert_eq!(linux("view.focus"), ["ctrl+alt+shift+f"]);
+        assert_eq!(find("view.focus").unwrap().mac, ["cmd+shift+f"]);
+        assert_eq!(find("terminal.search").unwrap().mac, ["cmd+f"]);
         // Every Mac chord has a Linux one, no Linux chord repeats a modifier and none is shared.
         let mut seen = std::collections::BTreeSet::new();
         for a in ACTIONS {
