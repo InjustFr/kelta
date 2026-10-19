@@ -27,7 +27,13 @@ import { fontStack, type TerminalConfig } from './config';
 import { fileLinkProvider } from './filelinks';
 import { AckBatcher, FrameHandler } from './frames';
 import { encodeKittyKey } from './kitty';
-import { baseCharacter, macOptionIsMeta, optionMetaSequence, shiftEnterFor } from './keymap';
+import {
+  baseCharacter,
+  macOptionIsMeta,
+  macTextEditSequence,
+  optionMetaSequence,
+  shiftEnterFor,
+} from './keymap';
 import { needsPasteConfirmation, sanitizePaste } from './paste';
 import { installQueryHandlers } from './queries';
 import { frames } from './raf';
@@ -115,6 +121,8 @@ export class TerminalView implements PoolView {
   #kittyFlags = 0;
   /** Keys whose keydown a Kelta shortcut took: their keyup is not reported either. */
   #consumed = new Set<string>();
+  /** Tail of the write chain: one `session_write` in flight at a time, so bytes reach the PTY in order. */
+  #out: Promise<void> = Promise.resolve();
 
   constructor(id: SessionId, deps: TerminalViewDeps) {
     this.id = id;
@@ -467,12 +475,18 @@ export class TerminalView implements PoolView {
 
   #write(data: string): void {
     if (this.#state.exited) return;
-    void sessionWrite(this.id, data).catch((err) => this.#deps.onError?.(err, t('Writing to the terminal')));
+    this.#chain(data);
   }
 
   #writeBytes(bytes: Uint8Array): void {
     if (this.#state.exited) return;
-    void sessionWrite(this.id, bytes).catch((err) => this.#deps.onError?.(err, t('Writing to the terminal')));
+    this.#chain(bytes);
+  }
+
+  #chain(data: string | Uint8Array): void {
+    this.#out = this.#out
+      .then(() => sessionWrite(this.id, data))
+      .catch((err) => this.#deps.onError?.(err, t('Writing to the terminal')));
   }
 
   /** Sends text as if typed (used for Shift+Enter and by tests). */
@@ -540,6 +554,13 @@ export class TerminalView implements PoolView {
       if (meta !== null) {
         event.preventDefault();
         this.#write(meta);
+        return false;
+      }
+      // After #sendKitty, so kitty programs keep CSI 1;3D for Option+arrows.
+      const edit = macTextEditSequence(event);
+      if (edit !== null) {
+        event.preventDefault();
+        this.#write(edit);
         return false;
       }
     }
