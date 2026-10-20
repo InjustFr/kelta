@@ -9,14 +9,16 @@
 //   (characters such as `%`, `"`, `(`, `N`).
 // - `Esc` `Esc` in a tool's terminal hides the tool (`tools.hide`); the first `Esc` reaches it. Outside
 //   terminals, fields and overlays it leaves focus mode (`view.unfocus`, registered only while it is on).
-// - Linux chords follow the Mac set with Cmd → Ctrl. In a focused terminal a plain Ctrl+letter goes to
-//   the terminal (`keys.linux_terminal = "terminal_first"`, the default); the catalog keeps those actions
-//   on Ctrl+Shift+letter too.
+// - Linux, keys.linux_modifier = "ctrl_shift" (default): every default chord holds Ctrl+Shift (catalog `linux`), so a plain
+//   Ctrl key reaches a focused terminal; a user/tool plain Ctrl+letter gets a Ctrl+Shift twin and yields to the terminal unless
+//   keys.linux_terminal = "kelta_first". Ctrl+Shift+C/X/V edit text fields.
+// - "super" (macKeymap): the Mac set with Super for Cmd, no twins; Super+A/C/X/V/Z, Super+Shift+Z edit text fields.
 
 import type { KeysSettings } from '$lib/gen';
 import { ACTIONS, type ActionContext } from '$lib/gen/actions';
 import { msg } from '$lib/i18n/index.svelte';
 import { currentPlatform } from '$lib/ui/format';
+import { macKeymap } from '$lib/ui/keymap.svelte';
 
 import {
   chordFromEvent,
@@ -62,6 +64,8 @@ export interface KeyManagerOptions {
   context?: (event: KeyboardEvent) => KeyContext;
   /** Extra chords (tool keybindings), re-read on `refresh()`. */
   extraBindings?: () => readonly ExtraBinding[];
+  /** Reads the clipboard for a text-field paste on Linux (Ctrl+Shift+V, or Super+V with `linux_modifier = "super"`). */
+  readClipboard?: () => Promise<string>;
   onError?: (err: unknown, actionId: string) => void;
   /** Timer functions (tests inject fakes). The prefix timer (hint or timeout) is the only one: event-armed. */
   setTimer?: (fn: () => void, ms: number) => unknown;
@@ -142,6 +146,18 @@ const ARROW_PREFIX_KEYS: Record<string, string> = {
 };
 /** Actions that stay available while an overlay (sheet, dialog, palette) is open. */
 const OVERLAY_ACTIONS = new Set(['palette.open', 'project.switcher']);
+/** Text-field edit chords WebKitGTK does not bind (#541), per `keys.linux_modifier`. */
+const FIELD_COMMANDS: Record<'ctrl_shift' | 'super', Record<string, string>> = {
+  ctrl_shift: { 'ctrl+shift+c': 'copy', 'ctrl+shift+x': 'cut', 'ctrl+shift+v': 'paste' },
+  super: {
+    'meta+a': 'selectAll',
+    'meta+c': 'copy',
+    'meta+x': 'cut',
+    'meta+v': 'paste',
+    'meta+z': 'undo',
+    'shift+meta+z': 'redo',
+  },
+};
 const BARE_MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock', 'OS']);
 
 /** Effective chords of an action: `keys.bindings` override, else the platform catalog default. */
@@ -153,7 +169,7 @@ export function effectiveChords(
   const override = keys?.bindings?.[actionId];
   if (override) return override;
   const meta = ACTIONS.find((a) => a.id === actionId);
-  return meta ? (platform === 'macos' ? meta.mac : meta.linux) : [];
+  return meta ? (macKeymap(platform) ? meta.mac : meta.linux) : [];
 }
 
 /** Every action → effective chords (catalog defaults ⊕ overrides, plus unknown ids from overrides). */
@@ -351,6 +367,7 @@ export class KeyManager {
         return this.#consume(event);
       }
     }
+    if (this.#fieldEdit(event, chord)) return this.#consume(event);
     return this.#blockWebviewDefault(event, chord);
   }
 
@@ -398,6 +415,27 @@ export class KeyManager {
       this.#opts.keys?.()?.linux_terminal !== 'kelta_first' &&
       isReservedChord(chord, ['ctrl+<letter>'], 'linux')
     );
+  }
+
+  /** Linux text fields: the edit chords of `FIELD_COMMANDS`; paste reads the clipboard and inserts with `insertText` (undoable). */
+  #fieldEdit(event: KeyboardEvent, chord: Chord): boolean {
+    if (this.#platform !== 'linux' || !this.#context(event).textInput) return false;
+    const command = FIELD_COMMANDS[macKeymap('linux') ? 'super' : 'ctrl_shift'][chordToString(chord)];
+    if (!command) return false;
+    if (command !== 'paste') {
+      document.execCommand(command);
+      return true;
+    }
+    const read = this.#opts.readClipboard;
+    if (!read) return false;
+    const field = event.target;
+    read().then(
+      (text) => {
+        if (document.activeElement === field) document.execCommand('insertText', false, text);
+      },
+      (err: unknown) => this.#opts.onError?.(err, 'terminal.paste'),
+    );
+    return true;
   }
 
   #run(binding: Binding): void {
@@ -501,7 +539,7 @@ export class KeyManager {
       if (!chord) return;
       const key = chordToString(chord);
       if (!chords.has(key)) chords.set(key, binding);
-      if (twin && platform === 'linux' && isReservedChord(chord, ['ctrl+<letter>'], 'linux'))
+      if (twin && !macKeymap(platform) && isReservedChord(chord, ['ctrl+<letter>'], 'linux'))
         twins.push([{ ...chord, shift: true }, binding]);
     };
     for (const meta of ACTIONS) {

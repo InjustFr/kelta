@@ -3,7 +3,9 @@
   import type { ProjectId, TicketItem } from '$lib/gen';
   import { ticketKey } from '$lib/stores/tickets.svelte';
   import { Button, Menu, currentPlatform, formatChord } from '$lib/ui';
+  import { macKeymap } from '$lib/ui/keymap.svelte';
 
+  import { chordFor } from '../../shell/labels';
   import { ticketCtx } from '../plugins/actions';
   import PluginActions from '../plugins/PluginActions.svelte';
   import { blockedReason, MORE_CHORD, TICKET_ACTIONS, type TicketAction } from './caps';
@@ -108,8 +110,8 @@
       icon="ellipsis"
       aria-haspopup="menu"
       aria-expanded={menu !== null}
-      aria-keyshortcuts={mac ? 'Meta+.' : 'Control+.'}
-      title={t('More actions ({keys})', { keys: chordText(MORE_CHORD) })}
+      aria-keyshortcuts={macKeymap(currentPlatform()) ? 'Meta+.' : 'Control+Shift+.'}
+      title={t('More actions ({keys})', { keys: chordText(chordFor('work.menu') ?? MORE_CHORD) })}
       onclick={openMore}>{t('More')}</Button
     >
   </span>

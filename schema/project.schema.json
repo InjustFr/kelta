@@ -2299,6 +2299,7 @@
       "default": {
         "bindings": {},
         "hints": true,
+        "linux_modifier": "ctrl_shift",
         "linux_terminal": "terminal_first",
         "list_keys": true,
         "prefix": "ctrl+shift+space",
@@ -2372,6 +2373,15 @@
           "deprecated": true,
           "description": "Deprecated and ignored: lists no longer have a key hint line, `?` opens their key panel.",
           "type": "boolean"
+        },
+        "linux_modifier": {
+          "default": "ctrl_shift",
+          "description": "Linux: the stand-in for Cmd. `ctrl_shift`: every Kelta chord holds Ctrl+Shift; `super`: the macOS keymap with Super for Cmd. Plain Ctrl always reaches the terminal program.",
+          "enum": [
+            "ctrl_shift",
+            "super"
+          ],
+          "type": "string"
         },
         "linux_terminal": {
           "default": "terminal_first",

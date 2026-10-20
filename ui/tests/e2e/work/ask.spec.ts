@@ -106,7 +106,7 @@ test('the Queue brief answers the question with 1 and the row leaves Your move (
     };
     mock.emit({ type: 'session.updated', session: structuredClone(s) });
   }, spikeClaude);
-  await page.keyboard.press('Control+0');
+  await page.keyboard.press('Control+Shift+Digit0');
   const now = page.getByTestId('inbox-pane');
   await expect(now.locator(`.row.yours${row}`)).toBeVisible();
   await now.locator(row).click();

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ACTIONS, RESERVED_CHORDS, RESERVED_CLASSES } from '$lib/gen/actions';
+import { setLinuxSuper } from '$lib/ui/keymap.svelte';
 
 import {
   chordFromEvent,
@@ -154,6 +155,7 @@ describe('reserved chords', () => {
       'ctrl+shift+1',
       'ctrl+shift+pagedown',
       'ctrl+shift+space',
+      'ctrl+alt+shift+d',
       'ctrl+enter',
     ]) {
       expect(reserved(c), c).toBe(false);
@@ -198,24 +200,25 @@ describe('findConflicts', () => {
 });
 
 describe('default chords of the generated catalog', () => {
-  it('follow the Mac set on Linux, taking from the terminal only plain Ctrl+letter and Ctrl+Alt', () => {
+  it('have no reserved chord and hold Ctrl+Shift on Linux, in both modes', () => {
     const defaults = effectiveBindings(null, 'linux');
-    for (const c of findConflicts(defaults, RESERVED, { platform: 'linux' })) {
-      expect(c.actions, c.chord).toHaveLength(1);
-      // Plain Ctrl+letter yields to a focused terminal; Ctrl+Alt are the Cmd+Opt twins.
-      expect(/^ctrl\+[a-z]$/.test(c.chord) || c.chord.startsWith('ctrl+alt+'), c.chord).toBe(true);
-    }
+    expect(findConflicts(defaults, RESERVED, { platform: 'linux' })).toEqual([]);
     for (const meta of ACTIONS) {
       for (const text of meta.linux) {
         const chord = parseChord(text, 'linux');
         expect(chord, `${meta.id}: ${text}`).not.toBeNull();
-        expect(chord!.meta, `${meta.id}: ${text}`).toBe(false);
+        expect(chord!.ctrl && chord!.shift && !chord!.meta, `${meta.id}: ${text}`).toBe(true);
       }
     }
-    // The Ctrl+Shift twin of a terminal-yielded key keeps the action reachable from a terminal.
-    expect(defaults['palette.open']).toEqual(['ctrl+k', 'ctrl+shift+k']);
-    expect(defaults['pane.close']).toEqual(['ctrl+w', 'ctrl+shift+w']);
+    expect(defaults['palette.open']).toEqual(['ctrl+shift+k']);
+    expect(defaults['pane.close']).toEqual(['ctrl+shift+w']);
     expect(defaults['terminal.copy']).toEqual(['ctrl+shift+c']);
+    setLinuxSuper(true);
+    try {
+      expect(findConflicts(effectiveBindings(null, 'linux'), RESERVED, { platform: 'linux' })).toEqual([]);
+    } finally {
+      setLinuxSuper(false);
+    }
   });
 
   it('only use app chords on macOS (Cmd based, never bare Ctrl/Alt)', () => {

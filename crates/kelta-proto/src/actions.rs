@@ -32,7 +32,7 @@ pub struct ActionMeta {
     pub id: &'static str,
     pub label: &'static str,
     pub mac: &'static [&'static str],
-    /// Linux chords when they are not the derived Mac set; `None` derives them, see [`ActionMeta::linux`].
+    /// Linux chords when the rule of [`ActionMeta::linux`] does not apply (Cmd+Ctrl chords); `None` derives them.
     #[serde(skip)]
     pub linux_override: Option<&'static [&'static str]>,
     /// Key after the app-prefix.
@@ -65,30 +65,26 @@ macro_rules! a {
 }
 
 impl ActionMeta {
-    /// Linux default chords: the Mac set with `cmd` → `ctrl`. A derived plain `ctrl+<letter>` also gets
-    /// `ctrl+shift+<letter>` (the terminal keeps `ctrl+<letter>` when it has focus) unless another
-    /// action's Mac set already takes that chord.
+    /// Linux default chords (`keys.linux_modifier = "ctrl_shift"`, #541): Cmd → Ctrl+Shift, so no default is a plain
+    /// Ctrl chord a terminal needs. Cmd+Shift+X takes Ctrl+Alt+Shift+X when an action has Cmd+X (#525), Cmd+Alt+X always.
+    /// With `"super"` the UI uses `mac` as is.
     pub fn linux(&self) -> Vec<String> {
         if let Some(chords) = self.linux_override {
             return chords.iter().map(|c| (*c).to_owned()).collect();
         }
-        let mut out = Vec::new();
-        for mac in self.mac {
-            let chord = mac.replace("cmd", "ctrl");
-            if let Some(letter) =
-                chord.strip_prefix("ctrl+").filter(|k| k.len() == 1 && k.as_bytes()[0].is_ascii_lowercase())
-            {
-                let alias = format!("ctrl+shift+{letter}");
-                let taken = ACTIONS.iter().any(|a| a.mac.contains(&format!("cmd+shift+{letter}").as_str()));
-                out.push(chord);
-                if !taken {
-                    out.push(alias);
-                }
-            } else {
-                out.push(chord);
-            }
-        }
-        out
+        self.mac
+            .iter()
+            .map(|mac| {
+                let (alt, key) = match (mac.strip_prefix("cmd+alt+"), mac.strip_prefix("cmd+shift+")) {
+                    (Some(key), _) => (true, key),
+                    (None, Some(key)) => {
+                        (ACTIONS.iter().any(|a| a.mac.contains(&format!("cmd+{key}").as_str())), key)
+                    }
+                    _ => (false, mac.strip_prefix("cmd+").unwrap_or(mac)),
+                };
+                format!("ctrl+{}shift+{key}", if alt { "alt+" } else { "" })
+            })
+            .collect()
     }
 }
 
@@ -147,22 +143,22 @@ pub const ACTIONS: &[ActionMeta] = &[
     a!("attention.next", "Next waiting", ["cmd+j"], Some("u"), Global),
     a!("attention.prev", "Previous waiting", ["cmd+shift+j"], Some("U"), Global),
     a!("attention.peek", "Peek waiting session", ["cmd+shift+y"], Some("y"), Global),
-    a!("nav.back", "Go back", ["cmd+ctrl+left"], linux["ctrl+alt+shift+left"], Some("-"), Global),
-    a!("nav.forward", "Go forward", ["cmd+ctrl+right"], linux["ctrl+alt+shift+right"], Some("="), Global),
+    a!("nav.back", "Go back", ["cmd+ctrl+left"], linux["ctrl+alt+shift+["], Some("-"), Global),
+    a!("nav.forward", "Go forward", ["cmd+ctrl+right"], linux["ctrl+alt+shift+]"], Some("="), Global),
     a!("work.start", "Start or continue work", ["cmd+enter"], Some("s"), NoTextField),
     a!("toast.run_last", "Run last toast action", ["cmd+shift+o"], Some("o"), Global),
     a!("work.new", "New work item", ["cmd+shift+n"], Some("w"), Global),
     a!("editor.send_selection", "Send selection to Claude", ["cmd+shift+l"], Some("@"), Editor),
     a!("editor.quickfix_claude", "Quickfix: files Claude touched", [], None, Global),
-    // Linux: `ctrl+f` stays the shell's (`terminal_first`); `ctrl+shift+f` is the GNOME Terminal / Konsole / Ghostty search chord (#525).
-    a!("terminal.search", "Search terminal", ["cmd+f"], linux["ctrl+shift+f", "ctrl+f"], Some("/"), Terminal),
-    // The Linux terminal convention: `ctrl+c` / `ctrl+v` stay SIGINT / literal-next even with `kelta_first`.
-    a!("terminal.copy", "Copy", ["cmd+c"], linux["ctrl+shift+c"], Some("["), Terminal),
-    a!("terminal.paste", "Paste", ["cmd+v"], linux["ctrl+shift+v"], Some("]"), Terminal),
+    // Linux: ctrl+shift+f, the GNOME Terminal / Konsole / Ghostty search chord (#525).
+    a!("terminal.search", "Search terminal", ["cmd+f"], Some("/"), Terminal),
+    // ctrl+c / ctrl+v stay SIGINT / literal-next on Linux.
+    a!("terminal.copy", "Copy", ["cmd+c"], Some("["), Terminal),
+    a!("terminal.paste", "Paste", ["cmd+v"], Some("]"), Terminal),
     a!("settings.open", "Open settings", ["cmd+,"], Some(","), Global),
     a!("rail.toggle", "Toggle sidebar", ["cmd+b"], Some("b"), Global),
     // Hides the rail and the docked Story panel, holds notifications about other work (#421).
-    a!("view.focus", "Focus mode", ["cmd+shift+f"], linux["ctrl+alt+shift+f"], Some("f"), Global),
+    a!("view.focus", "Focus mode", ["cmd+shift+f"], Some("f"), Global),
     a!("app.restart", "Restart Kelta", [], None, Global),
     a!("claude.setup", "Set up with Claude", [], None, Global),
     // Work menu and its entries for the focused tab's work item (FLOW §2.5, §3.5).
@@ -202,11 +198,11 @@ pub const ACTIONS: &[ActionMeta] = &[
 pub const PLUGIN_COMMAND_PREFIX: &str = "plugin.command.";
 
 /// Chords terminals use on Linux (SPEC §4 principles); used by `findConflicts`. `ctrl+<letter>` and
-/// `alt+<any>` are reserved as classes (see `RESERVED_CLASSES`). Kelta's plain `ctrl+<letter>` defaults
-/// leave the key to a focused terminal (`keys.linux_terminal`).
+/// `alt+<any>` are reserved as classes (see `RESERVED_CLASSES`). Kelta binds no plain `ctrl+<letter>` by
+/// default; one a user binds is left to a focused terminal (`keys.linux_terminal`).
 pub const RESERVED_CHORDS: &[&str] = &["shift+tab", "ctrl+space", "ctrl+\\"];
 
-/// Reserved chord classes: `ctrl+<letter>`, `alt+*`, `meta+*`, `ctrl+alt+*`, `super+*`.
+/// Reserved chord classes: `ctrl+<letter>`, `alt+*`, `meta+*`, `ctrl+alt+*` (without Shift), `super+*`.
 pub const RESERVED_CLASSES: &[&str] = &["ctrl+<letter>", "alt+*", "meta+*", "ctrl+alt+*", "super+*"];
 
 pub fn find(id: &str) -> Option<&'static ActionMeta> {
@@ -237,20 +233,37 @@ mod tests {
     }
 
     #[test]
-    fn linux_follows_mac_with_ctrl() {
+    fn linux_follows_mac_with_ctrl_shift() {
         let linux = |id| find(id).unwrap().linux();
-        assert_eq!(linux("palette.open"), ["ctrl+k", "ctrl+shift+k"]);
-        assert_eq!(linux("pane.split_down"), ["ctrl+shift+d"]);
-        assert_eq!(linux("pane.focus_left"), ["ctrl+alt+left"]);
-        assert_eq!(linux("project.goto.1"), ["ctrl+1"]);
-        // `ctrl+shift+d` is split down, so split right has no alias.
-        assert_eq!(linux("pane.split_right"), ["ctrl+d"]);
-        assert_eq!(linux("terminal.copy"), ["ctrl+shift+c"]);
-        assert_eq!(linux("terminal.search"), ["ctrl+shift+f", "ctrl+f"]);
-        assert_eq!(linux("view.focus"), ["ctrl+alt+shift+f"]);
+        for (id, want) in [
+            ("pane.split_right", "ctrl+shift+d"),
+            ("pane.split_down", "ctrl+alt+shift+d"),
+            ("attention.next", "ctrl+shift+j"),
+            ("attention.prev", "ctrl+alt+shift+j"),
+            ("rail.toggle", "ctrl+shift+b"),
+            ("tickets.open", "ctrl+alt+shift+b"),
+            ("work.start", "ctrl+shift+enter"),
+            ("pane.zoom", "ctrl+alt+shift+enter"),
+            ("project.goto.1", "ctrl+shift+1"),
+            ("inbox.open", "ctrl+shift+0"),
+            ("tool.goto.1", "ctrl+alt+shift+1"),
+            ("pane.focus_left", "ctrl+alt+shift+left"),
+            ("settings.open", "ctrl+shift+,"),
+            ("work.menu", "ctrl+shift+."),
+            ("palette.open", "ctrl+shift+k"),
+            ("project.next", "ctrl+shift+pagedown"),
+            ("nav.back", "ctrl+alt+shift+["),
+            ("nav.forward", "ctrl+alt+shift+]"),
+            ("terminal.copy", "ctrl+shift+c"),
+            ("terminal.paste", "ctrl+shift+v"),
+            ("terminal.search", "ctrl+shift+f"),
+            ("view.focus", "ctrl+alt+shift+f"),
+        ] {
+            assert_eq!(linux(id), [want], "{id}");
+        }
         assert_eq!(find("view.focus").unwrap().mac, ["cmd+shift+f"]);
         assert_eq!(find("terminal.search").unwrap().mac, ["cmd+f"]);
-        // Every Mac chord has a Linux one, no Linux chord repeats a modifier and none is shared.
+        // Every Mac chord has a Linux one holding Ctrl+Shift, no chord repeats a modifier and none is shared.
         let mut seen = std::collections::BTreeSet::new();
         for a in ACTIONS {
             let chords = a.linux();
@@ -262,6 +275,7 @@ mod tests {
                 uniq.dedup();
                 assert_eq!(uniq.len(), mods.len(), "{}: {c}", a.id);
                 assert!(!c.contains("cmd"), "{}: {c}", a.id);
+                assert!(mods.contains(&"ctrl") && mods.contains(&"shift"), "{}: {c}", a.id);
                 assert!(seen.insert(c.clone()), "{}: {c} bound twice", a.id);
             }
         }

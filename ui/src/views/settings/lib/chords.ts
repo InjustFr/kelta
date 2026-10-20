@@ -4,6 +4,7 @@
 import { msg } from '$lib/i18n/index.svelte';
 import { ACTIONS, type ActionMeta } from '$lib/gen/actions';
 import { eventCode } from '$lib/keys/chords';
+import { macKeymap } from '$lib/ui/keymap.svelte';
 
 export type Platform = 'macos' | 'linux';
 
@@ -99,7 +100,7 @@ export function normalizeChord(chord: string): string {
 }
 
 export function defaultChords(meta: ActionMeta, platform: Platform): readonly string[] {
-  return platform === 'macos' ? meta.mac : meta.linux;
+  return macKeymap(platform) ? meta.mac : meta.linux;
 }
 
 /** Effective chords per action: catalog default overridden by `keys.bindings` (`[]` unbinds). */

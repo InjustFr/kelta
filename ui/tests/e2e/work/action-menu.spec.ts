@@ -9,12 +9,12 @@ const first = (page: Page, name?: string) => menu(page, name).getByRole('menuite
 const firstLabel = (page: Page, name?: string) => first(page, name).locator('.label');
 
 /** `⌘.` on Linux. */
-const actionsKey = (page: Page) => page.keyboard.press('Control+.');
+const actionsKey = (page: Page) => page.keyboard.press('Control+Shift+Period');
 
 test('Queue: ⌘. opens the selected row’s actions, ↵ runs its next step', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 1200 });
   await boot(page);
-  await page.keyboard.press('Control+0');
+  await page.keyboard.press('Control+Shift+Digit0');
   const now = page.getByTestId('inbox-pane');
   const row = 'w:0199a6b2-0000-7000-8000-00000000a004'; // SHOP-155, ready for review
   for (let i = 0; i < 30; i += 1) {

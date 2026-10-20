@@ -20,6 +20,7 @@
   import Kbd from '$lib/ui/Kbd.svelte';
   import Spinner from '$lib/ui/Spinner.svelte';
   import { currentPlatform } from '$lib/ui/format';
+  import { macKeymap } from '$lib/ui/keymap.svelte';
   import { tick, untrack, type Component } from 'svelte';
 
   import { noteRecent } from '../../shell/jumplist';
@@ -491,7 +492,9 @@
             <EmptyState title={t('No matching setting')} icon="search">
               {#snippet actions()}
                 <Button size="sm" onclick={() => dispatch('palette.open')}
-                  >{t('Search actions in {keys}', { keys: platform === 'macos' ? '⌘K' : 'Ctrl+K' })}</Button
+                  >{t('Search actions in {keys}', {
+                    keys: platform === 'macos' ? '⌘K' : macKeymap(platform) ? 'Super+K' : 'Ctrl+Shift+K',
+                  })}</Button
                 >
                 <Button
                   size="sm"

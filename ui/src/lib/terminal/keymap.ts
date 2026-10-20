@@ -91,7 +91,7 @@ export function optionMetaSequence(
 /**
  * macOS text-editing keys as Ghostty/Terminal.app send them: Option+←/→ word moves (`ESC b/f`),
  * Cmd+←/→ line start/end (`^A`/`^E`), Cmd+⌫ kill line (`^U`). Null for anything else, including
- * extra modifiers. The caller applies it on macOS only.
+ * extra modifiers. The caller applies it with the macOS keymap (macOS, or Linux with `keys.linux_modifier = "super"`).
  */
 export function macTextEditSequence(
   e: Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>,

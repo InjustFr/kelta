@@ -87,9 +87,9 @@ describe('ProjectRail', () => {
     const kt = () => r.container.querySelector('[data-tab-id="kt-t1"]') as HTMLElement;
     const digit = () => kt().querySelector('.index')?.textContent;
     expect(digit()).toBeUndefined();
-    await fireEvent.keyDown(window, { key: 'Meta', metaKey: true, ctrlKey: true });
+    await fireEvent.keyDown(window, { key: 'Meta', metaKey: true, ctrlKey: true, shiftKey: true });
     // The digit and the tooltip's chord name the same row index.
-    expect(kt().title).toMatch(new RegExp(`\\((⌘|Ctrl\\+)${digit()}\\)$`));
+    expect(kt().title).toMatch(new RegExp(`\\((⌘|Ctrl\\+Shift\\+)${digit()}\\)$`));
     await fireEvent.keyUp(window, { key: 'Meta' });
     expect(digit()).toBeUndefined();
     const more = within(band(r, 'shop')).getByTestId('rail-more');
@@ -272,7 +272,7 @@ describe('ProjectRail', () => {
       'Claude',
       sessionTitle(sessions.get(rows()[1]!.dataset.sessionId!)!),
     ]);
-    await fireEvent.keyDown(window, { key: 'Meta', metaKey: true, ctrlKey: true });
+    await fireEvent.keyDown(window, { key: 'Meta', metaKey: true, ctrlKey: true, shiftKey: true });
     expect(section()!.querySelector('.index')).toBeNull();
     await fireEvent.keyUp(window, { key: 'Meta' });
     await unfold(r, 'shop');

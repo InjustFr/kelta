@@ -47,7 +47,7 @@ test('Reviews: scoping to Billing leaves its pull requests, All projects brings 
 test('Now: scoping to Billing hides Shop rows and the header counts follow', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 1200 });
   await boot(page);
-  await page.keyboard.press('Control+0');
+  await page.keyboard.press('Control+Shift+Digit0');
   const now = host(page).getByTestId('inbox-pane');
   const shopTicket = now.locator('[data-row="t:jira-acme:SHOP-151"]');
   await expect(shopTicket).toBeVisible();

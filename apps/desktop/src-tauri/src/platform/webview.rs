@@ -1,6 +1,7 @@
 //! Per-webview platform hooks (ARCHITECTURE §12.4, §13):
 //! - Linux: WebKitGTK `CacheModel::DocumentViewer` (smaller resident caches) and a
 //!   `web-process-terminated` reload.
+//! - Linux: Super sets GDK_META_MASK on key events, so the page sees it as `metaKey` (#541).
 //! - macOS: a `webViewWebContentProcessDidTerminate:` handler added to wry's navigation delegate
 //!   (reload) and the WebContent pid (via `_webProcessIdentifier`) for `perf_snapshot`.
 
@@ -34,6 +35,17 @@ fn budget(st: &mut (u32, Option<Instant>), now: Instant) -> bool {
     st.0 <= MAX_AUTO_RELOADS
 }
 
+/// GDK modifier bits (`gdk/gdktypes.h`).
+const MOD4_MASK: u32 = 1 << 6;
+const SUPER_MASK: u32 = 1 << 26;
+const META_MASK: u32 = 1 << 28;
+
+/// Key event state as WebKitGTK must see it: WebKit reads `metaKey` from META only, while GTK's Wayland
+/// backend reports Super as MOD4 | SUPER (and X11 can put META on Alt). META exactly when Super is held.
+pub fn meta_from_super(state: u32) -> u32 {
+    if state & (SUPER_MASK | MOD4_MASK) != 0 { state | META_MASK } else { state & !META_MASK }
+}
+
 /// Called once per created main webview.
 #[cfg(target_os = "linux")]
 pub fn configure<R: Runtime>(win: &WebviewWindow<R>) {
@@ -48,6 +60,16 @@ pub fn configure<R: Runtime>(win: &WebviewWindow<R>) {
                 v.reload();
             }
         });
+        fn meta_hook(_: &webkit2gtk::WebView, ev: &gtk::gdk::EventKey) -> gtk::glib::Propagation {
+            use gtk::glib::translate::ToGlibPtr;
+            let raw: *const gtk::gdk::ffi::GdkEventKey = ev.to_glib_none().0;
+            // SAFETY: the live event GTK is dispatching; WebKit's class handler (RUN_LAST) reads the same struct after us.
+            unsafe { (*raw.cast_mut()).state = meta_from_super((*raw).state) };
+            gtk::glib::Propagation::Proceed
+        }
+        use gtk::prelude::WidgetExt;
+        view.connect_key_press_event(meta_hook);
+        view.connect_key_release_event(meta_hook);
     });
 }
 
@@ -196,6 +218,16 @@ mod tests {
         let odd = "7 (we (ird) name) R 55 7 7 0";
         assert_eq!(parse_stat(odd), Some(("we (ird) name".into(), 55)));
         assert_eq!(parse_stat("garbage"), None);
+    }
+
+    #[test]
+    fn super_sets_meta_and_alt_alone_clears_it() {
+        const CTRL: u32 = 1 << 2;
+        const MOD1: u32 = 1 << 3;
+        assert_eq!(meta_from_super(SUPER_MASK | MOD4_MASK), SUPER_MASK | MOD4_MASK | META_MASK); // Wayland Super
+        assert_eq!(meta_from_super(MOD4_MASK | CTRL), MOD4_MASK | CTRL | META_MASK);
+        assert_eq!(meta_from_super(MOD1), MOD1); // Alt alone: no Meta
+        assert_eq!(meta_from_super(MOD1 | META_MASK), MOD1); // X11 Alt carrying the Meta virtual modifier
     }
 
     #[test]

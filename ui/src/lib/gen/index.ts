@@ -99,6 +99,7 @@ export type * from './LayoutNode';
 export type * from './LayoutSaveResult';
 export type * from './Lifecycle';
 export type * from './LinuxGraphics';
+export type * from './LinuxModifier';
 export type * from './LinuxSettings';
 export type * from './LinuxTerminalKeys';
 export type * from './LocalTag';

@@ -4,6 +4,7 @@
 
 import { t } from '$lib/i18n/index.svelte';
 import { dispatch, hasAction } from '$lib/actions';
+import { clipboardRead } from '$lib/ipc/commands';
 import { settings, toasts, tools } from '$lib/stores';
 
 import { KeyManager, type ExtraBinding } from './manager';
@@ -58,6 +59,7 @@ export const keyManager = new KeyManager({
   // ⌘0 on the Queue goes back (#415); the same action from the palette or the HUD only opens it.
   dispatch: (id, args) => dispatch(id, id === 'inbox.open' ? { chord: true } : args),
   hasAction,
+  readClipboard: () => clipboardRead({ kind: 'clipboard' }),
   extraBindings: toolBindings,
   onError: (err, id) => toasts.error(err, t('Action {id} failed', { id })),
 });

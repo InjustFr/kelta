@@ -3,6 +3,7 @@
 // keys match `KeyboardEvent.code` (physical keys) so the AZERTY top row still gives `ctrl+1`.
 
 import { currentPlatform } from '$lib/ui/format';
+import { macKeymap } from '$lib/ui/keymap.svelte';
 
 export type Platform = 'macos' | 'linux';
 
@@ -141,7 +142,7 @@ export function parseChord(text: string, platform: Platform = currentPlatform())
     if (mod) {
       if (isLast) return null; // chord without a key
       if (mod === 'mod') {
-        if (platform === 'macos') chord.meta = true;
+        if (macKeymap(platform)) chord.meta = true;
         else chord.ctrl = true;
       } else chord[mod] = true;
       continue;
@@ -221,15 +222,16 @@ export function chordFromEvent(event: KeyboardEvent): Chord | null {
 
 /**
  * Whether a chord is reserved for terminals. `reserved` mixes exact chords (`shift+tab`,
- * `ctrl+space`, `ctrl+\`) and classes: `ctrl+<letter>` (plain Ctrl+letter), `alt+*`, `meta+*`,
- * `super+*`, `ctrl+alt+*`. On macOS Cmd (meta) chords never reach the PTY, so they are not reserved.
+ * `ctrl+space`, `ctrl+\`) and classes: `ctrl+<letter>` (plain Ctrl+letter), `alt+*` (not Ctrl+Alt+Shift), `meta+*`,
+ * `super+*`, `ctrl+alt+*` (without Shift). On macOS, and on Linux with `keys.linux_modifier = "super"`, Cmd/Super (meta)
+ * chords never reach the PTY, so they are not reserved.
  */
 export function isReservedChord(
   chord: Chord,
   reserved: readonly string[],
   platform: Platform = currentPlatform(),
 ): boolean {
-  if (platform === 'macos' && chord.meta) return false;
+  if (macKeymap(platform) && chord.meta) return false;
   for (const entry of reserved) {
     const e = entry.trim().toLowerCase();
     switch (e) {
@@ -238,14 +240,15 @@ export function isReservedChord(
           return true;
         break;
       case 'alt+*':
-        if (chord.alt) return true;
+        // Ctrl+Alt+Shift is Kelta's (#541 defaults): terminals give it no meaning.
+        if (chord.alt && !(chord.ctrl && chord.shift)) return true;
         break;
       case 'meta+*':
       case 'super+*':
         if (chord.meta) return true;
         break;
       case 'ctrl+alt+*':
-        if (chord.ctrl && chord.alt) return true;
+        if (chord.ctrl && chord.alt && !chord.shift) return true;
         break;
       default: {
         const parsed = parseChord(e, platform);

@@ -96,9 +96,9 @@ test.describe('sidebar', () => {
     await waitForAttached(page, 2);
     expect(await railWidth(page)).toBe(64);
 
-    // Outside a terminal: a focused terminal keeps Ctrl+B (tmux prefix).
+    // Outside a terminal; a focused terminal keeps plain Ctrl+B (tmux prefix) and Ctrl+Shift+B is the chord.
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-    await page.keyboard.press('Control+B');
+    await page.keyboard.press('Control+Shift+B');
     await expect.poll(() => railWidth(page)).toBe(416);
     await edge.focus();
     await page.keyboard.press('Enter');
@@ -189,9 +189,11 @@ test.describe('sidebar', () => {
 
     const digits = page.getByTestId('rail').locator('.index');
     await expect(digits).toHaveCount(0);
-    // boot() pretends Linux: the row chords are Ctrl+N.
+    // boot() pretends Linux: the row chords are Ctrl+Shift+N.
     await page.keyboard.down('Control');
+    await page.keyboard.down('Shift');
     await expect(digits.first()).toBeVisible();
+    await page.keyboard.up('Shift');
     await page.keyboard.up('Control');
     await expect(digits).toHaveCount(0);
   });

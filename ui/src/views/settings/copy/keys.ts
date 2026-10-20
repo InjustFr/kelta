@@ -31,4 +31,12 @@ export default {
     help: msg('Who gets a plain Ctrl+letter that Kelta also binds: the terminal program or Kelta.'),
     options: { terminal_first: { label: msg('Terminal first') }, kelta_first: { label: msg('Kelta first') } },
   },
+  'keys.linux_modifier': {
+    platform: 'linux',
+    label: msg('Shortcut key'),
+    help: msg(
+      'Ctrl+Shift starts every Kelta shortcut, so a plain Ctrl key always reaches the terminal program. Super gives Kelta the macOS shortcuts with Super for Cmd.',
+    ),
+    options: { ctrl_shift: { label: msg('Ctrl+Shift') }, super: { label: msg('Super') } },
+  },
 } satisfies CopyTable;

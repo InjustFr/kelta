@@ -555,10 +555,10 @@ All follow DESIGN §6.13: one sentence saying what happened, one or two actions.
 | Key | macOS | Linux | Prefix | Action id | What it does |
 |---|---|---|---|---|---|
 | next step | `↵` | `Enter` | | (the list's or the header's primary) | the selected row's next step in any list; on the Desk `⌘↵` (or `⌘.` `↵`) from any pane, terminals included (§2.4, §2.5) |
-| actions | `⌘.` | `Ctrl+.` | `.` | `work.menu` | the menu of what has the keys: a selected row, a detail, the Desk (§2.5); else the palette |
-| find anything | `⌘K` | `Ctrl+K`, `Ctrl+Shift+K` | `:` | `palette.open` | the palette (§3.5) |
-| next that needs you | `⌘J` (`⇧⌘J` back) | `Ctrl+J` (`Ctrl+Shift+J`) | `u` (`U`) | `attention.next` | goes to the next waiting row's place (§3.4) |
-| zoom out and back | `⌘0` | `Ctrl+0` | `0` | `inbox.open` | opens the Queue, recording the tab and pane that had focus as the way back (the `‹` tooltip names it); on the Queue, returns there through the jumplist, focused. The palette entry and the which-key panel only open it |
+| actions | `⌘.` | `Ctrl+Shift+.` | `.` | `work.menu` | the menu of what has the keys: a selected row, a detail, the Desk (§2.5); else the palette |
+| find anything | `⌘K` | `Ctrl+Shift+K` | `:` | `palette.open` | the palette (§3.5) |
+| next that needs you | `⌘J` (`⇧⌘J` back) | `Ctrl+Shift+J` (`Ctrl+Alt+Shift+J`) | `u` (`U`) | `attention.next` | goes to the next waiting row's place (§3.4) |
+| zoom out and back | `⌘0` | `Ctrl+Shift+0` | `0` | `inbox.open` | opens the Queue, recording the tab and pane that had focus as the way back (the `‹` tooltip names it); on the Queue, returns there through the jumplist, focused. The palette entry and the which-key panel only open it |
 
 `Esc` on the Queue clears what the list holds first (the filter, then the marks, then the brief's extra actions; an open menu closes itself) and, with nothing left to clear, goes back like `⌘0`.
 
@@ -568,19 +568,19 @@ The other window-level chords:
 
 | Action id | macOS | Linux | Prefix | Context |
 |---|---|---|---|---|
-| `tickets.open` ("Open tickets") | `⇧⌘B` | `Ctrl+Shift+B` | `t` | global, the Library's Tickets |
+| `tickets.open` ("Open tickets") | `⇧⌘B` | `Ctrl+Alt+Shift+B` | `t` | global, the Library's Tickets |
 | `reviews.open` ("Open pull requests") | `⇧⌘R` | `Ctrl+Shift+R` | `r` | global; in a list or detail that has the keys (Queue, Tickets, Pull requests, ticket and review details) the chord refreshes it instead: the key manager passes `chord`, the pane takes `kelta:refresh` (`use:onRefresh`), as `⌘.` takes `kelta:actions`. The prefix key and the palette always open Pull requests |
-| `nav.back` / `nav.forward` | `⌃⌘←` / `⌃⌘→` | `Ctrl+Alt+Shift+←` / `→` | `-` / `=` | global, the jumplist (the top bar's `‹ ›`) |
+| `nav.back` / `nav.forward` | `⌃⌘←` / `⌃⌘→` | `Ctrl+Alt+Shift+[` / `]` | `-` / `=` | global, the jumplist (the top bar's `‹ ›`) |
 | `attention.peek` ("Peek waiting session") | `⇧⌘Y` | `Ctrl+Shift+Y` | `y` | global, peek and reply without switching |
 | `work.new` | `⇧⌘N` | `Ctrl+Shift+N` | `w` | global |
-| `work.story` ("Work: Story panel") | `⌘I` | `Ctrl+I`, `Ctrl+Shift+I` | | global, on the Desk: shows or hides the Story panel |
-| `work.start` ("Start or continue work") | `⌘↵` | `Ctrl+Enter` | `s` | anywhere but text fields, terminals included: submits the open work sheet or dialog, starts the marked or selected tickets, else on a work tab runs the next step (§2.4) |
+| `work.story` ("Work: Story panel") | `⌘I` | `Ctrl+Shift+I` | | global, on the Desk: shows or hides the Story panel |
+| `work.start` ("Start or continue work") | `⌘↵` | `Ctrl+Shift+Enter` | `s` | anywhere but text fields, terminals included: submits the open work sheet or dialog, starts the marked or selected tickets, else on a work tab runs the next step (§2.4) |
 | `view.focus` ("Focus mode") | `⇧⌘F` | `Ctrl+Alt+Shift+F` | `f` | global (below) |
-| `rail.toggle` ("Toggle sidebar") | `⌘B` | `Ctrl+B` | `b` | global |
-| `project.goto.N` | `⌘1`–`⌘9` | `Ctrl+1`–`Ctrl+9` | `1`–`9` | global, the nth work row of the sidebar |
-| `tool.goto.N` | `⌥⌘1`–`⌥⌘9` | `Ctrl+Alt+1`–`9` | | global, a tool zoomed in the current tab |
+| `rail.toggle` ("Toggle sidebar") | `⌘B` | `Ctrl+Shift+B` | `b` | global |
+| `project.goto.N` | `⌘1`–`⌘9` | `Ctrl+Shift+1`–`9` | `1`–`9` | global, the nth work row of the sidebar |
+| `tool.goto.N` | `⌥⌘1`–`⌥⌘9` | `Ctrl+Alt+Shift+1`–`9` | | global, a tool zoomed in the current tab |
 | `toast.run_last` ("Run last toast action") | `⇧⌘O` | `Ctrl+Shift+O` | `o` | global, runs the primary action of the most recent toast still shown |
-| `settings.open` | `⌘,` | `Ctrl+,` | `,` | global; Settings opens over the window, `Esc` or `⌘,` closes it |
+| `settings.open` | `⌘,` | `Ctrl+Shift+,` | `,` | global; Settings opens over the window, `Esc` or `⌘,` closes it |
 
 **Focus mode** (`view.focus`): the sidebar and the Story panel hide, the desk header stays. While it is on, background info toasts and the desktop notifications about other work are held; a blocked Claude still notifies and still lights the "needs you" chip (`notifications.focus_allow_blocked`). `Esc` `Esc` outside a terminal (inside one `Esc` belongs to the program; `view.unfocus` exists only while focus mode is on) or the chord again leaves it, the layout as it was, and one toast sums up what was held: "While you were focused: SHOP-12 ready to review, PR approved".
 

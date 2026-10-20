@@ -20,7 +20,7 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
   // Two-line rows (#383): a taller window keeps every Now section rendered.
   await page.setViewportSize({ width: 1280, height: 1200 });
   await boot(page);
-  await page.keyboard.press('Control+0');
+  await page.keyboard.press('Control+Shift+Digit0');
   await expect(now(page)).toBeVisible();
   await expect(now(page).locator('[data-zone="yours"]')).toBeVisible();
   // SHOP-142's Claude is working: the Claude working zone (#413).
@@ -65,7 +65,7 @@ test('Flow 1: ticket, Claude, review the diff', async ({ page }) => {
   await expect(header).toHaveAttribute('data-phase', 'to_review');
 
   // Now: the item's next step is Review changes, with Claude's last message; Enter opens the delta.
-  await page.keyboard.press('Control+0');
+  await page.keyboard.press('Control+Shift+Digit0');
   const id = await page.evaluate(
     () => window.__kelta!.stores.work.all.find((w) => w.ticket?.key === 'SHOP-151')!.id,
   );
@@ -85,7 +85,7 @@ test('the work menu opens from a terminal with its chord; letters never move', a
   // The shop tab hosts SHOP-142 (Claude + nvim); focus is in a terminal.
   await expect(page.getByTestId('work-header')).toBeVisible();
   await page.locator('[data-testid="terminal-pane"] .xterm').first().click();
-  await page.keyboard.press('Control+Period');
+  await page.keyboard.press('Control+Shift+Period');
   const menu = page.getByRole('menu', { name: 'Work' });
   await expect(menu).toBeVisible();
   // 11 runnable entries headed by object (incl. Start another PR, #456, Next step and Move to step…, #463), and Mark reviewed under "Not available now" (#439).
@@ -116,7 +116,7 @@ test('Start Claude gives a work item whose Claude is gone a new one in its tab',
     mock.emit({ type: 'session.updated', session: structuredClone(claude) });
   });
   await page.locator('[data-testid="terminal-pane"] .xterm').first().click();
-  await page.keyboard.press('Control+Period');
+  await page.keyboard.press('Control+Shift+Period');
   await page
     .getByRole('menu', { name: 'Work' })
     .getByRole('menuitem', { name: /Start Claude/ })
@@ -149,7 +149,7 @@ test('Now open refreshes review items: a moved head reads Updated since your rev
     mock.emit({ type: 'work.updated', work: structuredClone(w) });
     return w.id;
   });
-  await page.keyboard.press('Control+0');
+  await page.keyboard.press('Control+Shift+Digit0');
   const row = now(page).locator(`[data-row="w:${id}"]`);
   await expect(row).toContainText('Reviewed');
   // #101's head moved after my review: back in Review requests.
@@ -165,7 +165,7 @@ test('Now open refreshes review items: a moved head reads Updated since your rev
   });
   await expect(now(page)).toBeHidden();
   const before = (await callsOf(page, 'review_get')).length;
-  await page.keyboard.press('Control+0');
+  await page.keyboard.press('Control+Shift+Digit0');
   await expect(row).toContainText('Updated since your review');
   const gets = (await callsOf(page, 'review_get')).slice(before);
   expect(gets.some((c) => (c.args as { review: { number: number } }).review.number === 309)).toBe(true);
@@ -206,7 +206,7 @@ test('a Claude session Kelta did not start: Elsewhere, Claude needs you, Mod+J, 
   await emit('needs_input');
   await expect(rail).toHaveAttribute('data-attention', 'needs_input');
   await expect.poll(waiting).toBe(before + 1);
-  await page.keyboard.press('Control+0');
+  await page.keyboard.press('Control+Shift+Digit0');
   await expect(now(page).locator('[data-zone="yours"]')).toBeVisible();
   await expect(now(page).locator('[data-row="o:u1"]')).toContainText('Claude needs you, outside Kelta');
   await dispatch(page, 'attention.next');
@@ -240,7 +240,7 @@ test('a Claude session Kelta did not start: Elsewhere, Claude needs you, Mod+J, 
 test('at 936px the brief stays beside the list, not under it', async ({ page }) => {
   await page.setViewportSize({ width: 936, height: 1000 });
   await boot(page);
-  await page.keyboard.press('Control+0');
+  await page.keyboard.press('Control+Shift+Digit0');
   const list = await now(page).locator('.list').boundingBox();
   const side = await now(page).locator('.side').boundingBox();
   expect(side!.x).toBeGreaterThanOrEqual(list!.x + list!.width);

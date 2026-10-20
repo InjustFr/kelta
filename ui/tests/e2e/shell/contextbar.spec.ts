@@ -60,13 +60,13 @@ test('⌘0 ⌘0 comes back to the focused pane; Esc on the Queue clears its filt
   await dispatch(page, 'pane.focus_right');
   await expect(pane).toHaveAttribute('data-focused', 'true');
 
-  await page.keyboard.press('Control+0');
+  await page.keyboard.press('Control+Shift+Digit0');
   await expect(page).toHaveTitle('Queue');
   await expect(bar(page).getByTestId('context-back')).toHaveAttribute('aria-label', /^Back to Shop › /);
-  await page.keyboard.press('Control+0');
+  await page.keyboard.press('Control+Shift+Digit0');
   await backHere();
 
-  await page.keyboard.press('Control+0');
+  await page.keyboard.press('Control+Shift+Digit0');
   await page.getByTestId('inbox-pane').focus();
   await page.keyboard.press('/');
   await filter.fill('zzz');
@@ -86,7 +86,7 @@ test('a work tab has its header above the panes, and keeps it over a zoomed pane
   const top = (await header.boundingBox())!;
   const workPanes = (await page.getByTestId('panes').boundingBox())!;
   expect(workPanes.y).toBeGreaterThanOrEqual(top.y + top.height);
-  await page.keyboard.press('Control+Shift+Enter'); // pane.zoom
+  await page.keyboard.press('Control+Alt+Shift+Enter'); // pane.zoom
   await expect(header).toBeVisible();
   await unfold(page, 'shop');
   await page.locator('[data-testid="rail-row"][data-tab-id="shop-t2"]').click();
