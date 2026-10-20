@@ -9,6 +9,7 @@
   import { onUiEvent } from '$lib/ipc/events';
   import { appInfo, sessionSpawnTemplate, terminalSetPalette } from '$lib/ipc/commands';
   import { keyManager } from '$lib/keys';
+  import { setLinuxSuper } from '$lib/ui/keymap.svelte';
   import {
     GLOBAL,
     layout,
@@ -195,7 +196,7 @@
 
   $effect(() => {
     // Rebind when `[keys]` or the tool keybindings change.
-    void settings.value()?.keys;
+    setLinuxSuper(settings.value()?.keys.linux_modifier === 'super');
     void tools.byProject;
     keyManager.refresh();
   });

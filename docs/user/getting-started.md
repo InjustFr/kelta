@@ -55,7 +55,7 @@ Kelta has three places, listed at the top of the sidebar: the **Queue**, where a
 nvim, the desk. One piece of work (a branch, a worktree, a Claude conversation, at most one pull request) is a
 **work item**. The loop goes:
 
-1. **Pick a ticket.** Open **Tickets** (`Cmd+Shift+B`, `Ctrl+Shift+B` on Linux). It lists your tickets from every
+1. **Pick a ticket.** Open **Tickets** (`Cmd+Shift+B`, `Ctrl+Alt+Shift+B` on Linux). It lists your tickets from every
    open project (Mine); `2` and `3` switch to Unassigned and Team. Select one and press `s` (**Start work**).
    Kelta creates a worktree and a branch in the ticket's project, moves the ticket to In progress and opens Claude,
    already briefed on the ticket, next to nvim. No ticket? `Shift+Cmd+N` starts a work item from one sentence.
@@ -86,7 +86,7 @@ locally in a worktree with Claude ([pull requests](reviews.md)).
 | `Cmd+J` | the next thing that needs you (`Shift+Cmd+J` back) |
 | `Cmd+0` | the Queue, and from the Queue back where you were |
 
-On Linux, `Ctrl` replaces `Cmd`. The prefix key (`Ctrl+Shift+Space`, then one key) reaches every action; pause after
+On Linux, `Ctrl+Shift` replaces `Cmd` (see Keyboard on Linux). The prefix key (`Ctrl+Shift+Space`, then one key) reaches every action; pause after
 it and a panel lists the keys that follow (`Esc` closes it, `?` opens the full list).
 
 ## The Queue
@@ -121,7 +121,7 @@ first nine. Every other tab of a project (shells, diagnostics, details) and its 
 
 - **Width.** Drag the edge of the sidebar to resize it (200 to 480 px). With the edge focused, the arrow keys move
   it by 16 px (64 with Shift).
-- **Collapse.** `Cmd+B` (`Ctrl+B` on Linux), the button at the bottom of the sidebar, or `Enter` on the edge
+- **Collapse.** `Cmd+B` (`Ctrl+Shift+B` on Linux), the button at the bottom of the sidebar, or `Enter` on the edge
   folds it into an icon column. It starts folded when the window is narrower than 1400 px, and folds while the
   Queue is shown (the Queue lists the same work); open it by hand and it stays open until you leave the Queue.
   The width and the state are remembered.
@@ -149,7 +149,7 @@ rest until you leave it ([focus mode](keyring-and-notifications.md#focus-mode)).
 - A project's menu in the sidebar (right-click, or the button on its name) has **Close project** (its sessions keep
   running), **Close and stop sessions** and **Remove project...** (its file moves to `projects/.trash`).
 - A closed project leaves the sidebar. Bring it back with **Open project...** under the project list (shown while a
-  closed project exists), the palette action **Open project**, or the switcher (`Cmd+P`, `Ctrl+P`), which
+  closed project exists), the palette action **Open project**, or the switcher (`Cmd+P`, `Ctrl+Shift+P`), which
   lists closed projects as "not open".
 
 ## Panes and windows
@@ -164,16 +164,15 @@ rest until you leave it ([focus mode](keyring-and-notifications.md#focus-mode)).
 
 ## Keyboard on Linux
 
-Linux shortcuts are the macOS ones with `Cmd` replaced by `Ctrl`: `Ctrl+K` palette, `Ctrl+D` / `Ctrl+Shift+D`
-split, `Ctrl+W` close pane, `Ctrl+Alt+arrows` move between panes. Inside a terminal a plain `Ctrl+letter` belongs to
-the shell (`Ctrl+D` still ends it, `Ctrl+W` deletes a word), so the same actions also answer to `Ctrl+Shift+letter`
-(`Ctrl+Shift+K`, `Ctrl+Shift+W`...), and the prefix key (`Ctrl+Shift+Space`, then one key) reaches every action.
-Pause after the prefix and a panel lists the keys that follow (`Esc` closes it, `?` opens the full list);
-`keys.prefix_hint_ms` sets the pause, `0` turns the panel off.
-Copy and paste in a terminal are `Ctrl+Shift+C` / `Ctrl+Shift+V`. If you never use those shell keys, set
-`keys.linux_terminal = "kelta_first"` (Settings > Keys) and Kelta's `Ctrl+letter` wins in terminals too.
+Ctrl+Shift is Kelta's key: `Ctrl+Shift+K` palette, `Ctrl+Shift+D` split right, `Ctrl+Shift+W` close pane,
+`Ctrl+Alt+Shift+arrows` move between panes. Plain `Ctrl` is the shell's in a terminal (`Ctrl+D` still ends it,
+`Ctrl+W` deletes a word). Set Settings > Keys > Shortcut key to Super to get the macOS keys with Super for `Cmd`
+(`Super+K`, `Super+C` / `Super+V` copy and paste; `Ctrl+C` stays an interrupt). The prefix key (`Ctrl+Shift+Space`,
+then one key) reaches every action. Pause after the prefix and a panel lists the keys that follow (`Esc` closes it,
+`?` opens the full list); `keys.prefix_hint_ms` sets the pause, `0` turns the panel off. Copy and paste in a terminal
+are `Ctrl+Shift+C` / `Ctrl+Shift+V`, and they also work in text fields.
 Dropping files from the file manager onto a terminal pastes their paths, shell-escaped. Your
-desktop may already take `Ctrl+Alt+arrows` for workspaces: rebind either side in Settings > Keys.
+desktop may already take `Ctrl+Alt+Shift+arrows`: rebind either side in Settings > Keys.
 
 ## Language
 

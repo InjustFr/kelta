@@ -18,6 +18,7 @@ import Toggle from './Toggle.svelte';
 import VirtualList from './VirtualList.svelte';
 import { formatChord, relativeTime } from './format';
 import { ICON_NAMES, ensureIcon, injectSprite, isIconName, spriteSvg } from './icons';
+import { setLinuxSuper } from './keymap.svelte';
 import VirtualListHarness from './VirtualListHarness.test.svelte';
 
 describe('icons', () => {
@@ -63,6 +64,13 @@ describe('format', () => {
     expect(formatChord('ctrl++', 'linux')).toEqual(['Ctrl', '+']);
     expect(formatChord('V', 'macos')).toEqual(['⇧', 'V']);
     expect(formatChord('v', 'macos')).toEqual(['V']);
+    setLinuxSuper(true);
+    try {
+      expect(formatChord('mod+k', 'linux')).toEqual(['Super', 'K']);
+      expect(formatChord('cmd+k', 'linux')).toEqual(['Super', 'K']);
+    } finally {
+      setLinuxSuper(false);
+    }
   });
 
   it('relative times', () => {

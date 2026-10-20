@@ -27,7 +27,7 @@ test('SHOP-142: Claude open; Ctrl+I toggles; width and open state survive a relo
 
   // Outside a terminal: a focused terminal on Linux keeps plain Ctrl+letter.
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-  await page.keyboard.press('Control+I');
+  await page.keyboard.press('Control+Shift+I');
   await expect(panel(page)).toBeHidden();
   // Another tab keeps its own state.
   await page.locator('[data-testid="rail-row"][data-tab-id="billing-t1"]').click();

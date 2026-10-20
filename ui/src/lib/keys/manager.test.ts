@@ -2,8 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { KeysSettings } from '$lib/gen';
 import { ACTIONS } from '$lib/gen/actions';
+import { setLinuxSuper } from '$lib/ui/keymap.svelte';
 
-import { HINT_TABLE, KeyManager, type KeyContext, type KeyManagerOptions } from './manager';
+import {
+  effectiveBindings,
+  HINT_TABLE,
+  KeyManager,
+  type KeyContext,
+  type KeyManagerOptions,
+} from './manager';
 
 const GLOBAL: KeyContext = { terminal: false, kind: null, textInput: false, overlay: false };
 const TERMINAL: KeyContext = { terminal: true, kind: 'shell', textInput: false, overlay: false };
@@ -18,6 +25,7 @@ function keys(over: Partial<KeysSettings> = {}): KeysSettings {
     list_keys: true,
     hints: true,
     linux_terminal: 'terminal_first',
+    linux_modifier: 'ctrl_shift',
     ...over,
   };
 }
@@ -52,7 +60,10 @@ const ctrlShift = (code: string, key: string): KeyboardEvent =>
   press({ code, key, ctrlKey: true, shiftKey: true });
 const ctrl = (code: string, key: string): KeyboardEvent => press({ code, key, ctrlKey: true });
 
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  setLinuxSuper(false);
+});
 
 describe('direct chords (Linux)', () => {
   it('dispatches and consumes a default chord', () => {
@@ -71,8 +82,8 @@ describe('direct chords (Linux)', () => {
 
   it('matches digits on the physical key', () => {
     const { manager, ids } = setup();
-    manager.handleKeyDown(ctrl('Digit2', '2'));
-    manager.handleKeyDown(ctrl('Digit0', '0'));
+    manager.handleKeyDown(ctrlShift('Digit2', '@'));
+    manager.handleKeyDown(ctrlShift('Digit0', ')'));
     manager.handleKeyDown(ctrlShift('PageDown', 'PageDown'));
     expect(ids()).toEqual(['project.goto.2', 'inbox.open', 'project.next']);
   });
@@ -88,7 +99,7 @@ describe('direct chords (Linux)', () => {
 
   it('supports plugin command bindings from keys.bindings', () => {
     const { manager, calls } = setup({
-      keys: keys({ bindings: { 'plugin.command.acme/deploy': ['ctrl+9'] } }),
+      keys: keys({ bindings: { 'plugin.command.acme/deploy': ['ctrl+shift+9'] } }),
     });
     // 9 is project.goto.9 by default: first binding wins, so use another key.
     const { manager: m2, calls: c2 } = setup({
@@ -96,13 +107,15 @@ describe('direct chords (Linux)', () => {
     });
     m2.handleKeyDown(ctrlShift('F9', 'F9'));
     expect(c2.map((c) => c.id)).toEqual(['plugin.command.acme/deploy']);
-    manager.handleKeyDown(ctrl('Digit9', '9'));
+    manager.handleKeyDown(ctrlShift('Digit9', '('));
     expect(calls[0]?.id).toBe('project.goto.9');
   });
 
   it('does not consume chords of actions without a handler', () => {
     const { manager, calls } = setup({ hasAction: (id) => id !== 'tickets.open' });
-    expect(manager.handleKeyDown(ctrlShift('KeyB', 'B'))).toBe('pass');
+    expect(
+      manager.handleKeyDown(press({ code: 'KeyB', key: 'B', ctrlKey: true, altKey: true, shiftKey: true })),
+    ).toBe('pass');
     expect(calls).toEqual([]);
   });
 
@@ -151,17 +164,23 @@ describe('terminal passthrough', () => {
     }
   });
 
-  it('gives plain Ctrl+letter to a focused terminal, Kelta keeps its Ctrl+Shift twin', () => {
+  it('ctrl_shift: plain Ctrl reaches a terminal, Ctrl+Shift runs Kelta', () => {
     const { manager, ids, setCtx } = setup();
-    expect(manager.handleKeyDown(ctrl('KeyK', 'k'))).toBe('consumed');
+    expect(manager.handleKeyDown(ctrl('KeyK', 'k'))).toBe('pass');
     setCtx(TERMINAL);
-    const k = ctrl('KeyK', 'k');
-    expect(manager.handleKeyDown(k)).toBe('pass');
-    expect(k.defaultPrevented).toBe(false);
-    expect(manager.handleKeyDown(ctrl('KeyD', 'd'))).toBe('pass'); // EOF, not split right
+    for (const [code, key] of [
+      ['KeyD', 'd'],
+      ['KeyJ', 'j'],
+      ['KeyB', 'b'],
+      ['Digit1', '1'],
+    ]) {
+      const e = ctrl(code, key);
+      expect(manager.handleKeyDown(e), code).toBe('pass');
+      expect(e.defaultPrevented, code).toBe(false);
+    }
+    expect(manager.handleKeyDown(ctrlShift('KeyD', 'D'))).toBe('consumed');
     expect(manager.handleKeyDown(ctrlShift('KeyK', 'K'))).toBe('consumed');
-    expect(manager.handleKeyDown(ctrl('Digit1', '1'))).toBe('consumed'); // not a shell key
-    expect(ids()).toEqual(['palette.open', 'palette.open', 'project.goto.1']);
+    expect(ids()).toEqual(['pane.split_right', 'palette.open']);
   });
 
   it('gives override and tool Ctrl+letter chords a Ctrl+Shift twin that fires in a terminal', () => {
@@ -177,7 +196,10 @@ describe('terminal passthrough', () => {
   });
 
   it('keys.linux_terminal = "kelta_first" runs Ctrl+letter in terminals, Ctrl+C stays SIGINT', () => {
-    const { manager, ids } = setup({ ctx: TERMINAL, keys: keys({ linux_terminal: 'kelta_first' }) });
+    const { manager, ids } = setup({
+      ctx: TERMINAL,
+      keys: keys({ linux_terminal: 'kelta_first', bindings: { 'pane.split_right': ['ctrl+d'] } }),
+    });
     expect(manager.handleKeyDown(ctrl('KeyD', 'd'))).toBe('consumed');
     expect(manager.handleKeyDown(ctrl('KeyC', 'c'))).toBe('pass');
     expect(manager.handleKeyDown(ctrl('KeyV', 'v'))).toBe('pass');
@@ -241,7 +263,7 @@ describe('context-dependent actions', () => {
     expect(manager.handleKeyDown(copy())).toBe('pass');
     setCtx(TERMINAL);
     expect(manager.handleKeyDown(copy())).toBe('consumed');
-    const start = (): KeyboardEvent => press({ code: 'Enter', key: 'Enter', ctrlKey: true });
+    const start = (): KeyboardEvent => press({ code: 'Enter', key: 'Enter', ctrlKey: true, shiftKey: true });
     expect(manager.handleKeyDown(start())).toBe('consumed'); // terminal: the work tab's next step
     setCtx(GLOBAL);
     expect(manager.handleKeyDown(start())).toBe('consumed');
@@ -682,5 +704,80 @@ describe('which-key panel', () => {
     m.refresh();
     expect(keysOf()).toContain('T');
     expect(keysOf()).not.toContain('t');
+  });
+});
+
+describe('keys.linux_modifier (#541)', () => {
+  const meta = (code: string, key: string, shiftKey = false): KeyboardEvent =>
+    press({ code, key, metaKey: true, shiftKey });
+
+  it('super: Linux defaults are the Mac set, mod+t is Super+T, no Ctrl+Shift twins', () => {
+    setLinuxSuper(true);
+    expect(effectiveBindings(null, 'linux')).toEqual(effectiveBindings(null, 'macos'));
+    const { manager, ids } = setup({ keys: keys({ bindings: { 'session.new': ['mod+t'] } }) });
+    expect(manager.handleKeyDown(meta('KeyT', 't'))).toBe('consumed');
+    expect(manager.handleKeyDown(ctrl('KeyT', 't'))).toBe('pass');
+    expect(manager.handleKeyDown(ctrlShift('KeyT', 'T'))).toBe('pass');
+    expect(manager.handleKeyDown(meta('KeyK', 'k'))).toBe('consumed');
+    expect(manager.handleKeyDown(ctrlShift('KeyK', 'K'))).toBe('pass');
+    expect(ids()).toEqual(['session.new', 'palette.open']);
+  });
+
+  it('both modes: plain Ctrl+letter passes in a terminal', () => {
+    for (const on of [false, true]) {
+      setLinuxSuper(on);
+      const { manager } = setup({ ctx: TERMINAL });
+      for (const l of 'abcdefghijklmnopqrstuvwxyz') {
+        expect(manager.handleKeyDown(ctrl(`Key${l.toUpperCase()}`, l)), `${l} super=${on}`).toBe('pass');
+      }
+    }
+  });
+
+  it('text fields: Ctrl+Shift+C/X/V (ctrl_shift), Super edit keys (super)', async () => {
+    // jsdom has no execCommand.
+    const exec = vi.fn(() => true);
+    Object.defineProperty(document, 'execCommand', { value: exec, configurable: true });
+    const input = document.createElement('input');
+    document.body.append(input);
+    input.focus();
+    const { manager } = setup({
+      ctx: { ...GLOBAL, textInput: true },
+      readClipboard: () => Promise.resolve('clip'),
+    });
+    input.addEventListener('keydown', (e) => manager.handleKeyDown(e));
+    const fire = async (e: KeyboardEvent): Promise<void> => {
+      input.dispatchEvent(e);
+      await Promise.resolve();
+    };
+    try {
+      await fire(ctrlShift('KeyC', 'C'));
+      await fire(ctrlShift('KeyX', 'X'));
+      await fire(ctrlShift('KeyV', 'V'));
+      await fire(meta('KeyC', 'c')); // not a field key in this mode
+      expect(exec.mock.calls).toEqual([['copy'], ['cut'], ['insertText', false, 'clip']]);
+      exec.mockClear();
+      setLinuxSuper(true);
+      for (const [code, key, shift] of [
+        ['KeyA', 'a', false],
+        ['KeyC', 'c', false],
+        ['KeyX', 'x', false],
+        ['KeyZ', 'z', false],
+        ['KeyZ', 'Z', true],
+        ['KeyV', 'v', false],
+      ] as const) {
+        await fire(meta(code, key, shift));
+      }
+      expect(exec.mock.calls).toEqual([
+        ['selectAll'],
+        ['copy'],
+        ['cut'],
+        ['undo'],
+        ['redo'],
+        ['insertText', false, 'clip'],
+      ]);
+    } finally {
+      Reflect.deleteProperty(document, 'execCommand');
+      input.remove();
+    }
   });
 });

@@ -110,7 +110,7 @@ test('a background run claim shows on the ticket row and follows report_progress
   await expect(run).toHaveAttribute('title', '2 unresolved review findings');
 
   // Now lists the blocked run under Needs you, with its note.
-  await page.keyboard.press('Control+0');
+  await page.keyboard.press('Control+Shift+Digit0');
   const nowRow = page.getByTestId('inbox-pane').locator('[data-row="w:wi-run-160"]');
   await expect(nowRow).toContainText('2 unresolved review findings');
   await expect(nowRow.locator('[data-mark]')).toHaveAttribute('data-mark', 'broken');

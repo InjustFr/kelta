@@ -59,7 +59,7 @@ In the list:
 | `t` | put a local tag on the pull request |
 | `w` | run a workflow on the pull request |
 | `Cmd+Shift+R` (`Ctrl+Shift+R` on Linux) | refresh (outside a list or detail, it opens Pull requests) |
-| `Cmd+.` (`Ctrl+.` on Linux) | the selected pull request's actions in a menu, Open review first (`Enter` runs it); in the detail, its own actions |
+| `Cmd+.` (`Ctrl+Shift+.` on Linux) | the selected pull request's actions in a menu, Open review first (`Enter` runs it); in the detail, its own actions |
 
 In the detail of someone else's pull request: `a` approve, `c` comment, `Shift+C` request changes, `s` review
 locally, `v` view the changes, `o` open on the host, `t` tags, `w` workflow, `Cmd+Shift+R` refresh, `.` every

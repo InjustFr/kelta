@@ -16,6 +16,20 @@ async function written(page: Page, id: string): Promise<string[]> {
     });
 }
 
+/** Switches `keys.linux_modifier` the way Settings › Keys does (a live setting). */
+async function linuxModifier(page: Page, value: 'ctrl_shift' | 'super'): Promise<void> {
+  await page.evaluate(async (v) => {
+    const ipc = await import(/* @vite-ignore */ '/src/lib/ipc/commands.ts' as string);
+    window.__kelta!.stores.settings.accept(
+      null,
+      await ipc.settingsSet({ layer: 'global', path: 'keys.linux_modifier', value: v }),
+    );
+  }, value);
+  await expect
+    .poll(() => page.evaluate(() => window.__kelta!.stores.settings.value()?.keys.linux_modifier))
+    .toBe(value);
+}
+
 test.describe('keys', () => {
   test('plain Ctrl+letter, Alt chords, Shift+Tab, Ctrl+Space and Ctrl+\\ reach the terminal', async ({
     page,
@@ -29,6 +43,8 @@ test.describe('keys', () => {
       'Control+w',
       'Control+k',
       'Control+d',
+      'Control+j',
+      'Control+b',
       'Alt+b',
       'Shift+Tab',
       'Control+Space',
@@ -38,7 +54,7 @@ test.describe('keys', () => {
     }
     await expect
       .poll(async () => (await written(page, SESSIONS.shopClaude)).length)
-      .toBeGreaterThanOrEqual(10);
+      .toBeGreaterThanOrEqual(12);
     const data = (await written(page, SESSIONS.shopClaude)).join('|');
     expect(data).toContain('\x01'); // Ctrl+A
     expect(data).toContain('\x12'); // Ctrl+R (reverse search must not reload the webview)
@@ -46,6 +62,8 @@ test.describe('keys', () => {
     expect(data).toContain('\x17'); // Ctrl+W (pane.close outside a terminal)
     expect(data).toContain('\x0b'); // Ctrl+K (palette.open outside a terminal)
     expect(data).toContain('\x04'); // Ctrl+D (pane.split_right outside a terminal)
+    expect(data).toContain('\n'); // Ctrl+J (attention.next outside a terminal)
+    expect(data).toContain('\x02'); // Ctrl+B (rail.toggle outside a terminal)
     expect(data).toContain('\x1bb'); // Alt+B = ESC b
     expect(data).toContain('\x1b[Z'); // Shift+Tab
     expect(data).toContain('\x00'); // Ctrl+Space
@@ -157,10 +175,10 @@ test.describe('keys', () => {
     await expect(page.getByTestId('work-header')).toHaveAttribute('data-phase', 'to_review');
     await expect(page.locator('.work-header span.primary')).toHaveAttribute(
       'title',
-      'Review changes (Ctrl+Enter)',
+      'Review changes (Ctrl+Shift+Enter)',
     );
     await page.locator('[data-testid="pane"][data-focused="true"] .xterm-helper-textarea').focus();
-    await page.keyboard.press('Control+Enter');
+    await page.keyboard.press('Control+Shift+Enter');
     await expect.poll(async () => (await callsOf(page, 'work_diff')).length).toBe(1);
   });
 
@@ -170,7 +188,7 @@ test.describe('keys', () => {
     await page.keyboard.press('Control+Shift+Space');
     await page.keyboard.type('%');
     await expect(page.getByTestId('pane')).toHaveCount(3);
-    await page.keyboard.press('Control+Shift+Enter'); // pane.zoom
+    await page.keyboard.press('Control+Alt+Shift+Enter'); // pane.zoom
     await expect(page.locator('[data-testid="pane"]:visible')).toHaveCount(1);
   });
 
@@ -202,5 +220,71 @@ test.describe('keys', () => {
     // The chunk is loaded now: a Ctrl+Shift+K that opened the palette would show at once.
     await page.keyboard.press('Control+Shift+K');
     await expect(page.getByTestId('palette')).toHaveCount(0);
+  });
+  test('Linux ctrl_shift: Ctrl+Shift+D splits from a terminal, Ctrl+Shift+C/V edit a text input', async ({
+    page,
+  }) => {
+    await boot(page);
+    await page.locator('[data-testid="pane"][data-focused="true"] .xterm-helper-textarea').focus();
+    await page.keyboard.press('Control+Shift+D');
+    await expect(page.getByTestId('pane')).toHaveCount(3);
+
+    await page.keyboard.press('Control+Shift+K');
+    await page.getByTestId('palette').waitFor();
+    const input = page.getByTestId('palette-input');
+    await input.fill('abc');
+    await input.selectText();
+    await page.evaluate(() =>
+      document.addEventListener('copy', (e) => {
+        (window as unknown as { __copied: string }).__copied = (e.target as HTMLInputElement).value;
+      }),
+    );
+    await page.keyboard.press('Control+Shift+C');
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { __copied?: string }).__copied))
+      .toBe('abc');
+    await input.fill('');
+    await page.keyboard.press('Control+Shift+V');
+    await expect.poll(async () => (await callsOf(page, 'clipboard_read')).length).toBe(1);
+    await expect(input).toHaveValue('mock clipboard text');
+  });
+
+  test('Linux super: Super+K palette, Super+C/V in a terminal, Ctrl+C/V reach it, Super+V in a text input', async ({
+    page,
+  }) => {
+    await boot(page);
+    await linuxModifier(page, 'super');
+    await page.keyboard.press('Meta+k');
+    await page.getByTestId('palette').waitFor();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('palette')).toHaveCount(0);
+    await page.keyboard.press('Control+Shift+K');
+    await expect(page.getByTestId('palette')).toHaveCount(0);
+
+    await page.locator('[data-testid="pane"][data-focused="true"] .xterm-helper-textarea').focus();
+    await page.evaluate(async (id) => {
+      const { terminalPool } = await import(/* @vite-ignore */ '/src/lib/terminal/index.ts' as string);
+      (terminalPool.get(id) as unknown as { term: { selectAll(): void } }).term.selectAll();
+    }, SESSIONS.shopClaude);
+    await page.keyboard.press('Meta+c');
+    await expect.poll(async () => (await callsOf(page, 'clipboard_write')).length).toBe(1);
+    await page.keyboard.press('Meta+v');
+    await expect
+      .poll(async () => (await written(page, SESSIONS.shopClaude)).join(''))
+      .toContain('mock clipboard text');
+    await page.keyboard.press('Control+c');
+    await page.keyboard.press('Control+v');
+    const data = (await written(page, SESSIONS.shopClaude)).join('');
+    expect(data).toContain('\x03');
+    expect(data).toContain('\x16');
+
+    await page.keyboard.press('Meta+k');
+    await page.getByTestId('palette').waitFor();
+    const input = page.getByTestId('palette-input');
+    await input.focus();
+    await page.keyboard.press('Meta+v');
+    await expect(input).toHaveValue('mock clipboard text');
+    await page.keyboard.press('Meta+z');
+    await expect(input).toHaveValue('');
   });
 });

@@ -124,7 +124,7 @@ side panel, `/` filter, `?` every key, `Cmd+Shift+R` refresh.
 | `y` | copy the branch name (in the detail) |
 | `o` | open in the tracker |
 | `Cmd+Shift+R` (`Ctrl+Shift+R` on Linux) | refresh (outside a list or detail, it opens Pull requests) |
-| `Cmd+.` (`Ctrl+.` on Linux) | the selected ticket's actions in a menu, its next step first (`Enter` runs it); in the detail, its More menu |
+| `Cmd+.` (`Ctrl+Shift+.` on Linux) | the selected ticket's actions in a menu, its next step first (`Enter` runs it); in the detail, its More menu |
 
 ## Grouping and sorting
 
@@ -188,7 +188,7 @@ editable); the fields that have a value (assignee, priority, sprint, due date, t
 update); and the last 20 comments with a box to add one (`Cmd+Enter` posts).
 
 The action bar shows Start or Resume work `s`, always the filled button (when it is blocked it says why), then Move `m` and
-Comment `c`; Open PR `p` joins them only when the ticket has a pull request. More (`Cmd+.`, `Ctrl+.` on Linux) holds
+Comment `c`; Open PR `p` joins them only when the ticket has a pull request. More (`Cmd+.`, `Ctrl+Shift+.` on Linux) holds
 Assign to me `a` (not on a ticket already yours), Unassign `A`, Block ticket `b`, Refine with Claude `r`, Run workflow
 `w`, Copy branch `y`, Open in browser `o` and Tags `t`. Hover a button for its key; every key works without the bar. An
 action the tracker cannot do (a tracker without assignment or comments), or that has nothing to act on (no branch yet),

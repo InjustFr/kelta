@@ -4,6 +4,7 @@
 // terminal-specific key handling.
 
 import { t } from '$lib/i18n/index.svelte';
+import { macKeymap } from '$lib/ui/keymap.svelte';
 import { FitAddon } from '@xterm/addon-fit';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -551,13 +552,16 @@ export class TerminalView implements PoolView {
       return false;
     }
 
+    const macKeys = macKeymap(this.#deps.platform);
     // Not during input-method composition: Option+letter and the text-edit keys belong to the IME (same guard as #sendKitty).
-    if (this.#deps.platform === 'macos' && !event.isComposing && event.keyCode !== 229) {
-      const meta = optionMetaSequence(event, this.#cfg.optionAsMeta, this.#leftOption, this.#rightOption);
-      if (meta !== null) {
-        event.preventDefault();
-        this.#write(meta);
-        return false;
+    if (macKeys && !event.isComposing && event.keyCode !== 229) {
+      if (this.#deps.platform === 'macos') {
+        const meta = optionMetaSequence(event, this.#cfg.optionAsMeta, this.#leftOption, this.#rightOption);
+        if (meta !== null) {
+          event.preventDefault();
+          this.#write(meta);
+          return false;
+        }
       }
       // After #sendKitty, so kitty programs keep CSI 1;3D for Option+arrows.
       const edit = macTextEditSequence(event);
@@ -567,6 +571,11 @@ export class TerminalView implements PoolView {
         return false;
       }
     }
+    // Linux with Super as Kelta's key (#541): an unbound Super chord never reaches the program, like Cmd on macOS.
+    if (macKeys && this.#deps.platform === 'linux' && event.metaKey) {
+      event.preventDefault();
+      return false;
+    }
     return true;
   }
 
@@ -575,8 +584,8 @@ export class TerminalView implements PoolView {
     if (this.#kittyFlags === 0 || this.#state.exited || event.isComposing || event.keyCode === 229)
       return false;
     const macos = this.#deps.platform === 'macos';
-    // shortcut: Cmd stays the macOS app/menu layer (copy, paste, quit…), never reported as super.
-    if (macos && event.metaKey) return false;
+    // shortcut: Cmd (Super with keys.linux_modifier = "super") stays the app layer (copy, paste, …), never reported as super.
+    if (macKeymap(this.#deps.platform) && event.metaKey) return false;
     const mode = this.#cfg.optionAsMeta;
     const optionIsAlt =
       !macos ||

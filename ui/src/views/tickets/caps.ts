@@ -43,7 +43,7 @@ export const TICKET_ACTIONS: readonly { id: TicketAction; key: string }[] = [
   { id: 'move_step', key: 'E' },
 ];
 
-/** Opens the detail's More menu (Cmd+. on macOS, Ctrl+. on Linux). */
+/** Opens the detail's More menu (fallback label; the chord is work.menu's). */
 export const MORE_CHORD = 'mod+.';
 
 /**

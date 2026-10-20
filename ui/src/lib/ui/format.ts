@@ -2,6 +2,8 @@
 
 import { msg, t } from '$lib/i18n/index.svelte';
 
+import { macKeymap } from './keymap.svelte';
+
 const MAC_SYMBOLS: Record<string, string> = {
   cmd: '⌘',
   meta: '⌘',
@@ -57,7 +59,7 @@ export function currentPlatform(): 'macos' | 'linux' {
   return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? 'macos' : 'linux';
 }
 
-/** Splits a chord (`cmd+shift+k`) into display parts for the platform. `mod` = Cmd / Ctrl. */
+/** Splits a chord (`cmd+shift+k`) into display parts for the platform. `mod` = Cmd / Ctrl, or Super with `keys.linux_modifier = "super"`. */
 export function formatChord(chord: string, platform: 'macos' | 'linux' = currentPlatform()): string[] {
   const table = platform === 'macos' ? MAC_SYMBOLS : LINUX_NAMES;
   // A bare capital (`V`, `P`) is Shift + the letter: lowercasing alone would show `v` and `V` alike.
@@ -65,7 +67,7 @@ export function formatChord(chord: string, platform: 'macos' | 'linux' = current
     .toLowerCase()
     .split('+')
     .flatMap((p, i, all) => (p === '' && i === all.length - 1 ? ['+'] : p === '' ? [] : [p]));
-  const expanded = raw.flatMap((p) => (p === 'mod' ? [platform === 'macos' ? 'cmd' : 'ctrl'] : [p]));
+  const expanded = raw.flatMap((p) => (p === 'mod' ? [macKeymap(platform) ? 'cmd' : 'ctrl'] : [p]));
   return expanded.map((p) =>
     t(table[p] ?? (p.length === 1 ? p.toUpperCase() : p[0]!.toUpperCase() + p.slice(1))),
   );

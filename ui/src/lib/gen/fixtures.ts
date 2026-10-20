@@ -2177,6 +2177,7 @@ export const settingsDefault: Settings = {
   "keys": {
     "bindings": {},
     "hints": true,
+    "linux_modifier": "ctrl_shift",
     "linux_terminal": "terminal_first",
     "list_keys": true,
     "prefix": "ctrl+shift+space",

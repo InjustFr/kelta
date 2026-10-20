@@ -20,6 +20,7 @@
   import { resolveProjectColor } from '$lib/theme';
   import { Button, Icon, IconButton, Kbd, Lamp, Menu, type MenuItem } from '$lib/ui';
   import { currentPlatform, formatChord } from '$lib/ui/format';
+  import { macKeymap } from '$lib/ui/keymap.svelte';
   import { frames } from '$lib/terminal/raf';
 
   import { jumpOutside, nowSummary, refreshNow } from '../views/inbox/now';
@@ -271,9 +272,10 @@
 
   // The `⌘1`–`⌘9` digits show only while the modifier is held (#451); the row tooltips always name the chord.
   let modHeld = $state(false);
-  const onModKey = (e: KeyboardEvent) => (modHeld = currentPlatform() === 'macos' ? e.metaKey : e.ctrlKey);
+  const onModKey = (e: KeyboardEvent) =>
+    (modHeld = macKeymap(currentPlatform()) ? e.metaKey : e.ctrlKey && e.shiftKey);
 
-  /** `label (Ctrl+K)`: the tooltip keeps the chord when its badge has no room (#362). */
+  /** `label (Ctrl+Shift+K)`: the tooltip keeps the chord when its badge has no room (#362). */
   function tip(label: string, id: string): string {
     const c = chordFor(id);
     return c ? `${label} (${formatChord(c).join(currentPlatform() === 'macos' ? '' : '+')})` : label;

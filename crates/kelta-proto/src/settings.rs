@@ -374,6 +374,8 @@ pub struct KeysSettings {
     pub hints: bool,
     /// Linux, focused terminal: who gets a plain `ctrl+<letter>` bound in Kelta.
     pub linux_terminal: LinuxTerminalKeys,
+    /// Linux: the stand-in for Cmd. `ctrl_shift`: every Kelta chord holds Ctrl+Shift; `super`: the macOS keymap with Super for Cmd. Plain Ctrl always reaches the terminal program.
+    pub linux_modifier: LinuxModifier,
 }
 
 /// `terminal_first`: the terminal gets the key and the action stays on `ctrl+shift+<letter>`;
@@ -384,6 +386,15 @@ pub enum LinuxTerminalKeys {
     #[default]
     TerminalFirst,
     KeltaFirst,
+}
+
+/// `ctrl_shift`: Cmd → Ctrl+Shift (`ActionMeta::linux`); `super`: the Mac set with Super for Cmd (#541).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LinuxModifier {
+    #[default]
+    CtrlShift,
+    Super,
 }
 
 impl Default for KeysSettings {
@@ -397,6 +408,7 @@ impl Default for KeysSettings {
             list_keys: true,
             hints: true,
             linux_terminal: LinuxTerminalKeys::TerminalFirst,
+            linux_modifier: LinuxModifier::CtrlShift,
         }
     }
 }
@@ -2412,6 +2424,16 @@ label = "Release"
         assert_eq!(d.terminal.max_live_views, 2);
         assert_eq!(d.editor.presets.len(), 6);
         assert_eq!(d.session_templates.len(), 5);
+    }
+
+    #[test]
+    fn linux_modifier_defaults_to_ctrl_shift_and_reads_super() {
+        assert_eq!(KeysSettings::default().linux_modifier, LinuxModifier::CtrlShift);
+        assert_eq!(serde_json::to_value(LinuxModifier::CtrlShift).unwrap(), "ctrl_shift");
+        let k: KeysSettings =
+            serde_json::from_value(serde_json::json!({ "linux_modifier": "super" })).unwrap();
+        assert_eq!(k.linux_modifier, LinuxModifier::Super);
+        assert_eq!(serde_json::to_value(LinuxModifier::Super).unwrap(), "super");
     }
 
     #[test]

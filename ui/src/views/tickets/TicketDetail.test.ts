@@ -94,7 +94,7 @@ describe('TicketDetail', () => {
       within(bar)
         .getAllByRole('button')
         .map((b) => b.getAttribute('aria-keyshortcuts')),
-    ).toEqual(['s', 'm', 'p', 'c', 'Control+.']);
+    ).toEqual(['s', 'm', 'p', 'c', 'Control+Shift+.']);
     expect(action('Open PRs')).toBeTruthy(); // two PRs
     // the rest under More (Mod+. while the detail has the keys, #404), each with its key
     screen.getByTestId('ticket-detail').focus();
