@@ -262,6 +262,10 @@ test.describe('settings pane', () => {
     await expect(fields.nth(0)).toHaveAttribute('data-path', 'keys.prefix');
     await expect(fields.nth(1)).toHaveAttribute('data-path', 'keys.prefix_hint_ms');
 
+    // The harness follows the host: Linux derives Cmd → Ctrl+Shift, and Cmd+Shift+D → Ctrl+Alt+Shift+D (#541).
+    const linux = process.platform === 'linux';
+    const splitRight = linux ? 'Control+Shift+d' : 'Meta+d';
+    const splitDown = linux ? 'Control+Alt+Shift+d' : 'Meta+Shift+d';
     const rows = page.locator('[data-testid="bindings"] tr[data-action]');
     await page.getByTestId('keys-filter').fill('split');
     await expect(rows).toHaveCount(2);
@@ -270,7 +274,7 @@ test.describe('settings pane', () => {
 
     await page.getByRole('button', { name: 'Press keys', exact: true }).click();
     await expect(page.getByTestId('press-keys')).toBeFocused();
-    await page.keyboard.press('ControlOrMeta+Shift+d');
+    await page.keyboard.press(splitDown);
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toHaveAttribute('data-action', 'pane.split_down');
     await page.keyboard.press('Escape');
@@ -279,11 +283,11 @@ test.describe('settings pane', () => {
     const detach = page.locator('tr[data-action="pane.detach"]');
     await detach.getByRole('button', { name: 'Record' }).click();
     await expect(page.getByTestId('recorder')).toBeFocused();
-    await page.keyboard.press('ControlOrMeta+d');
+    await page.keyboard.press(splitRight);
     await expect(page.getByTestId('conflict')).toContainText('Split right');
     await page.getByRole('button', { name: 'Pick another' }).click();
     await expect(page.getByTestId('recorder')).toBeVisible();
-    await page.keyboard.press('ControlOrMeta+d');
+    await page.keyboard.press(splitRight);
     await page.getByRole('button', { name: 'Use it here' }).click();
 
     const split = page.locator('tr[data-action="pane.split_right"]');
