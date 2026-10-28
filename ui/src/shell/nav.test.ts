@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { workItem } from '$lib/gen/fixtures';
@@ -385,6 +385,21 @@ describe('panes and tabs', () => {
     await fireEvent.click(await screen.findByTestId('new-session-start'));
     await waitFor(() => expect(ui.view).toBeNull());
     expect(calls('session_spawn_template')).toHaveLength(1);
+  });
+
+  it('the new-session sheet defaults to the template started last', async () => {
+    localStorage.removeItem('kelta.newSession.template.v1');
+    const first = render(NewSessionSheet, { onclose: () => {} });
+    const select = within(await screen.findByTestId('new-session')).getAllByRole('combobox')[0]!;
+    expect((select as HTMLSelectElement).value).toBe('claude+editor');
+    await fireEvent.change(select, { target: { value: 'claude' } });
+    await fireEvent.click(screen.getByTestId('new-session-start'));
+    await waitFor(() => expect(calls('session_spawn_template')).toHaveLength(1));
+    first.unmount();
+    render(NewSessionSheet, { onclose: () => {} });
+    const again = within(await screen.findByTestId('new-session')).getAllByRole('combobox')[0]!;
+    expect((again as HTMLSelectElement).value).toBe('claude');
+    localStorage.removeItem('kelta.newSession.template.v1');
   });
 
   it('toggles zoom on the focused pane', () => {
