@@ -27,7 +27,7 @@ const EDIT_TOOLS: &[&str] = &["Edit", "Write", "MultiEdit"];
 /// | Stop | Done (preview = `last_assistant_message`, 200 chars) |
 /// | StopFailure | Error |
 /// | SessionEnd | Exited |
-/// | PostToolUse (any tool) | Unknown (NeedsInput → Working, else unchanged) + `file_edited` for `Edit`/`Write`/`MultiEdit` |
+/// | PostToolUse (any tool) | Unknown (NeedsInput → Working; main thread also Done/WaitingUser → Working; else unchanged) + `file_edited` for `Edit`/`Write`/`MultiEdit` |
 pub fn map(payload: &HookPayload) -> Option<StatusChange> {
     let event = payload.hook_event_name.as_str();
     let change = |status: SessionStatus| StatusChange {
@@ -56,13 +56,20 @@ pub fn map(payload: &HookPayload) -> Option<StatusChange> {
         }),
         names::STOP_FAILURE => Some(change(SessionStatus::Error)),
         names::SESSION_END => Some(change(SessionStatus::Exited)),
-        // Any tool: core moves NeedsInput → Working (#278); edit tools also report the file.
+        // Any tool: core moves NeedsInput → Working (#278), a main-thread one also Done → Working;
+        // edit tools also report the file.
         names::POST_TOOL_USE => Some(StatusChange {
             file_edited: payload
                 .tool_name
                 .as_deref()
                 .filter(|t| EDIT_TOOLS.contains(t))
                 .and_then(|_| payload.edited_file()),
+            // A background subagent keeps using tools after the main thread's Stop.
+            raw_event: if payload.extra.contains_key("agent_id") {
+                format!("{event}:subagent")
+            } else {
+                event.to_owned()
+            },
             ..change(SessionStatus::Unknown)
         }),
         _ => None,

@@ -9,7 +9,8 @@ import type { SessionStatus } from "./SessionStatus";
  */
 export type StatusChange = { status: SessionStatus, preview: string | null, file_edited: string | null, 
 /**
- * `hook_event_name` (+ `:<notification_type>` for Notification).
+ * `hook_event_name` (+ `:<notification_type>` for Notification, `:subagent` for a subagent's
+ * PostToolUse).
  */
 raw_event: string, 
 /**

@@ -64,12 +64,22 @@
     ];
   });
 
-  // Until the user picks one: Claude and nvim when offered, otherwise the first option.
+  // Kept in the webview's storage like the rail: the last thing started is the next default.
+  const LAST_KEY = 'kelta.newSession.template.v1';
+  const last = (() => {
+    try {
+      return localStorage.getItem(LAST_KEY);
+    } catch {
+      return null;
+    }
+  })();
+
+  // Until the user picks one: the last one started, else Claude and nvim, else the first option.
+  const offered = (id: string | null): id is string =>
+    templateOptions.some((o) => o.value === id && !('disabled' in o && o.disabled));
   const template = $derived(
     picked ??
-      (templateOptions.some((o) => o.value === 'claude+editor')
-        ? 'claude+editor'
-        : (templateOptions[0]?.value ?? '')),
+      (offered(last) ? last : offered('claude+editor') ? 'claude+editor' : (templateOptions[0]?.value ?? '')),
   );
 
   const cwdOptions = $derived.by(() => {
@@ -129,6 +139,11 @@
           placement,
         });
         for (const s of created) sessions.upsert(s);
+      }
+      try {
+        localStorage.setItem(LAST_KEY, template);
+      } catch {
+        // storage unavailable: the default stays Claude and nvim
       }
       onclose();
       await activateProject(projectId);

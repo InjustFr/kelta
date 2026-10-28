@@ -88,14 +88,23 @@ fn hook_decision_table() {
     // mark_seen keeps a pending needs-input
     assert_eq!(mark_seen(&st(S::NeedsInput, A::NeedsInput, false, true)).attention, A::NeedsInput);
     assert_eq!(mark_seen(&st(S::Done, A::Done, false, true)).attention, A::None);
-    // PostToolUse (any tool) after a permission prompt → Working; otherwise unchanged (#278)
+    // PostToolUse (any tool, a subagent's too) after a permission prompt → Working (#278)
     let tool = StatusChange { raw_event: "PostToolUse".into(), ..ch(S::Unknown) };
-    let d = apply_hook(&st(S::NeedsInput, A::NeedsInput, false, true), &tool);
-    assert_eq!((d.status, d.attention, d.notify), (S::Working, A::None, None));
+    let sub = StatusChange { raw_event: "PostToolUse:subagent".into(), ..ch(S::Unknown) };
+    for t in [&tool, &sub] {
+        let d = apply_hook(&st(S::NeedsInput, A::NeedsInput, false, true), t);
+        assert_eq!((d.status, d.attention, d.notify), (S::Working, A::None, None));
+    }
+    // After Stop or idle: a main-thread tool means Claude resumed on its own; a background
+    // subagent's tool doesn't.
     for prev in [st(S::WaitingUser, A::NeedsInput, false, false), st(S::Done, A::Done, false, false)] {
         let d = apply_hook(&prev, &tool);
+        assert_eq!((d.status, d.attention, d.notify), (S::Working, A::Activity, None));
+        let d = apply_hook(&prev, &sub);
         assert_eq!((d.status, d.attention, d.seen), (prev.status, prev.attention, prev.seen));
     }
+    let d = apply_hook(&st(S::Running, A::None, true, false), &tool);
+    assert_eq!(d.status, S::Running);
     // other "unchanged" changes (plugin set_attention None) don't clear NeedsInput
     assert_eq!(
         apply_hook(&st(S::NeedsInput, A::NeedsInput, false, true), &ch(S::Unknown)).status,
@@ -290,9 +299,7 @@ async fn answering_a_permission_prompt_clears_needs_input() {
         &b"\r"[..],
         b"y",
         b"n",
-        b"\x1b",
         b"\x1b[13u",
-        b"\x1b[27u",
         b"\x1b[49u",
         b"\x1b[121u",
         b"\x1b[13;1u",
@@ -303,6 +310,27 @@ async fn answering_a_permission_prompt_clears_needs_input() {
         h.core.session_apply_hook(&s.id, ch(S::NeedsInput)).await.unwrap();
         h.core.session_write(&s.id, answer).await.unwrap();
         assert_eq!(h.core.session_get(&s.id).unwrap().status, S::Working, "{answer:?}");
+    }
+
+    // Esc / Ctrl+C reject a prompt or interrupt a turn: no Stop hook comes, Claude waits.
+    for (from, key) in [
+        (S::NeedsInput, &b"\x1b"[..]),
+        (S::NeedsInput, b"\x1b[27u"),
+        (S::Working, b"\x1b"),
+        (S::Working, b"\x1b[27;65u"),
+        (S::Working, b"\x03"),
+        (S::Working, b"\x1b[99;5u"),
+    ] {
+        h.core.session_apply_hook(&s.id, ch(from)).await.unwrap();
+        h.core.session_write(&s.id, key).await.unwrap();
+        let info = h.core.session_get(&s.id).unwrap();
+        assert_eq!((info.status, info.attention), (S::WaitingUser, A::None), "{from:?} {key:?}");
+    }
+    // Esc release, other keys and text while working: still working.
+    h.core.session_apply_hook(&s.id, ch(S::Working)).await.unwrap();
+    for key in [&b"\x1b[27;1:3u"[..], b"\x1b[A", b"y", b"\r"] {
+        h.core.session_write(&s.id, key).await.unwrap();
+        assert_eq!(h.core.session_get(&s.id).unwrap().status, S::Working, "{key:?}");
     }
 
     // idle_prompt (Claude finished, unseen): typing the next prompt waits for UserPromptSubmit.
