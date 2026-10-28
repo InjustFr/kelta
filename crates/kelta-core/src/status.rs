@@ -66,7 +66,13 @@ pub fn apply_hook(prev: &SessState, change: &StatusChange) -> Decision {
     // A tool ran after a permission prompt: the user answered, Claude is working again (#278).
     // shortcut: any tool counts, so a parallel tool or subagent can clear another tool's pending
     // prompt; the next Stop or prompt corrects it, match the tool name if that ever bites.
-    let tool_ran = prev.status == SessionStatus::NeedsInput && change.raw_event == names::POST_TOOL_USE;
+    // A main-thread tool after Stop or idle: Claude resumed without a prompt (a background task
+    // finished, a Stop hook blocked).
+    let tool_ran = match prev.status {
+        SessionStatus::NeedsInput => change.raw_event.split(':').next() == Some(names::POST_TOOL_USE),
+        SessionStatus::Done | SessionStatus::WaitingUser => change.raw_event == names::POST_TOOL_USE,
+        _ => false,
+    };
     let status = if tool_ran && change.status == SessionStatus::Unknown {
         SessionStatus::Working
     } else {
@@ -133,6 +139,8 @@ pub enum Heuristic {
     Quiet,
     /// User input written to the pane (applied with hooks active too).
     Input,
+    /// Esc / Ctrl+C written to the pane: Claude stops without a Stop hook (applied with hooks active too).
+    Interrupt,
 }
 
 pub fn apply_heuristic(prev: &SessState, ev: Heuristic) -> Decision {
@@ -165,6 +173,16 @@ pub fn apply_heuristic(prev: &SessState, ev: Heuristic) -> Decision {
             let mut d = Decision::keep(prev);
             if prev.status == SessionStatus::NeedsInput {
                 d.status = SessionStatus::Working;
+                d.attention = Attention::None;
+                d.seen = true;
+            }
+            d
+        }
+        // Rejecting a prompt or interrupting a turn: Claude waits for the next prompt.
+        Heuristic::Interrupt => {
+            let mut d = Decision::keep(prev);
+            if matches!(prev.status, SessionStatus::Working | SessionStatus::NeedsInput) {
+                d.status = SessionStatus::WaitingUser;
                 d.attention = Attention::None;
                 d.seen = true;
             }

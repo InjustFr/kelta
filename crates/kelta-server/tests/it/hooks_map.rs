@@ -68,6 +68,10 @@ fn other_notifications_and_events_are_ignored() {
     let p = HookPayload { tool_name: Some("Bash".into()), ..edit.clone() };
     let c = map(&p).unwrap();
     assert_eq!((c.status, c.file_edited), (SessionStatus::Unknown, None));
+    // A subagent's tool is told apart: it doesn't mean the main thread resumed.
+    let mut p = p;
+    p.extra.insert("agent_id".into(), "a1".into());
+    assert_eq!(map(&p).unwrap().raw_event, "PostToolUse:subagent");
 
     for ev in ["PreToolUse", "SubagentStop", "PreCompact", "", "Whatever"] {
         let p = HookPayload { hook_event_name: ev.into(), ..Default::default() };

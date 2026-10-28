@@ -276,6 +276,18 @@ fn answers_prompt(bytes: &[u8]) -> bool {
     }
 }
 
+/// Esc or Ctrl+C, raw or as a kitty CSI-u press: Claude ends the turn (on a prompt, Esc rejects it).
+fn interrupts(bytes: &[u8]) -> bool {
+    match bytes {
+        [0x1b] | [0x03] => true,
+        // shortcut: kitty Ctrl+C with Caps/Num Lock isn't matched, parse its mods if that bites.
+        [0x1b, b'[', params @ .., b'u'] => {
+            params == b"99;5" || (params.starts_with(b"27") && kitty_answer(params))
+        }
+        _ => false,
+    }
+}
+
 /// `code[:alternates][;mods[:event]][;text]`: an answer key pressed with no modifiers other than
 /// Caps/Num Lock (#317) (Claude Code pushes DISAMBIGUATE, so Esc arrives as `ESC [ 27 u`). Repeat
 /// (`:2`) and release (`:3`) events don't count.
@@ -1166,12 +1178,19 @@ impl Core {
         if typed && bytes.first() != Some(&0x1b) {
             self.clear_question(id);
         }
-        // No hook fires when a permission prompt is answered (#278): the keystroke itself is the signal.
-        if answers_prompt(bytes)
-            && info.status == SessionStatus::NeedsInput
+        // No hook fires when a permission prompt is answered (#278) or a turn is interrupted: the
+        // keystroke itself is the signal.
+        let ev = match info.status {
+            SessionStatus::Working | SessionStatus::NeedsInput if interrupts(bytes) => {
+                Some(Heuristic::Interrupt)
+            }
+            SessionStatus::NeedsInput if answers_prompt(bytes) => Some(Heuristic::Input),
+            _ => None,
+        };
+        if let Some(ev) = ev
             && matches!(info.kind, SessionKind::Claude)
         {
-            let d = status::apply_heuristic(&state, Heuristic::Input);
+            let d = status::apply_heuristic(&state, ev);
             self.apply_decision(id, d, info.status_source, None);
         }
         Ok(())
