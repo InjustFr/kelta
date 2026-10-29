@@ -1,6 +1,6 @@
 # Homebrew cask template: the release workflow fills version and sha256 from the published checksums.
 cask "kelta" do
-  version "1.9.0"
+  version "1.9.1"
   sha256 :no_check
 
   url "https://github.com/InjustFr/kelta/releases/download/v#{version}/Kelta_#{version}_aarch64.dmg"

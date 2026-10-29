@@ -2,6 +2,12 @@
 
 All notable changes are listed here, generated from the commit messages at each release. Versions follow semver.
 
+## [1.9.1](https://github.com/InjustFr/kelta/compare/v1.9.0...v1.9.1) (2026-10-29)
+
+### Bug Fixes
+
+* **deps:** bump tokio, pulldown-cmark, rustls-webpki and ctutils past new RustSec advisories ([6d8007b](https://github.com/InjustFr/kelta/commit/6d8007b4b67027b5ffb9b0ad9323214ca2ab0132))
+
 ## [1.9.0](https://github.com/InjustFr/kelta/compare/v1.8.0...v1.9.0) (2026-10-29)
 
 ### Features
