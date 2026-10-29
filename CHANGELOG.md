@@ -2,6 +2,17 @@
 
 All notable changes are listed here, generated from the commit messages at each release. Versions follow semver.
 
+## [1.9.0](https://github.com/InjustFr/kelta/compare/v1.8.0...v1.9.0) (2026-10-29)
+
+### Features
+
+* **keys:** Linux shortcut key, Ctrl+Shift by default or Super as on macOS ([#541](https://github.com/InjustFr/kelta/issues/541)) ([3f892b8](https://github.com/InjustFr/kelta/commit/3f892b8a2f6306e1ef45264991513dc226979931))
+
+### Bug Fixes
+
+* **shell:** new-session sheet defaults to the template started last ([7204139](https://github.com/InjustFr/kelta/commit/72041393a711962cb798925adfaea04fa2cdcc18))
+* **status:** Claude resumed by a background task shows Working, Esc/Ctrl+C ends Working ([677bd7c](https://github.com/InjustFr/kelta/commit/677bd7c8582a0425541eb06d41f25b8750e418de))
+
 ## [1.8.0](https://github.com/InjustFr/kelta/compare/v1.7.0...v1.8.0) (2026-10-19)
 
 ### Features
