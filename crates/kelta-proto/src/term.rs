@@ -332,13 +332,26 @@ pub fn strip_appimage_env(vars: &mut BTreeMap<String, String>) {
             || k.ends_with("_APPIMAGE")
             || k.starts_with("GIO_LAUNCHED_DESKTOP_FILE"))
     });
+    let ends = |rest: &str| rest.chars().next().is_none_or(|c| !(c.is_alphanumeric() || "._-".contains(c)));
     // `p` as a whole path in `v`: `/x/.mount_K` names `/x/.mount_K/usr`, not `/x/.mount_Kx`.
-    let names = |p: &str, v: &str| {
-        v.match_indices(p).any(|(i, _)| {
-            v[i + p.len()..].chars().next().is_none_or(|c| !(c.is_alphanumeric() || "._-".contains(c)))
+    let names = |p: &str, v: &str| v.match_indices(p).any(|(i, _)| ends(&v[i + p.len()..]));
+    // AppImageLauncher's binfmt-bypass mounts the same file a second time next to `APPDIR`; the
+    // runtime names a mount `.mount_<6 chars of the file name><6 random alphanumerics>`.
+    let random = |s: &[u8]| s.len() >= 6 && s[s.len() - 6..].iter().all(u8::is_ascii_alphanumeric);
+    let sibling = appdir
+        .rsplit_once('/')
+        .filter(|(_, n)| n.starts_with(".mount_") && random(n.as_bytes()))
+        .map(|(parent, n)| format!("{parent}/{}", &n[..n.len() - 6]));
+    let sibling_of = |v: &str| {
+        sibling.as_deref().is_some_and(|s| {
+            v.match_indices(s).any(|(i, _)| {
+                let rest = &v[i + s.len()..];
+                random(&rest.as_bytes()[..rest.len().min(6)]) && ends(&rest[6..])
+            })
         })
     };
-    let refers = |v: &str| names(&appdir, v) || appimage.as_deref().is_some_and(|a| names(a, v));
+    let refers =
+        |v: &str| names(&appdir, v) || sibling_of(v) || appimage.as_deref().is_some_and(|a| names(a, v));
     let keys: Vec<String> = vars.keys().cloned().collect();
     for k in keys {
         let Some(v) = vars.get(&k).cloned() else { continue };
@@ -442,7 +455,9 @@ mod tests {
 
     #[test]
     fn appimage_runtime_env_is_stripped() {
-        let m = "/tmp/user/1000/.mount_Kelta_ab12";
+        let m = "/tmp/user/1000/.mount_Kelta_ab12Cd";
+        // AppImageLauncher's binfmt-bypass mount of the same file, and another AppImage's mount.
+        let (b, other) = ("/tmp/user/1000/.mount_Kelta_DlJePg", "/tmp/user/1000/.mount_Other_xY12zz");
         let env = |pairs: &[(&str, String)]| -> BTreeMap<String, String> {
             pairs.iter().map(|(k, v)| ((*k).to_owned(), v.clone())).collect()
         };
@@ -453,8 +468,8 @@ mod tests {
             ("ARGV0", "Kelta".to_owned()),
             ("PYTHONHOME", format!("{m}/usr/")),
             ("PYTHONPATH", format!("{m}/usr/share/pyshared/:")),
-            ("LD_LIBRARY_PATH", format!("{m}/usr/lib/:{m}/usr/lib/x86_64-linux-gnu/:/opt/lib")),
-            ("PATH", format!("/home/u/bin:{m}/usr/bin/:/usr/bin:{m}/usr/sbin/")),
+            ("LD_LIBRARY_PATH", format!("{b}/usr/lib:{m}/usr/lib/:{m}/usr/lib/x86_64-linux-gnu/:/opt/lib")),
+            ("PATH", format!("{b}/usr/bin:/home/u/bin:{m}/usr/bin/:/usr/bin:{m}/usr/sbin/:{other}/usr/bin")),
             ("XDG_DATA_DIRS", format!("{m}/usr/share/:/usr/share")),
             ("GTK_PATH", format!("{m}/usr/lib/gtk-3.0")),
             ("GSETTINGS_SCHEMA_DIR", format!("{m}/usr/share/glib-2.0/schemas")),
@@ -482,7 +497,7 @@ mod tests {
         strip_appimage_env(&mut vars);
         let expected = env(&[
             ("LD_LIBRARY_PATH", "/opt/lib".to_owned()),
-            ("PATH", "/home/u/bin:/usr/bin".to_owned()),
+            ("PATH", format!("/home/u/bin:/usr/bin:{other}/usr/bin")),
             ("XDG_DATA_DIRS", "/usr/share".to_owned()),
             ("GDK_BACKEND", "wayland".to_owned()),
             ("QT_PLUGIN_PATH", "/usr/lib/qt".to_owned()),
