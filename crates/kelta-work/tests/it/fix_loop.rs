@@ -595,6 +595,27 @@ async fn an_amend_outside_kelta_force_pushes_with_a_lease_on_the_old_tip() {
 }
 
 #[tokio::test]
+async fn an_aborted_rebase_onto_a_teammates_tip_is_not_an_own_rewrite() {
+    need_git!();
+    let fx = Fx::new();
+    let (w, item) = diverging(&fx, true).await;
+    std::fs::write(item.worktree.join("mine.txt"), "mine, amended\n").unwrap();
+    git(&item.worktree, &["commit", "-q", "-a", "--amend", "--no-edit"]);
+    let mate = teammate(&fx);
+    git(&mate, &["checkout", "-q", &item.branch]);
+    commit(&mate, "mine.txt", "theirs, on the branch\n", "teammate pushed");
+    git(&mate, &["push", "-q", "origin", &item.branch]);
+
+    // The rebase detaches HEAD onto the teammate's tip, conflicts, and is aborted.
+    let out = w.rebase(&item.id, start(RebaseOnto::RemoteBranch)).await.unwrap();
+    assert!(out.rebase.is_some_and(|r| r.total > 0), "conflicts expected");
+    w.rebase(&item.id, RebaseOp::Abort).await.unwrap();
+    let st = w.status(&item.id).await.unwrap();
+    assert!(!st.diverged && st.remote_new >= 1, "{st:?}");
+    assert_eq!(reason(&w.push(&item.id, true).await.unwrap_err()), "not_diverged");
+}
+
+#[tokio::test]
 async fn a_moved_remote_rejects_the_lease_and_never_falls_back_to_force() {
     need_git!();
     let fx = Fx::new();
