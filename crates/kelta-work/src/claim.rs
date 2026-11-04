@@ -115,7 +115,8 @@ impl WorkService {
     ) -> Result<Option<WorkItem>, KeltaError> {
         let probe = WorkItem { ticket: Some(ticket.clone()), ..WorkItem::default() };
         Ok(kelta_proto::api::claim_holder(&self.store.list_items(None).await?, &probe)
-            .filter(|h| h.claimed_by(sid)))
+            // #544: the item's own Claude holds it even when a run (of another session) claimed it.
+            .filter(|h| h.claimed_by(sid) || sid.is_some_and(|s| h.session_ids.contains(s))))
     }
 
     /// #502 Make this a work item without a ticket: a scratch item (`WorkKind::Branch`) on `worktree`, an
