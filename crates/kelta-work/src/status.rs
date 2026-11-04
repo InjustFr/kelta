@@ -46,8 +46,13 @@ impl WorkService {
             (st.files, st.insertions, st.deletions) = git::diffstat(&item.worktree, &base).await?;
         }
         let remote_ref = format!("refs/remotes/{}/{}", env.repo.remote, item.branch);
-        st.diverged = rebase::diverged(&item.worktree, &remote_ref, item.rebase.as_deref()).await?;
-        st.remote_new = rebase::remote_new(&item.worktree, &remote_ref, item.rebase.as_deref()).await?;
+        st.diverged = rebase::diverged(&item.worktree, &remote_ref, item.rebase.as_deref()).await?.is_some();
+        // An own rewrite leaves nothing new on the remote, however it was made (no Rebase onto its old self).
+        st.remote_new = if st.diverged {
+            0
+        } else {
+            rebase::remote_new(&item.worktree, &remote_ref, item.rebase.as_deref()).await?
+        };
         Ok(st)
     }
 

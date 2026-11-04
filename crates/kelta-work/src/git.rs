@@ -442,6 +442,20 @@ pub async fn is_ancestor(worktree: &Path, a: &str, b: &str) -> Result<bool, Kelt
     }
 }
 
+/// Whether this worktree's HEAD once pointed at `sha` (its HEAD reflog is per worktree). Checkouts
+/// and rebase starts (`rebase (start)`, `pull --rebase (start)`, ...) only detach onto a commit to look at or replay onto: that is not local work.
+pub async fn in_head_reflog(worktree: &Path, sha: &str) -> Result<bool, KeltaError> {
+    let out = run(worktree, &["log", "-g", "--format=%H%x09%gs", "HEAD"], LOCAL_TIMEOUT).await?;
+    Ok(out.ok()
+        && out.stdout.lines().any(|l| {
+            // Only the action before the first colon: the rest of `%gs` is a commit message.
+            l.split_once('\t').is_some_and(|(h, s)| {
+                let act = s.split(':').next().unwrap_or(s);
+                h == sha && act != "checkout" && !act.ends_with("(start)")
+            })
+        }))
+}
+
 /// `git rev-list --count <args>`.
 pub async fn count(worktree: &Path, args: &[&str]) -> Result<u32, KeltaError> {
     let mut a = vec!["rev-list", "--count"];
