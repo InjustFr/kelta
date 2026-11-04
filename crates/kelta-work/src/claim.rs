@@ -199,10 +199,7 @@ impl WorkService {
         if let Some(o) = plan::owner_of_pr(&all, &p, pr) {
             match &o.ticket {
                 Some(t) if t.account == ticket.account && t.key == ticket.key => {
-                    // Found by branch while `pr_url` names another PR (case aside): repoint it, Fix with Claude reads it.
-                    if o.pr_url.as_deref().is_some_and(|u| !u.eq_ignore_ascii_case(&pr.url)) {
-                        let url = pr.url.clone();
-                        let item = self.update(&o.id, |w| w.pr_url.replace(url).is_some()).await?;
+                    if let Some(item) = self.repoint_pr(o, &pr.url).await? {
                         return Ok((item, true));
                     }
                     return Ok((self.load(&o.id).await?, false));
@@ -214,7 +211,8 @@ impl WorkService {
                 None => {
                     let id = o.id.clone();
                     drop(guard);
-                    return self.link(&id, ticket, false).await.map(|w| (w, true));
+                    let linked = self.link(&id, ticket, false).await?;
+                    return Ok((self.repoint_pr(o, &pr.url).await?.unwrap_or(linked), true));
                 }
             }
         }
@@ -243,6 +241,16 @@ impl WorkService {
             }
             _ => Ok((item, true)),
         }
+    }
+
+    /// The PR's own item was found by branch while its `pr_url` names another PR (case aside): repoint
+    /// it, Fix with Claude reads it. `None`: already on `url`.
+    async fn repoint_pr(&self, o: &WorkItem, url: &str) -> Result<Option<WorkItem>, KeltaError> {
+        if o.pr_url.as_deref().is_none_or(|u| u.eq_ignore_ascii_case(url)) {
+            return Ok(None);
+        }
+        let url = url.to_owned();
+        self.update(&o.id, |w| w.pr_url.replace(url).is_some()).await.map(Some)
     }
 
     /// `report_progress`; `caller` is the MCP session (`None`: the global endpoint).
