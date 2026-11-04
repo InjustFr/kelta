@@ -442,6 +442,12 @@ pub async fn is_ancestor(worktree: &Path, a: &str, b: &str) -> Result<bool, Kelt
     }
 }
 
+/// Whether this worktree's HEAD once pointed at `sha` (its HEAD reflog is per worktree).
+pub async fn in_head_reflog(worktree: &Path, sha: &str) -> Result<bool, KeltaError> {
+    let out = run(worktree, &["log", "-g", "--format=%H", "HEAD"], LOCAL_TIMEOUT).await?;
+    Ok(out.ok() && out.stdout.lines().any(|l| l == sha))
+}
+
 /// `git rev-list --count <args>`.
 pub async fn count(worktree: &Path, args: &[&str]) -> Result<u32, KeltaError> {
     let mut a = vec!["rev-list", "--count"];

@@ -577,6 +577,24 @@ async fn own_rewrite_force_pushes_with_a_lease_on_the_recorded_tip() {
 }
 
 #[tokio::test]
+async fn an_amend_outside_kelta_force_pushes_with_a_lease_on_the_old_tip() {
+    need_git!();
+    let fx = Fx::new();
+    let (w, item) = diverging(&fx, true).await;
+    let tip = git(&item.worktree, &["rev-parse", "HEAD"]);
+    std::fs::write(item.worktree.join("mine.txt"), "mine, amended\n").unwrap();
+    git(&item.worktree, &["commit", "-q", "-a", "--amend", "--no-edit"]);
+    assert!(w.list(None).await.unwrap()[0].rebase.is_none());
+    let st = w.status(&item.id).await.unwrap();
+    assert!(st.diverged && st.remote_new == 0, "{st:?}");
+
+    let (args, res) = push(&fx, &w, &item, true).await;
+    assert_eq!(args[1], format!("--force-with-lease={}:{tip}", item.branch));
+    assert!(res.unwrap().rebase.is_none());
+    assert_eq!(git(&fx.remote, &["rev-parse", &item.branch]), git(&item.worktree, &["rev-parse", "HEAD"]));
+}
+
+#[tokio::test]
 async fn a_moved_remote_rejects_the_lease_and_never_falls_back_to_force() {
     need_git!();
     let fx = Fx::new();

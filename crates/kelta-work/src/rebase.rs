@@ -2,7 +2,8 @@
 //!
 //! `RebaseState{pre_head, remote_sha}` records HEAD and the remote branch tip before a rebase.
 //! Force push is allowed only for an own rewrite: `remote_sha` is in `pre_head` but not in HEAD,
-//! and the lease pins the remote to `remote_sha`. Anything else on the remote is counted by
+//! and the lease pins the remote to `remote_sha`. Without a recorded state, a rewrite made with plain
+//! git counts as own when the worktree's HEAD reflog holds the remote tip. Anything else on the remote is counted by
 //! `GitStatus.remote_new` and gets "Rebase onto {remote}/{branch}" instead.
 
 use std::path::Path;
@@ -35,18 +36,26 @@ pub(crate) async fn reread(wt: &Path, st: Box<RebaseState>) -> Result<Option<Box
     Ok(pending.then(|| Box::new(RebaseState { conflicts: Vec::new(), step: 0, total: 0, ..*st })))
 }
 
-/// `GitStatus.diverged`: an own rewrite of the pushed branch (FLOW §4.4 step 5), and the last
-/// fetched remote tip is still `remote_sha` (otherwise someone pushed: Remote has new commits).
+/// `GitStatus.diverged`, with the lease sha: HEAD dropped the fetched remote tip by an own rewrite
+/// (FLOW §4.4 step 5). The tip is the recorded `remote_sha` and in `pre_head`, or, for a rewrite
+/// made with plain git (`commit --amend`, `rebase -i`), HEAD once pointed at it.
 pub(crate) async fn diverged(
     wt: &Path,
     remote_ref: &str,
     st: Option<&RebaseState>,
-) -> Result<bool, KeltaError> {
-    let Some(st) = st.filter(|s| s.total == 0) else { return Ok(false) };
-    let Some(sha) = &st.remote_sha else { return Ok(false) };
-    Ok(git::rev(wt, remote_ref).await?.as_ref() == Some(sha)
-        && git::is_ancestor(wt, sha, &st.pre_head).await?
-        && !git::is_ancestor(wt, sha, "HEAD").await?)
+) -> Result<Option<String>, KeltaError> {
+    if st.is_some_and(|s| s.total > 0) {
+        return Ok(None);
+    }
+    let Some(tip) = git::rev(wt, remote_ref).await? else { return Ok(None) };
+    if git::is_ancestor(wt, &tip, "HEAD").await? {
+        return Ok(None);
+    }
+    let recorded = match st {
+        Some(s) => s.remote_sha.as_ref() == Some(&tip) && git::is_ancestor(wt, &tip, &s.pre_head).await?,
+        None => false,
+    };
+    Ok((recorded || git::in_head_reflog(wt, &tip).await?).then_some(tip))
 }
 
 /// `GitStatus.remote_new`: commits on `<remote>/<branch>` that neither HEAD nor the pre-rebase
@@ -242,19 +251,13 @@ impl WorkService {
         let (remote, branch) = (env.repo.remote.clone(), item.branch.clone());
         let remote_ref = format!("refs/remotes/{remote}/{branch}");
         let lease = if force {
-            let st = item.rebase.clone();
-            let sha = st.as_ref().and_then(|s| s.remote_sha.clone());
-            match sha {
-                Some(sha) if diverged(&wt, &remote_ref, st.as_deref()).await? => Some(sha),
-                _ => {
-                    return Err(reason(
-                        KeltaError::conflict(
-                            "Force push is only offered to rewrite your own rebased commits.",
-                        ),
-                        "not_diverged",
-                    ));
-                }
-            }
+            let Some(sha) = diverged(&wt, &remote_ref, item.rebase.as_deref()).await? else {
+                return Err(reason(
+                    KeltaError::conflict("Force push is only offered to rewrite your own rebased commits."),
+                    "not_diverged",
+                ));
+            };
+            Some(sha)
         } else {
             None
         };
