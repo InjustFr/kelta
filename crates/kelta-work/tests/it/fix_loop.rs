@@ -595,6 +595,19 @@ async fn an_amend_outside_kelta_force_pushes_with_a_lease_on_the_old_tip() {
 }
 
 #[tokio::test]
+async fn an_amend_of_a_commit_whose_message_says_start_is_still_an_own_rewrite() {
+    need_git!();
+    let fx = Fx::new();
+    let (w, item) = diverging(&fx, true).await;
+    git(&item.worktree, &["commit", "-q", "--amend", "-m", "feat: wizard (start) step"]);
+    git(&item.worktree, &["push", "-q", "--force", "origin", &item.branch]);
+    std::fs::write(item.worktree.join("mine.txt"), "mine, amended again\n").unwrap();
+    git(&item.worktree, &["commit", "-q", "-a", "--amend", "--no-edit"]);
+    let st = w.status(&item.id).await.unwrap();
+    assert!(st.diverged && st.remote_new == 0, "{st:?}");
+}
+
+#[tokio::test]
 async fn an_aborted_rebase_onto_a_teammates_tip_is_not_an_own_rewrite() {
     need_git!();
     let fx = Fx::new();

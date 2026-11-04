@@ -448,8 +448,11 @@ pub async fn in_head_reflog(worktree: &Path, sha: &str) -> Result<bool, KeltaErr
     let out = run(worktree, &["log", "-g", "--format=%H%x09%gs", "HEAD"], LOCAL_TIMEOUT).await?;
     Ok(out.ok()
         && out.stdout.lines().any(|l| {
-            l.split_once('\t')
-                .is_some_and(|(h, s)| h == sha && !s.starts_with("checkout:") && !s.contains("(start)"))
+            // Only the action before the first colon: the rest of `%gs` is a commit message.
+            l.split_once('\t').is_some_and(|(h, s)| {
+                let act = s.split(':').next().unwrap_or(s);
+                h == sha && act != "checkout" && !act.ends_with("(start)")
+            })
         }))
 }
 
