@@ -181,8 +181,8 @@ impl WorkService {
     /// MCP `link_pr` (#453): the work item of `ticket` on `pr`'s head branch, without Claude. The
     /// scratch item adopting `pr` gets the ticket; else a new item runs Start work up to its
     /// worktree (the one that has the branch checked out, or a new one) and Resume runs the rest.
-    /// The `bool` is `true` when it linked, `false` when the PR's item already had this ticket (a
-    /// no-op). `Conflict` names the item holding the ticket or the PR.
+    /// The `bool` is `true` when it linked (or repointed the item's `pr_url` to this PR), `false` when the
+    /// PR's item already had this ticket (a no-op). `Conflict` names the item holding the ticket or the PR.
     pub async fn link_ticket_pr(
         &self,
         project: &ProjectId,
@@ -199,6 +199,12 @@ impl WorkService {
         if let Some(o) = plan::owner_of_pr(&all, &p, pr) {
             match &o.ticket {
                 Some(t) if t.account == ticket.account && t.key == ticket.key => {
+                    // Found by branch while `pr_url` names another PR (case aside): repoint it, Fix with Claude reads it.
+                    if o.pr_url.as_deref().is_some_and(|u| !u.eq_ignore_ascii_case(&pr.url)) {
+                        let url = pr.url.clone();
+                        let item = self.update(&o.id, |w| w.pr_url.replace(url).is_some()).await?;
+                        return Ok((item, true));
+                    }
                     return Ok((self.load(&o.id).await?, false));
                 }
                 Some(t) => {
