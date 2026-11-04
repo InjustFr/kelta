@@ -1039,7 +1039,8 @@ impl WorkItem {
 
     /// `claim_ticket` of `self` against `held`, an unfinished item of the same ticket: an orphaned
     /// claim, or one of the same run (equal `run_id`s), is taken over (same id, the new run's
-    /// worktree); so is a `blocked` or `failed` one, whose lane has ended, and the holder's own
+    /// worktree); so is a `done`, `blocked` or `failed` one, whose lane has ended (#544: a done run has
+    /// handed its work over, any session may take it), and the holder's own
     /// re-claim (#497: `claimed_by` the claiming session, run ids equal or one missing; the lanes of
     /// one orchestrator share a session, so two different run ids still conflict). Anything else wins
     /// and comes back as `Err`.
@@ -1048,10 +1049,9 @@ impl WorkItem {
         let new = self.run.as_ref();
         let held_id = h.run.as_ref().and_then(|r| r.run_id.as_ref());
         let new_id = new.and_then(|n| n.run_id.as_ref());
-        let ended = h
-            .run
-            .as_ref()
-            .is_some_and(|r| matches!(r.state, RunState::Orphaned | RunState::Blocked | RunState::Failed));
+        let ended = h.run.as_ref().is_some_and(|r| {
+            matches!(r.state, RunState::Orphaned | RunState::Blocked | RunState::Failed | RunState::Done)
+        });
         let same_run = held_id.is_some() && held_id == new_id;
         let mine = h.claimed_by(new.and_then(|n| n.session_id.as_ref()))
             && !matches!((held_id, new_id), (Some(a), Some(b)) if a != b);
@@ -1401,6 +1401,10 @@ mod tests {
         let got = new(Some("a"), None).claim_over(Some(start.clone())).unwrap();
         assert!(got.run.is_some());
         assert!(new(Some("b"), None).claim_over(Some(start)).is_err());
+        // #544: a done run has ended: any session takes the claim over.
+        let mut done = held(Some("a"), Some("r1"));
+        done.run.as_mut().unwrap().state = RunState::Done;
+        assert!(new(Some("b"), Some("r2")).claim_over(Some(done)).is_ok());
         // Another lane of one session, another session, and unowned claims still conflict.
         assert!(new(Some("a"), Some("r2")).claim_over(Some(held(Some("a"), Some("r1")))).is_err());
         assert!(new(Some("b"), None).claim_over(Some(held(Some("a"), None))).is_err());
