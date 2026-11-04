@@ -16,7 +16,7 @@ use kelta_proto::tracker::{StatusCategory, TicketRef};
 use crate::{WorkService, git, plan};
 
 impl WorkService {
-    /// `claim_ticket`: `worktree` defaults to the held item's on the holder's re-claim (#497), else to
+    /// `claim_ticket`: `worktree` defaults to the held item's whoever claims (#497, #547), else to
     /// the project's primary repo; `branch` to its checkout.
     pub async fn claim(
         &self,
@@ -30,10 +30,11 @@ impl WorkService {
         let core = self.api()?;
         let p = core.project(project).ok_or_else(|| KeltaError::not_found(format!("project {project}")))?;
         let primary = p.repos.iter().find(|r| r.primary).or(p.repos.first());
-        // #497: the holder's re-claim without `worktree` keeps the item's worktree, branch and base.
+        // #497, #547: a claim without `worktree` keeps the held item's worktree, branch and base, a
+        // takeover by another session included (a live holder still fails `Conflict` below).
         let kept = match &worktree {
             Some(_) => None,
-            None => self.held_by(&ticket, run.session_id.as_ref()).await?,
+            None => self.holder(&ticket).await?,
         };
         let path = match (worktree, &kept) {
             (Some(w), _) => w,
@@ -106,16 +107,22 @@ impl WorkService {
         }
     }
 
-    /// #497: the unfinished item of `ticket` that `sid` holds (`WorkItem::claimed_by`): a re-claim of it
-    /// takes it over and never adopts (#494).
+    /// The unfinished item of `ticket`, whoever holds it.
+    async fn holder(&self, ticket: &TicketRef) -> Result<Option<WorkItem>, KeltaError> {
+        let probe = WorkItem { ticket: Some(ticket.clone()), ..WorkItem::default() };
+        Ok(kelta_proto::api::claim_holder(&self.store.list_items(None).await?, &probe))
+    }
+
+    /// #497: the unfinished item of `ticket` that `sid` holds: its run's session (`WorkItem::claimed_by`)
+    /// or, since #544, one of its own `session_ids`. A re-claim of it takes it over and never adopts (#494).
     pub async fn held_by(
         &self,
         ticket: &TicketRef,
         sid: Option<&SessionId>,
     ) -> Result<Option<WorkItem>, KeltaError> {
-        let probe = WorkItem { ticket: Some(ticket.clone()), ..WorkItem::default() };
-        Ok(kelta_proto::api::claim_holder(&self.store.list_items(None).await?, &probe)
-            // #544: the item's own Claude holds it even when a run (of another session) claimed it.
+        Ok(self
+            .holder(ticket)
+            .await?
             .filter(|h| h.claimed_by(sid) || sid.is_some_and(|s| h.session_ids.contains(s))))
     }
 
