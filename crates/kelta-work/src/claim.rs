@@ -115,7 +115,8 @@ impl WorkService {
     ) -> Result<Option<WorkItem>, KeltaError> {
         let probe = WorkItem { ticket: Some(ticket.clone()), ..WorkItem::default() };
         Ok(kelta_proto::api::claim_holder(&self.store.list_items(None).await?, &probe)
-            .filter(|h| h.claimed_by(sid)))
+            // #544: the item's own Claude holds it even when a run (of another session) claimed it.
+            .filter(|h| h.claimed_by(sid) || sid.is_some_and(|s| h.session_ids.contains(s))))
     }
 
     /// #502 Make this a work item without a ticket: a scratch item (`WorkKind::Branch`) on `worktree`, an
@@ -180,8 +181,8 @@ impl WorkService {
     /// MCP `link_pr` (#453): the work item of `ticket` on `pr`'s head branch, without Claude. The
     /// scratch item adopting `pr` gets the ticket; else a new item runs Start work up to its
     /// worktree (the one that has the branch checked out, or a new one) and Resume runs the rest.
-    /// The `bool` is `true` when it linked, `false` when the PR's item already had this ticket (a
-    /// no-op). `Conflict` names the item holding the ticket or the PR.
+    /// The `bool` is `true` when it linked (or repointed the item's `pr_url` to this PR), `false` when the
+    /// PR's item already had this ticket (a no-op). `Conflict` names the item holding the ticket or the PR.
     pub async fn link_ticket_pr(
         &self,
         project: &ProjectId,
@@ -198,6 +199,9 @@ impl WorkService {
         if let Some(o) = plan::owner_of_pr(&all, &p, pr) {
             match &o.ticket {
                 Some(t) if t.account == ticket.account && t.key == ticket.key => {
+                    if let Some(item) = self.repoint_pr(o, &pr.url).await? {
+                        return Ok((item, true));
+                    }
                     return Ok((self.load(&o.id).await?, false));
                 }
                 Some(t) => {
@@ -207,7 +211,8 @@ impl WorkService {
                 None => {
                     let id = o.id.clone();
                     drop(guard);
-                    return self.link(&id, ticket, false).await.map(|w| (w, true));
+                    let linked = self.link(&id, ticket, false).await?;
+                    return Ok((self.repoint_pr(o, &pr.url).await?.unwrap_or(linked), true));
                 }
             }
         }
@@ -236,6 +241,16 @@ impl WorkService {
             }
             _ => Ok((item, true)),
         }
+    }
+
+    /// The PR's own item was found by branch while its `pr_url` names another PR (case aside): repoint
+    /// it, Fix with Claude reads it. `None`: already on `url`.
+    async fn repoint_pr(&self, o: &WorkItem, url: &str) -> Result<Option<WorkItem>, KeltaError> {
+        if o.pr_url.as_deref().is_none_or(|u| u.eq_ignore_ascii_case(url)) {
+            return Ok(None);
+        }
+        let url = url.to_owned();
+        self.update(&o.id, |w| w.pr_url.replace(url).is_some()).await.map(Some)
     }
 
     /// `report_progress`; `caller` is the MCP session (`None`: the global endpoint).
