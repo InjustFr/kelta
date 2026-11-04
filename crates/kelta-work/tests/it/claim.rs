@@ -504,6 +504,27 @@ async fn a_bare_re_claim_keeps_the_items_worktree() {
 }
 
 #[tokio::test]
+async fn a_bare_takeover_by_another_session_keeps_the_items_worktree_branch_and_base() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    session(&fx, "orch-a", "kelta-a6");
+    session(&fx, "orch-b", "kelta-b2");
+    let w = fx.service();
+    let wt = run_worktree(&fx, "feat/ticket-142");
+    let (t, p) = (samples::ticket_ref(), project());
+    let a = w.claim(&p, t.clone(), Some(wt.clone()), None, run("orch-a")).await.unwrap();
+    w.report("SHOP-142", None, RunState::Blocked, None, None, Some(&orch_a())).await.unwrap();
+
+    let b = w.claim(&p, t, None, None, run("orch-b")).await.unwrap();
+    assert_eq!(b.id, a.id);
+    assert_eq!(b.worktree.canonicalize().unwrap(), wt.canonicalize().unwrap());
+    assert_eq!((&b.branch, &b.base), (&a.branch, &a.base));
+    assert_eq!(b.run.unwrap().session_id, Some(SessionId::new("orch-b")));
+}
+
+#[tokio::test]
 async fn an_items_own_claude_claims_its_ticket() {
     if !has_git() {
         return;

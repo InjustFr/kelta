@@ -35,7 +35,8 @@ Every tool name and field below is the one Kelta's MCP server lists. Errors star
      `<workflow>-$KELTA_SESSION_ID`).
    - `account` (and `project`) are needed only for a ticket the lists do not show.
    - A ticket with live work answers `Conflict: KEY is held by session … (run)`: pick another. A claim that is
-     orphaned (its session is gone), blocked or failed is taken over.
+     orphaned (its session is gone), blocked, failed or done is taken over. Without `worktree`, the takeover
+     keeps the item's worktree, branch and base.
    - The claim does not move the ticket on the board.
 3. **Report each phase.** `report_progress{key, phase, state, note?, sha?}`. `phase` is free text, `state` is
    one of the following; an omitted `note` or `sha` keeps the last one.
