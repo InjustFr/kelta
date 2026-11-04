@@ -2,6 +2,22 @@
 
 All notable changes are listed here, generated from the commit messages at each release. Versions follow semver.
 
+## [1.9.2](https://github.com/InjustFr/kelta/compare/v1.9.1...v1.9.2) (2026-11-04)
+
+### Bug Fixes
+
+* **claim:** a takeover without worktree keeps the held item's worktree, branch and base ([b2d355f](https://github.com/InjustFr/kelta/commit/b2d355f79002aa15bec95c1d7e88577b2cdad8d0))
+* **claim:** keep the item's worktree when its own Claude re-claims a done run ([6a433c6](https://github.com/InjustFr/kelta/commit/6a433c63fbd559b26ace404c034a94b2ddfe6ee2))
+* **claim:** let any session take over a claim whose run is done ([94ae802](https://github.com/InjustFr/kelta/commit/94ae802f60b441040df18582ed65b610e620df36))
+* **deps:** bump pulldown-cmark to 0.13.6 for RUSTSEC-2026-0433 ([caa3ad5](https://github.com/InjustFr/kelta/commit/caa3ad5fea4999222cc813d4a5fbd516905e5b55))
+* **term:** strip AppImageLauncher's second mount from child envs ([e50454a](https://github.com/InjustFr/kelta/commit/e50454af3937327044d9202a73a47b60669d6325)), closes [#542](https://github.com/InjustFr/kelta/issues/542)
+* **work:** ignore checkout and rebase-start reflog entries when detecting an own rewrite ([b2d6553](https://github.com/InjustFr/kelta/commit/b2d6553090677378d4a86ffd3f9f5c5093fad66f))
+* **work:** ignore pull --rebase starts when detecting an own rewrite ([6693c7e](https://github.com/InjustFr/kelta/commit/6693c7ee4b6dbe37a42024fe57a7b14700bd4de7))
+* **work:** link_pr repoints a stale pr_url on the PR's own item ([bd8ecef](https://github.com/InjustFr/kelta/commit/bd8ecefbdcc0bb7534c402014d165f29243957bd))
+* **work:** link_pr repoints pr_url when attaching a ticket to a scratch item ([#546](https://github.com/InjustFr/kelta/issues/546)) ([96504f0](https://github.com/InjustFr/kelta/commit/96504f02d3a8cdb0a91825ab75cf0b17cc6437ad))
+* **work:** match only the reflog action when spotting an own rewrite ([#545](https://github.com/InjustFr/kelta/issues/545)) ([03a4a37](https://github.com/InjustFr/kelta/commit/03a4a3768b5634edc518ecdc655b35c7493b0aec))
+* **work:** offer Force push after an amend made outside Kelta ([f96eddc](https://github.com/InjustFr/kelta/commit/f96eddc06879b78f9254b266c5af1d716a16baf0))
+
 ## [1.9.1](https://github.com/InjustFr/kelta/compare/v1.9.0...v1.9.1) (2026-10-29)
 
 ### Bug Fixes
