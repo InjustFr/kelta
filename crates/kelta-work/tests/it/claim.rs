@@ -529,6 +529,41 @@ async fn an_items_own_claude_claims_its_ticket() {
 }
 
 #[tokio::test]
+async fn a_done_runs_claim_is_taken_over_by_the_items_claude_and_by_any_session() {
+    if !has_git() {
+        return;
+    }
+    let fx = Fx::new();
+    session(&fx, "orch-a", "kelta-a6");
+    session(&fx, "orch-b", "kelta-b2");
+    let w = fx.service();
+    let wt = run_worktree(&fx, "feat/ticket-142");
+    let (t, p) = (samples::ticket_ref(), project());
+    let item = w.claim(&p, t.clone(), Some(wt), None, run("orch-a")).await.unwrap();
+    let c =
+        SessionInfo { id: SessionId::new("claude-c"), cwd: item.worktree.clone(), ..samples::session_info() };
+    fx.core.insert_session(c.clone());
+    w.adopt_run(&item.id, &c).await.unwrap();
+    w.report("SHOP-142", None, RunState::Done, None, None, Some(&orch_a())).await.unwrap();
+
+    // The item's own Claude re-claims without a worktree: the item keeps its own.
+    let got = w.claim(&p, t.clone(), None, None, run("claude-c")).await.unwrap();
+    assert_eq!(got.id, item.id);
+    assert_eq!(got.run.as_ref().unwrap().state, RunState::Running);
+    assert_eq!(got.run.unwrap().session_id, Some(c.id.clone()));
+    assert_eq!((&got.worktree, &got.branch), (&item.worktree, &item.branch));
+
+    // Done again: any other session takes it over.
+    w.report("SHOP-142", None, RunState::Done, None, None, Some(&c.id)).await.unwrap();
+    let other = w.claim(&p, t, Some(item.worktree.clone()), None, run("orch-b")).await.unwrap();
+    assert_eq!(other.id, item.id);
+    assert_eq!(other.run.as_ref().unwrap().state, RunState::Running);
+    assert_eq!(other.run.unwrap().session_id, Some(SessionId::new("orch-b")));
+    assert_eq!((&other.worktree, &other.branch), (&item.worktree, &item.branch));
+    assert_eq!(fx.store.list_items(None).await.unwrap().len(), 1);
+}
+
+#[tokio::test]
 async fn hooks_follow_the_unfinished_item_of_a_reused_session() {
     if !has_git() {
         return;
