@@ -890,6 +890,14 @@ async fn link_pr_links_once_without_claude_and_adds_an_item_to_a_held_ticket() {
     assert_eq!(again.id, second.id, "the same PR again is a no-op");
     assert_eq!(w.list(None).await.unwrap().len(), 3);
 
+    // The item found by branch carries another PR's url: linking repoints it (#543).
+    let mut stale = second.clone();
+    stale.pr_url = Some("https://github.com/acme/shop-api/pull/1".into());
+    fx.store.put_item(&stale).await.unwrap();
+    let (fixed, linked) = w.link_ticket_pr(&project(), ticket("SHOP-142"), &r2).await.unwrap();
+    assert!(linked);
+    assert_eq!((fixed.id, fixed.pr_url.as_deref()), (second.id.clone(), Some(r2.url.as_str())));
+
     // The ticket reads Resume work: Resume runs the rest of the start, Claude included.
     let resumed = w.resume(&item.id).await.unwrap();
     assert_eq!(resumed.state, WorkState::PrOpen, "{:?}", resumed.steps);
