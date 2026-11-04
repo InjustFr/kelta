@@ -841,6 +841,36 @@ async fn a_pr_branch_checked_out_in_another_worktree_is_adopted_not_added_again(
 }
 
 #[tokio::test]
+async fn link_pr_repoints_a_scratch_item_whose_pr_url_names_another_pr() {
+    need_git!();
+    let fx = Fx::new();
+    git(&fx.repo, &["checkout", "-q", "-b", "feat/outside"]);
+    push_outside(&fx.repo);
+    git(&fx.repo, &["checkout", "-q", "main"]);
+    git(&fx.repo, &["branch", "-q", "-D", "feat/outside"]);
+    let r = outside_pr(&fx);
+    let w = fx.service();
+    let plan = w.plan(&project(), WorkSource::Review { review: r.r#ref.clone() }).await.unwrap();
+    let scratch = w.start(plan).await.unwrap();
+    assert_eq!((scratch.kind, scratch.ticket.clone()), (WorkKind::Branch, None));
+
+    // Found by branch with no ticket, its url names PR #1 (#546): the ticket is attached and the url follows.
+    let mut stale = scratch.clone();
+    stale.pr_url = Some("https://github.com/acme/shop-api/pull/1".into());
+    fx.store.put_item(&stale).await.unwrap();
+    let (item, linked) = w.link_ticket_pr(&project(), ticket("SHOP-141"), &r).await.unwrap();
+    assert!(linked);
+    assert_eq!(item.id, scratch.id);
+    assert_eq!(item.ticket.as_ref().map(|x| x.key.as_str()), Some("SHOP-141"));
+    assert_eq!(item.pr_url.as_deref(), Some(r.url.as_str()));
+    assert_eq!(
+        fx.store.get_item(&scratch.id).await.unwrap().unwrap().pr_url.as_deref(),
+        Some(r.url.as_str()),
+        "persisted"
+    );
+}
+
+#[tokio::test]
 async fn link_pr_links_once_without_claude_and_adds_an_item_to_a_held_ticket() {
     need_git!();
     let fx = Fx::new();
