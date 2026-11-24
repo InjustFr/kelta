@@ -168,14 +168,15 @@ async fn work_list_reads_every_items_steps_in_one_query() {
         .call(|c| {
             c.trace_v2(
                 TraceEventCodes::SQLITE_TRACE_STMT,
-                Some(|e| {
+                Some(|e: TraceEvent<'_>| {
                     if let TraceEvent::Stmt(_, sql) = e
                         && sql.contains("FROM work_steps")
                     {
                         STEP_QUERIES.fetch_add(1, Ordering::Relaxed);
                     }
                 }),
-            );
+            )
+            .expect("trace");
             Ok((q::work_list(c, None)?, q::work_open(c)?))
         })
         .await
