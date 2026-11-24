@@ -1,5 +1,11 @@
 Symbols Nerd Font Mono (SymbolsNerdFontMono-Regular), Nerd Fonts v3.5.1
 Source: https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/NerdFontsSymbolsOnly.zip
-Converted ttf -> woff2 with fonttools (ttLib.woff2 compress), glyphs unchanged.
+Converted ttf -> woff2 with fonttools (ttLib.woff2 compress), then Font Logos (U+F300-F385, unlicensed
+upstream, #537) removed with:
+  pyftsubset SymbolsNerdFontMono-Regular.woff2 --unicodes='U+0000-F2FF,U+F386-10FFFF' --layout-features='*' \
+    --glyph-names --symbol-cmap --legacy-cmap --notdef-glyph --notdef-outline --name-IDs='*' --name-legacy \
+    --name-languages='*' --drop-tables= --flavor=woff2
+Every other glyph is unchanged (FontForge's private PfEd table is dropped).
 Licence: LICENSE (MIT). Served as the CSS family "Kelta Symbols" (ui/src/styles/base.css).
-Third-party glyph sets and their licences (CC BY 4.0 attribution, OFL, Apache 2.0): NOTICE.md.
+Third-party glyph sets and their licences (CC BY 4.0 attribution, OFL, Apache 2.0): NOTICE.md, shipped in
+the app bundles under licenses/fonts/.

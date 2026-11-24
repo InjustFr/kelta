@@ -34,6 +34,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "resources": {
+      "../../../ui/src/assets/fonts/NOTICE.md": "licenses/fonts/NOTICE.md",
+      "../../../ui/src/assets/fonts/LICENSE": "licenses/fonts/LICENSE"
+    },
     "macOS": {
       "minimumSystemVersion": "13.0"
     }
