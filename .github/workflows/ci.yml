@@ -83,7 +83,7 @@ jobs:
       fail-fast: false
       matrix:
         # macOS minutes cost 10x: PRs (checked locally first) run Linux only, main and manual runs both OSes.
-        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04","macos-14"]') }}
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04","macos-15"]') }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # macOS gets by hand what the Linux image has.

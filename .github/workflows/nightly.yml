@@ -118,7 +118,7 @@ jobs:
   macos:
     needs: prep
     if: needs.prep.outputs.build == 'true'
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 30
     env:
       KELTA_VERSION: ${{ needs.prep.outputs.version }}

@@ -125,7 +125,7 @@ jobs:
   macos:
     needs: version
     if: needs.version.outputs.version != ''
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 30
     env:
       KELTA_VERSION: ${{ needs.version.outputs.version }}
