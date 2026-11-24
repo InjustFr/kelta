@@ -634,6 +634,10 @@ async fn run_state_changes_publish_once_per_edge() {
     ] {
         w.report("SHOP-142", Some(phase.into()), state, Some("n".into()), None, Some(&me)).await.unwrap();
     }
+    // #516: done is final until the ticket is claimed again; a repeated `done` is a no-op.
+    let e = w.report("SHOP-142", None, RunState::Running, None, None, Some(&me)).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Conflict, "{}", e.message);
+    w.report("SHOP-142", Some("Again".into()), RunState::Done, None, None, Some(&me)).await.unwrap();
     w.release("SHOP-142", None, Some(&me)).await.unwrap(); // already done: nothing
     let j = |p: Option<&str>, s: &str| (json!(p), json!(s));
     assert_eq!(

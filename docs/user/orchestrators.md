@@ -49,7 +49,9 @@ Every tool name and field below is the one Kelta's MCP server lists. Errors star
    | `done` | handed over (step 6) | the run's phase row disappears; the item reads like any other (its PR, its review) |
 
    A claim answers only to the session that made it; if that session is gone, any caller's report takes the claim
-   over. Reporting a state or phase that did not change publishes nothing.
+   over. Reporting a state or phase that did not change publishes nothing. `done` is final: a later report answers
+   `Conflict` (another `done` is a no-op) until `claim_ticket` claims the ticket again, so a Claude that goes back
+   to work after review feedback claims first.
 4. **Ask and notify.** `ask{question, options, body_md?}` (1 to 9 options) shows buttons on the ticket row, in the
    Queue and in Peek, and returns at once: end your turn, the chosen option arrives as your next message.
    `notify{message}` sends a desktop notification. Both exist only on sessions Kelta starts.

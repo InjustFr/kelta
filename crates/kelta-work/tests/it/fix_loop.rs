@@ -1010,4 +1010,14 @@ async fn link_pr_links_once_without_claude_and_adds_an_item_to_a_held_ticket() {
     let resumed = w.resume(&item.id).await.unwrap();
     assert_eq!(resumed.state, WorkState::PrOpen, "{:?}", resumed.steps);
     assert_eq!(fx.spawned_of(|k| *k == SessionKind::Claude).len(), claudes + 1);
+
+    // #548: an item that already ended with another PR is not repointed, it would keep reading finished.
+    let mut ended = fx.store.get_item(&second.id).await.unwrap().unwrap();
+    ended.pr_url = Some("https://github.com/acme/shop-api/pull/1".into());
+    ended.state = WorkState::Merged { detail: None };
+    fx.store.put_item(&ended).await.unwrap();
+    let e = w.link_ticket_pr(&project(), ticket("SHOP-142"), &r2).await.unwrap_err();
+    assert_eq!(e.code, ErrorCode::Conflict);
+    assert!(e.message.contains("start new work"), "{}", e.message);
+    assert_eq!(fx.store.get_item(&second.id).await.unwrap().unwrap().pr_url, ended.pr_url, "untouched");
 }

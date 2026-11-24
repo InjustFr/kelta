@@ -204,6 +204,14 @@ impl WorkService {
         let source = WorkSource::Ticket { ticket: ticket.clone() };
         // A ticket held by other items gets one more (#456); only the PR's own item decides.
         if let Some(o) = plan::owner_of_pr(&all, &p, pr) {
+            // #548: an item already merged or closed on another PR would keep reading as finished.
+            if o.state.pr_done() && o.pr_url.as_deref().is_some_and(|u| !u.eq_ignore_ascii_case(&pr.url)) {
+                let ended = o.pr_url.as_deref().unwrap_or_default();
+                return Err(KeltaError::conflict(format!(
+                    "work item {} on {} already ended with {ended}: start new work for {}",
+                    o.id, o.branch, pr.url
+                )));
+            }
             match &o.ticket {
                 Some(t) if t.account == ticket.account && t.key == ticket.key => {
                     if let Some(item) = self.repoint_pr(o, &pr.url).await? {
@@ -276,6 +284,10 @@ impl WorkService {
             .update(&id, |w| {
                 let Some(r) = w.run.as_mut() else { return false };
                 previous = Some(r.state);
+                // #516: done is final until the ticket is claimed again; a repeated `done` is a no-op.
+                if r.state == RunState::Done {
+                    return false;
+                }
                 // An orphaned claim driven by another caller becomes its own, never the dead owner's again.
                 if r.session_id.is_some() && r.session_id.as_ref() != caller {
                     r.session_id = caller.cloned();
@@ -287,6 +299,11 @@ impl WorkService {
                 true
             })
             .await?;
+        if previous == Some(RunState::Done) && state != RunState::Done {
+            return Err(KeltaError::conflict(format!(
+                "{key}'s run is done: claim_ticket again to report on it"
+            )));
+        }
         self.publish_run_state(&w, previous);
         Ok(w)
     }

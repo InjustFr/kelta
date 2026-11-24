@@ -373,7 +373,7 @@ pub(crate) fn tool_defs() -> Value {
         },
         {
             "name": "report_progress",
-            "description": "Report how far the run on a claimed ticket got. `phase` is free text (the workflow's phase title); `state` drives the lamp; blocked and failed runs show in Kelta's Queue with their `note`.",
+            "description": "Report how far the run on a claimed ticket got. `phase` is free text (the workflow's phase title); `state` drives the lamp; blocked and failed runs show in Kelta's Queue with their `note`. `done` is final: claim the ticket again before reporting more.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
