@@ -105,7 +105,9 @@ jobs:
         run: |
           curl -fsSLo nextest.tgz "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.148/cargo-nextest-0.9.148-universal-apple-darwin.tar.gz"
           echo "6c23b7fb4ca82c571fc8dfedbab45bfa773d45918f933170c85d21cd7f4b852b  nextest.tgz" | shasum -a 256 -c -
-          tar -xzf nextest.tgz -C ~/.cargo/bin && rm nextest.tgz
+          # macos-15 has rustup from Homebrew: $CARGO_HOME/bin is neither created nor on PATH.
+          mkdir -p "$CARGO_HOME/bin" && echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+          tar -xzf nextest.tgz -C "$CARGO_HOME/bin" && rm nextest.tgz
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
